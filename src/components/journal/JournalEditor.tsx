@@ -14,6 +14,7 @@ import type { MoodLevel, JournalEntryFormData } from '../../types/journal';
 
 interface JournalEditorProps {
   initialData?: Partial<JournalEntryFormData>;
+  initialContent?: string; // For pre-filling from prompts
   onSave: (data: JournalEntryFormData) => Promise<void>;
   onCancel?: () => void;
   isEditing?: boolean;
@@ -29,6 +30,7 @@ const PROMPTS = [
 
 export function JournalEditor({
   initialData,
+  initialContent,
   onSave,
   onCancel,
   isEditing = false,
@@ -43,6 +45,21 @@ export function JournalEditor({
   const [prompt] = useState(
     () => PROMPTS[Math.floor(Math.random() * PROMPTS.length)]
   );
+
+  // Handle initialContent changes (from AI prompts)
+  useEffect(() => {
+    if (initialContent && initialContent.trim()) {
+      setContent(initialContent);
+      // Focus and scroll to end
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+        textareaRef.current.setSelectionRange(
+          initialContent.length,
+          initialContent.length
+        );
+      }
+    }
+  }, [initialContent]);
 
   // Auto-resize textarea
   useEffect(() => {

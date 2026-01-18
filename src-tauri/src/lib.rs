@@ -47,6 +47,17 @@ pub fn run() {
             // Statistics
             commands::get_mood_statistics,
             commands::get_overall_statistics,
+            // Analytics
+            commands::get_mood_distribution,
+            commands::get_streak_stats,
+            commands::get_day_of_week_stats,
+            commands::get_monthly_mood_data,
+            // Settings
+            commands::get_setting,
+            commands::set_setting,
+            commands::delete_setting,
+            commands::get_all_settings,
+            commands::get_app_version,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

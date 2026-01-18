@@ -16,11 +16,12 @@
 
 | Feature | Priority | Status | Description |
 |---------|----------|--------|-------------|
-| Mood Entry | P0 | Planned | Log daily mood with customizable scales (1-10, emoji, color) |
-| Journal Entry | P0 | Planned | Rich text journaling with mood association |
-| Calendar View | P1 | Planned | Visual calendar showing mood trends |
-| Analytics Dashboard | P1 | Planned | Charts and insights on mood patterns |
-| AI Insights | P2 | Planned | AI-generated observations from journal entries |
+| Mood Entry | P0 | **Complete** | Log daily mood with 5-level scale (emoji, color) |
+| Journal Entry | P0 | **Complete** | Encrypted journaling with mood association |
+| Calendar View | P1 | **Complete** | Visual calendar showing mood trends by day |
+| Analytics Dashboard | P1 | **Complete** | Charts: distribution, trends, streaks, weekly patterns |
+| Settings Panel | P2 | **Complete** | User preferences, AI config, appearance, privacy |
+| AI Insights | P2 | In Progress | Privacy-focused AI insights (opt-in, OpenAI/local AI) |
 | Export/Import | P2 | Planned | Backup and restore data |
 | Reminders | P3 | Planned | Configurable notification reminders |
 
@@ -292,92 +293,165 @@ export async function verifyPassword(password: string): Promise<boolean> {
 
 ### AI Integration Philosophy
 
-1. **Privacy First:** All AI processing should be optional
-2. **Local Processing Preferred:** Use local models when possible
-3. **Transparent:** Users should know when AI is used
-4. **User Control:** Easy opt-out, data deletion
+1. **Privacy First:** Never send actual journal content to external APIs
+2. **Metadata Only:** Send only aggregated mood data, sentiment summaries, general tone
+3. **Opt-In:** AI features disabled by default, require explicit user consent
+4. **Transparent:** Clear disclosure of what data is processed and how
+5. **Pro Feature:** AI insights planned as premium/paid feature for monetization
+6. **User Choice:** Support both OpenAI API (BYOK) and local AI (Ollama) for maximum privacy
+
+### Privacy-Preserving AI Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    User's Journal Entry                      │
+│              (NEVER sent to external APIs)                   │
+└─────────────────────┬───────────────────────────────────────┘
+                      │ Local Processing Only
+                      ▼
+┌─────────────────────────────────────────────────────────────┐
+│              Local Metadata Extraction                       │
+│  - Mood value (1-5)                                         │
+│  - General sentiment (positive/negative/neutral)            │
+│  - Word count, entry frequency                              │
+│  - Time patterns (morning/evening)                          │
+│  - Emotional keywords (locally extracted, not content)      │
+└─────────────────────┬───────────────────────────────────────┘
+                      │ Anonymized metadata only
+                      ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    OpenAI API                                │
+│  Receives: "User has 3.2 avg mood, declining trend,         │
+│            writes mostly evenings, frequent anxiety words"   │
+│  Returns: Personalized prompts, wellness suggestions         │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### What Gets Sent to AI (Allowed)
+
+- Mood scores (numerical values only)
+- General sentiment classification (positive/negative/neutral)
+- Entry frequency patterns (e.g., "writes daily", "inconsistent")
+- Time-of-day patterns (e.g., "mostly evening entries")
+- Aggregated statistics (averages, trends, streaks)
+- Extracted emotional categories (e.g., "anxiety-related", "gratitude-focused")
+
+### What NEVER Gets Sent (Forbidden)
+
+- Actual journal text content
+- Specific events or situations described
+- Names, places, or identifiable information
+- Direct quotes or excerpts
+- Personal details or context
 
 ### Planned AI Features
 
-#### 5.1 Mood Pattern Analysis
+#### 5.1 Contextual Journal Prompts
 ```typescript
-interface MoodAnalysis {
-  period: 'week' | 'month' | 'year';
-  averageMood: number;
-  trend: 'improving' | 'stable' | 'declining';
-  patterns: {
-    dayOfWeek: Record<string, number>;  // Mon-Sun averages
-    timeOfDay: Record<string, number>;  // Morning/Afternoon/Evening
-  };
-  insights: string[];  // AI-generated observations
+interface AIPromptRequest {
+  recentMoodAverage: number;
+  moodTrend: 'improving' | 'stable' | 'declining';
+  dominantEmotions: string[];  // e.g., ['anxious', 'hopeful']
+  entryFrequency: 'daily' | 'weekly' | 'sporadic';
+  preferredTime: 'morning' | 'afternoon' | 'evening';
 }
-```
 
-#### 5.2 Journal Prompts
-```typescript
 interface JournalPrompt {
   id: string;
   text: string;
-  category: 'gratitude' | 'reflection' | 'goals' | 'emotions';
-  contextual: boolean;  // Based on recent moods
-}
-
-// Generate contextual prompts based on mood history
-async function generatePrompts(recentMoods: MoodEntry[]): Promise<JournalPrompt[]>;
-```
-
-#### 5.3 Sentiment Analysis
-```typescript
-interface SentimentResult {
-  score: number;        // -1 to 1
-  magnitude: number;    // 0 to 1 (intensity)
-  keywords: string[];   // Extracted emotional keywords
-  suggestedMood: number; // 1-10 scale suggestion
-}
-
-// Analyze journal entry sentiment
-async function analyzeEntry(text: string): Promise<SentimentResult>;
-```
-
-#### 5.4 Weekly Summary Generation
-```typescript
-interface WeeklySummary {
-  weekStart: Date;
-  weekEnd: Date;
-  moodSummary: string;      // AI-generated paragraph
-  highlights: string[];     // Positive moments extracted
-  challenges: string[];     // Difficult moments
-  suggestions: string[];    // Wellness suggestions
+  category: 'gratitude' | 'reflection' | 'goals' | 'emotions' | 'self-care';
+  reasoning: string;  // Why this prompt was suggested
 }
 ```
 
-### AI Implementation Options
+#### 5.2 Wellness Insights
+```typescript
+interface WellnessInsight {
+  type: 'observation' | 'suggestion' | 'celebration';
+  message: string;
+  basedOn: string;  // e.g., "Your 7-day mood trend"
+  actionable: boolean;
+}
 
-| Option | Pros | Cons | Privacy |
-|--------|------|------|---------|
-| Local LLM (Ollama) | Full privacy, offline | Requires setup, slower | Excellent |
-| Claude API | High quality | Requires internet, cost | Good (with consent) |
-| On-device ML | Fast, private | Limited capabilities | Excellent |
+// Example: "Your mood tends to be higher on days you journal in the morning.
+// Consider making morning journaling a habit."
+```
 
-### AI Feature Toggle
+#### 5.3 Weekly Reflection Prompts
+```typescript
+interface WeeklyReflection {
+  weekSummary: {
+    moodRange: [number, number];
+    averageMood: number;
+    entryCount: number;
+  };
+  reflectionPrompts: string[];  // AI-generated based on week's patterns
+  suggestedFocus: string;       // Area to focus on next week
+}
+```
+
+### Implementation: OpenAI Integration
 
 ```typescript
-// src/stores/settingsStore.ts
+// src/lib/aiService.ts
+interface AIConfig {
+  apiKey: string;           // User provides their own key OR uses app subscription
+  model: 'gpt-4o-mini';     // Cost-effective model for prompts
+  maxTokens: 500;           // Limit response size
+}
+
+interface MetadataSummary {
+  periodDays: number;
+  moodStats: {
+    average: number;
+    trend: 'up' | 'down' | 'stable';
+    distribution: Record<1|2|3|4|5, number>;
+  };
+  patterns: {
+    bestDayOfWeek: string;
+    worstDayOfWeek: string;
+    preferredTime: string;
+    consistency: 'high' | 'medium' | 'low';
+  };
+  emotionalIndicators: string[];  // Locally extracted, not content
+}
+
+async function generateInsights(metadata: MetadataSummary): Promise<WellnessInsight[]>;
+async function generatePrompts(metadata: MetadataSummary): Promise<JournalPrompt[]>;
+```
+
+### AI Settings Store
+
+```typescript
+// src/stores/aiSettingsStore.ts
 interface AISettings {
-  enabled: boolean;
-  provider: 'local' | 'claude' | 'none';
+  enabled: boolean;                    // Master toggle (default: false)
+  apiKeySource: 'user' | 'subscription' | null;
+  userApiKey: string | null;           // Encrypted storage
   features: {
-    moodAnalysis: boolean;
-    journalPrompts: boolean;
-    sentimentAnalysis: boolean;
-    weeklySummary: boolean;
+    contextualPrompts: boolean;
+    wellnessInsights: boolean;
+    weeklyReflections: boolean;
   };
-  dataConsent: {
-    allowCloudProcessing: boolean;
+  consent: {
+    agreedToTerms: boolean;
     consentDate: Date | null;
+    dataUsageUnderstood: boolean;
+  };
+  subscription: {
+    tier: 'free' | 'pro' | null;
+    validUntil: Date | null;
   };
 }
 ```
+
+### Monetization Strategy
+
+| Tier | AI Features | Price |
+|------|-------------|-------|
+| Free | None (all local analytics) | $0 |
+| Pro | Full AI insights, prompts, weekly reflections | TBD |
+| BYOK | User provides own OpenAI key | $0 (user pays OpenAI) |
 
 ---
 

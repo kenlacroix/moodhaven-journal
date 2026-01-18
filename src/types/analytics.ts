@@ -1,0 +1,72 @@
+/**
+ * Analytics and Calendar type definitions
+ */
+
+import type { MoodLevel } from './journal';
+
+// Calendar day data from backend
+export interface CalendarDayData {
+  date: string; // YYYY-MM-DD
+  averageMood: number;
+  entryCount: number;
+}
+
+// Mood distribution for analytics
+export interface MoodDistribution {
+  mood: MoodLevel;
+  count: number;
+  percentage: number;
+}
+
+// Streak statistics
+export interface StreakStats {
+  currentStreak: number;
+  longestStreak: number;
+  lastEntryDate: string | null;
+}
+
+// Day of week statistics
+export interface DayOfWeekStats {
+  dayOfWeek: number; // 0-6 (Sunday-Saturday)
+  dayName: string;
+  averageMood: number;
+  entryCount: number;
+}
+
+// Trend data point for charts
+export interface TrendDataPoint {
+  date: string;
+  averageMood: number;
+  entryCount: number;
+}
+
+// Analytics period options
+export interface AnalyticsPeriod {
+  label: string;
+  days: number;
+  key: '7' | '30' | '90';
+}
+
+export const ANALYTICS_PERIODS: AnalyticsPeriod[] = [
+  { label: '7 Days', days: 7, key: '7' },
+  { label: '30 Days', days: 30, key: '30' },
+  { label: '90 Days', days: 90, key: '90' },
+];
+
+// Full analytics data
+export interface AnalyticsData {
+  averageMood: number;
+  totalEntries: number;
+  streakStats: StreakStats;
+  moodDistribution: MoodDistribution[];
+  dayOfWeekStats: DayOfWeekStats[];
+  trendData: TrendDataPoint[];
+}
+
+// Calendar state
+export interface CalendarState {
+  year: number;
+  month: number; // 1-12
+  selectedDate: string | null; // YYYY-MM-DD
+  monthData: Map<string, CalendarDayData>;
+}

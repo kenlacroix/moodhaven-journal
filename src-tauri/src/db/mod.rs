@@ -52,6 +52,38 @@ pub struct DailyStats {
     pub entry_count: i32,
 }
 
+/// Mood distribution for analytics
+#[derive(Debug, Serialize, Deserialize)]
+pub struct MoodDistribution {
+    pub mood: i32,
+    pub count: i32,
+}
+
+/// Streak statistics
+#[derive(Debug, Serialize, Deserialize)]
+pub struct StreakStats {
+    pub current_streak: i32,
+    pub longest_streak: i32,
+    pub last_entry_date: Option<String>,
+}
+
+/// Day of week statistics
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DayOfWeekStats {
+    pub day_of_week: i32,
+    pub day_name: String,
+    pub average_mood: f64,
+    pub entry_count: i32,
+}
+
+/// Calendar day data for monthly view
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CalendarDayData {
+    pub date: String,
+    pub average_mood: f64,
+    pub entry_count: i32,
+}
+
 /// Database state managed by Tauri
 pub struct Database {
     pub conn: Mutex<Connection>,
@@ -361,4 +393,203 @@ pub fn get_overall_stats(db: &Database) -> Result<(f64, i32), String> {
         .map_err(|e| format!("Query failed: {}", e))?;
 
     Ok(result)
+}
+
+// ============================================================================
+// Analytics Operations
+// ============================================================================
+
+/// Get mood distribution (count per mood level 1-5)
+pub fn get_mood_distribution(db: &Database) -> Result<Vec<MoodDistribution>, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT mood, COUNT(*) as count
+             FROM journal_entries
+             GROUP BY mood
+             ORDER BY mood",
+        )
+        .map_err(|e| format!("Prepare failed: {}", e))?;
+
+    let distribution = stmt
+        .query_map([], |row| {
+            Ok(MoodDistribution {
+                mood: row.get(0)?,
+                count: row.get(1)?,
+            })
+        })
+        .map_err(|e| format!("Query failed: {}", e))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("Row parsing failed: {}", e))?;
+
+    Ok(distribution)
+}
+
+/// Get streak statistics (current and longest streaks)
+pub fn get_streak_stats(db: &Database) -> Result<StreakStats, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+
+    // Get all unique dates with entries, ordered by date descending
+    let mut stmt = conn
+        .prepare(
+            "SELECT DISTINCT date(created_at) as entry_date
+             FROM journal_entries
+             ORDER BY entry_date DESC",
+        )
+        .map_err(|e| format!("Prepare failed: {}", e))?;
+
+    let dates: Vec<String> = stmt
+        .query_map([], |row| row.get(0))
+        .map_err(|e| format!("Query failed: {}", e))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("Row parsing failed: {}", e))?;
+
+    if dates.is_empty() {
+        return Ok(StreakStats {
+            current_streak: 0,
+            longest_streak: 0,
+            last_entry_date: None,
+        });
+    }
+
+    let last_entry_date = dates.first().cloned();
+    let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+
+    // Calculate current streak (consecutive days from today or yesterday)
+    let mut current_streak = 0;
+    let mut check_date = chrono::Local::now().date_naive();
+
+    // If the last entry is not today, check if it was yesterday
+    if let Some(ref last_date) = last_entry_date {
+        if last_date != &today {
+            let yesterday = (chrono::Local::now() - chrono::Duration::days(1))
+                .format("%Y-%m-%d")
+                .to_string();
+            if last_date != &yesterday {
+                // Streak is broken
+                current_streak = 0;
+            } else {
+                check_date = check_date - chrono::Duration::days(1);
+            }
+        }
+    }
+
+    // Count consecutive days
+    if current_streak == 0 && (last_entry_date.as_ref() == Some(&today) ||
+        last_entry_date.as_ref() == Some(&(chrono::Local::now() - chrono::Duration::days(1)).format("%Y-%m-%d").to_string())) {
+        for date_str in &dates {
+            let expected = check_date.format("%Y-%m-%d").to_string();
+            if date_str == &expected {
+                current_streak += 1;
+                check_date = check_date - chrono::Duration::days(1);
+            } else {
+                break;
+            }
+        }
+    }
+
+    // Calculate longest streak
+    let mut longest_streak = 0;
+    let mut temp_streak = 1;
+
+    for i in 0..dates.len() - 1 {
+        let current = chrono::NaiveDate::parse_from_str(&dates[i], "%Y-%m-%d")
+            .map_err(|e| format!("Date parse failed: {}", e))?;
+        let next = chrono::NaiveDate::parse_from_str(&dates[i + 1], "%Y-%m-%d")
+            .map_err(|e| format!("Date parse failed: {}", e))?;
+
+        if (current - next).num_days() == 1 {
+            temp_streak += 1;
+        } else {
+            longest_streak = longest_streak.max(temp_streak);
+            temp_streak = 1;
+        }
+    }
+    longest_streak = longest_streak.max(temp_streak);
+
+    // Ensure current streak isn't greater than longest
+    current_streak = current_streak.min(longest_streak);
+    longest_streak = longest_streak.max(current_streak);
+
+    Ok(StreakStats {
+        current_streak,
+        longest_streak,
+        last_entry_date,
+    })
+}
+
+/// Get average mood by day of week
+pub fn get_day_of_week_stats(db: &Database) -> Result<Vec<DayOfWeekStats>, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+
+    let day_names = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT
+                CAST(strftime('%w', created_at) AS INTEGER) as dow,
+                AVG(mood) as avg_mood,
+                COUNT(*) as count
+             FROM journal_entries
+             GROUP BY dow
+             ORDER BY dow",
+        )
+        .map_err(|e| format!("Prepare failed: {}", e))?;
+
+    let stats = stmt
+        .query_map([], |row| {
+            let dow: i32 = row.get(0)?;
+            Ok(DayOfWeekStats {
+                day_of_week: dow,
+                day_name: day_names.get(dow as usize).unwrap_or(&"Unknown").to_string(),
+                average_mood: row.get(1)?,
+                entry_count: row.get(2)?,
+            })
+        })
+        .map_err(|e| format!("Query failed: {}", e))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("Row parsing failed: {}", e))?;
+
+    Ok(stats)
+}
+
+/// Get mood data for a specific month (for calendar view)
+pub fn get_monthly_mood_data(
+    db: &Database,
+    year: i32,
+    month: i32,
+) -> Result<Vec<CalendarDayData>, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT
+                date(created_at) as date,
+                AVG(mood) as avg_mood,
+                COUNT(*) as count
+             FROM journal_entries
+             WHERE strftime('%Y', created_at) = ?1
+               AND strftime('%m', created_at) = ?2
+             GROUP BY date(created_at)
+             ORDER BY date",
+        )
+        .map_err(|e| format!("Prepare failed: {}", e))?;
+
+    let year_str = format!("{:04}", year);
+    let month_str = format!("{:02}", month);
+
+    let data = stmt
+        .query_map(params![year_str, month_str], |row| {
+            Ok(CalendarDayData {
+                date: row.get(0)?,
+                average_mood: row.get(1)?,
+                entry_count: row.get(2)?,
+            })
+        })
+        .map_err(|e| format!("Query failed: {}", e))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("Row parsing failed: {}", e))?;
+
+    Ok(data)
 }

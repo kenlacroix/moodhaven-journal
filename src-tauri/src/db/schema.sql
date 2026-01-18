@@ -72,3 +72,37 @@ BEGIN
         entry_count = entry_count + 1,
         updated_at = datetime('now');
 END;
+
+-- Trigger to update daily stats on entry update (mood change)
+CREATE TRIGGER IF NOT EXISTS update_daily_stats_update
+    AFTER UPDATE ON journal_entries
+    WHEN OLD.mood != NEW.mood
+BEGIN
+    UPDATE mood_daily_stats
+    SET average_mood = (
+        SELECT AVG(mood) FROM journal_entries
+        WHERE date(created_at) = date(NEW.created_at)
+    ),
+    updated_at = datetime('now')
+    WHERE date = date(NEW.created_at);
+END;
+
+-- Trigger to update daily stats on entry delete
+CREATE TRIGGER IF NOT EXISTS update_daily_stats_delete
+    AFTER DELETE ON journal_entries
+BEGIN
+    UPDATE mood_daily_stats
+    SET average_mood = COALESCE(
+        (SELECT AVG(mood) FROM journal_entries WHERE date(created_at) = date(OLD.created_at)),
+        0
+    ),
+    entry_count = (
+        SELECT COUNT(*) FROM journal_entries WHERE date(created_at) = date(OLD.created_at)
+    ),
+    updated_at = datetime('now')
+    WHERE date = date(OLD.created_at);
+
+    -- Remove row if no entries left for that date
+    DELETE FROM mood_daily_stats
+    WHERE date = date(OLD.created_at) AND entry_count = 0;
+END;

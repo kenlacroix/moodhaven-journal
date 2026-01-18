@@ -1,0 +1,336 @@
+/**
+ * Journal Service
+ *
+ * Handles journal CRUD operations with automatic encryption/decryption.
+ * All sensitive data is encrypted before storage and decrypted after retrieval.
+ */
+
+import { invoke } from '@tauri-apps/api/core';
+import {
+  encrypt,
+  decrypt,
+  hashPassword,
+  verifyPasswordHash,
+  type EncryptedData,
+} from './crypto';
+import type {
+  JournalEntry,
+  JournalEntryFormData,
+  MoodLevel,
+  MoodStatistics,
+} from '../types/journal';
+
+// ============================================================================
+// Types matching Rust backend
+// ============================================================================
+
+interface EncryptedJournalEntryRow {
+  id: string;
+  encrypted_content: EncryptedData;
+  mood: number;
+  created_at: string;
+  updated_at: string;
+}
+
+interface UserSettings {
+  password_hash: string;
+  password_salt: string;
+}
+
+interface DailyStats {
+  date: string;
+  average_mood: number;
+  entry_count: number;
+}
+
+// ============================================================================
+// Password Management
+// ============================================================================
+
+/**
+ * Check if user has set up their password
+ */
+export async function hasPassword(): Promise<boolean> {
+  return invoke<boolean>('check_password_exists');
+}
+
+/**
+ * Set up initial password
+ */
+export async function setupPassword(password: string): Promise<void> {
+  const { hash, salt } = await hashPassword(password);
+  await invoke('store_password_hash', { hash, salt });
+}
+
+/**
+ * Verify user's password against stored hash
+ */
+export async function verifyPassword(password: string): Promise<boolean> {
+  const settings = await invoke<UserSettings | null>('get_password_hash');
+
+  if (!settings) {
+    return false;
+  }
+
+  return verifyPasswordHash(
+    password,
+    settings.password_hash,
+    settings.password_salt
+  );
+}
+
+// ============================================================================
+// Session Management
+// ============================================================================
+
+// In-memory password for the session (cleared on app close)
+let sessionPassword: string | null = null;
+
+/**
+ * Unlock the journal with password
+ */
+export async function unlockJournal(password: string): Promise<boolean> {
+  const isValid = await verifyPassword(password);
+
+  if (isValid) {
+    sessionPassword = password;
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Lock the journal (clear session password)
+ */
+export function lockJournal(): void {
+  sessionPassword = null;
+}
+
+/**
+ * Check if journal is unlocked
+ */
+export function isUnlocked(): boolean {
+  return sessionPassword !== null;
+}
+
+/**
+ * Get session password (throws if locked)
+ */
+function getPassword(): string {
+  if (!sessionPassword) {
+    throw new Error('Journal is locked. Please unlock first.');
+  }
+  return sessionPassword;
+}
+
+// ============================================================================
+// Journal Entry Operations
+// ============================================================================
+
+/**
+ * Create a new journal entry (encrypts content automatically)
+ */
+export async function createEntry(
+  data: JournalEntryFormData
+): Promise<JournalEntry> {
+  const password = getPassword();
+
+  // Encrypt the content
+  const result = await encrypt(data.content, password);
+
+  if (!result.success || !result.data) {
+    throw new Error(result.error || 'Encryption failed');
+  }
+
+  // Generate UUID
+  const id = crypto.randomUUID();
+
+  // Store in database
+  const row = await invoke<EncryptedJournalEntryRow>('create_journal_entry', {
+    id,
+    encryptedContent: result.data,
+    mood: data.mood,
+  });
+
+  // Return decrypted entry
+  return {
+    id: row.id,
+    content: data.content, // We already have the plaintext
+    mood: row.mood as MoodLevel,
+    tags: data.tags,
+    createdAt: new Date(row.created_at),
+    updatedAt: new Date(row.updated_at),
+  };
+}
+
+/**
+ * Get a single entry by ID (decrypts automatically)
+ */
+export async function getEntry(id: string): Promise<JournalEntry | null> {
+  const password = getPassword();
+
+  const row = await invoke<EncryptedJournalEntryRow | null>(
+    'get_journal_entry',
+    { id }
+  );
+
+  if (!row) {
+    return null;
+  }
+
+  return decryptEntry(row, password);
+}
+
+/**
+ * Get all entries (decrypts automatically)
+ */
+export async function getAllEntries(
+  limit?: number
+): Promise<JournalEntry[]> {
+  const password = getPassword();
+
+  const rows = await invoke<EncryptedJournalEntryRow[]>(
+    'get_all_journal_entries',
+    { limit }
+  );
+
+  // Decrypt all entries in parallel
+  const entries = await Promise.all(
+    rows.map((row) => decryptEntry(row, password))
+  );
+
+  return entries;
+}
+
+/**
+ * Get entries by date range
+ */
+export async function getEntriesByDateRange(
+  startDate: Date,
+  endDate: Date
+): Promise<JournalEntry[]> {
+  const password = getPassword();
+
+  const rows = await invoke<EncryptedJournalEntryRow[]>(
+    'get_journal_entries_by_date',
+    {
+      startDate: formatDate(startDate),
+      endDate: formatDate(endDate),
+    }
+  );
+
+  const entries = await Promise.all(
+    rows.map((row) => decryptEntry(row, password))
+  );
+
+  return entries;
+}
+
+/**
+ * Update an existing entry
+ */
+export async function updateEntry(
+  id: string,
+  data: JournalEntryFormData
+): Promise<JournalEntry> {
+  const password = getPassword();
+
+  // Encrypt the new content
+  const result = await encrypt(data.content, password);
+
+  if (!result.success || !result.data) {
+    throw new Error(result.error || 'Encryption failed');
+  }
+
+  const row = await invoke<EncryptedJournalEntryRow>('update_journal_entry', {
+    id,
+    encryptedContent: result.data,
+    mood: data.mood,
+  });
+
+  return {
+    id: row.id,
+    content: data.content,
+    mood: row.mood as MoodLevel,
+    tags: data.tags,
+    createdAt: new Date(row.created_at),
+    updatedAt: new Date(row.updated_at),
+  };
+}
+
+/**
+ * Delete an entry
+ */
+export async function deleteEntry(id: string): Promise<boolean> {
+  return invoke<boolean>('delete_journal_entry', { id });
+}
+
+// ============================================================================
+// Statistics
+// ============================================================================
+
+/**
+ * Get mood statistics for a date range
+ */
+export async function getMoodStatistics(
+  startDate: Date,
+  endDate: Date
+): Promise<DailyStats[]> {
+  return invoke<DailyStats[]>('get_mood_statistics', {
+    startDate: formatDate(startDate),
+    endDate: formatDate(endDate),
+  });
+}
+
+/**
+ * Get overall statistics
+ */
+export async function getOverallStatistics(): Promise<MoodStatistics> {
+  const [averageMood, totalEntries] = await invoke<[number, number]>(
+    'get_overall_statistics'
+  );
+
+  // TODO: Calculate full statistics including streaks
+  return {
+    averageMood,
+    totalEntries,
+    moodDistribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+    streak: 0,
+    longestStreak: 0,
+  };
+}
+
+// ============================================================================
+// Helper Functions
+// ============================================================================
+
+/**
+ * Decrypt an encrypted entry row
+ */
+async function decryptEntry(
+  row: EncryptedJournalEntryRow,
+  password: string
+): Promise<JournalEntry> {
+  const result = await decrypt(row.encrypted_content, password);
+
+  if (!result.success || result.data === undefined) {
+    throw new Error(result.error || 'Decryption failed');
+  }
+
+  return {
+    id: row.id,
+    content: result.data,
+    mood: row.mood as MoodLevel,
+    tags: [], // TODO: Fetch from entry_tags table
+    createdAt: new Date(row.created_at),
+    updatedAt: new Date(row.updated_at),
+  };
+}
+
+/**
+ * Format date as YYYY-MM-DD for SQLite
+ */
+function formatDate(date: Date): string {
+  return date.toISOString().split('T')[0];
+}

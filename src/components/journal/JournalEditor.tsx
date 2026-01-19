@@ -10,6 +10,8 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { MoodSelector } from './MoodSelector';
+import { TemplateSelector } from './TemplateSelector';
+import { formatTemplateContent, type JournalTemplate } from '../../lib/journalTemplates';
 import type { MoodLevel, JournalEntryFormData } from '../../types/journal';
 
 interface JournalEditorProps {
@@ -39,12 +41,35 @@ export function JournalEditor({
   const [mood, setMood] = useState<MoodLevel | null>(initialData?.mood ?? null);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedTemplate, setSelectedTemplate] = useState<string | undefined>();
+  const [showTemplates, setShowTemplates] = useState(!isEditing && !content);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Random prompt for placeholder
   const [prompt] = useState(
     () => PROMPTS[Math.floor(Math.random() * PROMPTS.length)]
   );
+
+  // Handle template selection
+  const handleTemplateSelect = useCallback((template: JournalTemplate) => {
+    setSelectedTemplate(template.id);
+    const templateContent = formatTemplateContent(template);
+    setContent(templateContent);
+    if (template.defaultMood) {
+      setMood(template.defaultMood as MoodLevel);
+    }
+    setShowTemplates(false);
+    // Focus textarea
+    setTimeout(() => {
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+        textareaRef.current.setSelectionRange(
+          templateContent.length,
+          templateContent.length
+        );
+      }
+    }, 100);
+  }, []);
 
   // Handle initialContent changes (from AI prompts)
   useEffect(() => {
@@ -102,6 +127,8 @@ export function JournalEditor({
       if (!isEditing) {
         setContent('');
         setMood(null);
+        setSelectedTemplate(undefined);
+        setShowTemplates(true);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save entry');
@@ -139,15 +166,43 @@ export function JournalEditor({
             <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">
               {isEditing ? 'Edit Entry' : 'New Entry'}
             </h2>
-            <time className="text-sm text-slate-400 dark:text-slate-500">
-              {new Date().toLocaleDateString('en-US', {
-                weekday: 'long',
-                month: 'short',
-                day: 'numeric',
-              })}
-            </time>
+            <div className="flex items-center gap-3">
+              {!isEditing && (
+                <button
+                  type="button"
+                  onClick={() => setShowTemplates(!showTemplates)}
+                  className={`
+                    text-sm font-medium px-3 py-1.5 rounded-lg transition-colors
+                    ${showTemplates
+                      ? 'bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400'
+                      : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                    }
+                  `}
+                >
+                  Templates
+                </button>
+              )}
+              <time className="text-sm text-slate-400 dark:text-slate-500">
+                {new Date().toLocaleDateString('en-US', {
+                  weekday: 'long',
+                  month: 'short',
+                  day: 'numeric',
+                })}
+              </time>
+            </div>
           </div>
         </div>
+
+        {/* Template Selector */}
+        {showTemplates && !isEditing && (
+          <div className="px-6 py-4 bg-slate-50/50 dark:bg-slate-800/20 border-b border-slate-100 dark:border-slate-800">
+            <TemplateSelector
+              onSelect={handleTemplateSelect}
+              selectedId={selectedTemplate}
+              compact
+            />
+          </div>
+        )}
 
         {/* Mood Selector */}
         <div className="px-6 py-5 bg-slate-50/50 dark:bg-slate-800/30">

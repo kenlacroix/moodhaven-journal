@@ -20,10 +20,14 @@
 | Journal Entry | P0 | **Complete** | Encrypted journaling with mood association |
 | Calendar View | P1 | **Complete** | Visual calendar showing mood trends by day |
 | Analytics Dashboard | P1 | **Complete** | Charts: distribution, trends, streaks, weekly patterns |
-| Settings Panel | P2 | **Complete** | User preferences, AI config, appearance, privacy |
-| AI Insights | P2 | In Progress | Privacy-focused AI insights (opt-in, OpenAI/local AI) |
-| Export/Import | P2 | Planned | Backup and restore data |
+| Settings Panel | P2 | **Complete** | Tabbed settings with search, data management |
+| AI Insights | P2 | **Complete** | Privacy-focused AI insights (opt-in, OpenAI/local AI) |
+| First-Run Wizard | P2 | **Complete** | Welcome, password setup, storage selection, import |
+| Export/Import | P2 | **Complete** | Encrypted backup and restore functionality |
+| Journal Templates | P2 | **Complete** | 7 templates: Gratitude, Happiness, Rest, etc. |
+| Factory Reset | P2 | **Complete** | Complete data wipe with confirmation |
 | Reminders | P3 | Planned | Configurable notification reminders |
+| 2FA Support | P3 | Planned | Optional YubiKey/OTP authentication |
 
 ### Feature Implementation Guidelines
 
@@ -462,8 +466,8 @@ interface AISettings {
 <!-- Update this section as development progresses -->
 
 ```markdown
-## Sprint: Phase 2-3 (AI & Polish)
-Duration: Week 3-4
+## Sprint: Phase 4 (Polish & Release Prep)
+Duration: Week 5
 
 ### Completed
 - [x] Project structure setup
@@ -481,20 +485,23 @@ Duration: Week 3-4
 - [x] Privacy-first AI insights (metadata-only)
 - [x] Local sentiment/emotion extraction
 - [x] Bug fix: Journal save freeze (v0.2.1)
+- [x] First-run wizard (welcome, password, storage)
+- [x] Export/import functionality
+- [x] Settings page improvements (tabs, search)
+- [x] Journal templates (7 templates)
+- [x] Factory reset function
 
 ### In Progress
-- [ ] First-run wizard (welcome, password, storage)
-- [ ] Export/import functionality
-- [ ] Settings page improvements (tabs, search)
+- [ ] Cross-platform build testing
+- [ ] User documentation
 
 ### Blocked
 - None
 
 ### Upcoming
-- [ ] Journal templates (gratitude, happiness, rest, grounding)
-- [ ] Factory reset function
 - [ ] 2FA support (optional)
-- [ ] Cross-platform build documentation
+- [ ] Cloud storage backends (Dropbox, WebDAV)
+- [ ] Reminders/notifications
 ```
 
 ### Known Issues (Fixed)
@@ -588,6 +595,114 @@ Duration: Week 3-4
 - [ ] GitHub release created
 - [ ] Release notes published
 - [ ] Download links verified
+```
+
+---
+
+## 7. Cross-Platform Build Guide
+
+### Prerequisites
+
+All platforms require:
+- Node.js 18+ and npm
+- Rust toolchain (rustup, cargo)
+- Platform-specific build tools (see below)
+
+### Linux Build
+
+```bash
+# Install dependencies (Ubuntu/Debian)
+sudo apt update
+sudo apt install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
+
+# Build
+npm install
+npm run tauri build
+
+# Output: src-tauri/target/release/bundle/
+# - AppImage: moodbloom_x.x.x_amd64.AppImage
+# - Debian: moodbloom_x.x.x_amd64.deb
+```
+
+### Windows Build
+
+```powershell
+# Install dependencies
+# - Visual Studio Build Tools 2022 with "Desktop development with C++"
+# - WebView2 Runtime (usually pre-installed on Windows 10/11)
+
+# Build
+npm install
+npm run tauri build
+
+# Output: src-tauri/target/release/bundle/
+# - MSI installer: moodbloom_x.x.x_x64_en-US.msi
+# - NSIS installer: moodbloom_x.x.x_x64-setup.exe
+```
+
+### macOS Build
+
+```bash
+# Install Xcode Command Line Tools
+xcode-select --install
+
+# Build
+npm install
+npm run tauri build
+
+# Output: src-tauri/target/release/bundle/
+# - .app bundle: MoodBloom.app
+# - DMG installer: MoodBloom_x.x.x_x64.dmg
+
+# For universal binary (Intel + Apple Silicon):
+npm run tauri build -- --target universal-apple-darwin
+```
+
+### Code Signing
+
+#### Windows
+Set environment variables before building:
+```powershell
+$env:TAURI_PRIVATE_KEY = "path/to/private-key.pem"
+$env:TAURI_KEY_PASSWORD = "your-password"
+```
+
+#### macOS
+```bash
+# Notarization (requires Apple Developer account)
+export APPLE_ID="your@email.com"
+export APPLE_PASSWORD="app-specific-password"
+export APPLE_TEAM_ID="XXXXXXXXXX"
+```
+
+### Build Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| Rust compilation errors | Run `rustup update` |
+| WebKit not found (Linux) | Install `libwebkit2gtk-4.1-dev` |
+| Code signing failed | Check certificate/key paths |
+| Bundle too large | Enable `strip = true` in Cargo.toml (already configured) |
+
+### Release Checklist
+
+```markdown
+## Pre-Release
+- [ ] Version bumped in package.json, Cargo.toml, tauri.conf.json
+- [ ] CLAUDE.md updated with changes
+- [ ] `npm run typecheck` passes
+- [ ] `cargo check` passes
+- [ ] Test on clean install
+
+## Build & Test
+- [ ] Linux: AppImage works on Ubuntu 22.04+
+- [ ] Windows: MSI installs on Windows 10/11
+- [ ] macOS: DMG installs on macOS 10.15+
+
+## Release
+- [ ] Create GitHub release with changelog
+- [ ] Upload platform binaries
+- [ ] Verify download links work
 ```
 
 ---

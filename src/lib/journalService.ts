@@ -65,7 +65,7 @@ export async function setupPassword(password: string): Promise<void> {
 /**
  * Verify user's password against stored hash
  */
-export async function verifyPassword(password: string): Promise<boolean> {
+export async function verifyUserPassword(password: string): Promise<boolean> {
   const settings = await invoke<UserSettings | null>('get_password_hash');
 
   if (!settings) {
@@ -90,7 +90,7 @@ let sessionPassword: string | null = null;
  * Unlock the journal with password
  */
 export async function unlockJournal(password: string): Promise<boolean> {
-  const isValid = await verifyPassword(password);
+  const isValid = await verifyUserPassword(password);
 
   if (isValid) {
     sessionPassword = password;

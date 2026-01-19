@@ -673,7 +673,7 @@ function FeatureItem({ icon, title, description }: { icon: string; title: string
 
 // Storage option component
 function StorageOption({
-  type,
+  type: _type,
   title,
   description,
   icon,

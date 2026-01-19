@@ -7,7 +7,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useAppStore } from '../stores/appStore';
 import { get2FAStatus } from '../lib/twoFactorService';
-import { verifyPassword } from '../lib/journalService';
+import { verifyUserPassword } from '../lib/journalService';
 import { TwoFactorVerify } from '../components/twoFactor';
 import type { TwoFactorStatus } from '../types/twoFactor';
 
@@ -43,7 +43,7 @@ export function LockScreen() {
 
       try {
         // First verify the password
-        const isPasswordValid = await verifyPassword(password);
+        const isPasswordValid = await verifyUserPassword(password);
 
         if (!isPasswordValid) {
           setError('Incorrect password. Please try again.');

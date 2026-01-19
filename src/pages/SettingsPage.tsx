@@ -18,6 +18,7 @@ import {
 import { testOpenAIKey, testLocalAIConnection } from '../lib/settingsService';
 import {
   factoryReset,
+  exitApp,
   exportData,
   getDataStats,
   downloadBackup,
@@ -182,8 +183,9 @@ export function SettingsPage() {
     setIsResetting(true);
     try {
       await factoryReset();
-      // Reload the app to return to first-run state
-      window.location.reload();
+      // Exit the app completely - user will need to reopen it
+      // This ensures the backend reinitializes with a fresh database
+      await exitApp();
     } catch (error) {
       console.error('Reset failed:', error);
       setIsResetting(false);

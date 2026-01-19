@@ -51,7 +51,7 @@ function base64ToBuffer(base64: string): ArrayBuffer {
   for (let i = 0; i < binary.length; i++) {
     bytes[i] = binary.charCodeAt(i);
   }
-  return bytes.buffer;
+  return bytes.buffer as ArrayBuffer;
 }
 
 /**
@@ -81,7 +81,7 @@ async function deriveKey(
   return crypto.subtle.deriveKey(
     {
       name: 'PBKDF2',
-      salt,
+      salt: salt as BufferSource,
       iterations: PBKDF2_ITERATIONS,
       hash: 'SHA-256',
     },
@@ -123,7 +123,7 @@ export async function encrypt(
     const ciphertext = await crypto.subtle.encrypt(
       {
         name: ALGORITHM,
-        iv,
+        iv: iv as BufferSource,
       },
       key,
       encodedText
@@ -133,8 +133,8 @@ export async function encrypt(
       success: true,
       data: {
         ciphertext: bufferToBase64(ciphertext),
-        iv: bufferToBase64(iv.buffer),
-        salt: bufferToBase64(salt.buffer),
+        iv: bufferToBase64(iv.buffer as ArrayBuffer),
+        salt: bufferToBase64(salt.buffer as ArrayBuffer),
         version: 1,
       },
     };
@@ -228,7 +228,7 @@ export async function hashPassword(
   const hashBits = await crypto.subtle.deriveBits(
     {
       name: 'PBKDF2',
-      salt: useSalt,
+      salt: useSalt as BufferSource,
       iterations: PBKDF2_ITERATIONS,
       hash: 'SHA-256',
     },
@@ -238,7 +238,7 @@ export async function hashPassword(
 
   return {
     hash: bufferToBase64(hashBits),
-    salt: bufferToBase64(useSalt.buffer),
+    salt: bufferToBase64(useSalt.buffer as ArrayBuffer),
   };
 }
 

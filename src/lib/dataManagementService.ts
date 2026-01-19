@@ -15,6 +15,13 @@ export async function factoryReset(): Promise<boolean> {
 }
 
 /**
+ * Exit the application (used after factory reset to fully restart)
+ */
+export async function exitApp(): Promise<void> {
+  return invoke<void>('exit_app');
+}
+
+/**
  * Export all journal data to encrypted backup
  * @param password - Password to encrypt the backup
  * @returns Base64-encoded backup string

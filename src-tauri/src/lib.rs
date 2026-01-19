@@ -63,6 +63,7 @@ pub fn run() {
             commands::export_data,
             commands::import_data,
             commands::get_data_stats,
+            commands::exit_app,
             // Two-factor authentication
             commands::generate_totp_secret,
             commands::verify_totp_code,

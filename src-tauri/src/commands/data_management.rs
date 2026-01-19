@@ -7,6 +7,12 @@ use std::fs;
 
 use crate::db::{self, Database};
 
+/// Exit the application (used after factory reset)
+#[tauri::command]
+pub fn exit_app() {
+    std::process::exit(0);
+}
+
 /// Factory reset - wipe all app data and return to first-run state
 #[tauri::command]
 pub async fn factory_reset(app: AppHandle) -> Result<bool, String> {

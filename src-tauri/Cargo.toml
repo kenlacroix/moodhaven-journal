@@ -1,6 +1,6 @@
 [package]
 name = "moodbloom"
-version = "0.2.0"
+version = "0.2.1"
 description = "A calm, secure mood tracking and journaling app"
 authors = ["MoodBloom"]
 edition = "2021"

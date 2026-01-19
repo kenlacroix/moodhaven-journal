@@ -462,27 +462,53 @@ interface AISettings {
 <!-- Update this section as development progresses -->
 
 ```markdown
-## Sprint: Foundation Setup
-Duration: Week 1-2
+## Sprint: Phase 2-3 (AI & Polish)
+Duration: Week 3-4
 
 ### Completed
-- [ ] Project structure setup
-- [ ] Tauri + React + TypeScript scaffolding
-- [ ] TailwindCSS configuration
-- [ ] Basic window and navigation
+- [x] Project structure setup
+- [x] Tauri + React + TypeScript scaffolding
+- [x] TailwindCSS configuration
+- [x] Basic window and navigation
+- [x] Data models definition
+- [x] SQLite database with triggers
+- [x] AES-256-GCM encryption module (PBKDF2, 600k iterations)
+- [x] Mood entry UI (5-level emoji scale)
+- [x] Journal editor with encryption
+- [x] Calendar view with mood heatmap
+- [x] Analytics dashboard (charts, streaks, patterns)
+- [x] Settings panel (AI, appearance, privacy)
+- [x] Privacy-first AI insights (metadata-only)
+- [x] Local sentiment/emotion extraction
+- [x] Bug fix: Journal save freeze (v0.2.1)
 
 ### In Progress
-- [ ] Data models definition
-- [ ] SQLite database setup
-- [ ] Encryption module
+- [ ] First-run wizard (welcome, password, storage)
+- [ ] Export/import functionality
+- [ ] Settings page improvements (tabs, search)
 
 ### Blocked
 - None
 
 ### Upcoming
-- [ ] Mood entry UI
-- [ ] Basic journal editor
+- [ ] Journal templates (gratitude, happiness, rest, grounding)
+- [ ] Factory reset function
+- [ ] 2FA support (optional)
+- [ ] Cross-platform build documentation
 ```
+
+### Known Issues (Fixed)
+
+| Issue | Version Fixed | Description |
+|-------|---------------|-------------|
+| Journal save freeze | v0.2.1 | App would become unresponsive when saving entries due to Rust Mutex deadlock |
+
+### Technical Notes
+
+#### Journal Save Freeze Fix (v0.2.1)
+- **Root Cause:** `std::sync::Mutex` in Rust is non-reentrant. `create_entry` and `update_entry` were acquiring the database mutex lock, then calling `get_entry` which tried to acquire the same lock, causing a deadlock.
+- **Solution:** Modified both functions to query directly using the existing connection instead of calling separate functions that acquire new locks.
+- **Files Changed:** `src-tauri/src/db/mod.rs`
 
 ### Task Templates
 

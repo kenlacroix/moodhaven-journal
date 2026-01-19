@@ -196,8 +196,26 @@ pub fn create_entry(
     )
     .map_err(|e| format!("Failed to create entry: {}", e))?;
 
-    // Fetch the created entry
-    get_entry(db, id)?.ok_or_else(|| "Entry not found after creation".to_string())
+    // Fetch the created entry using the same connection (avoid deadlock)
+    conn.query_row(
+        "SELECT id, encrypted_content, mood, created_at, updated_at
+         FROM journal_entries WHERE id = ?1",
+        params![id],
+        |row| {
+            let content_json: String = row.get(1)?;
+            let ec: EncryptedContent = serde_json::from_str(&content_json)
+                .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+
+            Ok(JournalEntryRow {
+                id: row.get(0)?,
+                encrypted_content: ec,
+                mood: row.get(2)?,
+                created_at: row.get(3)?,
+                updated_at: row.get(4)?,
+            })
+        },
+    )
+    .map_err(|e| format!("Failed to fetch created entry: {}", e))
 }
 
 /// Get a single entry by ID
@@ -329,8 +347,26 @@ pub fn update_entry(
         return Err("Entry not found".to_string());
     }
 
-    drop(conn);
-    get_entry(db, id)?.ok_or_else(|| "Entry not found after update".to_string())
+    // Fetch the updated entry using the same connection (avoid deadlock/race)
+    conn.query_row(
+        "SELECT id, encrypted_content, mood, created_at, updated_at
+         FROM journal_entries WHERE id = ?1",
+        params![id],
+        |row| {
+            let content_json: String = row.get(1)?;
+            let ec: EncryptedContent = serde_json::from_str(&content_json)
+                .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+
+            Ok(JournalEntryRow {
+                id: row.get(0)?,
+                encrypted_content: ec,
+                mood: row.get(2)?,
+                created_at: row.get(3)?,
+                updated_at: row.get(4)?,
+            })
+        },
+    )
+    .map_err(|e| format!("Failed to fetch updated entry: {}", e))
 }
 
 /// Delete an entry

@@ -1,6 +1,6 @@
 [package]
 name = "moodbloom"
-version = "0.3.0"
+version = "0.3.1"
 description = "A calm, secure mood tracking and journaling app"
 authors = ["MoodBloom"]
 edition = "2021"
@@ -22,6 +22,7 @@ rusqlite = { version = "0.31", features = ["bundled"] }
 uuid = { version = "1", features = ["v4"] }
 chrono = { version = "0.4", features = ["serde"] }
 anyhow = "1"
+base64 = "0.21"
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-shell = "2"

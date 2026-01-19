@@ -63,6 +63,18 @@ pub fn run() {
             commands::export_data,
             commands::import_data,
             commands::get_data_stats,
+            // Two-factor authentication
+            commands::generate_totp_secret,
+            commands::verify_totp_code,
+            commands::enable_totp,
+            commands::store_webauthn_credential_cmd,
+            commands::get_webauthn_credentials,
+            commands::regenerate_backup_codes,
+            commands::verify_backup_code,
+            commands::get_backup_codes_count,
+            commands::get_2fa_status,
+            commands::disable_2fa,
+            commands::verify_2fa_totp,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

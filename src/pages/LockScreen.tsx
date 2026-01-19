@@ -1,17 +1,35 @@
 /**
  * LockScreen - Password entry screen for unlocking the journal
+ *
+ * Supports two-factor authentication after password verification.
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useAppStore } from '../stores/appStore';
+import { get2FAStatus } from '../lib/twoFactorService';
+import { verifyPassword } from '../lib/journalService';
+import { TwoFactorVerify } from '../components/twoFactor';
+import type { TwoFactorStatus } from '../types/twoFactor';
+
+type LockScreenStep = 'password' | '2fa';
 
 export function LockScreen() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [step, setStep] = useState<LockScreenStep>('password');
+  const [twoFactorStatus, setTwoFactorStatus] = useState<TwoFactorStatus | null>(null);
+  const [verifiedPassword, setVerifiedPassword] = useState<string | null>(null);
+
   const unlock = useAppStore((state) => state.unlock);
 
-  const handleSubmit = useCallback(
+  // Check 2FA status on mount
+  useEffect(() => {
+    get2FAStatus().then(setTwoFactorStatus).catch(() => setTwoFactorStatus(null));
+  }, []);
+
+  // Handle password form submission
+  const handlePasswordSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
 
@@ -24,10 +42,28 @@ export function LockScreen() {
       setIsLoading(true);
 
       try {
-        const success = await unlock(password);
-        if (!success) {
+        // First verify the password
+        const isPasswordValid = await verifyPassword(password);
+
+        if (!isPasswordValid) {
           setError('Incorrect password. Please try again.');
           setPassword('');
+          setIsLoading(false);
+          return;
+        }
+
+        // Password is valid - check if 2FA is enabled
+        if (twoFactorStatus?.enabled) {
+          // Store password for later use after 2FA verification
+          setVerifiedPassword(password);
+          setStep('2fa');
+        } else {
+          // No 2FA, unlock directly
+          const success = await unlock(password);
+          if (!success) {
+            setError('Failed to unlock. Please try again.');
+            setPassword('');
+          }
         }
       } catch (err) {
         setError('An error occurred. Please try again.');
@@ -35,8 +71,40 @@ export function LockScreen() {
         setIsLoading(false);
       }
     },
-    [password, unlock]
+    [password, unlock, twoFactorStatus]
   );
+
+  // Handle successful 2FA verification
+  const handle2FASuccess = useCallback(async () => {
+    if (!verifiedPassword) {
+      setStep('password');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const success = await unlock(verifiedPassword);
+      if (!success) {
+        setError('Failed to unlock. Please try again.');
+        setStep('password');
+        setVerifiedPassword(null);
+        setPassword('');
+      }
+    } catch (err) {
+      setError('An error occurred. Please try again.');
+      setStep('password');
+      setVerifiedPassword(null);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [verifiedPassword, unlock]);
+
+  // Handle 2FA cancellation - go back to password entry
+  const handle2FACancel = useCallback(() => {
+    setStep('password');
+    setVerifiedPassword(null);
+    setPassword('');
+  }, []);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 p-4">
@@ -54,50 +122,70 @@ export function LockScreen() {
               <span className="text-white text-2xl font-bold">M</span>
             </div>
             <h1 className="text-2xl font-bold text-slate-800 dark:text-white">
-              Welcome Back
+              {step === 'password' ? 'Welcome Back' : 'Verify Identity'}
             </h1>
             <p className="text-slate-500 dark:text-slate-400 mt-1">
-              Enter your password to unlock
+              {step === 'password'
+                ? 'Enter your password to unlock'
+                : 'Complete two-factor authentication'}
             </p>
           </div>
 
-          {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div>
-              <label htmlFor="password" className="label">
-                Password
-              </label>
-              <input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter your password"
-                autoFocus
-                disabled={isLoading}
-                className="input"
-              />
-            </div>
+          {/* Password Step */}
+          {step === 'password' && (
+            <form onSubmit={handlePasswordSubmit} className="space-y-6">
+              <div>
+                <label htmlFor="password" className="label">
+                  Password
+                </label>
+                <input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Enter your password"
+                  autoFocus
+                  disabled={isLoading}
+                  className="input"
+                />
+              </div>
 
-            {error && (
-              <p className="text-sm text-rose-500 dark:text-rose-400">{error}</p>
-            )}
-
-            <button
-              type="submit"
-              disabled={isLoading || !password}
-              className="btn-primary w-full py-3"
-            >
-              {isLoading ? (
-                <>
-                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Unlocking...
-                </>
-              ) : (
-                'Unlock Journal'
+              {error && (
+                <p className="text-sm text-rose-500 dark:text-rose-400">{error}</p>
               )}
-            </button>
-          </form>
+
+              <button
+                type="submit"
+                disabled={isLoading || !password}
+                className="btn-primary w-full py-3"
+              >
+                {isLoading ? (
+                  <>
+                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Verifying...
+                  </>
+                ) : (
+                  'Continue'
+                )}
+              </button>
+
+              {/* 2FA indicator */}
+              {twoFactorStatus?.enabled && (
+                <p className="text-xs text-center text-slate-400 dark:text-slate-500">
+                  Two-factor authentication is enabled
+                </p>
+              )}
+            </form>
+          )}
+
+          {/* 2FA Step */}
+          {step === '2fa' && twoFactorStatus && (
+            <TwoFactorVerify
+              method={twoFactorStatus.method}
+              onSuccess={handle2FASuccess}
+              onCancel={handle2FACancel}
+            />
+          )}
 
           {/* Security note */}
           <p className="text-xs text-slate-400 dark:text-slate-500 text-center mt-6">

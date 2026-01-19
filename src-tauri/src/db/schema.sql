@@ -106,3 +106,22 @@ BEGIN
     DELETE FROM mood_daily_stats
     WHERE date = date(OLD.created_at) AND entry_count = 0;
 END;
+
+-- Two-Factor Authentication settings
+CREATE TABLE IF NOT EXISTS two_factor_auth (
+    id INTEGER PRIMARY KEY CHECK (id = 1),  -- Singleton row
+    enabled INTEGER NOT NULL DEFAULT 0,      -- 0 = disabled, 1 = enabled
+    method TEXT,                             -- 'totp', 'webauthn', 'both', or NULL
+    totp_secret TEXT,                        -- Encrypted TOTP secret (Base32)
+    webauthn_credentials TEXT,               -- JSON array of registered credentials
+    backup_codes TEXT,                       -- JSON array of SHA-256 hashed codes
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Settings table for storing application settings
+CREATE TABLE IF NOT EXISTS app_settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);

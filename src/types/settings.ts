@@ -65,6 +65,17 @@ export interface AppearanceSettings {
   animationsEnabled: boolean;
 }
 
+// Storage backend options
+export type StorageBackend = 'local' | 'dropbox' | 'webdav';
+
+// Storage settings
+export interface StorageSettings {
+  type: StorageBackend;
+  webdavUrl?: string;
+  dropboxToken?: string;
+  lastSyncDate?: string; // ISO timestamp
+}
+
 // Complete app settings
 export interface AppSettings {
   version: string; // Settings schema version
@@ -72,6 +83,7 @@ export interface AppSettings {
   journal: JournalPreferences;
   privacy: PrivacySettings;
   appearance: AppearanceSettings;
+  storage: StorageSettings;
 }
 
 // Default settings factory
@@ -117,6 +129,9 @@ export function createDefaultSettings(): AppSettings {
       theme: 'system',
       compactMode: false,
       animationsEnabled: true,
+    },
+    storage: {
+      type: 'local',
     },
   };
 }

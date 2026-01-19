@@ -28,12 +28,12 @@ import {
  */
 export function extractEntryMetadata(entry: JournalEntry): EntryMetadata {
   const content = entry.content.toLowerCase();
-  const date = new Date(entry.createdAt);
+  const date = new Date(entry.created_at);
 
   return {
     id: entry.id,
-    mood: entry.mood,
-    sentiment: analyzeSentiment(content, entry.mood),
+    mood: entry.mood || 3,
+    sentiment: analyzeSentiment(content, entry.mood || 3),
     emotionalIndicators: detectEmotionalIndicators(content),
     wordCount: countWords(entry.content),
     timeOfDay: getTimeOfDay(date),
@@ -260,7 +260,7 @@ function calculatePatterns(
 function calculateFrequency(entries: JournalEntry[]): FrequencyPattern {
   if (entries.length < 2) return 'rare';
 
-  const dates = entries.map((e) => new Date(e.createdAt).toISOString().split('T')[0]);
+  const dates = entries.map((e) => new Date(e.created_at).toISOString().split('T')[0]);
   const uniqueDates = new Set(dates);
   const daySpan = Math.max(
     1,

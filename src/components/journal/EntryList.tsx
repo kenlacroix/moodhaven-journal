@@ -23,7 +23,7 @@ function groupEntriesByDate(entries: JournalEntry[]): Map<string, JournalEntry[]
   const groups = new Map<string, JournalEntry[]>();
 
   entries.forEach((entry) => {
-    const dateKey = entry.createdAt.toLocaleDateString('en-US', {
+    const dateKey = new Date(entry.created_at).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'long',
       day: 'numeric',
@@ -66,13 +66,13 @@ function EntryCard({
   onClick: () => void;
   onDelete?: () => void;
 }) {
-  const mood = getMoodOption(entry.mood);
+  const mood = entry.mood ? getMoodOption(entry.mood) : null;
   const preview =
     entry.content.length > 150
       ? entry.content.substring(0, 150) + '...'
       : entry.content;
 
-  const time = entry.createdAt.toLocaleTimeString('en-US', {
+  const time = new Date(entry.created_at).toLocaleTimeString('en-US', {
     hour: 'numeric',
     minute: '2-digit',
   });
@@ -95,26 +95,32 @@ function EntryCard({
       onKeyDown={(e) => e.key === 'Enter' && onClick()}
       tabIndex={0}
       role="button"
-      aria-label={`Journal entry from ${time}, mood: ${mood.label}`}
+      aria-label={`Journal entry from ${time}${mood ? `, mood: ${mood.label}` : ''}`}
     >
       {/* Mood indicator stripe */}
-      <div
-        className={`
-          absolute left-0 top-4 bottom-4 w-1 rounded-full
-          ${mood.color}
-        `}
-      />
+      {mood && (
+        <div
+          className={`
+            absolute left-0 top-4 bottom-4 w-1 rounded-full
+            ${mood.color}
+          `}
+        />
+      )}
 
       <div className="pl-3">
         {/* Header */}
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
-            <span className="text-lg" role="img" aria-label={mood.label}>
-              {mood.emoji}
-            </span>
-            <span className="text-sm font-medium text-slate-500 dark:text-slate-400">
-              {mood.label}
-            </span>
+            {mood && (
+              <>
+                <span className="text-lg" role="img" aria-label={mood.label}>
+                  {mood.emoji}
+                </span>
+                <span className="text-sm font-medium text-slate-500 dark:text-slate-400">
+                  {mood.label}
+                </span>
+              </>
+            )}
           </div>
           <time className="text-xs text-slate-400 dark:text-slate-500">
             {time}

@@ -25,11 +25,12 @@ export const MOOD_OPTIONS: MoodOption[] = [
 // Decrypted journal entry (used in memory)
 export interface JournalEntry {
   id: string;
+  title?: string;
   content: string;
-  mood: MoodLevel;
+  mood: MoodLevel | null;
   tags: string[];
-  createdAt: Date;
-  updatedAt: Date;
+  created_at: string; // ISO string for easy serialization
+  updated_at: string;
 }
 
 // Encrypted journal entry (stored in database)

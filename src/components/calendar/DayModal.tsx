@@ -139,7 +139,7 @@ export function DayModal({ date, onClose, onAddEntry }: DayModalProps) {
                           </span>
                         </div>
                         <span className="text-xs text-slate-500 dark:text-slate-400">
-                          {entry.createdAt.toLocaleTimeString('en-US', {
+                          {new Date(entry.created_at).toLocaleTimeString('en-US', {
                             hour: 'numeric',
                             minute: '2-digit',
                           })}

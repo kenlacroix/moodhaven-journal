@@ -159,8 +159,8 @@ export async function createEntry(
     content: data.content, // We already have the plaintext
     mood: row.mood as MoodLevel,
     tags: data.tags,
-    createdAt: new Date(row.created_at),
-    updatedAt: new Date(row.updated_at),
+    created_at: row.created_at,
+    updated_at: row.updated_at,
   };
 }
 
@@ -254,8 +254,8 @@ export async function updateEntry(
     content: data.content,
     mood: row.mood as MoodLevel,
     tags: data.tags,
-    createdAt: new Date(row.created_at),
-    updatedAt: new Date(row.updated_at),
+    created_at: row.created_at,
+    updated_at: row.updated_at,
   };
 }
 
@@ -323,8 +323,8 @@ async function decryptEntry(
     content: result.data,
     mood: row.mood as MoodLevel,
     tags: [], // TODO: Fetch from entry_tags table
-    createdAt: new Date(row.created_at),
-    updatedAt: new Date(row.updated_at),
+    created_at: row.created_at,
+    updated_at: row.updated_at,
   };
 }
 
@@ -333,4 +333,72 @@ async function decryptEntry(
  */
 function formatDate(date: Date): string {
   return date.toISOString().split('T')[0];
+}
+
+// ============================================================================
+// Additional Functions for New UI
+// ============================================================================
+
+/**
+ * Get entry by ID (alias for getEntry)
+ */
+export async function getEntryById(id: string): Promise<JournalEntry | null> {
+  return getEntry(id);
+}
+
+/**
+ * Save entry (create or update)
+ */
+export async function saveEntry(data: {
+  id?: string;
+  title?: string;
+  content: string;
+  mood?: number;
+}): Promise<JournalEntry> {
+  const formData: JournalEntryFormData = {
+    content: data.content,
+    mood: (data.mood || 3) as MoodLevel,
+    tags: [],
+  };
+
+  if (data.id) {
+    return updateEntry(data.id, formData);
+  } else {
+    return createEntry(formData);
+  }
+}
+
+/**
+ * Search entries by content
+ */
+export async function searchEntries(query: string): Promise<JournalEntry[]> {
+  // Get all entries and filter client-side (since content is encrypted)
+  const entries = await getAllEntries();
+  const lowerQuery = query.toLowerCase();
+
+  return entries.filter(
+    (entry) =>
+      entry.content.toLowerCase().includes(lowerQuery) ||
+      (entry.title?.toLowerCase().includes(lowerQuery))
+  );
+}
+
+/**
+ * Get entries from same day in previous years (On This Day)
+ */
+export async function getEntriesOnThisDay(): Promise<JournalEntry[]> {
+  const entries = await getAllEntries();
+  const today = new Date();
+  const currentMonth = today.getMonth();
+  const currentDay = today.getDate();
+  const currentYear = today.getFullYear();
+
+  return entries.filter((entry) => {
+    const entryDate = new Date(entry.created_at);
+    return (
+      entryDate.getMonth() === currentMonth &&
+      entryDate.getDate() === currentDay &&
+      entryDate.getFullYear() !== currentYear
+    );
+  });
 }

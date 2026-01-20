@@ -13,7 +13,7 @@
 import { useState, useCallback } from 'react';
 import { useAppStore } from '../stores/appStore';
 import { useSettingsStore } from '../stores/settingsStore';
-import { TotpSetup, WebAuthnSetup } from '../components/twoFactor';
+import { TotpSetup, HardwareKeySetup } from '../components/twoFactor';
 import { generateRecoveryKey, storeRecoveryKey } from '../lib/recoveryKeyService';
 
 type WizardStep = 'welcome' | 'password' | 'recovery' | 'security' | 'storage' | 'import' | 'complete';
@@ -45,7 +45,7 @@ export function SetupScreen() {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
-  const [twoFactorSetupMode, setTwoFactorSetupMode] = useState<'none' | 'totp' | 'webauthn'>('none');
+  const [twoFactorSetupMode, setTwoFactorSetupMode] = useState<'none' | 'totp' | 'hardwarekey'>('none');
   const [twoFactorComplete, setTwoFactorComplete] = useState(false);
   const [recoveryKey, setRecoveryKey] = useState<string | null>(null);
   const [recoveryKeyConfirmed, setRecoveryKeyConfirmed] = useState(false);
@@ -479,8 +479,8 @@ export function SetupScreen() {
                     onCancel={() => setTwoFactorSetupMode('none')}
                   />
                 )}
-                {twoFactorSetupMode === 'webauthn' && (
-                  <WebAuthnSetup
+                {twoFactorSetupMode === 'hardwarekey' && (
+                  <HardwareKeySetup
                     onComplete={() => {
                       setTwoFactorComplete(true);
                       setTwoFactorSetupMode('none');
@@ -542,16 +542,16 @@ export function SetupScreen() {
 
                           <button
                             type="button"
-                            onClick={() => setTwoFactorSetupMode('webauthn')}
+                            onClick={() => setTwoFactorSetupMode('hardwarekey')}
                             className="w-full flex items-center gap-3 p-4 rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-violet-300 dark:hover:border-violet-600 text-left transition-all"
                           >
                             <div className="w-10 h-10 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center flex-shrink-0">
-                              <span className="text-xl">&#128273;</span>
+                              <span className="text-xl">🔑</span>
                             </div>
                             <div className="flex-1">
                               <p className="font-medium text-slate-700 dark:text-slate-200">Hardware Security Key</p>
                               <p className="text-xs text-slate-500 dark:text-slate-400">
-                                Use a YubiKey or similar FIDO2 device
+                                Use a YubiKey or similar FIDO2 device (native)
                               </p>
                             </div>
                           </button>

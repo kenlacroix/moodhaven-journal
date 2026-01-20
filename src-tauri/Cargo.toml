@@ -27,6 +27,11 @@ totp-rs = { version = "5", features = ["qr", "gen_secret"] }
 data-encoding = "2"
 sha2 = "0.10"
 rand = "0.8"
+# FIDO/Hardware Key support (native, not WebAuthn)
+ctap-hid-fido2 = "3"
+aes-gcm = "0.10"
+argon2 = "0.5"
+hex = "0.4"
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-shell = "2"

@@ -29,7 +29,7 @@ import {
   disable2FA,
   getBackupCodesCount,
 } from '../lib/twoFactorService';
-import { TotpSetup, WebAuthnSetup, BackupCodesDisplay } from '../components/twoFactor';
+import { TotpSetup, HardwareKeySetup, BackupCodesDisplay } from '../components/twoFactor';
 import type { TwoFactorStatus, BackupCodes } from '../types/twoFactor';
 
 type SettingsTab = 'general' | 'privacy' | 'ai' | 'about';
@@ -692,11 +692,11 @@ export function SettingsPage() {
                 </div>
               )}
 
-              {/* 2FA Setup Modal - WebAuthn */}
+              {/* 2FA Setup Modal - Hardware Key (native FIDO2) */}
               {show2FASetup === 'webauthn' && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
                   <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-6 max-w-md mx-4 w-full">
-                    <WebAuthnSetup
+                    <HardwareKeySetup
                       onComplete={handle2FASetupComplete}
                       onCancel={() => setShow2FASetup(null)}
                     />

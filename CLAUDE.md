@@ -26,7 +26,7 @@
 | Export/Import | P2 | **Complete** | Encrypted backup and restore functionality |
 | Journal Templates | P2 | **Complete** | 7 templates: Gratitude, Happiness, Rest, etc. |
 | Factory Reset | P2 | **Complete** | Complete data wipe with confirmation |
-| 2FA Support | P2 | **Complete** | Optional TOTP/WebAuthn authentication with backup codes |
+| 2FA Support | P2 | **Complete** | TOTP + native FIDO2 hardware key (not WebAuthn browser APIs) |
 | Recovery Key | P2 | **Complete** | Optional recovery key generation during setup |
 | Reminders | P3 | Planned | Configurable notification reminders |
 
@@ -84,6 +84,16 @@ MoodBloom implements a zero-knowledge security architecture where user data is e
 - It encrypts a copy of the user's password for recovery purposes (key escrow).
 - The recovery key is shown only once and must be stored securely by the user.
 - This is the ONLY way to recover access if the password is forgotten.
+
+**Hardware Security Key (Native FIDO2):**
+- Optional second factor using YubiKey or similar FIDO2 devices.
+- Uses native Rust CTAP2/HID libraries, NOT browser WebAuthn APIs.
+- Browser WebAuthn does not work in Tauri WebView - this is by design.
+- Hardware key acts as a local unlock factor, NOT password recovery.
+- Both password AND hardware key are required when enabled.
+- If password is lost, data is still unrecoverable (hardware key doesn't bypass encryption).
+- Implementation: `src-tauri/src/commands/hardware_key.rs` + `src/lib/hardwareKeyService.ts`
+- **Build Requirement (Linux):** `sudo apt-get install libudev-dev` for USB HID support.
 
 **Important Security Notices:**
 - **Forgotten passwords cannot be recovered** (unless recovery key was generated).

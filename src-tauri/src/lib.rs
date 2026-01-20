@@ -76,6 +76,13 @@ pub fn run() {
             commands::get_2fa_status,
             commands::disable_2fa,
             commands::verify_2fa_totp,
+            // Hardware key (native FIDO2, not WebAuthn)
+            commands::hardware_key_detect,
+            commands::hardware_key_status,
+            commands::hardware_key_register,
+            commands::hardware_key_verify,
+            commands::hardware_key_disable,
+            commands::hardware_key_required,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

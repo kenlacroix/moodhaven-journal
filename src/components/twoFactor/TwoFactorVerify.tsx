@@ -3,17 +3,20 @@
  *
  * Supports:
  * - TOTP code entry
- * - WebAuthn (security key)
+ * - Hardware security key (native FIDO2, not WebAuthn browser APIs)
  * - Backup code fallback
  */
 
 import { useState, useCallback, useEffect } from 'react';
 import {
   verify2FATotp,
-  verifyWebAuthnCredential,
   verifyBackupCode,
   getBackupCodesCount,
 } from '../../lib/twoFactorService';
+import {
+  verifyHardwareKey,
+  getHardwareKeyErrorMessage,
+} from '../../lib/hardwareKeyService';
 import type { TwoFactorMethod, TwoFactorVerifyMode } from '../../types/twoFactor';
 
 interface TwoFactorVerifyProps {
@@ -75,20 +78,23 @@ export function TwoFactorVerify({ method, onSuccess, onCancel }: TwoFactorVerify
     }
   }, [code, attempts, onSuccess]);
 
-  // Handle WebAuthn verification
-  const handleWebAuthnVerify = useCallback(async () => {
+  // Handle hardware key verification (native FIDO2, not WebAuthn)
+  const handleHardwareKeyVerify = useCallback(async () => {
     setIsVerifying(true);
     setError(null);
 
     try {
-      const valid = await verifyWebAuthnCredential();
-      if (valid) {
+      // Native FIDO2 verification via Rust
+      const secret = await verifyHardwareKey();
+      if (secret) {
+        // Hardware key verified successfully
+        // The secret will be used to combine with password-derived key
         onSuccess();
       } else {
         setError('Verification failed');
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Verification failed');
+      setError(getHardwareKeyErrorMessage(err));
     } finally {
       setIsVerifying(false);
     }
@@ -132,10 +138,10 @@ export function TwoFactorVerify({ method, onSuccess, onCancel }: TwoFactorVerify
     setError(null);
   };
 
-  // Auto-start WebAuthn on mount if that's the only method
+  // Auto-start hardware key verification on mount if that's the only method
   useEffect(() => {
     if (mode === 'webauthn' && method === 'webauthn') {
-      handleWebAuthnVerify();
+      handleHardwareKeyVerify();
     }
   }, []);
 
@@ -221,14 +227,14 @@ export function TwoFactorVerify({ method, onSuccess, onCancel }: TwoFactorVerify
         </>
       )}
 
-      {/* WebAuthn Mode */}
+      {/* Hardware Key Mode (native FIDO2) */}
       {mode === 'webauthn' && (
         <>
           <div className="text-center py-4">
             {isVerifying ? (
               <>
                 <div className="w-16 h-16 bg-violet-100 dark:bg-violet-900/30 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
-                  <span className="text-3xl">&#128273;</span>
+                  <span className="text-3xl">🔑</span>
                 </div>
                 <p className="text-sm text-slate-500 dark:text-slate-400">
                   Touch your security key...
@@ -237,7 +243,7 @@ export function TwoFactorVerify({ method, onSuccess, onCancel }: TwoFactorVerify
             ) : (
               <>
                 <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <span className="text-3xl">&#128273;</span>
+                  <span className="text-3xl">🔑</span>
                 </div>
               </>
             )}
@@ -249,7 +255,7 @@ export function TwoFactorVerify({ method, onSuccess, onCancel }: TwoFactorVerify
 
           <button
             type="button"
-            onClick={handleWebAuthnVerify}
+            onClick={handleHardwareKeyVerify}
             disabled={isVerifying}
             className="
               w-full py-3 px-4 rounded-xl

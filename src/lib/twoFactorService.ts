@@ -10,7 +10,6 @@ import type {
   TwoFactorStatus,
   TotpSetupData,
   BackupCodes,
-  WebAuthnCredential,
 } from '../types/twoFactor';
 
 // ============================================================================
@@ -66,161 +65,15 @@ export async function verify2FATotp(code: string): Promise<boolean> {
 }
 
 // ============================================================================
-// WebAuthn
+// Hardware Key (Native FIDO2)
 // ============================================================================
 
-/**
- * Get stored WebAuthn credentials for verification
- */
-export async function getWebAuthnCredentials(): Promise<WebAuthnCredential[]> {
-  return invoke('get_webauthn_credentials');
-}
-
-/**
- * Store a WebAuthn credential after browser registration
- * Returns backup codes if this is the first 2FA method
- */
-export async function storeWebAuthnCredential(
-  credentialId: string,
-  publicKey: string
-): Promise<BackupCodes> {
-  return invoke('store_webauthn_credential_cmd', {
-    credentialId,
-    publicKey,
-  });
-}
-
-/**
- * Register a new WebAuthn credential (hardware key)
- * This handles the full browser-based WebAuthn registration flow
- */
-export async function registerWebAuthnCredential(): Promise<BackupCodes> {
-  // Check if WebAuthn is supported
-  if (!window.PublicKeyCredential) {
-    throw new Error('WebAuthn is not supported in this browser');
-  }
-
-  // Generate challenge (in production, this should come from server)
-  const challenge = new Uint8Array(32);
-  crypto.getRandomValues(challenge);
-
-  // User ID (consistent for this app)
-  const userId = new Uint8Array(16);
-  crypto.getRandomValues(userId);
-
-  const publicKeyCredentialCreationOptions: PublicKeyCredentialCreationOptions = {
-    challenge,
-    rp: {
-      name: 'MoodBloom',
-      id: window.location.hostname || 'localhost',
-    },
-    user: {
-      id: userId,
-      name: 'user@moodbloom',
-      displayName: 'MoodBloom User',
-    },
-    pubKeyCredParams: [
-      { alg: -7, type: 'public-key' },   // ES256
-      { alg: -257, type: 'public-key' }, // RS256
-    ],
-    timeout: 60000,
-    authenticatorSelection: {
-      authenticatorAttachment: 'cross-platform', // Hardware keys
-      userVerification: 'preferred',
-      residentKey: 'discouraged',
-    },
-    attestation: 'none',
-  };
-
-  try {
-    const credential = await navigator.credentials.create({
-      publicKey: publicKeyCredentialCreationOptions,
-    }) as PublicKeyCredential;
-
-    if (!credential) {
-      throw new Error('No credential returned');
-    }
-
-    const response = credential.response as AuthenticatorAttestationResponse;
-
-    // Extract credential ID and public key
-    const credentialId = btoa(
-      String.fromCharCode(...new Uint8Array(credential.rawId))
-    );
-    const publicKey = btoa(
-      String.fromCharCode(...new Uint8Array(response.getPublicKey() || new ArrayBuffer(0)))
-    );
-
-    // Store in backend
-    return storeWebAuthnCredential(credentialId, publicKey);
-  } catch (error) {
-    if (error instanceof Error) {
-      if (error.name === 'NotAllowedError') {
-        throw new Error('Registration was cancelled or timed out');
-      }
-      if (error.name === 'InvalidStateError') {
-        throw new Error('This security key is already registered');
-      }
-      throw error;
-    }
-    throw new Error('WebAuthn registration failed');
-  }
-}
-
-/**
- * Verify WebAuthn credential during login
- */
-export async function verifyWebAuthnCredential(): Promise<boolean> {
-  // Check if WebAuthn is supported
-  if (!window.PublicKeyCredential) {
-    throw new Error('WebAuthn is not supported in this browser');
-  }
-
-  // Get stored credentials
-  const credentials = await getWebAuthnCredentials();
-  if (credentials.length === 0) {
-    throw new Error('No security keys registered');
-  }
-
-  // Generate challenge
-  const challenge = new Uint8Array(32);
-  crypto.getRandomValues(challenge);
-
-  const allowCredentials = credentials.map((cred) => ({
-    id: Uint8Array.from(atob(cred.id), (c) => c.charCodeAt(0)),
-    type: 'public-key' as const,
-  }));
-
-  const publicKeyCredentialRequestOptions: PublicKeyCredentialRequestOptions = {
-    challenge,
-    rpId: window.location.hostname || 'localhost',
-    allowCredentials,
-    timeout: 60000,
-    userVerification: 'preferred',
-  };
-
-  try {
-    const assertion = await navigator.credentials.get({
-      publicKey: publicKeyCredentialRequestOptions,
-    }) as PublicKeyCredential;
-
-    if (!assertion) {
-      throw new Error('No assertion returned');
-    }
-
-    // In a full implementation, we'd verify the signature on the backend
-    // For now, successful assertion means the key was authenticated
-    return true;
-  } catch (error) {
-    if (error instanceof Error) {
-      if (error.name === 'NotAllowedError') {
-        throw new Error('Verification was cancelled or timed out');
-      }
-      throw error;
-    }
-    throw new Error('WebAuthn verification failed');
-  }
-}
+// NOTE: Hardware key registration and verification is now handled by
+// native Rust FIDO2/CTAP2 libraries, not browser WebAuthn APIs.
+// See src/lib/hardwareKeyService.ts for the new implementation.
+//
+// The browser WebAuthn APIs do not work in Tauri WebView, so we use
+// native USB HID communication with FIDO2 devices instead.
 
 // ============================================================================
 // Backup Codes

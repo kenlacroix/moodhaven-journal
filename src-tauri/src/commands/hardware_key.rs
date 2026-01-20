@@ -63,11 +63,49 @@ pub struct HardwareKeyFeatureInfo {
 // Feature Available Check (always compiled)
 // ============================================================================
 
+/// Check if libudev runtime library is available on Linux
+#[cfg(all(feature = "hardware-key", target_os = "linux"))]
+fn check_libudev_available() -> bool {
+    use std::path::Path;
+
+    // Check common locations for libudev.so
+    let paths = [
+        "/lib/x86_64-linux-gnu/libudev.so.1",
+        "/lib/libudev.so.1",
+        "/usr/lib/libudev.so.1",
+        "/usr/lib/x86_64-linux-gnu/libudev.so.1",
+        "/lib64/libudev.so.1",
+        "/usr/lib64/libudev.so.1",
+    ];
+
+    paths.iter().any(|p| Path::new(p).exists())
+}
+
 /// Check if hardware key feature is available
 #[tauri::command]
 pub fn hardware_key_feature_available() -> HardwareKeyFeatureInfo {
     #[cfg(feature = "hardware-key")]
     {
+        // On Linux, check if libudev runtime library is available
+        #[cfg(target_os = "linux")]
+        {
+            if !check_libudev_available() {
+                return HardwareKeyFeatureInfo {
+                    available: false,
+                    reason: Some("libudev library not found. Required for USB hardware key support.".to_string()),
+                    install_instructions: Some(
+                        "To enable hardware key support on Linux:\n\n\
+                         Install the libudev library:\n   \
+                            sudo apt-get install libudev1\n\n\
+                         Or on Fedora/RHEL:\n   \
+                            sudo dnf install systemd-libs\n\n\
+                         Then restart the application.".to_string()
+                    ),
+                };
+            }
+        }
+
+        // macOS and Windows don't need runtime library checks
         HardwareKeyFeatureInfo {
             available: true,
             reason: None,
@@ -79,8 +117,8 @@ pub fn hardware_key_feature_available() -> HardwareKeyFeatureInfo {
     {
         let instructions = if cfg!(target_os = "linux") {
             "To enable hardware key support on Linux:\n\n\
-             1. Install the required system library:\n   \
-                sudo apt-get install libudev-dev\n\n\
+             1. Install the required libraries:\n   \
+                sudo apt-get install libudev1 libudev-dev\n\n\
              2. Rebuild the app with the feature enabled:\n   \
                 cd src-tauri && cargo build --features hardware-key\n\n\
              Or run in dev mode:\n   \

@@ -95,11 +95,15 @@ MoodBloom implements a zero-knowledge security architecture where user data is e
 - Implementation: `src-tauri/src/commands/hardware_key.rs` + `src/lib/hardwareKeyService.ts`
 - **Feature Flag:** This feature is optional and requires the `hardware-key` cargo feature.
 - **Build with feature:** `cargo build --features hardware-key`
-- **System Requirements:**
-  - Linux: `sudo apt-get install libudev-dev` (for USB HID support)
+- **Build Requirements (compile-time):**
+  - Linux: `sudo apt-get install libudev-dev`
   - macOS: No additional dependencies
   - Windows: No additional dependencies
-- **UI Behavior:** If feature is not enabled, the UI displays installation instructions to the user.
+- **Runtime Requirements:**
+  - Linux: `libudev1` (checked at runtime, shows install instructions if missing)
+  - macOS: No additional dependencies (uses IOKit)
+  - Windows: No additional dependencies (uses native HID APIs)
+- **UI Behavior:** If feature is not compiled in OR runtime dependencies are missing, the UI displays platform-specific installation instructions.
 
 **Important Security Notices:**
 - **Forgotten passwords cannot be recovered** (unless recovery key was generated).

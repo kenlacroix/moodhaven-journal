@@ -14,7 +14,10 @@ import {
   detectHardwareKeys,
   registerHardwareKey,
   getHardwareKeyErrorMessage,
+  getHardwareKeyFeatureInfo,
+  isFeatureNotAvailableError,
   type HardwareKeyDevice,
+  type HardwareKeyFeatureInfo,
 } from '../../lib/hardwareKeyService';
 
 interface HardwareKeySetupProps {
@@ -22,29 +25,47 @@ interface HardwareKeySetupProps {
   onCancel: () => void;
 }
 
-type SetupStep = 'detecting' | 'intro' | 'registering' | 'success' | 'error' | 'no-device';
+type SetupStep = 'checking' | 'not-available' | 'detecting' | 'intro' | 'registering' | 'success' | 'error' | 'no-device';
 
 export function HardwareKeySetup({ onComplete, onCancel }: HardwareKeySetupProps) {
-  const [step, setStep] = useState<SetupStep>('detecting');
+  const [step, setStep] = useState<SetupStep>('checking');
   const [error, setError] = useState<string | null>(null);
   const [devices, setDevices] = useState<HardwareKeyDevice[]>([]);
   const [deviceName, setDeviceName] = useState<string>('');
+  const [featureInfo, setFeatureInfo] = useState<HardwareKeyFeatureInfo | null>(null);
 
-  // Detect devices on mount
+  // Check feature availability and detect devices on mount
   useEffect(() => {
-    detectHardwareKeys()
-      .then((foundDevices) => {
+    async function initialize() {
+      try {
+        // First check if feature is available
+        const info = await getHardwareKeyFeatureInfo();
+        setFeatureInfo(info);
+
+        if (!info.available) {
+          setStep('not-available');
+          return;
+        }
+
+        // Feature is available, detect devices
+        const foundDevices = await detectHardwareKeys();
         setDevices(foundDevices);
         if (foundDevices.length > 0) {
           setStep('intro');
         } else {
           setStep('no-device');
         }
-      })
-      .catch((err) => {
-        setError(getHardwareKeyErrorMessage(err));
-        setStep('no-device');
-      });
+      } catch (err) {
+        if (isFeatureNotAvailableError(err)) {
+          setStep('not-available');
+        } else {
+          setError(getHardwareKeyErrorMessage(err));
+          setStep('no-device');
+        }
+      }
+    }
+
+    initialize();
   }, []);
 
   // Handle registration
@@ -76,10 +97,71 @@ export function HardwareKeySetup({ onComplete, onCancel }: HardwareKeySetupProps
         setStep('no-device');
       }
     } catch (err) {
-      setError(getHardwareKeyErrorMessage(err));
-      setStep('no-device');
+      if (isFeatureNotAvailableError(err)) {
+        setStep('not-available');
+      } else {
+        setError(getHardwareKeyErrorMessage(err));
+        setStep('no-device');
+      }
     }
   }, []);
+
+  // Checking feature availability
+  if (step === 'checking') {
+    return (
+      <div className="space-y-6 py-8">
+        <div className="text-center">
+          <div className="w-16 h-16 bg-violet-100 dark:bg-violet-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+            <span className="text-3xl">🔑</span>
+          </div>
+          <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">
+            Checking Hardware Key Support...
+          </h3>
+        </div>
+        <div className="flex justify-center">
+          <div className="w-8 h-8 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+      </div>
+    );
+  }
+
+  // Feature not available - show install instructions
+  if (step === 'not-available') {
+    return (
+      <div className="space-y-6">
+        <div className="text-center">
+          <div className="w-12 h-12 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center mx-auto mb-3">
+            <span className="text-2xl">🔧</span>
+          </div>
+          <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">
+            Hardware Key Support Not Enabled
+          </h3>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">
+            This build does not include hardware key support.
+          </p>
+        </div>
+
+        {featureInfo?.install_instructions && (
+          <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl">
+            <p className="text-sm font-medium text-slate-700 dark:text-slate-200 mb-3">
+              To enable hardware key support:
+            </p>
+            <pre className="text-xs text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-900 p-3 rounded-lg overflow-x-auto whitespace-pre-wrap font-mono">
+              {featureInfo.install_instructions}
+            </pre>
+          </div>
+        )}
+
+        <button
+          type="button"
+          onClick={onCancel}
+          className="w-full py-3 px-4 rounded-xl text-sm font-medium bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+        >
+          Go Back
+        </button>
+      </div>
+    );
+  }
 
   // Detecting step
   if (step === 'detecting') {

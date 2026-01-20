@@ -35,6 +35,36 @@ export interface HardwareKeyRegistration {
   credential_id: string;
 }
 
+export interface HardwareKeyFeatureInfo {
+  available: boolean;
+  reason: string | null;
+  install_instructions: string | null;
+}
+
+// ============================================================================
+// Feature Availability
+// ============================================================================
+
+/**
+ * Check if hardware key feature is available in this build
+ * The feature may be disabled if system dependencies are missing
+ */
+export async function getHardwareKeyFeatureInfo(): Promise<HardwareKeyFeatureInfo> {
+  return invoke<HardwareKeyFeatureInfo>('hardware_key_feature_available');
+}
+
+/**
+ * Check if hardware key feature is available
+ */
+export async function isHardwareKeyFeatureAvailable(): Promise<boolean> {
+  try {
+    const info = await getHardwareKeyFeatureInfo();
+    return info.available;
+  } catch {
+    return false;
+  }
+}
+
 // ============================================================================
 // Device Detection
 // ============================================================================
@@ -132,12 +162,30 @@ export async function disableHardwareKey(): Promise<boolean> {
 // ============================================================================
 
 /**
+ * Check if an error indicates the feature is not available
+ */
+export function isFeatureNotAvailableError(error: unknown): boolean {
+  if (error instanceof Error) {
+    const msg = error.message.toLowerCase();
+    return msg.includes('feature not available') || msg.includes('rebuild with');
+  }
+  if (typeof error === 'string') {
+    const msg = error.toLowerCase();
+    return msg.includes('feature not available') || msg.includes('rebuild with');
+  }
+  return false;
+}
+
+/**
  * Parse hardware key errors into user-friendly messages
  */
 export function getHardwareKeyErrorMessage(error: unknown): string {
   if (error instanceof Error) {
     const msg = error.message.toLowerCase();
 
+    if (msg.includes('feature not available') || msg.includes('rebuild with')) {
+      return 'Hardware key support is not enabled in this build.';
+    }
     if (msg.includes('no hardware key')) {
       return 'No hardware key detected. Please insert your security key.';
     }
@@ -152,6 +200,13 @@ export function getHardwareKeyErrorMessage(error: unknown): string {
     }
 
     return error.message;
+  }
+
+  if (typeof error === 'string') {
+    if (error.toLowerCase().includes('feature not available')) {
+      return 'Hardware key support is not enabled in this build.';
+    }
+    return error;
   }
 
   return 'An unexpected error occurred with the hardware key.';

@@ -93,7 +93,13 @@ MoodBloom implements a zero-knowledge security architecture where user data is e
 - Both password AND hardware key are required when enabled.
 - If password is lost, data is still unrecoverable (hardware key doesn't bypass encryption).
 - Implementation: `src-tauri/src/commands/hardware_key.rs` + `src/lib/hardwareKeyService.ts`
-- **Build Requirement (Linux):** `sudo apt-get install libudev-dev` for USB HID support.
+- **Feature Flag:** This feature is optional and requires the `hardware-key` cargo feature.
+- **Build with feature:** `cargo build --features hardware-key`
+- **System Requirements:**
+  - Linux: `sudo apt-get install libudev-dev` (for USB HID support)
+  - macOS: No additional dependencies
+  - Windows: No additional dependencies
+- **UI Behavior:** If feature is not enabled, the UI displays installation instructions to the user.
 
 **Important Security Notices:**
 - **Forgotten passwords cannot be recovered** (unless recovery key was generated).
@@ -652,9 +658,15 @@ All platforms require:
 sudo apt update
 sudo apt install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
 
-# Build
+# Optional: For hardware key support (FIDO2/YubiKey)
+sudo apt install -y libudev-dev
+
+# Build (standard, without hardware key support)
 npm install
 npm run tauri build
+
+# Build with hardware key support enabled
+cd src-tauri && cargo build --release --features hardware-key
 
 # Output: src-tauri/target/release/bundle/
 # - AppImage: moodbloom_x.x.x_amd64.AppImage
@@ -718,6 +730,8 @@ export APPLE_TEAM_ID="XXXXXXXXXX"
 |-------|----------|
 | Rust compilation errors | Run `rustup update` |
 | WebKit not found (Linux) | Install `libwebkit2gtk-4.1-dev` |
+| `libudev` not found (Linux) | Install `libudev-dev` OR build without hardware key feature |
+| Hardware key feature fails | Either install `libudev-dev` or omit `--features hardware-key` |
 | Code signing failed | Check certificate/key paths |
 | Bundle too large | Enable `strip = true` in Cargo.toml (already configured) |
 

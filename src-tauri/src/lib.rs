@@ -77,6 +77,7 @@ pub fn run() {
             commands::disable_2fa,
             commands::verify_2fa_totp,
             // Hardware key (native FIDO2, not WebAuthn)
+            commands::hardware_key_feature_available,
             commands::hardware_key_detect,
             commands::hardware_key_status,
             commands::hardware_key_register,

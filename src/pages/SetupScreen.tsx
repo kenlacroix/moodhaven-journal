@@ -14,8 +14,9 @@ import { useState, useCallback } from 'react';
 import { useAppStore } from '../stores/appStore';
 import { useSettingsStore } from '../stores/settingsStore';
 import { TotpSetup, WebAuthnSetup } from '../components/twoFactor';
+import { generateRecoveryKey, storeRecoveryKey } from '../lib/recoveryKeyService';
 
-type WizardStep = 'welcome' | 'password' | 'security' | 'storage' | 'import' | 'complete';
+type WizardStep = 'welcome' | 'password' | 'recovery' | 'security' | 'storage' | 'import' | 'complete';
 
 interface StepConfig {
   id: WizardStep;
@@ -26,6 +27,7 @@ interface StepConfig {
 const STEPS: StepConfig[] = [
   { id: 'welcome', title: 'Welcome', subtitle: 'Get started' },
   { id: 'password', title: 'Password', subtitle: 'Protect your data' },
+  { id: 'recovery', title: 'Recovery', subtitle: 'Optional backup' },
   { id: 'security', title: 'Extra Security', subtitle: 'Two-factor auth' },
   { id: 'storage', title: 'Storage', subtitle: 'Choose location' },
   { id: 'import', title: 'Import', subtitle: 'Restore data' },
@@ -45,6 +47,9 @@ export function SetupScreen() {
   const [importFile, setImportFile] = useState<File | null>(null);
   const [twoFactorSetupMode, setTwoFactorSetupMode] = useState<'none' | 'totp' | 'webauthn'>('none');
   const [twoFactorComplete, setTwoFactorComplete] = useState(false);
+  const [recoveryKey, setRecoveryKey] = useState<string | null>(null);
+  const [recoveryKeyConfirmed, setRecoveryKeyConfirmed] = useState(false);
+  const [showRecoveryKey, setShowRecoveryKey] = useState(false);
 
   const initialize = useAppStore((state) => state.initialize);
   const saveSettings = useSettingsStore((state) => state.saveSettings);
@@ -278,10 +283,25 @@ export function SetupScreen() {
                   <p className="text-sm text-rose-500 dark:text-rose-400">{error}</p>
                 )}
 
-                <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-xl">
-                  <p className="text-xs text-amber-700 dark:text-amber-300">
-                    <strong>Important:</strong> We cannot recover your password. Please store it securely.
-                  </p>
+                <div className="p-4 bg-rose-50 dark:bg-rose-900/20 rounded-xl border border-rose-200 dark:border-rose-800">
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-full bg-rose-100 dark:bg-rose-900/50 flex items-center justify-center flex-shrink-0">
+                      <svg className="w-4 h-4 text-rose-600 dark:text-rose-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium text-rose-700 dark:text-rose-300">
+                        Zero-Knowledge Security
+                      </p>
+                      <p className="text-xs text-rose-600 dark:text-rose-400">
+                        Your password encrypts all data locally. We never see or store your password.
+                        <strong className="block mt-1">
+                          If you forget your password, your data cannot be recovered.
+                        </strong>
+                      </p>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="flex gap-3">
@@ -301,6 +321,148 @@ export function SetupScreen() {
                     Continue
                   </button>
                 </div>
+              </div>
+            )}
+
+            {/* Recovery Key Step */}
+            {currentStep === 'recovery' && (
+              <div className="space-y-6">
+                <div className="text-center">
+                  <div className="w-12 h-12 rounded-xl bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center mx-auto mb-4">
+                    <svg className="w-6 h-6 text-violet-600 dark:text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                    </svg>
+                  </div>
+                  <h2 className="text-xl font-bold text-slate-800 dark:text-white mb-1">
+                    Recovery Key (Optional)
+                  </h2>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">
+                    Generate a backup key in case you forget your password
+                  </p>
+                </div>
+
+                {!recoveryKey ? (
+                  <>
+                    <div className="p-4 bg-slate-50 dark:bg-slate-700/50 rounded-xl space-y-3">
+                      <p className="text-sm text-slate-600 dark:text-slate-300">
+                        A recovery key is a 24-character code that can unlock your journal if you forget your password.
+                      </p>
+                      <ul className="text-xs text-slate-500 dark:text-slate-400 space-y-1 list-disc list-inside">
+                        <li>Write it down and store it securely</li>
+                        <li>It will only be shown once</li>
+                        <li>Anyone with this key can access your data</li>
+                      </ul>
+                    </div>
+
+                    <div className="flex gap-3">
+                      <button
+                        type="button"
+                        onClick={goBack}
+                        className="btn-secondary flex-1 py-3"
+                      >
+                        Back
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const key = generateRecoveryKey();
+                          setRecoveryKey(key);
+                          setShowRecoveryKey(true);
+                        }}
+                        className="btn-primary flex-1 py-3"
+                      >
+                        Generate Key
+                      </button>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={goNext}
+                      className="w-full text-sm text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 py-2"
+                    >
+                      Skip - I understand my password cannot be recovered
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <div className="p-4 bg-violet-50 dark:bg-violet-900/20 rounded-xl border border-violet-200 dark:border-violet-800">
+                      <p className="text-xs text-violet-600 dark:text-violet-400 mb-3 font-medium">
+                        Write this down and store it securely:
+                      </p>
+                      <div className="relative">
+                        <div className={`
+                          font-mono text-lg text-center py-4 px-2 bg-white dark:bg-slate-800 rounded-lg
+                          ${showRecoveryKey ? '' : 'blur-sm select-none'}
+                        `}>
+                          {recoveryKey}
+                        </div>
+                        {!showRecoveryKey && (
+                          <button
+                            type="button"
+                            onClick={() => setShowRecoveryKey(true)}
+                            className="absolute inset-0 flex items-center justify-center text-sm text-violet-600 dark:text-violet-400 hover:underline"
+                          >
+                            Click to reveal
+                          </button>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(recoveryKey);
+                        }}
+                        className="w-full mt-3 text-xs text-violet-600 dark:text-violet-400 hover:underline"
+                      >
+                        Copy to clipboard
+                      </button>
+                    </div>
+
+                    <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-xl">
+                      <label className="flex items-start gap-3 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={recoveryKeyConfirmed}
+                          onChange={(e) => setRecoveryKeyConfirmed(e.target.checked)}
+                          className="mt-0.5 rounded border-slate-300 text-violet-600 focus:ring-violet-500"
+                        />
+                        <span className="text-xs text-amber-700 dark:text-amber-300">
+                          I have written down my recovery key and stored it securely. I understand this key will not be shown again.
+                        </span>
+                      </label>
+                    </div>
+
+                    <div className="flex gap-3">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRecoveryKey(null);
+                          setRecoveryKeyConfirmed(false);
+                          setShowRecoveryKey(false);
+                        }}
+                        className="btn-secondary flex-1 py-3"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (recoveryKey && recoveryKeyConfirmed && password) {
+                            try {
+                              await storeRecoveryKey(recoveryKey, password);
+                              goNext();
+                            } catch (err) {
+                              setError('Failed to save recovery key');
+                            }
+                          }
+                        }}
+                        disabled={!recoveryKeyConfirmed}
+                        className="btn-primary flex-1 py-3"
+                      >
+                        Save & Continue
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             )}
 

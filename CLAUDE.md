@@ -26,8 +26,9 @@
 | Export/Import | P2 | **Complete** | Encrypted backup and restore functionality |
 | Journal Templates | P2 | **Complete** | 7 templates: Gratitude, Happiness, Rest, etc. |
 | Factory Reset | P2 | **Complete** | Complete data wipe with confirmation |
+| 2FA Support | P2 | **Complete** | Optional TOTP/WebAuthn authentication with backup codes |
+| Recovery Key | P2 | **Complete** | Optional recovery key generation during setup |
 | Reminders | P3 | Planned | Configurable notification reminders |
-| 2FA Support | P3 | Planned | Optional YubiKey/OTP authentication |
 
 ### Feature Implementation Guidelines
 
@@ -62,6 +63,32 @@ When implementing features:
 ---
 
 ## 2. Security Guidance
+
+### Zero-Knowledge Security Model
+
+MoodBloom implements a zero-knowledge security architecture where user data is encrypted client-side with keys derived from the user's password. This means:
+
+**Core Principles:**
+- **No Backdoors:** There are no master keys, admin passwords, or recovery mechanisms that bypass encryption.
+- **Password-Derived Keys:** All encryption keys are derived from the user's password using PBKDF2 (600,000 iterations).
+- **Client-Side Encryption:** Data is encrypted before storage. The backend never sees plaintext data.
+- **No Password Storage:** Only a salted hash is stored for password verification. The password itself is never stored.
+
+**Two Paths from Locked State:**
+1. **Unlock with Password (+2FA):** Enter correct password (and 2FA if enabled) to decrypt and access data.
+2. **Erase & Start Fresh:** Securely delete all data and reset the app. No password required. Available via "Forgot password?" on lock screen.
+
+**Optional Recovery Key:**
+- Users can opt-in to generate a recovery key during setup.
+- The recovery key is a 24-character code (XXXX-XXXX-XXXX-XXXX-XXXX-XXXX).
+- It encrypts a copy of the user's password for recovery purposes (key escrow).
+- The recovery key is shown only once and must be stored securely by the user.
+- This is the ONLY way to recover access if the password is forgotten.
+
+**Important Security Notices:**
+- **Forgotten passwords cannot be recovered** (unless recovery key was generated).
+- There is no email reset, cloud recovery, or master key.
+- Users must understand and accept this when setting up the app.
 
 ### Data Protection Principles
 

@@ -762,6 +762,159 @@ export APPLE_TEAM_ID="XXXXXXXXXX"
 
 ---
 
+## 8. Testing Guide
+
+### Test Stack
+
+| Tool | Purpose |
+|------|---------|
+| [Vitest](https://vitest.dev/) | Test runner (Vite-native, fast) |
+| [@testing-library/react](https://testing-library.com/react) | Component rendering & queries |
+| [@testing-library/jest-dom](https://github.com/testing-library/jest-dom) | DOM assertion matchers (`toBeInTheDocument`, etc.) |
+| [@testing-library/user-event](https://testing-library.com/docs/user-event/intro) | Simulating user interactions |
+| [jsdom](https://github.com/jsdom/jsdom) | Browser DOM environment for tests |
+
+### Commands
+
+```bash
+npm test              # Run all tests once
+npm run test:watch    # Run tests in watch mode (re-runs on file changes)
+npm run test:coverage # Run tests with v8 coverage report
+```
+
+### File Conventions
+
+- **Co-located tests:** Test files live next to their source files.
+  - `src/lib/dateUtils.ts` → `src/lib/dateUtils.test.ts`
+  - `src/stores/appStore.ts` → `src/stores/appStore.test.ts`
+  - `src/components/journal/MoodSelector.tsx` → `src/components/journal/MoodSelector.test.tsx`
+- **Naming:** `*.test.ts` for logic, `*.test.tsx` for components.
+- **Setup file:** `src/test/setup.ts` — global mocks and polyfills.
+- **Config:** `vitest.config.ts` at project root.
+- **Globals:** `describe`, `it`, `expect`, `vi` are globally available (no imports needed).
+
+### Test Categories
+
+| Category | Files | Mocking | Notes |
+|----------|-------|---------|-------|
+| Pure utilities | `dateUtils`, `chartUtils`, `journalTemplates` | None | Deterministic, use `vi.useFakeTimers()` for date-dependent tests |
+| Complex logic | `metadataExtractor`, `aiService` | None | Sentiment analysis, pattern detection, aggregation |
+| Crypto | `crypto`, `recoveryKeyService` | Tauri `invoke` | Uses Node WebCrypto API; `crypto.test.ts` runs in Node environment (`// @vitest-environment node`) |
+| Zustand stores | `appStore`, `settingsStore` | Service modules | Test via `getState()` / `setState()`, mock backend services |
+| React components | `MoodSelector`, `TemplateSelector` | Tauri (global) | Use Testing Library queries, `userEvent` for interactions |
+
+### Mocking Tauri IPC
+
+All tests run in jsdom (or Node for crypto), so Tauri's native IPC is unavailable. The global setup mocks it:
+
+```typescript
+// src/test/setup.ts — already configured
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: vi.fn(),
+}));
+```
+
+To mock specific invoke calls in a test:
+
+```typescript
+import { invoke } from '@tauri-apps/api/core';
+const mockInvoke = vi.mocked(invoke);
+
+beforeEach(() => vi.clearAllMocks());
+
+it('calls the backend', async () => {
+  mockInvoke.mockResolvedValue({ ok: true });
+  // ... trigger the code that calls invoke ...
+  expect(mockInvoke).toHaveBeenCalledWith('command_name', { arg: 'value' });
+});
+```
+
+### Mocking Service Modules (Stores)
+
+For Zustand stores that depend on service modules:
+
+```typescript
+// Mock the module BEFORE importing the store
+vi.mock('../lib/journalService', () => ({
+  hasPassword: vi.fn(),
+  setupPassword: vi.fn(),
+  unlockJournal: vi.fn(),
+  lockJournal: vi.fn(),
+}));
+
+import { hasPassword } from '../lib/journalService';
+const mockHasPassword = vi.mocked(hasPassword);
+
+// Reset store state in beforeEach
+beforeEach(() => {
+  useAppStore.setState({ isInitialized: false, isUnlocked: false });
+  vi.clearAllMocks();
+});
+```
+
+### WebCrypto in Tests
+
+jsdom does not fully support the WebCrypto API. The setup file polyfills it:
+
+```typescript
+// src/test/setup.ts
+import { webcrypto } from 'node:crypto';
+vi.stubGlobal('crypto', webcrypto);
+```
+
+For files that rely heavily on `crypto.subtle` (like `crypto.test.ts`), use the Node environment instead of jsdom:
+
+```typescript
+// @vitest-environment node
+// Place this comment at the top of the test file
+```
+
+### What to Test
+
+- **Do test:** Pure functions, data transformations, state transitions, user interactions, accessibility attributes, error paths.
+- **Do test:** Edge cases (empty inputs, boundary values, invalid data).
+- **Do test:** That components render correct content and respond to user actions.
+
+### What NOT to Test (Out of Scope)
+
+- Tauri backend (Rust) — requires separate `#[cfg(test)]` modules.
+- Page-level integration (multi-component flows) — future work.
+- E2E tests (Tauri test driver) — future work.
+- Visual regression — future work.
+- React hooks in isolation — test through components that use them.
+
+### Adding New Tests Checklist
+
+When adding a new module or component:
+
+- [ ] Create `<filename>.test.ts(x)` next to the source file
+- [ ] Import the module under test and any required types
+- [ ] Mock external dependencies (Tauri IPC, services) as needed
+- [ ] Group tests with `describe()` blocks by functionality
+- [ ] Use `beforeEach` to reset mocks and store state
+- [ ] Test happy path, edge cases, and error handling
+- [ ] Run `npm test` to verify all tests pass
+- [ ] Run `npm run typecheck` to verify no TypeScript errors
+
+### Current Test Coverage
+
+| Test File | Tests | What It Covers |
+|-----------|-------|----------------|
+| `lib/dateUtils.test.ts` | 54 | All 18 exported date functions, leap years, timezone safety |
+| `lib/chartUtils.test.ts` | 27 | Mood colors/emojis, SVG path generation, coordinate mapping |
+| `lib/journalTemplates.test.ts` | 10 | Template data integrity, lookup, content formatting |
+| `lib/metadataExtractor.test.ts` | 49 | Sentiment, emotions, streaks, mood stats, aggregation |
+| `lib/crypto.test.ts` | 20 | AES-256-GCM encrypt/decrypt, password hashing, verification |
+| `lib/recoveryKeyService.test.ts` | 7 | Key format, character exclusions, uniqueness |
+| `lib/aiService.test.ts` | 17 | AI config, pattern detection, fallback prompts |
+| `stores/appStore.test.ts` | 17 | Auth state machine (init, unlock, lock, theme) |
+| `stores/settingsStore.test.ts` | 18 | Settings CRUD, AI/appearance/privacy/journal setters |
+| `components/journal/MoodSelector.test.tsx` | 9 | Rendering, aria attributes, click handling, disabled state |
+| `components/journal/TemplateSelector.test.tsx` | 9 | Grid mode, compact mode, selection highlight |
+| **Total** | **237** | |
+
+---
+
 ## Quick Reference
 
 ### Common Commands
@@ -774,7 +927,9 @@ npm run tauri dev          # Start dev server with hot reload
 npm run tauri build        # Build for current platform
 
 # Testing
-npm test                   # Run tests
+npm test                   # Run all tests once
+npm run test:watch         # Run tests in watch mode
+npm run test:coverage      # Run tests with coverage report
 npm run typecheck          # Check TypeScript
 
 # Linting
@@ -791,6 +946,8 @@ npm run lint:fix           # Fix auto-fixable issues
 | `src/App.tsx` | React app root |
 | `src/stores/` | Global state management |
 | `src/lib/tauri.ts` | Tauri IPC wrappers |
+| `vitest.config.ts` | Test runner configuration |
+| `src/test/setup.ts` | Global test setup and mocks |
 
 ### Useful Links
 
@@ -798,6 +955,8 @@ npm run lint:fix           # Fix auto-fixable issues
 - [React Docs](https://react.dev/)
 - [TailwindCSS Docs](https://tailwindcss.com/docs)
 - [Rust Book](https://doc.rust-lang.org/book/)
+- [Vitest Docs](https://vitest.dev/)
+- [Testing Library Docs](https://testing-library.com/)
 
 ---
 

@@ -1,0 +1,33 @@
+import '@testing-library/jest-dom/vitest';
+import { webcrypto } from 'node:crypto';
+
+// Polyfill WebCrypto API for jsdom environment (Node 18 doesn't expose it fully in jsdom)
+// jsdom provides a partial crypto that lacks SubtleCrypto support.
+vi.stubGlobal('crypto', webcrypto);
+
+// Mock @tauri-apps/api/core globally
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: vi.fn(),
+}));
+
+// Mock @tauri-apps/plugin-shell
+vi.mock('@tauri-apps/plugin-shell', () => ({
+  open: vi.fn(),
+}));
+
+// Mock window.matchMedia for theme-related tests (only in jsdom environment)
+if (typeof window !== 'undefined') {
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  });
+}

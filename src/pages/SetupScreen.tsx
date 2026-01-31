@@ -15,6 +15,7 @@ import { useAppStore } from '../stores/appStore';
 import { useSettingsStore } from '../stores/settingsStore';
 import { TotpSetup, HardwareKeySetup } from '../components/twoFactor';
 import { generateRecoveryKey, storeRecoveryKey } from '../lib/recoveryKeyService';
+import type { StorageBackend } from '../types/settings';
 
 type WizardStep = 'welcome' | 'password' | 'recovery' | 'security' | 'storage' | 'import' | 'complete';
 
@@ -34,7 +35,7 @@ const STEPS: StepConfig[] = [
   { id: 'complete', title: 'Ready', subtitle: 'All set!' },
 ];
 
-type StorageType = 'local' | 'dropbox' | 'webdav';
+type StorageType = StorageBackend;
 
 export function SetupScreen() {
   const [currentStep, setCurrentStep] = useState<WizardStep>('welcome');
@@ -107,7 +108,11 @@ export function SetupScreen() {
           ...s.settings,
           storage: {
             type: storageType,
-            webdavUrl: storageType === 'webdav' ? webdavUrl : undefined,
+            webdav: {
+              url: storageType === 'webdav' ? webdavUrl : '',
+              username: '',
+              password: '',
+            },
           },
         },
       }));
@@ -603,7 +608,6 @@ export function SetupScreen() {
 
                 <div className="space-y-3">
                   <StorageOption
-                    type="local"
                     title="Local Storage"
                     description="Store data on this device only"
                     icon="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
@@ -612,22 +616,11 @@ export function SetupScreen() {
                     recommended
                   />
                   <StorageOption
-                    type="dropbox"
-                    title="Dropbox"
-                    description="Sync across devices with Dropbox"
-                    icon="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707"
-                    selected={storageType === 'dropbox'}
-                    onSelect={() => setStorageType('dropbox')}
-                    comingSoon
-                  />
-                  <StorageOption
-                    type="webdav"
                     title="WebDAV"
-                    description="Use your own server or NAS"
+                    description="Sync encrypted backups to your own server or NAS"
                     icon="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2"
                     selected={storageType === 'webdav'}
                     onSelect={() => setStorageType('webdav')}
-                    comingSoon
                   />
                 </div>
 
@@ -835,7 +828,6 @@ function FeatureItem({ icon, title, description }: { icon: string; title: string
 
 // Storage option component
 function StorageOption({
-  type: _type,
   title,
   description,
   icon,
@@ -844,7 +836,6 @@ function StorageOption({
   recommended,
   comingSoon,
 }: {
-  type: StorageType;
   title: string;
   description: string;
   icon: string;

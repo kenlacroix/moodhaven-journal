@@ -18,6 +18,8 @@
   },
   "dependencies": {
     "@tauri-apps/api": "^2.0.0",
+    "@tauri-apps/plugin-http": "^2.5.6",
+    "@tauri-apps/plugin-notification": "^2.3.3",
     "@tauri-apps/plugin-shell": "^2.0.0",
     "@tiptap/extension-bubble-menu": "^3.15.3",
     "@tiptap/extension-link": "^3.15.3",

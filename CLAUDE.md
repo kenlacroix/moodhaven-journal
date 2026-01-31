@@ -28,7 +28,9 @@
 | Factory Reset | P2 | **Complete** | Complete data wipe with confirmation |
 | 2FA Support | P2 | **Complete** | TOTP + native FIDO2 hardware key (not WebAuthn browser APIs) |
 | Recovery Key | P2 | **Complete** | Optional recovery key generation during setup |
-| Reminders | P3 | Planned | Configurable notification reminders |
+| Reminders | P2 | **Complete** | Configurable notification reminders with Tauri notifications |
+| Cloud Sync (WebDAV) | P2 | **Complete** | Manual encrypted backup/restore to WebDAV servers |
+| Encrypted Export | P2 | **Complete** | AES-256-GCM encrypted export/import with password |
 
 ### Feature Implementation Guidelines
 
@@ -117,6 +119,14 @@ MoodBloom implements a zero-knowledge security architecture where user data is e
 3. **No Telemetry:** No analytics or tracking without explicit user consent.
 4. **Minimal Permissions:** Request only necessary system permissions.
 
+**Cloud Sync Security:**
+- **All backups are encrypted client-side** before upload. The WebDAV server only ever sees encrypted data.
+- Uses `tauri-plugin-http` for HTTP requests, bypassing WebView CSP (user-configured URLs can't be hardcoded in CSP).
+- Encrypted export format: `{format: 'moodbloom-encrypted-v1', payload: EncryptedData}` — AES-256-GCM envelope.
+- WebDAV credentials are stored in app settings (same protection as OpenAI API key).
+- Sync is manual (button-triggered), not automatic — user controls when data leaves the device.
+- Legacy unencrypted backups are auto-detected and imported without decryption.
+
 ### Security Checklist for New Features
 
 - [ ] Sensitive data encrypted before storage
@@ -139,6 +149,12 @@ MoodBloom implements a zero-knowledge security architecture where user data is e
   }
 }
 ```
+
+**Capability permissions** (`src-tauri/capabilities/default.json`):
+- `core:default` — Standard Tauri commands
+- `shell:allow-open` — Open URLs in default browser
+- `notification:default` — System notifications for reminders
+- `http:default` — HTTP requests for WebDAV cloud sync (bypasses CSP)
 
 ### Forbidden Patterns
 
@@ -513,8 +529,7 @@ interface AISettings {
 <!-- Update this section as development progresses -->
 
 ```markdown
-## Sprint: Phase 4 (Polish & Release Prep)
-Duration: Week 5
+## Sprint: Phase 5 (Polish & Release Prep)
 
 ### Completed
 - [x] Project structure setup
@@ -537,18 +552,24 @@ Duration: Week 5
 - [x] Settings page improvements (tabs, search)
 - [x] Journal templates (7 templates)
 - [x] Factory reset function
+- [x] 2FA support (TOTP + native FIDO2 hardware key)
+- [x] Recovery key generation
+- [x] Zero-knowledge security model
+- [x] Reminders/notifications (Tauri notification plugin)
+- [x] Encrypted export/import (AES-256-GCM via TypeScript crypto)
+- [x] WebDAV cloud sync (manual upload/download with tauri-plugin-http)
+- [x] Test suite (300 tests, Vitest + Testing Library)
 
 ### In Progress
 - [ ] Cross-platform build testing
-- [ ] User documentation
 
 ### Blocked
 - None
 
 ### Upcoming
-- [ ] 2FA support (optional)
-- [ ] Cloud storage backends (Dropbox, WebDAV)
-- [ ] Reminders/notifications
+- [ ] User documentation
+- [ ] CI/CD pipeline
+- [ ] Release preparation
 ```
 
 ### Known Issues (Fixed)
@@ -946,6 +967,12 @@ npm run lint:fix           # Fix auto-fixable issues
 | `src/App.tsx` | React app root |
 | `src/stores/` | Global state management |
 | `src/lib/tauri.ts` | Tauri IPC wrappers |
+| `src/lib/crypto.ts` | AES-256-GCM encryption (PBKDF2 key derivation) |
+| `src/lib/dataManagementService.ts` | Export/import with encryption envelope |
+| `src/lib/webdavService.ts` | WebDAV HTTP operations via tauri-plugin-http |
+| `src/lib/cloudSyncService.ts` | Cloud sync orchestration (export/encrypt/upload) |
+| `src/lib/reminderService.ts` | Notification reminder scheduling |
+| `src/types/settings.ts` | App settings type definitions |
 | `vitest.config.ts` | Test runner configuration |
 | `src/test/setup.ts` | Global test setup and mocks |
 

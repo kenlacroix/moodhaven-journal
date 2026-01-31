@@ -14,15 +14,18 @@ import {
   SettingToggle,
   SettingSelect,
   SettingInput,
+  DaySelector,
 } from '../components/settings';
 import { testOpenAIKey, testLocalAIConnection } from '../lib/settingsService';
 import {
   factoryReset,
   exitApp,
-  exportData,
   getDataStats,
-  downloadBackup,
+  downloadBackup as downloadBackupFile,
+  encryptedExport,
 } from '../lib/dataManagementService';
+import { testConnection as testWebDAVConnection } from '../lib/webdavService';
+import { uploadBackup, downloadBackup as downloadCloudBackup } from '../lib/cloudSyncService';
 import {
   get2FAStatus,
   regenerateBackupCodes,
@@ -31,6 +34,8 @@ import {
 } from '../lib/twoFactorService';
 import { TotpSetup, HardwareKeySetup, BackupCodesDisplay } from '../components/twoFactor';
 import type { TwoFactorStatus, BackupCodes } from '../types/twoFactor';
+import type { ReminderFrequency, StorageBackend } from '../types/settings';
+import { sendTestNotification } from '../lib/reminderService';
 
 type SettingsTab = 'general' | 'privacy' | 'ai' | 'about';
 
@@ -46,13 +51,13 @@ const TABS: TabConfig[] = [
     id: 'general',
     label: 'General',
     icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z',
-    keywords: ['appearance', 'theme', 'dark', 'light', 'compact', 'animations', 'journal', 'prompts', 'auto-save'],
+    keywords: ['appearance', 'theme', 'dark', 'light', 'compact', 'animations', 'journal', 'prompts', 'auto-save', 'reminders', 'notifications'],
   },
   {
     id: 'privacy',
     label: 'Privacy',
     icon: 'M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z',
-    keywords: ['security', 'lock', 'timeout', 'clipboard', 'encryption', 'password', '2fa', 'two-factor', 'authenticator', 'yubikey', 'backup codes', 'totp'],
+    keywords: ['security', 'lock', 'timeout', 'clipboard', 'encryption', 'password', '2fa', 'two-factor', 'authenticator', 'yubikey', 'backup codes', 'totp', 'cloud', 'sync', 'webdav', 'backup'],
   },
   {
     id: 'ai',
@@ -89,6 +94,15 @@ export function SettingsPage() {
     setAIConsent,
     setAutoLockTimeout,
     setShowPrompts,
+    setReminderEnabled,
+    setReminderTime,
+    setReminderFrequency,
+    setReminderCustomDays,
+    setReminderMessage,
+    setReminderSound,
+    setStorageType,
+    setWebDAVConfig,
+    setLastSyncDate,
   } = useSettingsStore();
 
   const [activeTab, setActiveTab] = useState<SettingsTab>('general');
@@ -110,6 +124,16 @@ export function SettingsPage() {
   const [backupCodes, setBackupCodes] = useState<BackupCodes | null>(null);
   const [isDisabling2FA, setIsDisabling2FA] = useState(false);
   const [showDisable2FAConfirm, setShowDisable2FAConfirm] = useState(false);
+
+  // Reminder test state
+  const [testingNotification, setTestingNotification] = useState(false);
+  const [notificationTestResult, setNotificationTestResult] = useState<string | null>(null);
+
+  // Cloud sync state
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<string | null>(null);
+  const [showPasswordModal, setShowPasswordModal] = useState<'export' | 'upload' | 'download' | null>(null);
+  const [syncPassword, setSyncPassword] = useState('');
 
   useEffect(() => {
     loadSettings();
@@ -164,18 +188,64 @@ export function SettingsPage() {
     }
   }, [refresh2FAStatus]);
 
-  const handleExport = useCallback(async () => {
-    setIsExporting(true);
-    try {
-      const data = await exportData(''); // TODO: prompt for password
-      const date = new Date().toISOString().split('T')[0];
-      downloadBackup(data, `moodbloom-backup-${date}.moodbloom`);
-    } catch (error) {
-      console.error('Export failed:', error);
-    } finally {
-      setIsExporting(false);
-    }
+  const handleExport = useCallback(() => {
+    setShowPasswordModal('export');
   }, []);
+
+  const handlePasswordSubmit = useCallback(async () => {
+    if (!syncPassword) return;
+    setIsSyncing(true);
+    setSyncStatus(null);
+
+    try {
+      if (showPasswordModal === 'export') {
+        setIsExporting(true);
+        const data = await encryptedExport(syncPassword);
+        const date = new Date().toISOString().split('T')[0];
+        downloadBackupFile(data, `moodbloom-backup-${date}.moodbloom`);
+        setIsExporting(false);
+      } else if (showPasswordModal === 'upload') {
+        const result = await uploadBackup(syncPassword, settings.storage.webdav);
+        if (result.success) {
+          setLastSyncDate(result.timestamp!, 'upload');
+          setSyncStatus(`Uploaded: ${result.filename}`);
+        } else {
+          setSyncStatus(`Error: ${result.error}`);
+        }
+      } else if (showPasswordModal === 'download') {
+        const result = await downloadCloudBackup(syncPassword, settings.storage.webdav);
+        if (result.success) {
+          setLastSyncDate(result.timestamp!, 'download');
+          setSyncStatus(`Downloaded ${result.entriesCount} entries`);
+        } else {
+          setSyncStatus(`Error: ${result.error}`);
+        }
+      }
+    } catch (error) {
+      setSyncStatus(`Error: ${error instanceof Error ? error.message : 'Operation failed'}`);
+      setIsExporting(false);
+    } finally {
+      setIsSyncing(false);
+      setShowPasswordModal(null);
+      setSyncPassword('');
+    }
+  }, [syncPassword, showPasswordModal, settings.storage.webdav, setLastSyncDate]);
+
+  const handleTestNotification = useCallback(async () => {
+    setTestingNotification(true);
+    setNotificationTestResult(null);
+    try {
+      await sendTestNotification(settings.reminders.message);
+      setNotificationTestResult('Notification sent!');
+      setTimeout(() => setNotificationTestResult(null), 3000);
+    } catch (error) {
+      setNotificationTestResult(
+        error instanceof Error ? error.message : 'Failed to send notification'
+      );
+    } finally {
+      setTestingNotification(false);
+    }
+  }, [settings.reminders.message]);
 
   const handleReset = useCallback(async () => {
     if (resetConfirmText !== 'RESET') return;
@@ -392,6 +462,86 @@ export function SettingsPage() {
                   hasUnsavedChanges: true,
                 }))}
               />
+            </SettingSection>
+
+            <SettingSection
+              title="Reminders"
+              description="Get notified to journal regularly"
+            >
+              <SettingToggle
+                label="Enable reminders"
+                description="Receive notifications at your preferred time"
+                checked={settings.reminders.enabled}
+                onChange={setReminderEnabled}
+              />
+
+              {settings.reminders.enabled && (
+                <>
+                  <SettingInput
+                    label="Reminder time"
+                    description="When should we remind you?"
+                    value={settings.reminders.time}
+                    onChange={setReminderTime}
+                    type="time"
+                  />
+
+                  <SettingSelect
+                    label="Frequency"
+                    description="How often do you want reminders?"
+                    value={settings.reminders.frequency}
+                    options={[
+                      { value: 'daily', label: 'Every day' },
+                      { value: 'weekdays', label: 'Weekdays only' },
+                      { value: 'weekends', label: 'Weekends only' },
+                      { value: 'custom', label: 'Custom days' },
+                    ]}
+                    onChange={(v) => setReminderFrequency(v as ReminderFrequency)}
+                  />
+
+                  {settings.reminders.frequency === 'custom' && (
+                    <div className="py-2">
+                      <p className="font-medium text-slate-700 dark:text-slate-200 mb-2">
+                        Select days
+                      </p>
+                      <DaySelector
+                        selectedDays={settings.reminders.customDays}
+                        onChange={setReminderCustomDays}
+                      />
+                    </div>
+                  )}
+
+                  <SettingInput
+                    label="Reminder message"
+                    description="Customize your notification message"
+                    value={settings.reminders.message}
+                    onChange={setReminderMessage}
+                    placeholder="Time to reflect on your day"
+                  />
+
+                  <SettingToggle
+                    label="Play sound"
+                    description="Play a sound with the notification"
+                    checked={settings.reminders.sound}
+                    onChange={setReminderSound}
+                  />
+
+                  <div className="pt-2 border-t border-slate-200 dark:border-slate-700">
+                    <button
+                      type="button"
+                      onClick={handleTestNotification}
+                      disabled={testingNotification}
+                      className="px-4 py-2 text-sm font-medium text-violet-600 dark:text-violet-400 bg-violet-100 dark:bg-violet-900/30 rounded-lg hover:bg-violet-200 dark:hover:bg-violet-900/50 transition-colors disabled:opacity-50"
+                    >
+                      {testingNotification ? 'Sending...' : 'Send Test Notification'}
+                    </button>
+                    {notificationTestResult && (
+                      <p className={`text-sm mt-2 ${notificationTestResult.includes('sent') ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                        {notificationTestResult}
+                      </p>
+                    )}
+                  </div>
+                </>
+              )}
             </SettingSection>
           </div>
         )}
@@ -768,6 +918,137 @@ export function SettingsPage() {
                 </div>
               )}
             </SettingSection>
+
+            {/* Cloud Backup Section */}
+            <SettingSection
+              title="Cloud Backup"
+              description="Sync encrypted backups to a WebDAV server"
+            >
+              <SettingSelect
+                label="Storage backend"
+                description="Where to store cloud backups"
+                value={settings.storage.type}
+                options={[
+                  { value: 'local', label: 'Local only' },
+                  { value: 'webdav', label: 'WebDAV' },
+                ]}
+                onChange={(v) => setStorageType(v as StorageBackend)}
+              />
+
+              {settings.storage.type === 'webdav' && (
+                <>
+                  <SettingInput
+                    label="WebDAV URL"
+                    description="Full URL to your WebDAV directory"
+                    value={settings.storage.webdav.url}
+                    onChange={(v) => setWebDAVConfig({ url: v })}
+                    placeholder="https://cloud.example.com/remote.php/dav/files/user/"
+                    type="url"
+                    onTest={async () => {
+                      const result = await testWebDAVConnection(settings.storage.webdav);
+                      return { valid: result.success, error: result.error };
+                    }}
+                  />
+
+                  <SettingInput
+                    label="Username"
+                    description="WebDAV login username"
+                    value={settings.storage.webdav.username}
+                    onChange={(v) => setWebDAVConfig({ username: v })}
+                    placeholder="username"
+                  />
+
+                  <SettingInput
+                    label="Password"
+                    description="WebDAV login password"
+                    value={settings.storage.webdav.password}
+                    onChange={(v) => setWebDAVConfig({ password: v })}
+                    placeholder="password"
+                    type="password"
+                  />
+
+                  <div className="pt-3 border-t border-slate-200 dark:border-slate-700">
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        disabled={isSyncing || !settings.storage.webdav.url}
+                        onClick={() => setShowPasswordModal('upload')}
+                        className="px-4 py-2 text-sm font-medium text-violet-600 dark:text-violet-400 bg-violet-100 dark:bg-violet-900/30 rounded-lg hover:bg-violet-200 dark:hover:bg-violet-900/50 transition-colors disabled:opacity-50"
+                      >
+                        Upload Backup
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isSyncing || !settings.storage.webdav.url}
+                        onClick={() => setShowPasswordModal('download')}
+                        className="px-4 py-2 text-sm font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-900/30 rounded-lg hover:bg-emerald-200 dark:hover:bg-emerald-900/50 transition-colors disabled:opacity-50"
+                      >
+                        Download Backup
+                      </button>
+                    </div>
+
+                    {settings.storage.lastSyncDate && (
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
+                        Last sync: {new Date(settings.storage.lastSyncDate).toLocaleString()}
+                        {settings.storage.lastSyncDirection && ` (${settings.storage.lastSyncDirection})`}
+                      </p>
+                    )}
+
+                    {syncStatus && (
+                      <p className={`text-sm mt-2 ${syncStatus.startsWith('Error') ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                        {syncStatus}
+                      </p>
+                    )}
+                  </div>
+                </>
+              )}
+            </SettingSection>
+
+            {/* Password prompt modal for export/sync */}
+            {showPasswordModal && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+                <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-6 max-w-md mx-4">
+                  <h3 className="text-lg font-semibold text-slate-800 dark:text-white mb-2">
+                    {showPasswordModal === 'export' ? 'Export Backup' :
+                     showPasswordModal === 'upload' ? 'Upload to WebDAV' :
+                     'Download from WebDAV'}
+                  </h3>
+                  <p className="text-sm text-slate-600 dark:text-slate-300 mb-4">
+                    Enter your master password to {showPasswordModal === 'download' ? 'decrypt' : 'encrypt'} the backup.
+                  </p>
+                  <input
+                    type="password"
+                    value={syncPassword}
+                    onChange={(e) => setSyncPassword(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && syncPassword && !isSyncing) {
+                        handlePasswordSubmit();
+                      }
+                    }}
+                    placeholder="Master password"
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 transition-colors mb-4"
+                    autoFocus
+                  />
+                  <div className="flex gap-3">
+                    <button
+                      type="button"
+                      className="flex-1 px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+                      onClick={() => { setShowPasswordModal(null); setSyncPassword(''); }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!syncPassword || isSyncing}
+                      className="flex-1 px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      onClick={handlePasswordSubmit}
+                    >
+                      {isSyncing ? 'Processing...' : 'Continue'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

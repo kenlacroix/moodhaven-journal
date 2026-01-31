@@ -15,6 +15,18 @@ vi.mock('@tauri-apps/plugin-shell', () => ({
   open: vi.fn(),
 }));
 
+// Mock @tauri-apps/plugin-notification
+vi.mock('@tauri-apps/plugin-notification', () => ({
+  isPermissionGranted: vi.fn().mockResolvedValue(true),
+  requestPermission: vi.fn().mockResolvedValue('granted'),
+  sendNotification: vi.fn(),
+}));
+
+// Mock @tauri-apps/plugin-http
+vi.mock('@tauri-apps/plugin-http', () => ({
+  fetch: vi.fn(),
+}));
+
 // Mock window.matchMedia for theme-related tests (only in jsdom environment)
 if (typeof window !== 'undefined') {
   Object.defineProperty(window, 'matchMedia', {

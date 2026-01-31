@@ -10,7 +10,7 @@ interface SettingInputProps {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
-  type?: 'text' | 'password' | 'url';
+  type?: 'text' | 'password' | 'url' | 'time';
   disabled?: boolean;
   onTest?: () => Promise<{ valid: boolean; error?: string }>;
 }
@@ -29,7 +29,7 @@ export function SettingInput({
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ valid: boolean; error?: string } | null>(null);
 
-  const inputType = type === 'password' && !showValue ? 'password' : 'text';
+  const inputType = type === 'password' && !showValue ? 'password' : type === 'time' ? 'time' : 'text';
 
   const handleTest = async () => {
     if (!onTest) return;

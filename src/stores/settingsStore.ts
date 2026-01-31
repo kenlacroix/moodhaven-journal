@@ -9,6 +9,10 @@ import type {
   AppSettings,
   AIProvider,
   AIFeatures,
+  ReminderFrequency,
+  DayOfWeek,
+  StorageBackend,
+  WebDAVConfig,
 } from '../types/settings';
 import { createDefaultSettings } from '../types/settings';
 import {
@@ -51,6 +55,19 @@ interface SettingsState {
 
   // Journal
   setShowPrompts: (enabled: boolean) => void;
+
+  // Reminders
+  setReminderEnabled: (enabled: boolean) => void;
+  setReminderTime: (time: string) => void;
+  setReminderFrequency: (frequency: ReminderFrequency) => void;
+  setReminderCustomDays: (days: DayOfWeek[]) => void;
+  setReminderMessage: (message: string) => void;
+  setReminderSound: (sound: boolean) => void;
+
+  // Cloud Storage
+  setStorageType: (type: StorageBackend) => void;
+  setWebDAVConfig: (config: Partial<WebDAVConfig>) => void;
+  setLastSyncDate: (date: string, direction: 'upload' | 'download') => void;
 }
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({
@@ -266,6 +283,105 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       settings: {
         ...state.settings,
         journal: { ...state.settings.journal, showPrompts },
+      },
+      hasUnsavedChanges: true,
+    }));
+  },
+
+  // Reminders
+  setReminderEnabled: (enabled) => {
+    set((state) => ({
+      settings: {
+        ...state.settings,
+        reminders: { ...state.settings.reminders, enabled },
+      },
+      hasUnsavedChanges: true,
+    }));
+  },
+
+  setReminderTime: (time) => {
+    set((state) => ({
+      settings: {
+        ...state.settings,
+        reminders: { ...state.settings.reminders, time },
+      },
+      hasUnsavedChanges: true,
+    }));
+  },
+
+  setReminderFrequency: (frequency) => {
+    set((state) => ({
+      settings: {
+        ...state.settings,
+        reminders: { ...state.settings.reminders, frequency },
+      },
+      hasUnsavedChanges: true,
+    }));
+  },
+
+  setReminderCustomDays: (customDays) => {
+    set((state) => ({
+      settings: {
+        ...state.settings,
+        reminders: { ...state.settings.reminders, customDays },
+      },
+      hasUnsavedChanges: true,
+    }));
+  },
+
+  setReminderMessage: (message) => {
+    set((state) => ({
+      settings: {
+        ...state.settings,
+        reminders: { ...state.settings.reminders, message },
+      },
+      hasUnsavedChanges: true,
+    }));
+  },
+
+  setReminderSound: (sound) => {
+    set((state) => ({
+      settings: {
+        ...state.settings,
+        reminders: { ...state.settings.reminders, sound },
+      },
+      hasUnsavedChanges: true,
+    }));
+  },
+
+  // Cloud Storage
+  setStorageType: (type) => {
+    set((state) => ({
+      settings: {
+        ...state.settings,
+        storage: { ...state.settings.storage, type },
+      },
+      hasUnsavedChanges: true,
+    }));
+  },
+
+  setWebDAVConfig: (config) => {
+    set((state) => ({
+      settings: {
+        ...state.settings,
+        storage: {
+          ...state.settings.storage,
+          webdav: { ...state.settings.storage.webdav, ...config },
+        },
+      },
+      hasUnsavedChanges: true,
+    }));
+  },
+
+  setLastSyncDate: (date, direction) => {
+    set((state) => ({
+      settings: {
+        ...state.settings,
+        storage: {
+          ...state.settings.storage,
+          lastSyncDate: date,
+          lastSyncDirection: direction,
+        },
       },
       hasUnsavedChanges: true,
     }));

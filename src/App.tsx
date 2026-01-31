@@ -17,6 +17,7 @@ import { SetupScreen } from './pages/SetupScreen';
 import { MainLayout, type ViewType } from './components/layout';
 import { useAppStore } from './stores/appStore';
 import { useSettingsStore } from './stores/settingsStore';
+import { useReminderScheduler } from './hooks/useReminderScheduler';
 
 function App() {
   const { isUnlocked, isInitialized, checkInitialization, lock } = useAppStore();
@@ -24,6 +25,9 @@ function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [currentView, setCurrentView] = useState<ViewType>('writing');
   const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
+
+  // Schedule reminder notifications (hook checks enabled state internally)
+  useReminderScheduler();
 
   useEffect(() => {
     const init = async () => {

@@ -2,9 +2,12 @@
  * Data Management Service
  *
  * Handles factory reset, export, and import operations.
+ * Provides encrypted export/import wrappers using AES-256-GCM.
  */
 
 import { invoke } from '@tauri-apps/api/core';
+import { encrypt, decrypt } from './crypto';
+import type { EncryptedData } from './crypto';
 
 /**
  * Factory reset - wipe all app data
@@ -77,4 +80,69 @@ export async function readBackupFile(file: File): Promise<string> {
     reader.onerror = () => reject(new Error('Failed to read file'));
     reader.readAsText(file);
   });
+}
+
+// --- Encrypted export/import ---
+
+const ENCRYPTED_EXPORT_VERSION = 'moodbloom-encrypted-v1';
+
+interface EncryptedExportEnvelope {
+  format: typeof ENCRYPTED_EXPORT_VERSION;
+  payload: EncryptedData;
+}
+
+/**
+ * Export data with AES-256-GCM encryption.
+ * Calls the Rust export (base64 JSON), then encrypts with the given password.
+ * @param password - Master password for encryption
+ * @returns JSON string containing encrypted envelope
+ */
+export async function encryptedExport(password: string): Promise<string> {
+  const base64Data = await exportData('');
+
+  const result = await encrypt(base64Data, password);
+  if (!result.success || !result.data) {
+    throw new Error(result.error || 'Encryption failed');
+  }
+
+  const envelope: EncryptedExportEnvelope = {
+    format: ENCRYPTED_EXPORT_VERSION,
+    payload: result.data,
+  };
+
+  return JSON.stringify(envelope);
+}
+
+/**
+ * Import data from an encrypted or legacy backup.
+ * Auto-detects format: encrypted envelope (new) or plain base64 (legacy).
+ * @param data - Backup data string (encrypted JSON or legacy base64)
+ * @param password - Master password for decryption
+ * @returns Number of entries imported
+ */
+export async function encryptedImport(data: string, password: string): Promise<number> {
+  let base64Data: string;
+
+  try {
+    const parsed = JSON.parse(data);
+    if (parsed.format === ENCRYPTED_EXPORT_VERSION && parsed.payload) {
+      const result = await decrypt(parsed.payload as EncryptedData, password);
+      if (!result.success || !result.data) {
+        throw new Error(result.error || 'Decryption failed - wrong password?');
+      }
+      base64Data = result.data;
+    } else {
+      // JSON but not encrypted envelope — treat as legacy
+      base64Data = data;
+    }
+  } catch (e) {
+    if (e instanceof SyntaxError) {
+      // Not JSON — treat as legacy base64
+      base64Data = data;
+    } else {
+      throw e;
+    }
+  }
+
+  return importData(base64Data, '');
 }

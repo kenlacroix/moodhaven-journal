@@ -65,15 +65,38 @@ export interface AppearanceSettings {
   animationsEnabled: boolean;
 }
 
+// Days of week for reminder scheduling (0 = Sunday, 6 = Saturday)
+export type DayOfWeek = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+
+// Reminder frequency options
+export type ReminderFrequency = 'daily' | 'weekdays' | 'weekends' | 'custom';
+
+// Reminder settings
+export interface ReminderSettings {
+  enabled: boolean;
+  time: string; // "HH:MM" 24-hour format
+  frequency: ReminderFrequency;
+  customDays: DayOfWeek[]; // Used when frequency is 'custom'
+  message: string;
+  sound: boolean;
+}
+
 // Storage backend options
-export type StorageBackend = 'local' | 'dropbox' | 'webdav';
+export type StorageBackend = 'local' | 'webdav';
+
+// WebDAV connection configuration
+export interface WebDAVConfig {
+  url: string;
+  username: string;
+  password: string;
+}
 
 // Storage settings
 export interface StorageSettings {
   type: StorageBackend;
-  webdavUrl?: string;
-  dropboxToken?: string;
+  webdav: WebDAVConfig;
   lastSyncDate?: string; // ISO timestamp
+  lastSyncDirection?: 'upload' | 'download';
 }
 
 // Complete app settings
@@ -83,6 +106,7 @@ export interface AppSettings {
   journal: JournalPreferences;
   privacy: PrivacySettings;
   appearance: AppearanceSettings;
+  reminders: ReminderSettings;
   storage: StorageSettings;
 }
 
@@ -130,8 +154,21 @@ export function createDefaultSettings(): AppSettings {
       compactMode: false,
       animationsEnabled: true,
     },
+    reminders: {
+      enabled: false,
+      time: '20:00',
+      frequency: 'daily',
+      customDays: [],
+      message: 'Time to reflect on your day',
+      sound: true,
+    },
     storage: {
       type: 'local',
+      webdav: {
+        url: '',
+        username: '',
+        password: '',
+      },
     },
   };
 }

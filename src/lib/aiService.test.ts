@@ -3,9 +3,8 @@ import {
   detectRecurringPatterns,
   getFallbackPrompts,
 } from './aiService';
-import type { AppSettings } from '../types/settings';
 import { createDefaultSettings } from '../types/settings';
-import type { AggregatedMetadata } from '../types/ai';
+import type { AggregatedMetadata, TimeOfDay } from '../types/ai';
 
 function createTestMetadata(
   overrides: Partial<AggregatedMetadata> = {}
@@ -175,7 +174,7 @@ describe('aiService', () => {
         patterns: {
           bestDayOfWeek: 'Monday',
           worstDayOfWeek: 'Monday', // same day -> no weekly pattern
-          bestTimeOfDay: '', // empty -> no time pattern (falsy)
+          bestTimeOfDay: '' as unknown as TimeOfDay, // empty -> no time pattern (falsy)
           frequency: 'sporadic',
           currentStreak: 1,
           longestStreak: 3,

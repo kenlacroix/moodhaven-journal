@@ -2,7 +2,6 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MoodSelector } from './MoodSelector';
 import { MOOD_OPTIONS } from '../../types/journal';
-import type { MoodLevel } from '../../types/journal';
 
 describe('MoodSelector', () => {
   const mockOnChange = vi.fn();

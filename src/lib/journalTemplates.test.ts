@@ -2,7 +2,6 @@ import {
   JOURNAL_TEMPLATES,
   getTemplate,
   formatTemplateContent,
-  type JournalTemplate,
 } from './journalTemplates';
 
 describe('journalTemplates', () => {

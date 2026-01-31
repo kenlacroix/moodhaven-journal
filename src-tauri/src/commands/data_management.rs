@@ -61,7 +61,7 @@ pub async fn factory_reset(app: AppHandle) -> Result<bool, String> {
 #[tauri::command]
 pub async fn export_data(
     app: AppHandle,
-    password: String,
+    _password: String,
 ) -> Result<String, String> {
     let db = app.state::<Database>();
 
@@ -105,7 +105,7 @@ pub async fn export_data(
 pub async fn import_data(
     app: AppHandle,
     data: String,
-    password: String,
+    _password: String,
 ) -> Result<i32, String> {
     let db = app.state::<Database>();
 

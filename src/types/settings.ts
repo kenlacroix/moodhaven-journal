@@ -99,6 +99,11 @@ export interface StorageSettings {
   lastSyncDirection?: 'upload' | 'download';
 }
 
+// Tutorial settings
+export interface TutorialSettings {
+  hasSeenTutorial: boolean;
+}
+
 // Complete app settings
 export interface AppSettings {
   version: string; // Settings schema version
@@ -108,6 +113,7 @@ export interface AppSettings {
   appearance: AppearanceSettings;
   reminders: ReminderSettings;
   storage: StorageSettings;
+  tutorial: TutorialSettings;
 }
 
 // Default settings factory
@@ -169,6 +175,9 @@ export function createDefaultSettings(): AppSettings {
         username: '',
         password: '',
       },
+    },
+    tutorial: {
+      hasSeenTutorial: false,
     },
   };
 }

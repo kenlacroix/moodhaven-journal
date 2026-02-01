@@ -51,7 +51,7 @@ const TABS: TabConfig[] = [
     id: 'general',
     label: 'General',
     icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z',
-    keywords: ['appearance', 'theme', 'dark', 'light', 'compact', 'animations', 'journal', 'prompts', 'auto-save', 'reminders', 'notifications'],
+    keywords: ['appearance', 'theme', 'dark', 'light', 'compact', 'animations', 'journal', 'prompts', 'auto-save', 'reminders', 'notifications', 'tutorial', 'help', 'tour'],
   },
   {
     id: 'privacy',
@@ -103,6 +103,7 @@ export function SettingsPage() {
     setStorageType,
     setWebDAVConfig,
     setLastSyncDate,
+    setHasSeenTutorial,
   } = useSettingsStore();
 
   const [activeTab, setActiveTab] = useState<SettingsTab>('general');
@@ -128,6 +129,12 @@ export function SettingsPage() {
   // Reminder test state
   const [testingNotification, setTestingNotification] = useState(false);
   const [notificationTestResult, setNotificationTestResult] = useState<string | null>(null);
+
+  // Tutorial state
+  const handleShowTutorial = useCallback(async () => {
+    setHasSeenTutorial(false);
+    await saveSettings();
+  }, [setHasSeenTutorial, saveSettings]);
 
   // Cloud sync state
   const [isSyncing, setIsSyncing] = useState(false);
@@ -542,6 +549,29 @@ export function SettingsPage() {
                   </div>
                 </>
               )}
+            </SettingSection>
+
+            <SettingSection
+              title="Help"
+              description="Learn how to use MoodBloom"
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-slate-700 dark:text-slate-200 text-sm">
+                    App Tutorial
+                  </p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Replay the introductory tour of MoodBloom
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleShowTutorial}
+                  className="px-4 py-2 text-sm font-medium text-violet-600 dark:text-violet-400 bg-violet-100 dark:bg-violet-900/30 rounded-lg hover:bg-violet-200 dark:hover:bg-violet-900/50 transition-colors"
+                >
+                  Show Tutorial
+                </button>
+              </div>
             </SettingSection>
           </div>
         )}

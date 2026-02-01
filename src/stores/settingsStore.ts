@@ -68,6 +68,9 @@ interface SettingsState {
   setStorageType: (type: StorageBackend) => void;
   setWebDAVConfig: (config: Partial<WebDAVConfig>) => void;
   setLastSyncDate: (date: string, direction: 'upload' | 'download') => void;
+
+  // Tutorial
+  setHasSeenTutorial: (seen: boolean) => void;
 }
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({
@@ -382,6 +385,17 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
           lastSyncDate: date,
           lastSyncDirection: direction,
         },
+      },
+      hasUnsavedChanges: true,
+    }));
+  },
+
+  // Tutorial
+  setHasSeenTutorial: (hasSeenTutorial) => {
+    set((state) => ({
+      settings: {
+        ...state.settings,
+        tutorial: { ...state.settings.tutorial, hasSeenTutorial },
       },
       hasUnsavedChanges: true,
     }));

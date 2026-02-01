@@ -15,6 +15,7 @@ import { SettingsPage } from './pages/SettingsPage';
 import { LockScreen } from './pages/LockScreen';
 import { SetupScreen } from './pages/SetupScreen';
 import { MainLayout, type ViewType } from './components/layout';
+import { TutorialWizard } from './components/tutorial';
 import { useAppStore } from './stores/appStore';
 import { useSettingsStore } from './stores/settingsStore';
 import { useReminderScheduler } from './hooks/useReminderScheduler';
@@ -22,9 +23,11 @@ import { useReminderScheduler } from './hooks/useReminderScheduler';
 function App() {
   const { isUnlocked, isInitialized, checkInitialization, lock } = useAppStore();
   const loadSettings = useSettingsStore((s) => s.loadSettings);
+  const hasSeenTutorial = useSettingsStore((s) => s.settings.tutorial?.hasSeenTutorial);
   const [isLoading, setIsLoading] = useState(true);
   const [currentView, setCurrentView] = useState<ViewType>('writing');
   const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
+  const [showTutorial, setShowTutorial] = useState(false);
 
   // Schedule reminder notifications (hook checks enabled state internally)
   useReminderScheduler();
@@ -37,6 +40,19 @@ function App() {
     };
     init();
   }, [checkInitialization, loadSettings]);
+
+  // Show tutorial on first unlock when user hasn't seen it
+  useEffect(() => {
+    if (isUnlocked && hasSeenTutorial === false) {
+      setShowTutorial(true);
+    }
+  }, [isUnlocked, hasSeenTutorial]);
+
+  const handleTutorialComplete = useCallback(async () => {
+    setShowTutorial(false);
+    useSettingsStore.getState().setHasSeenTutorial(true);
+    await useSettingsStore.getState().saveSettings();
+  }, []);
 
   const handleNavigate = useCallback((view: ViewType) => {
     setCurrentView(view);
@@ -84,49 +100,53 @@ function App() {
 
   // Main app with sidebar layout
   return (
-    <MainLayout
-      currentView={currentView}
-      onNavigate={handleNavigate}
-      onLock={lock}
-    >
-      {/* Writing View - calm writing space (default) */}
-      {currentView === 'writing' && (
-        <WritingView
-          entryId={selectedEntryId}
-          onEntrySaved={() => {
-            // Optionally refresh timeline, etc.
-          }}
-        />
-      )}
+    <>
+      <MainLayout
+        currentView={currentView}
+        onNavigate={handleNavigate}
+        onLock={lock}
+      >
+        {/* Writing View - calm writing space (default) */}
+        {currentView === 'writing' && (
+          <WritingView
+            entryId={selectedEntryId}
+            onEntrySaved={() => {
+              // Optionally refresh timeline, etc.
+            }}
+          />
+        )}
 
-      {/* Timeline View - chronological entry list */}
-      {currentView === 'timeline' && (
-        <TimelineView
-          onSelectEntry={handleSelectEntry}
-          onNewEntry={handleNewEntry}
-        />
-      )}
+        {/* Timeline View - chronological entry list */}
+        {currentView === 'timeline' && (
+          <TimelineView
+            onSelectEntry={handleSelectEntry}
+            onNewEntry={handleNewEntry}
+          />
+        )}
 
-      {/* Search View */}
-      {currentView === 'search' && (
-        <SearchView onSelectEntry={handleSelectEntry} />
-      )}
+        {/* Search View */}
+        {currentView === 'search' && (
+          <SearchView onSelectEntry={handleSelectEntry} />
+        )}
 
-      {/* On This Day View */}
-      {currentView === 'onthisday' && (
-        <OnThisDayView onSelectEntry={handleSelectEntry} />
-      )}
+        {/* On This Day View */}
+        {currentView === 'onthisday' && (
+          <OnThisDayView onSelectEntry={handleSelectEntry} />
+        )}
 
-      {/* Insights View - AI content only here */}
-      {currentView === 'insights' && (
-        <InsightsView />
-      )}
+        {/* Insights View - AI content only here */}
+        {currentView === 'insights' && (
+          <InsightsView />
+        )}
 
-      {/* Settings */}
-      {currentView === 'settings' && (
-        <SettingsPage />
-      )}
-    </MainLayout>
+        {/* Settings */}
+        {currentView === 'settings' && (
+          <SettingsPage />
+        )}
+      </MainLayout>
+
+      {showTutorial && <TutorialWizard onComplete={handleTutorialComplete} />}
+    </>
   );
 }
 

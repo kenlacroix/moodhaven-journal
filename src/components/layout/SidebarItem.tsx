@@ -12,15 +12,16 @@ interface SidebarItemProps {
   label: string;
   isActive: boolean;
   onClick: () => void;
+  collapsed?: boolean;
 }
 
-export function SidebarItem({ icon, label, isActive, onClick }: SidebarItemProps) {
+export function SidebarItem({ icon, label, isActive, onClick, collapsed = false }: SidebarItemProps) {
   return (
     <button
       type="button"
       onClick={onClick}
       className={`
-        w-full flex items-center gap-3 px-3 py-2.5 rounded-lg
+        w-full flex items-center ${collapsed ? 'justify-center' : 'gap-3'} px-3 py-2.5 rounded-lg
         text-sm font-medium transition-colors
         focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500
         ${
@@ -30,9 +31,10 @@ export function SidebarItem({ icon, label, isActive, onClick }: SidebarItemProps
         }
       `}
       aria-current={isActive ? 'page' : undefined}
+      title={collapsed ? label : undefined}
     >
       <span className="w-5 h-5 flex-shrink-0">{icon}</span>
-      <span>{label}</span>
+      {!collapsed && <span>{label}</span>}
     </button>
   );
 }

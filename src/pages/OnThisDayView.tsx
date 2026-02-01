@@ -110,13 +110,13 @@ export function OnThisDayView({ onSelectEntry }: OnThisDayViewProps) {
                   key={entry.id}
                   type="button"
                   onClick={() => onSelectEntry(entry.id)}
-                  className="w-full text-left p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700 transition-colors group"
+                  className="w-full text-left p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700 shadow-sm hover:shadow-md hover:-translate-y-px transition-all duration-200 group"
                 >
                   <div className="flex items-start gap-3">
                     {entry.mood && (
-                      <span className="text-xl flex-shrink-0">
-                        {MOODS[entry.mood]}
-                      </span>
+                      <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center flex-shrink-0">
+                        <span className="text-lg">{MOODS[entry.mood]}</span>
+                      </div>
                     )}
 
                     <div className="flex-1 min-w-0">
@@ -132,7 +132,7 @@ export function OnThisDayView({ onSelectEntry }: OnThisDayViewProps) {
                     </div>
 
                     <svg
-                      className="w-4 h-4 text-slate-300 dark:text-slate-600 group-hover:text-slate-400 flex-shrink-0 mt-1 transition-colors"
+                      className="w-4 h-4 text-slate-300 dark:text-slate-600 group-hover:text-slate-400 group-hover:translate-x-0.5 flex-shrink-0 mt-1 transition-all duration-200"
                       fill="none"
                       viewBox="0 0 24 24"
                       stroke="currentColor"

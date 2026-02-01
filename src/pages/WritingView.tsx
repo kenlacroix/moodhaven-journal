@@ -26,6 +26,8 @@ export function WritingView({ entryId, onEntrySaved }: WritingViewProps) {
   const [isSaving, setIsSaving] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
   const [savedAgoText, setSavedAgoText] = useState('');
+  const [showCheckmark, setShowCheckmark] = useState(false);
+  const [isEditorFocused, setIsEditorFocused] = useState(false);
   const autoSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const agoIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -93,6 +95,8 @@ export function WritingView({ entryId, onEntrySaved }: WritingViewProps) {
       })
         .then(() => {
           setLastSavedAt(new Date());
+          setShowCheckmark(true);
+          setTimeout(() => setShowCheckmark(false), 1500);
           onEntrySaved?.();
         })
         .catch((err) => {
@@ -135,8 +139,12 @@ export function WritingView({ entryId, onEntrySaved }: WritingViewProps) {
             </div>
           )}
 
-          {/* Editor surface with subtle contrast */}
-          <div className="flex-1 flex flex-col min-h-0 bg-white dark:bg-slate-900 rounded-2xl shadow-sm px-8 py-10">
+          {/* Editor surface with subtle contrast - lifts on focus */}
+          <div
+            onFocus={() => setIsEditorFocused(true)}
+            onBlur={() => setIsEditorFocused(false)}
+            className={`flex-1 flex flex-col min-h-0 bg-white dark:bg-slate-900 rounded-2xl px-8 py-10 transition-shadow duration-300 ${isEditorFocused ? 'shadow-md' : 'shadow-sm'}`}
+          >
             {/* Title input - lighter weight */}
             <input
               type="text"
@@ -172,9 +180,25 @@ export function WritingView({ entryId, onEntrySaved }: WritingViewProps) {
               <span>End-to-end encrypted</span>
             </div>
 
-            {/* Save indicator */}
-            <div className="text-xs text-slate-400 dark:text-slate-500 transition-opacity duration-300">
-              {isSaving ? 'Saving...' : savedAgoText}
+            {/* Save indicator with micro-animation */}
+            <div className="flex items-center gap-1.5 text-xs text-slate-400 dark:text-slate-500">
+              {isSaving ? (
+                <span className="flex items-center gap-1.5">
+                  <span className="w-3 h-3 border-[1.5px] border-slate-300 dark:border-slate-600 border-t-violet-500 rounded-full animate-spin" />
+                  Saving...
+                </span>
+              ) : showCheckmark ? (
+                <span className="flex items-center gap-1.5 animate-fade-in">
+                  <svg className="w-3.5 h-3.5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                  </svg>
+                  {savedAgoText}
+                </span>
+              ) : (
+                <span className="transition-opacity duration-300">
+                  {savedAgoText}
+                </span>
+              )}
             </div>
           </div>
         </div>

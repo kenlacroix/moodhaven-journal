@@ -3,6 +3,9 @@
  *
  * Features:
  * - Bold, Italic, Strikethrough, Links, Lists
+ * - Headings (H2, H3), Blockquotes, Code Blocks, Horizontal Rules
+ * - Task lists with interactive checkboxes
+ * - Slash commands (`/` to open command palette)
  * - Floating toolbar on text selection
  * - Auto-focus on open
  * - Large readable font, comfortable line height
@@ -16,8 +19,11 @@ import { Extension } from '@tiptap/core';
 import Link from '@tiptap/extension-link';
 import Placeholder from '@tiptap/extension-placeholder';
 import Underline from '@tiptap/extension-underline';
+import TaskList from '@tiptap/extension-task-list';
+import TaskItem from '@tiptap/extension-task-item';
 import { FloatingToolbar } from './FloatingToolbar';
 import { EmojiPicker } from './EmojiPicker';
+import { SlashCommands } from './slashCommands';
 
 interface RichTextEditorProps {
   value: string;
@@ -36,7 +42,7 @@ export function RichTextEditor({
   className = '',
   onOpenContextMenu,
 }: RichTextEditorProps) {
-  const [toolbarExpanded, setToolbarExpanded] = useState(false);
+  const [toolbarExpanded, setToolbarExpanded] = useState(true);
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const [linkDialogInitialUrl, setLinkDialogInitialUrl] = useState('');
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
@@ -47,9 +53,7 @@ export function RichTextEditor({
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
-        // Disable heading levels we don't need
-        heading: false,
-        // Keep bullet and ordered lists
+        heading: { levels: [2, 3] },
         bulletList: {
           keepMarks: true,
           keepAttributes: false,
@@ -60,6 +64,8 @@ export function RichTextEditor({
         },
       }),
       Underline,
+      TaskList,
+      TaskItem.configure({ nested: true }),
       Link.configure({
         openOnClick: false,
         HTMLAttributes: {
@@ -82,6 +88,7 @@ export function RichTextEditor({
           };
         },
       }),
+      SlashCommands,
     ],
     content: value,
     autofocus: autoFocus ? 'end' : false,
@@ -134,6 +141,24 @@ export function RichTextEditor({
       case 'orderedList':
         editor.chain().focus().toggleOrderedList().run();
         break;
+      case 'heading2':
+        editor.chain().focus().toggleHeading({ level: 2 }).run();
+        break;
+      case 'heading3':
+        editor.chain().focus().toggleHeading({ level: 3 }).run();
+        break;
+      case 'blockquote':
+        editor.chain().focus().toggleBlockquote().run();
+        break;
+      case 'taskList':
+        editor.chain().focus().toggleTaskList().run();
+        break;
+      case 'codeBlock':
+        editor.chain().focus().toggleCodeBlock().run();
+        break;
+      case 'horizontalRule':
+        editor.chain().focus().setHorizontalRule().run();
+        break;
     }
   }, [editor]);
 
@@ -148,6 +173,11 @@ export function RichTextEditor({
         link: false,
         bulletList: false,
         orderedList: false,
+        heading2: false,
+        heading3: false,
+        blockquote: false,
+        taskList: false,
+        codeBlock: false,
       };
     }
     return {
@@ -158,6 +188,11 @@ export function RichTextEditor({
       link: editor.isActive('link'),
       bulletList: editor.isActive('bulletList'),
       orderedList: editor.isActive('orderedList'),
+      heading2: editor.isActive('heading', { level: 2 }),
+      heading3: editor.isActive('heading', { level: 3 }),
+      blockquote: editor.isActive('blockquote'),
+      taskList: editor.isActive('taskList'),
+      codeBlock: editor.isActive('codeBlock'),
     };
   }, [editor]);
 
@@ -216,7 +251,7 @@ export function RichTextEditor({
       {/* Editor content */}
       <EditorContent
         editor={editor}
-        className="flex-1 overflow-auto"
+        className="flex-1 overflow-y-auto editor-scroll-container"
       />
 
       {/* Floating toolbar - appears on selection, hidden when collapsible toolbar is open */}
@@ -262,6 +297,34 @@ export function RichTextEditor({
         .ProseMirror:focus {
           outline: none;
         }
+        /* Remove focus outline from TipTap wrapper */
+        .tiptap:focus,
+        .tiptap:focus-visible,
+        .tiptap *:focus-visible {
+          outline: none;
+        }
+
+        /* Hide editor scrollbar unless hovered */
+        .editor-scroll-container {
+          scrollbar-gutter: stable;
+        }
+        .editor-scroll-container::-webkit-scrollbar {
+          width: 4px;
+        }
+        .editor-scroll-container::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .editor-scroll-container::-webkit-scrollbar-thumb {
+          background: transparent;
+          border-radius: 9999px;
+          transition: background 0.2s;
+        }
+        .editor-scroll-container:hover::-webkit-scrollbar-thumb {
+          background: rgb(203 213 225);
+        }
+        .dark .editor-scroll-container:hover::-webkit-scrollbar-thumb {
+          background: rgb(71 85 105);
+        }
         .ProseMirror p.is-editor-empty:first-child::before {
           content: attr(data-placeholder);
           float: left;
@@ -269,6 +332,96 @@ export function RichTextEditor({
           pointer-events: none;
           height: 0;
         }
+
+        /* Paragraph spacing */
+        .ProseMirror p {
+          margin: 0.25em 0;
+        }
+
+        /* Headings */
+        .ProseMirror h2 {
+          font-size: 1.5em;
+          font-weight: 700;
+          line-height: 1.3;
+          margin: 1em 0 0.4em;
+          color: rgb(30 41 59);
+        }
+        .dark .ProseMirror h2 {
+          color: rgb(226 232 240);
+        }
+        .ProseMirror h3 {
+          font-size: 1.25em;
+          font-weight: 600;
+          line-height: 1.4;
+          margin: 0.8em 0 0.3em;
+          color: rgb(51 65 85);
+        }
+        .dark .ProseMirror h3 {
+          color: rgb(203 213 225);
+        }
+
+        /* Blockquote */
+        .ProseMirror blockquote {
+          border-left: 3px solid rgb(139 92 246);
+          padding-left: 1em;
+          margin: 0.75em 0;
+          color: rgb(100 116 139);
+          font-style: italic;
+        }
+        .dark .ProseMirror blockquote {
+          border-left-color: rgb(167 139 250);
+          color: rgb(148 163 184);
+        }
+
+        /* Code block */
+        .ProseMirror pre {
+          background: rgb(241 245 249);
+          border-radius: 0.5em;
+          padding: 0.75em 1em;
+          margin: 0.75em 0;
+          overflow-x: auto;
+          font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+          font-size: 0.9em;
+          line-height: 1.5;
+          color: rgb(30 41 59);
+        }
+        .dark .ProseMirror pre {
+          background: rgb(30 41 59);
+          color: rgb(226 232 240);
+        }
+        .ProseMirror pre code {
+          background: none;
+          padding: 0;
+          border-radius: 0;
+          font-size: inherit;
+          color: inherit;
+        }
+
+        /* Inline code */
+        .ProseMirror code {
+          background: rgb(241 245 249);
+          border-radius: 0.25em;
+          padding: 0.15em 0.35em;
+          font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+          font-size: 0.9em;
+          color: rgb(139 92 246);
+        }
+        .dark .ProseMirror code {
+          background: rgb(30 41 59);
+          color: rgb(167 139 250);
+        }
+
+        /* Horizontal rule */
+        .ProseMirror hr {
+          border: none;
+          border-top: 2px solid rgb(226 232 240);
+          margin: 1.5em 0;
+        }
+        .dark .ProseMirror hr {
+          border-top-color: rgb(51 65 85);
+        }
+
+        /* Lists */
         .ProseMirror ul {
           list-style-type: disc;
           padding-left: 1.5em;
@@ -284,6 +437,86 @@ export function RichTextEditor({
         }
         .ProseMirror li p {
           margin: 0;
+        }
+
+        /* Task list */
+        .ProseMirror ul[data-type="taskList"] {
+          list-style: none;
+          padding-left: 0;
+          margin: 0.5em 0;
+        }
+        .ProseMirror ul[data-type="taskList"] li {
+          display: flex;
+          align-items: flex-start;
+          gap: 0.5em;
+          margin: 0.35em 0;
+        }
+        .ProseMirror ul[data-type="taskList"] li > label {
+          flex-shrink: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          margin-top: 0.25em;
+          user-select: none;
+        }
+        .ProseMirror ul[data-type="taskList"] li > label input[type="checkbox"] {
+          appearance: none;
+          -webkit-appearance: none;
+          width: 1.15em;
+          height: 1.15em;
+          border: 2px solid rgb(203 213 225);
+          border-radius: 0.25em;
+          cursor: pointer;
+          position: relative;
+          transition: all 150ms ease;
+        }
+        .dark .ProseMirror ul[data-type="taskList"] li > label input[type="checkbox"] {
+          border-color: rgb(100 116 139);
+        }
+        .ProseMirror ul[data-type="taskList"] li > label input[type="checkbox"]:checked {
+          background: rgb(139 92 246);
+          border-color: rgb(139 92 246);
+        }
+        .dark .ProseMirror ul[data-type="taskList"] li > label input[type="checkbox"]:checked {
+          background: rgb(167 139 250);
+          border-color: rgb(167 139 250);
+        }
+        .ProseMirror ul[data-type="taskList"] li > label input[type="checkbox"]:checked::after {
+          content: '';
+          position: absolute;
+          top: 0.05em;
+          left: 0.25em;
+          width: 0.35em;
+          height: 0.6em;
+          border: solid white;
+          border-width: 0 2px 2px 0;
+          transform: rotate(45deg);
+        }
+        .ProseMirror ul[data-type="taskList"] li > div {
+          flex: 1;
+        }
+        .ProseMirror ul[data-type="taskList"] li[data-checked="true"] > div > p {
+          text-decoration: line-through;
+          color: rgb(148 163 184);
+        }
+        .dark .ProseMirror ul[data-type="taskList"] li[data-checked="true"] > div > p {
+          color: rgb(100 116 139);
+        }
+
+        /* Nested task lists */
+        .ProseMirror ul[data-type="taskList"] ul[data-type="taskList"] {
+          margin: 0.25em 0;
+          padding-left: 1.5em;
+        }
+
+        /* Slash command menu — CSS variables for dark mode */
+        :root {
+          --slash-menu-bg: white;
+          --slash-menu-border: rgb(226 232 240);
+        }
+        .dark {
+          --slash-menu-bg: rgb(15 23 42);
+          --slash-menu-border: rgb(51 65 85);
         }
       `}</style>
     </div>
@@ -383,6 +616,34 @@ function CollapsibleToolbar({ editor, onFormat, getFormatState, expanded, onTogg
             label="Numbered list"
             isActive={formatState.orderedList}
             onClick={() => onFormat('orderedList')}
+          />
+
+          <TBDivider />
+
+          {/* Blocks */}
+          <ToolbarBtn
+            icon={<TBHeading2Icon />}
+            label="Heading 2"
+            isActive={formatState.heading2}
+            onClick={() => onFormat('heading2')}
+          />
+          <ToolbarBtn
+            icon={<TBHeading3Icon />}
+            label="Heading 3"
+            isActive={formatState.heading3}
+            onClick={() => onFormat('heading3')}
+          />
+          <ToolbarBtn
+            icon={<TBBlockquoteIcon />}
+            label="Blockquote"
+            isActive={formatState.blockquote}
+            onClick={() => onFormat('blockquote')}
+          />
+          <ToolbarBtn
+            icon={<TBTaskListIcon />}
+            label="Task list"
+            isActive={formatState.taskList}
+            onClick={() => onFormat('taskList')}
           />
 
           <TBDivider />
@@ -630,6 +891,44 @@ function TBEmojiIcon() {
   return (
     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  );
+}
+
+function TBHeading2Icon() {
+  return (
+    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4 6v12M4 12h7M11 6v12" />
+      <text x="15" y="19" fontSize="10" fill="currentColor" stroke="none" fontWeight="bold" fontFamily="sans-serif">2</text>
+    </svg>
+  );
+}
+
+function TBHeading3Icon() {
+  return (
+    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4 6v12M4 12h7M11 6v12" />
+      <text x="15" y="19" fontSize="10" fill="currentColor" stroke="none" fontWeight="bold" fontFamily="sans-serif">3</text>
+    </svg>
+  );
+}
+
+function TBBlockquoteIcon() {
+  return (
+    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+      <path d="M6 17h3l2-4V7H5v6h3l-2 4zm8 0h3l2-4V7h-6v6h3l-2 4z" />
+    </svg>
+  );
+}
+
+function TBTaskListIcon() {
+  return (
+    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+      <rect x="3" y="5" width="4" height="4" rx="0.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4.25 7l0.75 0.75L6.5 6" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M10 7h10" />
+      <rect x="3" y="14" width="4" height="4" rx="0.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M10 16h10" />
     </svg>
   );
 }

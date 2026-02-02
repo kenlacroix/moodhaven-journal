@@ -106,43 +106,46 @@ function App() {
         onNavigate={handleNavigate}
         onLock={lock}
       >
-        {/* Writing View - calm writing space (default) */}
-        {currentView === 'writing' && (
-          <WritingView
-            entryId={selectedEntryId}
-            onEntrySaved={() => {
-              // Optionally refresh timeline, etc.
-            }}
-          />
-        )}
+        {/* Keyed wrapper replays fade animation on view change */}
+        <div key={currentView} className="h-full animate-view-enter">
+          {/* Writing View - calm writing space (default) */}
+          {currentView === 'writing' && (
+            <WritingView
+              entryId={selectedEntryId}
+              onEntrySaved={() => {
+                // Optionally refresh timeline, etc.
+              }}
+            />
+          )}
 
-        {/* Timeline View - chronological entry list */}
-        {currentView === 'timeline' && (
-          <TimelineView
-            onSelectEntry={handleSelectEntry}
-            onNewEntry={handleNewEntry}
-          />
-        )}
+          {/* Timeline View - chronological entry list */}
+          {currentView === 'timeline' && (
+            <TimelineView
+              onSelectEntry={handleSelectEntry}
+              onNewEntry={handleNewEntry}
+            />
+          )}
 
-        {/* Search View */}
-        {currentView === 'search' && (
-          <SearchView onSelectEntry={handleSelectEntry} />
-        )}
+          {/* Search View */}
+          {currentView === 'search' && (
+            <SearchView onSelectEntry={handleSelectEntry} />
+          )}
 
-        {/* On This Day View */}
-        {currentView === 'onthisday' && (
-          <OnThisDayView onSelectEntry={handleSelectEntry} />
-        )}
+          {/* On This Day View */}
+          {currentView === 'onthisday' && (
+            <OnThisDayView onSelectEntry={handleSelectEntry} />
+          )}
 
-        {/* Insights View - AI content only here */}
-        {currentView === 'insights' && (
-          <InsightsView />
-        )}
+          {/* Insights View - AI content only here */}
+          {currentView === 'insights' && (
+            <InsightsView />
+          )}
 
-        {/* Settings */}
-        {currentView === 'settings' && (
-          <SettingsPage />
-        )}
+          {/* Settings */}
+          {currentView === 'settings' && (
+            <SettingsPage />
+          )}
+        </div>
       </MainLayout>
 
       {showTutorial && <TutorialWizard onComplete={handleTutorialComplete} />}

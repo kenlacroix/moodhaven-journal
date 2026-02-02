@@ -340,7 +340,7 @@ function CollapsibleToolbar({ editor, onFormat, getFormatState, expanded, onTogg
 
       {/* Expandable button row */}
       <div
-        className={`overflow-hidden transition-all duration-200 ${expanded ? 'max-h-12 opacity-100' : 'max-h-0 opacity-0'}`}
+        className={`overflow-hidden transition-all duration-300 ease-out ${expanded ? 'max-h-12 opacity-100' : 'max-h-0 opacity-0'}`}
       >
         <div className="flex items-center gap-0.5 px-2 pb-2">
           {/* Text formatting */}
@@ -425,7 +425,7 @@ function ToolbarBtn({
         onClick();
       }}
       className={`
-        p-1.5 rounded transition-colors
+        p-1.5 rounded transition-all duration-150 active:scale-90
         ${isActive
           ? 'bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400'
           : 'text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-600 dark:hover:text-slate-300'

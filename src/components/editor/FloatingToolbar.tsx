@@ -151,7 +151,7 @@ export function FloatingToolbar({
   return (
     <div
       ref={toolbarRef}
-      className="fixed z-50 flex items-center gap-0.5 px-1.5 py-1 bg-slate-800 dark:bg-slate-700 rounded-lg shadow-lg"
+      className="fixed z-50 flex items-center gap-0.5 px-1.5 py-1 bg-slate-800/90 dark:bg-slate-700/90 backdrop-blur-md rounded-lg shadow-lg animate-float-in"
       style={{
         top: `${position.top}px`,
         left: `${position.left}px`,
@@ -199,7 +199,7 @@ export function FloatingToolbar({
           type="button"
           onClick={() => setShowMoreMenu(!showMoreMenu)}
           className={`
-            p-1.5 rounded transition-colors
+            p-1.5 rounded transition-all duration-150 active:scale-90
             ${showMoreMenu
               ? 'bg-slate-600 dark:bg-slate-500 text-white'
               : 'text-slate-300 hover:bg-slate-700 dark:hover:bg-slate-600 hover:text-white'
@@ -244,7 +244,7 @@ function ToolbarButton({
         onClick();
       }}
       className={`
-        p-1.5 rounded transition-colors
+        p-1.5 rounded transition-all duration-150 active:scale-90
         ${isActive
           ? 'bg-violet-500 text-white'
           : 'text-slate-300 hover:bg-slate-700 dark:hover:bg-slate-600 hover:text-white'

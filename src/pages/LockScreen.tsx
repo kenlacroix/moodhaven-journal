@@ -2,9 +2,10 @@
  * LockScreen - Password entry screen for unlocking the journal
  *
  * Supports two-factor authentication after password verification.
+ * Includes exponential-backoff rate limiting on failed attempts.
  */
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useAppStore } from '../stores/appStore';
 import { get2FAStatus } from '../lib/twoFactorService';
 import { verifyUserPassword } from '../lib/journalService';
@@ -12,8 +13,27 @@ import { factoryReset, exitApp } from '../lib/dataManagementService';
 import { recoverPassword, isRecoveryKeyEnabled } from '../lib/recoveryKeyService';
 import { TwoFactorVerify } from '../components/twoFactor';
 import type { TwoFactorStatus } from '../types/twoFactor';
+import {
+  loadRateLimitState,
+  recordFailedAttempt,
+  resetRateLimit,
+  isLockedOut,
+  getRemainingLockoutMs,
+  getRemainingFreeAttempts,
+  getNextLockoutDuration,
+  formatDuration,
+  type RateLimitState,
+} from '../lib/rateLimitService';
 
 type LockScreenStep = 'password' | '2fa' | 'erase-confirm' | 'recovery-key';
+
+/** Format remaining ms as mm:ss for the countdown display. */
+function formatCountdown(ms: number): string {
+  const totalSeconds = Math.ceil(ms / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+}
 
 export function LockScreen() {
   const [password, setPassword] = useState('');
@@ -27,13 +47,81 @@ export function LockScreen() {
   const [recoveryKeyInput, setRecoveryKeyInput] = useState('');
   const [hasRecoveryKey, setHasRecoveryKey] = useState(false);
 
+  // Rate limiting state
+  const [rateLimitState, setRateLimitState] = useState<RateLimitState>({
+    failedAttempts: 0,
+    lockoutUntil: null,
+    lastFailedAt: null,
+  });
+  const [lockoutRemaining, setLockoutRemaining] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   const unlock = useAppStore((state) => state.unlock);
 
-  // Check 2FA status and recovery key status on mount
+  const lockedOut = lockoutRemaining > 0;
+
+  // Check 2FA status, recovery key status, and rate limit on mount
   useEffect(() => {
     get2FAStatus().then(setTwoFactorStatus).catch(() => setTwoFactorStatus(null));
     isRecoveryKeyEnabled().then(setHasRecoveryKey).catch(() => setHasRecoveryKey(false));
+    loadRateLimitState().then((state) => {
+      setRateLimitState(state);
+      setLockoutRemaining(getRemainingLockoutMs(state));
+    });
   }, []);
+
+  // Countdown timer — ticks every second while locked out
+  useEffect(() => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+
+    if (lockoutRemaining > 0) {
+      timerRef.current = setInterval(() => {
+        const remaining = getRemainingLockoutMs(rateLimitState);
+        setLockoutRemaining(remaining);
+        if (remaining <= 0) {
+          setError(null);
+          if (timerRef.current) {
+            clearInterval(timerRef.current);
+            timerRef.current = null;
+          }
+        }
+      }, 1000);
+    }
+
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [lockoutRemaining > 0, rateLimitState]);
+
+  // Helper: handle a failed auth attempt (shared by password and recovery key)
+  const handleFailedAttempt = useCallback(
+    async (baseError: string) => {
+      const newState = await recordFailedAttempt(rateLimitState);
+      setRateLimitState(newState);
+      const remaining = getRemainingLockoutMs(newState);
+      setLockoutRemaining(remaining);
+
+      if (remaining > 0) {
+        setError(`Too many failed attempts. Try again in ${formatDuration(remaining)}.`);
+      } else {
+        const freeLeft = getRemainingFreeAttempts(newState);
+        if (freeLeft > 0) {
+          setError(`${baseError} ${freeLeft} ${freeLeft === 1 ? 'attempt' : 'attempts'} remaining before lockout.`);
+        } else {
+          // Last free attempt was just used — next failure triggers lockout
+          const nextDuration = getNextLockoutDuration(newState);
+          setError(`${baseError} Next failure will lock for ${formatDuration(nextDuration)}.`);
+        }
+      }
+    },
+    [rateLimitState]
+  );
 
   // Handle password form submission
   const handlePasswordSubmit = useCallback(
@@ -45,6 +133,14 @@ export function LockScreen() {
         return;
       }
 
+      // Block if currently locked out
+      if (isLockedOut(rateLimitState)) {
+        const remaining = getRemainingLockoutMs(rateLimitState);
+        setLockoutRemaining(remaining);
+        setError(`Account is temporarily locked. Try again in ${formatDuration(remaining)}.`);
+        return;
+      }
+
       setError(null);
       setIsLoading(true);
 
@@ -53,13 +149,18 @@ export function LockScreen() {
         const isPasswordValid = await verifyUserPassword(password);
 
         if (!isPasswordValid) {
-          setError('Incorrect password. Please try again.');
           setPassword('');
           setIsLoading(false);
+          await handleFailedAttempt('Incorrect password.');
           return;
         }
 
-        // Password is valid - check if 2FA is enabled
+        // Password is valid — reset rate limit
+        await resetRateLimit();
+        setRateLimitState({ failedAttempts: 0, lockoutUntil: null, lastFailedAt: null });
+        setLockoutRemaining(0);
+
+        // Check if 2FA is enabled
         if (twoFactorStatus?.enabled) {
           // Store password for later use after 2FA verification
           setVerifiedPassword(password);
@@ -78,7 +179,7 @@ export function LockScreen() {
         setIsLoading(false);
       }
     },
-    [password, unlock, twoFactorStatus]
+    [password, unlock, twoFactorStatus, rateLimitState, handleFailedAttempt]
   );
 
   // Handle successful 2FA verification
@@ -113,7 +214,7 @@ export function LockScreen() {
     setPassword('');
   }, []);
 
-  // Handle erase and start fresh - no password required
+  // Handle erase and start fresh - no password required, never rate-limited
   const handleEraseAndReset = useCallback(async () => {
     if (eraseConfirmText !== 'ERASE') {
       setError('Please type ERASE to confirm');
@@ -149,6 +250,14 @@ export function LockScreen() {
         return;
       }
 
+      // Block if currently locked out (shares counter with password)
+      if (isLockedOut(rateLimitState)) {
+        const remaining = getRemainingLockoutMs(rateLimitState);
+        setLockoutRemaining(remaining);
+        setError(`Account is temporarily locked. Try again in ${formatDuration(remaining)}.`);
+        return;
+      }
+
       setError(null);
       setIsLoading(true);
 
@@ -157,13 +266,18 @@ export function LockScreen() {
         const recoveredPassword = await recoverPassword(recoveryKeyInput);
 
         if (!recoveredPassword) {
-          setError('Invalid recovery key. Please check and try again.');
           setRecoveryKeyInput('');
           setIsLoading(false);
+          await handleFailedAttempt('Invalid recovery key.');
           return;
         }
 
-        // Recovery key is valid - check if 2FA is enabled
+        // Recovery key is valid — reset rate limit
+        await resetRateLimit();
+        setRateLimitState({ failedAttempts: 0, lockoutUntil: null, lastFailedAt: null });
+        setLockoutRemaining(0);
+
+        // Check if 2FA is enabled
         if (twoFactorStatus?.enabled) {
           // Store the recovered password for use after 2FA verification
           setVerifiedPassword(recoveredPassword);
@@ -182,7 +296,7 @@ export function LockScreen() {
         setIsLoading(false);
       }
     },
-    [recoveryKeyInput, unlock, twoFactorStatus]
+    [recoveryKeyInput, unlock, twoFactorStatus, rateLimitState, handleFailedAttempt]
   );
 
   // Cancel recovery key flow
@@ -191,6 +305,13 @@ export function LockScreen() {
     setRecoveryKeyInput('');
     setError(null);
   }, []);
+
+  // Derived UI helpers
+  const freeAttemptsLeft = getRemainingFreeAttempts(rateLimitState);
+  const showAttemptsWarning =
+    !lockedOut &&
+    rateLimitState.failedAttempts > 0 &&
+    rateLimitState.failedAttempts <= 4;
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 p-4">
@@ -211,6 +332,26 @@ export function LockScreen() {
             </p>
           </div>
 
+          {/* Lockout Banner — shown on password and recovery-key steps */}
+          {lockedOut && (step === 'password' || step === 'recovery-key') && (
+            <div className="mb-6 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl">
+              <div className="flex items-center gap-3">
+                <svg className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+                    Account temporarily locked
+                  </p>
+                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
+                    Too many failed attempts. Try again in{' '}
+                    <span className="font-mono font-medium">{formatCountdown(lockoutRemaining)}</span>
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Password Step */}
           {step === 'password' && (
             <form onSubmit={handlePasswordSubmit} className="space-y-6">
@@ -225,7 +366,7 @@ export function LockScreen() {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter your password"
                   autoFocus
-                  disabled={isLoading}
+                  disabled={isLoading || lockedOut}
                   className="input"
                 />
               </div>
@@ -234,9 +375,16 @@ export function LockScreen() {
                 <p className="text-sm text-rose-500 dark:text-rose-400">{error}</p>
               )}
 
+              {/* Attempts remaining warning */}
+              {showAttemptsWarning && !error && (
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  {freeAttemptsLeft} {freeAttemptsLeft === 1 ? 'attempt' : 'attempts'} remaining before lockout
+                </p>
+              )}
+
               <button
                 type="submit"
-                disabled={isLoading || !password}
+                disabled={isLoading || !password || lockedOut}
                 className="btn-primary w-full py-3"
               >
                 {isLoading ? (
@@ -256,7 +404,7 @@ export function LockScreen() {
                 </p>
               )}
 
-              {/* Forgot password options */}
+              {/* Forgot password options — never gated by lockout */}
               <div className="text-center pt-2 space-y-2">
                 {hasRecoveryKey && (
                   <button
@@ -315,13 +463,20 @@ export function LockScreen() {
                   onChange={(e) => setRecoveryKeyInput(e.target.value.toUpperCase())}
                   placeholder="XXXX-XXXX-XXXX-XXXX-XXXX-XXXX"
                   autoFocus
-                  disabled={isLoading}
+                  disabled={isLoading || lockedOut}
                   className="input font-mono text-center tracking-wider"
                 />
               </div>
 
               {error && (
                 <p className="text-sm text-rose-500 dark:text-rose-400">{error}</p>
+              )}
+
+              {/* Attempts remaining warning */}
+              {showAttemptsWarning && !error && (
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  {freeAttemptsLeft} {freeAttemptsLeft === 1 ? 'attempt' : 'attempts'} remaining before lockout
+                </p>
               )}
 
               <div className="flex gap-3">
@@ -335,7 +490,7 @@ export function LockScreen() {
                 </button>
                 <button
                   type="submit"
-                  disabled={isLoading || !recoveryKeyInput}
+                  disabled={isLoading || !recoveryKeyInput || lockedOut}
                   className="btn-primary flex-1 py-3"
                 >
                   {isLoading ? (

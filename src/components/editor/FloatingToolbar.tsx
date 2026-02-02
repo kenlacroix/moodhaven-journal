@@ -19,6 +19,7 @@ interface FloatingToolbarProps {
   getFormatState: () => Record<string, boolean>;
   onOpenContextMenu?: () => void;
   disabled?: boolean;
+  onLinkClick?: () => void;
 }
 
 interface FormatState {
@@ -40,6 +41,7 @@ export function FloatingToolbar({
   getFormatState,
   onOpenContextMenu,
   disabled = false,
+  onLinkClick,
 }: FloatingToolbarProps) {
   const [isVisible, setIsVisible] = useState(false);
   const [position, setPosition] = useState<Position>({ top: 0, left: 0 });
@@ -122,15 +124,8 @@ export function FloatingToolbar({
   }, [showMoreMenu]);
 
   const handleLinkClick = () => {
-    const previousUrl = editor.getAttributes('link').href;
-    const url = window.prompt('Enter URL:', previousUrl || 'https://');
-
-    if (url === null) return;
-
-    if (url === '') {
-      onFormat('link');
-    } else {
-      onFormat('link', url);
+    if (onLinkClick) {
+      onLinkClick();
     }
   };
 

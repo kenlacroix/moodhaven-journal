@@ -56,11 +56,13 @@ export function Sidebar({ currentView, onNavigate, onLock }: SidebarProps) {
 
       {/* Logo */}
       <div className="p-4 border-b border-slate-100 dark:border-slate-800">
-        <div className={`flex items-center ${collapsed ? 'justify-center' : 'gap-3'}`}>
+        <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center flex-shrink-0">
             <span className="text-white text-sm font-bold">M</span>
           </div>
-          {!collapsed && <span className="text-lg font-semibold text-slate-800 dark:text-white">MoodHaven</span>}
+          <span className={`text-lg font-semibold text-slate-800 dark:text-white whitespace-nowrap overflow-hidden transition-all duration-300 ${collapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
+            MoodHaven
+          </span>
         </div>
       </div>
 
@@ -71,7 +73,7 @@ export function Sidebar({ currentView, onNavigate, onLock }: SidebarProps) {
           onClick={() => onNavigate('writing')}
           className={`
             w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg
-            text-sm font-medium transition-colors
+            text-sm font-medium transition-all duration-300
             ${currentView === 'writing'
               ? 'bg-violet-500 text-white'
               : 'bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400 hover:bg-violet-100 dark:hover:bg-violet-900/30'
@@ -82,7 +84,9 @@ export function Sidebar({ currentView, onNavigate, onLock }: SidebarProps) {
           <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
           </svg>
-          {!collapsed && <span>New Entry</span>}
+          <span className={`whitespace-nowrap overflow-hidden transition-all duration-300 ${collapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
+            New Entry
+          </span>
         </button>
       </div>
 
@@ -155,13 +159,15 @@ export function Sidebar({ currentView, onNavigate, onLock }: SidebarProps) {
         <button
           type="button"
           onClick={onLock}
-          className={`w-full flex items-center ${collapsed ? 'justify-center' : 'gap-3'} px-3 py-2.5 rounded-lg text-sm font-medium text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-colors`}
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-all duration-300"
           title={collapsed ? 'Lock' : undefined}
         >
           <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
           </svg>
-          {!collapsed && <span>Lock</span>}
+          <span className={`whitespace-nowrap overflow-hidden transition-all duration-300 ${collapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
+            Lock
+          </span>
         </button>
       </div>
     </aside>

@@ -48,6 +48,8 @@ export default {
         'pulse-soft': 'pulseSoft 2s ease-in-out infinite',
         'view-enter': 'viewEnter 0.2s ease-out',
         'float-in': 'floatIn 0.15s ease-out',
+        'check-bounce': 'checkBounce 0.35s cubic-bezier(0.34, 1.56, 0.64, 1)',
+        'entry-in': 'entryIn 0.3s ease-out both',
       },
       keyframes: {
         fadeIn: {
@@ -68,6 +70,15 @@ export default {
         },
         floatIn: {
           '0%': { opacity: '0', transform: 'translateY(6px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+        checkBounce: {
+          '0%': { opacity: '0', transform: 'scale(0)' },
+          '60%': { transform: 'scale(1.15)' },
+          '100%': { opacity: '1', transform: 'scale(1)' },
+        },
+        entryIn: {
+          '0%': { opacity: '0', transform: 'translateY(8px)' },
           '100%': { opacity: '1', transform: 'translateY(0)' },
         },
       },

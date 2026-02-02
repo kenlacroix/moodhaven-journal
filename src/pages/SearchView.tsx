@@ -111,12 +111,13 @@ export function SearchView({ onSelectEntry }: SearchViewProps) {
                 {results.length} {results.length === 1 ? 'result' : 'results'}
               </p>
 
-              {results.map((entry) => (
+              {results.map((entry, i) => (
                 <button
                   key={entry.id}
                   type="button"
                   onClick={() => onSelectEntry(entry.id)}
-                  className="w-full text-left p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700 shadow-sm hover:shadow-md hover:-translate-y-px transition-all duration-200 group"
+                  style={{ animationDelay: `${i * 50}ms` }}
+                  className="w-full text-left p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700 shadow-sm hover:shadow-md hover:-translate-y-px transition-all duration-200 group animate-entry-in"
                 >
                   <div className="flex items-start gap-3">
                     {entry.mood && (

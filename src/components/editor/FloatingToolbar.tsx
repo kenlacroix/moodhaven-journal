@@ -20,6 +20,7 @@ interface FloatingToolbarProps {
   onOpenContextMenu?: () => void;
   disabled?: boolean;
   onLinkClick?: () => void;
+  onEmojiClick?: () => void;
 }
 
 interface FormatState {
@@ -42,6 +43,7 @@ export function FloatingToolbar({
   onOpenContextMenu,
   disabled = false,
   onLinkClick,
+  onEmojiClick,
 }: FloatingToolbarProps) {
   const [isVisible, setIsVisible] = useState(false);
   const [position, setPosition] = useState<Position>({ top: 0, left: 0 });
@@ -130,9 +132,8 @@ export function FloatingToolbar({
   };
 
   const handleEmojiClick = () => {
-    const emoji = window.prompt('Enter emoji:');
-    if (emoji) {
-      editor.chain().focus().insertContent(emoji).run();
+    if (onEmojiClick) {
+      onEmojiClick();
     }
   };
 

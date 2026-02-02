@@ -12,10 +12,12 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useEditor, EditorContent, type Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
+import { Extension } from '@tiptap/core';
 import Link from '@tiptap/extension-link';
 import Placeholder from '@tiptap/extension-placeholder';
 import Underline from '@tiptap/extension-underline';
 import { FloatingToolbar } from './FloatingToolbar';
+import { EmojiPicker } from './EmojiPicker';
 
 interface RichTextEditorProps {
   value: string;
@@ -37,6 +39,10 @@ export function RichTextEditor({
   const [toolbarExpanded, setToolbarExpanded] = useState(false);
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const [linkDialogInitialUrl, setLinkDialogInitialUrl] = useState('');
+  const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
+
+  // Ref so the Tiptap extension can call the latest opener without stale closures
+  const openLinkDialogRef = useRef<() => void>(() => {});
 
   const editor = useEditor({
     extensions: [
@@ -63,6 +69,18 @@ export function RichTextEditor({
       Placeholder.configure({
         placeholder,
         emptyEditorClass: 'is-editor-empty',
+      }),
+      // Ctrl+K to open link dialog
+      Extension.create({
+        name: 'linkShortcut',
+        addKeyboardShortcuts() {
+          return {
+            'Mod-k': () => {
+              openLinkDialogRef.current();
+              return true;
+            },
+          };
+        },
       }),
     ],
     content: value,
@@ -151,6 +169,9 @@ export function RichTextEditor({
     setLinkDialogOpen(true);
   }, [editor]);
 
+  // Keep ref in sync for the Tiptap keyboard shortcut
+  openLinkDialogRef.current = handleOpenLinkDialog;
+
   // Handle link dialog submission
   const handleLinkDialogSubmit = useCallback((url: string) => {
     setLinkDialogOpen(false);
@@ -160,6 +181,13 @@ export function RichTextEditor({
       handleFormat('link');
     }
   }, [handleFormat]);
+
+  // Handle emoji selection
+  const handleEmojiSelect = useCallback((emoji: string) => {
+    if (!editor) return;
+    editor.chain().focus().insertContent(emoji).run();
+    setEmojiPickerOpen(false);
+  }, [editor]);
 
   // Show loading state while editor initializes
   if (!editor) {
@@ -182,6 +210,7 @@ export function RichTextEditor({
         expanded={toolbarExpanded}
         onToggle={setToolbarExpanded}
         onLinkClick={handleOpenLinkDialog}
+        onEmojiClick={() => setEmojiPickerOpen(true)}
       />
 
       {/* Editor content */}
@@ -198,7 +227,16 @@ export function RichTextEditor({
         onOpenContextMenu={onOpenContextMenu}
         disabled={toolbarExpanded}
         onLinkClick={handleOpenLinkDialog}
+        onEmojiClick={() => setEmojiPickerOpen(true)}
       />
+
+      {/* Emoji picker */}
+      {emojiPickerOpen && (
+        <EmojiPicker
+          onSelect={handleEmojiSelect}
+          onClose={() => setEmojiPickerOpen(false)}
+        />
+      )}
 
       {/* Link dialog */}
       {linkDialogOpen && (
@@ -263,9 +301,10 @@ interface CollapsibleToolbarProps {
   expanded: boolean;
   onToggle: (expanded: boolean) => void;
   onLinkClick: () => void;
+  onEmojiClick: () => void;
 }
 
-function CollapsibleToolbar({ editor, onFormat, getFormatState, expanded, onToggle, onLinkClick }: CollapsibleToolbarProps) {
+function CollapsibleToolbar({ editor, onFormat, getFormatState, expanded, onToggle, onLinkClick, onEmojiClick }: CollapsibleToolbarProps) {
   const [formatState, setFormatState] = useState<Record<string, boolean>>({});
 
   // Track format state on selection/transaction changes
@@ -354,6 +393,11 @@ function CollapsibleToolbar({ editor, onFormat, getFormatState, expanded, onTogg
             label="Link (Ctrl+K)"
             isActive={formatState.link}
             onClick={onLinkClick}
+          />
+          <ToolbarBtn
+            icon={<TBEmojiIcon />}
+            label="Emoji"
+            onClick={onEmojiClick}
           />
         </div>
       </div>
@@ -578,6 +622,14 @@ function TBLinkIcon() {
   return (
     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+    </svg>
+  );
+}
+
+function TBEmojiIcon() {
+  return (
+    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
     </svg>
   );
 }

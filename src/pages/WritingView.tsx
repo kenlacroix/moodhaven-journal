@@ -170,7 +170,7 @@ export function WritingView({ entryId, onEntrySaved }: WritingViewProps) {
             />
           </div>
 
-          {/* Bottom status bar - encryption badge + save indicator */}
+          {/* Bottom status bar - encryption badge + word count + save indicator */}
           <div className="flex items-center justify-between mt-3 px-1">
             {/* Encryption reassurance */}
             <div className="flex items-center gap-1.5 text-xs text-slate-400 dark:text-slate-500">
@@ -179,6 +179,13 @@ export function WritingView({ entryId, onEntrySaved }: WritingViewProps) {
               </svg>
               <span>End-to-end encrypted</span>
             </div>
+
+            {/* Word count */}
+            {contentText.trim() && (
+              <span className="text-xs text-slate-400 dark:text-slate-500">
+                {contentText.trim().split(/\s+/).length} {contentText.trim().split(/\s+/).length === 1 ? 'word' : 'words'}
+              </span>
+            )}
 
             {/* Save indicator with micro-animation */}
             <div className="flex items-center gap-1.5 text-xs text-slate-400 dark:text-slate-500">

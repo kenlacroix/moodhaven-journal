@@ -171,24 +171,26 @@ export function WritingView({ entryId, onEntrySaved }: WritingViewProps) {
           </div>
 
           {/* Bottom status bar - encryption badge + word count + save indicator */}
-          <div className="flex items-center justify-between mt-3 px-1">
-            {/* Encryption reassurance */}
-            <div className="flex items-center gap-1.5 text-xs text-slate-400 dark:text-slate-500">
+          <div className="flex items-center mt-3 px-1">
+            {/* Encryption reassurance - pinned left */}
+            <div className="flex-1 flex items-center gap-1.5 text-xs text-slate-400 dark:text-slate-500">
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
               </svg>
               <span>End-to-end encrypted</span>
             </div>
 
-            {/* Word count */}
-            {contentText.trim() && (
-              <span className="text-xs text-slate-400 dark:text-slate-500">
-                {contentText.trim().split(/\s+/).length} {contentText.trim().split(/\s+/).length === 1 ? 'word' : 'words'}
-              </span>
-            )}
+            {/* Word count - pinned center */}
+            <div className="flex-1 text-center text-xs text-slate-400 dark:text-slate-500">
+              {contentText.trim() && (
+                <span>
+                  {contentText.trim().split(/\s+/).length} {contentText.trim().split(/\s+/).length === 1 ? 'word' : 'words'}
+                </span>
+              )}
+            </div>
 
-            {/* Save indicator with micro-animation */}
-            <div className="flex items-center gap-1.5 text-xs text-slate-400 dark:text-slate-500">
+            {/* Save indicator with micro-animation - pinned right */}
+            <div className="flex-1 flex items-center justify-end gap-1.5 text-xs text-slate-400 dark:text-slate-500">
               {isSaving ? (
                 <span className="flex items-center gap-1.5">
                   <span className="w-3 h-3 border-[1.5px] border-slate-300 dark:border-slate-600 border-t-violet-500 rounded-full animate-spin" />

@@ -2,7 +2,7 @@
  * WritingView - Calm writing space (default view)
  *
  * Per spec:
- * - Centered writing column (max ~680-760px)
+ * - Centered writing column (768px base, scales to 75% on large screens)
  * - Vertically padded, soft background
  * - Title field: placeholder "Title (optional)", lighter color
  * - Body editor: auto-focus, large readable font, no toolbar by default
@@ -129,7 +129,7 @@ export function WritingView({ entryId, onEntrySaved }: WritingViewProps) {
       {/* Main writing area - centered column */}
       <div className="flex-1 flex flex-col min-h-0 px-6 sm:px-12 lg:px-20 py-12">
         {/* Centered content container with soft background */}
-        <div className="flex-1 flex flex-col max-w-[720px] w-full mx-auto min-h-0 relative">
+        <div className="flex-1 flex flex-col max-w-3xl lg:max-w-[75%] w-full mx-auto min-h-0 relative">
           {/* Inviting heading - only for new entries */}
           {!entryId && (
             <div className="mb-6">

@@ -31,6 +31,7 @@
 | Reminders | P2 | **Complete** | Configurable notification reminders with Tauri notifications |
 | Cloud Sync (WebDAV) | P2 | **Complete** | Manual encrypted backup/restore to WebDAV servers |
 | Encrypted Export | P2 | **Complete** | AES-256-GCM encrypted export/import with password |
+| Speech-to-Text | P3 | Planned | Local offline STT via whisper.cpp sidecar (optional model download) |
 
 ### Feature Implementation Guidelines
 
@@ -570,7 +571,38 @@ interface AISettings {
 - [ ] User documentation
 - [ ] CI/CD pipeline
 - [ ] Release preparation
+
+### Future (Post-Release)
+- [ ] Speech-to-Text (local, offline via whisper.cpp)
 ```
+
+### Speech-to-Text (Planned — Post-Release)
+
+**Goal:** Let users dictate journal entries using a local, offline speech-to-text engine. All audio processing stays on-device — no cloud APIs, no data leaves the machine.
+
+**Architecture:**
+- **Engine:** [whisper.cpp](https://github.com/ggerganov/whisper.cpp) — C/C++ port of OpenAI Whisper, runs fully offline
+- **Bundling:** Ship `whisper-cli` as a Tauri sidecar (`tauri.conf.json` → `bundle.externalBin`), compiled per platform in CI (~2-5MB)
+- **Model download:** On-demand from Hugging Face (`huggingface.co/ggerganov/whisper.cpp`), stored in `app_data_dir/models/`. No custom servers needed.
+- **Audio capture:** Web Audio API in the WebView (avoids native Rust audio dependency)
+- **Flow:** Mic → Web Audio API → temp WAV → Tauri sidecar invokes whisper-cli → stdout text → insert at cursor → delete temp WAV
+
+**Model options (user selects in Settings):**
+
+| Model | Size | Quality | Speed |
+|-------|------|---------|-------|
+| `ggml-tiny.en.bin` | ~75MB | Acceptable | Fast |
+| `ggml-base.en.bin` | ~142MB | Good | Fast |
+| `ggml-small.en.bin` | ~466MB | Very good | Moderate |
+| `ggml-medium.en.bin` | ~1.5GB | Excellent | Slower |
+
+**UI:**
+- Settings → "Speech to Text" section (disabled by default)
+- Enable toggle → model picker → download button with progress bar
+- Once downloaded, a mic button appears in the editor toolbar
+- Click to record, click again to stop → transcribed text inserted
+
+**Privacy:** Consistent with zero-knowledge model — audio never leaves the device, temp files deleted after transcription, no API keys required.
 
 ### Known Issues (Fixed)
 

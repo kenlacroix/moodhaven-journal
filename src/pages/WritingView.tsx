@@ -154,6 +154,7 @@ export function WritingView({ entryId, onEntrySaved }: WritingViewProps) {
               className="
                 w-full text-2xl font-medium
                 bg-transparent border-none outline-none
+                focus-visible:ring-0 focus-visible:ring-offset-0
                 text-slate-600 dark:text-slate-300
                 placeholder:text-slate-300 dark:placeholder:text-slate-600
                 mb-6 flex-shrink-0

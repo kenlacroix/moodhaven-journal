@@ -297,11 +297,13 @@ export function RichTextEditor({
         .ProseMirror:focus {
           outline: none;
         }
-        /* Remove focus outline from TipTap wrapper */
+        /* Remove focus outline and ring from TipTap wrapper */
         .tiptap:focus,
         .tiptap:focus-visible,
         .tiptap *:focus-visible {
           outline: none;
+          box-shadow: none;
+          --tw-ring-shadow: 0 0 #0000;
         }
 
         /* Hide editor scrollbar unless hovered */

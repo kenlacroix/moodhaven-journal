@@ -6,6 +6,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
+import { save } from '@tauri-apps/plugin-dialog';
 import { encrypt, decrypt } from './crypto';
 import type { EncryptedData } from './crypto';
 
@@ -52,20 +53,42 @@ export async function getDataStats(): Promise<{ totalEntries: number; averageMoo
 }
 
 /**
- * Download export as file
- * @param data - Backup data string
- * @param filename - Name of the file to download
+ * Download export as file using native Save dialog.
+ * Verifies the file is written and contains encrypted data.
+ * @param data - Backup data string (must be encrypted envelope)
+ * @param filename - Default name of the file to download
+ * @throws Error if file write fails, verification fails, or data is not encrypted
  */
-export function downloadBackup(data: string, filename: string): void {
-  const blob = new Blob([data], { type: 'application/octet-stream' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+export async function downloadBackup(data: string, filename: string): Promise<void> {
+  // Verify data is encrypted before writing
+  try {
+    const parsed = JSON.parse(data);
+    if (parsed.format !== 'moodbloom-encrypted-v1' || !parsed.payload) {
+      throw new Error('Export data is not encrypted. Aborting write.');
+    }
+  } catch (e) {
+    if (e instanceof SyntaxError) {
+      throw new Error('Export data is not in the expected encrypted format.');
+    }
+    throw e;
+  }
+
+  const filePath = await save({
+    defaultPath: filename,
+    filters: [{ name: 'MoodBloom Backup', extensions: ['moodbloom'] }],
+  });
+
+  if (!filePath) return; // user cancelled
+
+  // Write via Rust command (bypasses FS plugin scope restrictions)
+  const bytesWritten = await invoke<number>('write_text_file', {
+    path: filePath,
+    contents: data,
+  });
+
+  if (!bytesWritten || bytesWritten === 0) {
+    throw new Error('Export file was not written. Please try again.');
+  }
 }
 
 /**

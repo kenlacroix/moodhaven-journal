@@ -31,8 +31,8 @@ export function BackupCodesDisplay({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleDownload = () => {
-    downloadBackupCodes(codes);
+  const handleDownload = async () => {
+    await downloadBackupCodes(codes);
     setDownloaded(true);
   };
 

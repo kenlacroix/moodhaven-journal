@@ -4,7 +4,7 @@ version = "0.4.0"
 description = "A calm, secure mood tracking and journaling app"
 authors = ["MoodBloom"]
 edition = "2021"
-rust-version = "1.70"
+rust-version = "1.77.2"
 
 [lib]
 name = "moodbloom_lib"
@@ -44,6 +44,8 @@ hex = "0.4"
 ctap-hid-fido2 = { version = "3", optional = true }
 aes-gcm = { version = "0.10", optional = true }
 argon2 = { version = "0.5", optional = true }
+tauri-plugin-dialog = "2"
+tauri-plugin-fs = "2"
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-shell = "2"

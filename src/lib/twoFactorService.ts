@@ -6,6 +6,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
+import { save } from '@tauri-apps/plugin-dialog';
 import type {
   TwoFactorStatus,
   TotpSetupData,
@@ -108,7 +109,7 @@ export async function disable2FA(): Promise<boolean> {
 /**
  * Download backup codes as a text file
  */
-export function downloadBackupCodes(codes: string[]): void {
+export async function downloadBackupCodes(codes: string[]): Promise<void> {
   const content = [
     'MoodBloom Backup Codes',
     '=====================',
@@ -121,15 +122,14 @@ export function downloadBackupCodes(codes: string[]): void {
     `Generated: ${new Date().toISOString()}`,
   ].join('\n');
 
-  const blob = new Blob([content], { type: 'text/plain' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'moodbloom-backup-codes.txt';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  const filePath = await save({
+    defaultPath: 'moodbloom-backup-codes.txt',
+    filters: [{ name: 'Text Files', extensions: ['txt'] }],
+  });
+
+  if (!filePath) return;
+
+  await invoke('write_text_file', { path: filePath, contents: content });
 }
 
 /**

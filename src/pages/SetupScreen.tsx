@@ -15,6 +15,7 @@ import { useAppStore } from '../stores/appStore';
 import { useSettingsStore } from '../stores/settingsStore';
 import { TotpSetup, HardwareKeySetup } from '../components/twoFactor';
 import { generateRecoveryKey, storeRecoveryKey } from '../lib/recoveryKeyService';
+import { readBackupFile, encryptedImport } from '../lib/dataManagementService';
 import type { StorageBackend } from '../types/settings';
 
 type WizardStep = 'welcome' | 'password' | 'recovery' | 'security' | 'storage' | 'import' | 'complete';
@@ -120,13 +121,23 @@ export function SetupScreen() {
 
       // If import file provided, handle import
       if (importFile) {
-        // TODO: Implement import logic
-        console.log('Import file selected:', importFile.name);
+        const fileContents = await readBackupFile(importFile);
+        const count = await encryptedImport(fileContents, password);
+        if (count === 0) {
+          setError('No entries found in backup file.');
+          setIsLoading(false);
+          return;
+        }
       }
 
       goNext();
     } catch (err) {
-      setError('An error occurred. Please try again.');
+      const msg = err instanceof Error ? err.message : 'An error occurred';
+      if (msg.includes('Decryption failed') || msg.includes('wrong password')) {
+        setError('Import failed: wrong password. The backup was created with a different password.');
+      } else {
+        setError(msg);
+      }
     } finally {
       setIsLoading(false);
     }

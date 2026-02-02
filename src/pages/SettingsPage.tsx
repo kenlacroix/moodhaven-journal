@@ -7,7 +7,7 @@
  * - Keyboard navigation support
  */
 
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useSettingsStore } from '../stores/settingsStore';
 import {
   SettingSection,
@@ -36,6 +36,18 @@ import { TotpSetup, HardwareKeySetup, BackupCodesDisplay } from '../components/t
 import type { TwoFactorStatus, BackupCodes } from '../types/twoFactor';
 import type { ReminderFrequency, StorageBackend } from '../types/settings';
 import { sendTestNotification } from '../lib/reminderService';
+import { verifyUserPassword } from '../lib/journalService';
+import {
+  loadRateLimitState,
+  recordFailedAttempt,
+  resetRateLimit,
+  isLockedOut,
+  getRemainingLockoutMs,
+  getRemainingFreeAttempts,
+  getNextLockoutDuration,
+  formatDuration,
+  type RateLimitState,
+} from '../lib/rateLimitService';
 
 type SettingsTab = 'general' | 'privacy' | 'ai' | 'about';
 
@@ -141,6 +153,16 @@ export function SettingsPage() {
   const [syncStatus, setSyncStatus] = useState<string | null>(null);
   const [showPasswordModal, setShowPasswordModal] = useState<'export' | 'upload' | 'download' | null>(null);
   const [syncPassword, setSyncPassword] = useState('');
+  const [syncPasswordError, setSyncPasswordError] = useState<string | null>(null);
+
+  // Rate limiting for password modal (shares persisted state with lock screen)
+  const [syncRateLimit, setSyncRateLimit] = useState<RateLimitState>({
+    failedAttempts: 0,
+    lockoutUntil: null,
+    lastFailedAt: null,
+  });
+  const [syncLockoutRemaining, setSyncLockoutRemaining] = useState(0);
+  const syncTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     loadSettings();
@@ -199,18 +221,113 @@ export function SettingsPage() {
     setShowPasswordModal('export');
   }, []);
 
+  // Load rate limit state when password modal opens
+  useEffect(() => {
+    if (showPasswordModal) {
+      setSyncPasswordError(null);
+      loadRateLimitState().then((state) => {
+        setSyncRateLimit(state);
+        setSyncLockoutRemaining(getRemainingLockoutMs(state));
+      });
+    }
+    return () => {
+      if (syncTimerRef.current) {
+        clearInterval(syncTimerRef.current);
+        syncTimerRef.current = null;
+      }
+    };
+  }, [showPasswordModal]);
+
+  // Countdown timer for lockout in password modal
+  useEffect(() => {
+    if (syncTimerRef.current) {
+      clearInterval(syncTimerRef.current);
+      syncTimerRef.current = null;
+    }
+
+    if (syncLockoutRemaining > 0) {
+      syncTimerRef.current = setInterval(() => {
+        const remaining = getRemainingLockoutMs(syncRateLimit);
+        setSyncLockoutRemaining(remaining);
+        if (remaining <= 0) {
+          setSyncPasswordError(null);
+          if (syncTimerRef.current) {
+            clearInterval(syncTimerRef.current);
+            syncTimerRef.current = null;
+          }
+        }
+      }, 1000);
+    }
+
+    return () => {
+      if (syncTimerRef.current) {
+        clearInterval(syncTimerRef.current);
+        syncTimerRef.current = null;
+      }
+    };
+  }, [syncLockoutRemaining > 0, syncRateLimit]);
+
+  const syncLockedOut = syncLockoutRemaining > 0;
+
+  /** Format remaining ms as mm:ss for the countdown display. */
+  const formatCountdown = (ms: number): string => {
+    const totalSeconds = Math.ceil(ms / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  };
+
   const handlePasswordSubmit = useCallback(async () => {
     if (!syncPassword) return;
+
+    // Block if currently locked out
+    if (isLockedOut(syncRateLimit)) {
+      const remaining = getRemainingLockoutMs(syncRateLimit);
+      setSyncLockoutRemaining(remaining);
+      setSyncPasswordError(`Too many failed attempts. Try again in ${formatDuration(remaining)}.`);
+      return;
+    }
+
+    setSyncPasswordError(null);
     setIsSyncing(true);
     setSyncStatus(null);
 
     try {
+      // Verify password before proceeding
+      const isValid = await verifyUserPassword(syncPassword);
+      if (!isValid) {
+        const newState = await recordFailedAttempt(syncRateLimit);
+        setSyncRateLimit(newState);
+        const remaining = getRemainingLockoutMs(newState);
+        setSyncLockoutRemaining(remaining);
+
+        if (remaining > 0) {
+          setSyncPasswordError(`Too many failed attempts. Try again in ${formatDuration(remaining)}.`);
+        } else {
+          const freeLeft = getRemainingFreeAttempts(newState);
+          if (freeLeft > 0) {
+            setSyncPasswordError(`Incorrect password. ${freeLeft} ${freeLeft === 1 ? 'attempt' : 'attempts'} remaining before lockout.`);
+          } else {
+            const nextDuration = getNextLockoutDuration(newState);
+            setSyncPasswordError(`Incorrect password. Next failure will lock for ${formatDuration(nextDuration)}.`);
+          }
+        }
+        setSyncPassword('');
+        setIsSyncing(false);
+        return;
+      }
+
+      // Password verified — reset rate limit
+      await resetRateLimit();
+      setSyncRateLimit({ failedAttempts: 0, lockoutUntil: null, lastFailedAt: null });
+
       if (showPasswordModal === 'export') {
         setIsExporting(true);
         const data = await encryptedExport(syncPassword);
         const date = new Date().toISOString().split('T')[0];
-        downloadBackupFile(data, `moodbloom-backup-${date}.moodbloom`);
+        await downloadBackupFile(data, `moodbloom-backup-${date}.moodbloom`);
         setIsExporting(false);
+        setSyncStatus('Encrypted backup saved successfully.');
       } else if (showPasswordModal === 'upload') {
         const result = await uploadBackup(syncPassword, settings.storage.webdav);
         if (result.success) {
@@ -228,15 +345,16 @@ export function SettingsPage() {
           setSyncStatus(`Error: ${result.error}`);
         }
       }
+
+      setShowPasswordModal(null);
+      setSyncPassword('');
     } catch (error) {
       setSyncStatus(`Error: ${error instanceof Error ? error.message : 'Operation failed'}`);
       setIsExporting(false);
     } finally {
       setIsSyncing(false);
-      setShowPasswordModal(null);
-      setSyncPassword('');
     }
-  }, [syncPassword, showPasswordModal, settings.storage.webdav, setLastSyncDate]);
+  }, [syncPassword, syncRateLimit, showPasswordModal, settings.storage.webdav, setLastSyncDate]);
 
   const handleTestNotification = useCallback(async () => {
     setTestingNotification(true);
@@ -1049,31 +1167,52 @@ export function SettingsPage() {
                   <input
                     type="password"
                     value={syncPassword}
-                    onChange={(e) => setSyncPassword(e.target.value)}
+                    onChange={(e) => { setSyncPassword(e.target.value); setSyncPasswordError(null); }}
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter' && syncPassword && !isSyncing) {
+                      if (e.key === 'Enter' && syncPassword && !isSyncing && !syncLockedOut) {
                         handlePasswordSubmit();
                       }
                     }}
                     placeholder="Master password"
-                    className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 transition-colors mb-4"
+                    disabled={syncLockedOut}
+                    className={`w-full px-3 py-2 rounded-lg border bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 transition-colors ${
+                      syncPasswordError
+                        ? 'border-rose-400 dark:border-rose-500'
+                        : 'border-slate-200 dark:border-slate-700'
+                    } disabled:opacity-50`}
                     autoFocus
                   />
-                  <div className="flex gap-3">
+
+                  {/* Error message or lockout countdown */}
+                  {syncPasswordError && (
+                    <p className="mt-2 text-sm text-rose-600 dark:text-rose-400">
+                      {syncPasswordError}
+                    </p>
+                  )}
+                  {syncLockedOut && (
+                    <div className="mt-2 flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400">
+                      <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+                      </svg>
+                      <span>Locked for {formatCountdown(syncLockoutRemaining)}</span>
+                    </div>
+                  )}
+
+                  <div className="flex gap-3 mt-4">
                     <button
                       type="button"
                       className="flex-1 px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
-                      onClick={() => { setShowPasswordModal(null); setSyncPassword(''); }}
+                      onClick={() => { setShowPasswordModal(null); setSyncPassword(''); setSyncPasswordError(null); }}
                     >
                       Cancel
                     </button>
                     <button
                       type="button"
-                      disabled={!syncPassword || isSyncing}
+                      disabled={!syncPassword || isSyncing || syncLockedOut}
                       className="flex-1 px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       onClick={handlePasswordSubmit}
                     >
-                      {isSyncing ? 'Processing...' : 'Continue'}
+                      {isSyncing ? 'Verifying...' : 'Continue'}
                     </button>
                   </div>
                 </div>

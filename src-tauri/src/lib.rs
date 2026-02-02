@@ -15,6 +15,8 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_http::init())
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
         .setup(|app| {
             // Initialize database
             let db_path = get_db_path(&app.handle())?;
@@ -65,6 +67,7 @@ pub fn run() {
             commands::export_data,
             commands::import_data,
             commands::get_data_stats,
+            commands::write_text_file,
             commands::exit_app,
             // Two-factor authentication
             commands::generate_totp_secret,

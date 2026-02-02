@@ -18,6 +18,7 @@ interface FloatingToolbarProps {
   onFormat: (command: string, value?: string) => void;
   getFormatState: () => Record<string, boolean>;
   onOpenContextMenu?: () => void;
+  disabled?: boolean;
 }
 
 interface FormatState {
@@ -38,6 +39,7 @@ export function FloatingToolbar({
   onFormat,
   getFormatState,
   onOpenContextMenu,
+  disabled = false,
 }: FloatingToolbarProps) {
   const [isVisible, setIsVisible] = useState(false);
   const [position, setPosition] = useState<Position>({ top: 0, left: 0 });
@@ -49,6 +51,13 @@ export function FloatingToolbar({
 
   // Update visibility and position based on selection
   const updateToolbar = useCallback(() => {
+    // Hide when collapsible toolbar is expanded
+    if (disabled) {
+      setIsVisible(false);
+      setShowMoreMenu(false);
+      return;
+    }
+
     const { selection } = editor.state;
     const { from, to } = selection;
 
@@ -80,7 +89,7 @@ export function FloatingToolbar({
     });
     setIsVisible(true);
     setFormatState(getFormatState());
-  }, [editor, getFormatState]);
+  }, [editor, getFormatState, disabled]);
 
   // Listen to selection changes
   useEffect(() => {

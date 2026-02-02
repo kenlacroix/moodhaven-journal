@@ -34,6 +34,8 @@ export function RichTextEditor({
   className = '',
   onOpenContextMenu,
 }: RichTextEditorProps) {
+  const [toolbarExpanded, setToolbarExpanded] = useState(false);
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -157,6 +159,8 @@ export function RichTextEditor({
         editor={editor}
         onFormat={handleFormat}
         getFormatState={getFormatState}
+        expanded={toolbarExpanded}
+        onToggle={setToolbarExpanded}
       />
 
       {/* Editor content */}
@@ -165,15 +169,16 @@ export function RichTextEditor({
         className="flex-1 overflow-auto"
       />
 
-      {/* Floating toolbar - appears on selection */}
+      {/* Floating toolbar - appears on selection, hidden when collapsible toolbar is open */}
       <FloatingToolbar
         editor={editor}
         onFormat={handleFormat}
         getFormatState={getFormatState}
         onOpenContextMenu={onOpenContextMenu}
+        disabled={toolbarExpanded}
       />
 
-      {/* Placeholder styling */}
+      {/* Editor styling — restore list styles stripped by Tailwind preflight */}
       <style>{`
         .is-editor-empty:first-child::before {
           content: attr(data-placeholder);
@@ -195,6 +200,22 @@ export function RichTextEditor({
           pointer-events: none;
           height: 0;
         }
+        .ProseMirror ul {
+          list-style-type: disc;
+          padding-left: 1.5em;
+          margin: 0.5em 0;
+        }
+        .ProseMirror ol {
+          list-style-type: decimal;
+          padding-left: 1.5em;
+          margin: 0.5em 0;
+        }
+        .ProseMirror li {
+          margin: 0.25em 0;
+        }
+        .ProseMirror li p {
+          margin: 0;
+        }
       `}</style>
     </div>
   );
@@ -208,10 +229,11 @@ interface CollapsibleToolbarProps {
   editor: Editor;
   onFormat: (command: string, value?: string) => void;
   getFormatState: () => Record<string, boolean>;
+  expanded: boolean;
+  onToggle: (expanded: boolean) => void;
 }
 
-function CollapsibleToolbar({ editor, onFormat, getFormatState }: CollapsibleToolbarProps) {
-  const [expanded, setExpanded] = useState(false);
+function CollapsibleToolbar({ editor, onFormat, getFormatState, expanded, onToggle }: CollapsibleToolbarProps) {
   const [formatState, setFormatState] = useState<Record<string, boolean>>({});
 
   // Track format state on selection/transaction changes
@@ -241,7 +263,7 @@ function CollapsibleToolbar({ editor, onFormat, getFormatState }: CollapsibleToo
       {/* Toggle bar */}
       <button
         type="button"
-        onClick={() => setExpanded(!expanded)}
+        onClick={() => onToggle(!expanded)}
         className="w-full flex items-center gap-1.5 px-2 py-1.5 text-xs text-slate-400 dark:text-slate-500 hover:text-slate-500 dark:hover:text-slate-400 transition-colors"
       >
         <svg
@@ -332,6 +354,7 @@ function ToolbarBtn({
   return (
     <button
       type="button"
+      onMouseDown={(e) => e.preventDefault()}
       onClick={(e) => {
         e.preventDefault();
         onClick();

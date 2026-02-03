@@ -8,7 +8,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { WritingView } from './pages/WritingView';
 import { TimelineView } from './pages/TimelineView';
-import { SearchView } from './pages/SearchView';
 import { OnThisDayView } from './pages/OnThisDayView';
 import { InsightsView } from './pages/InsightsView';
 import { SettingsPage } from './pages/SettingsPage';
@@ -124,11 +123,6 @@ function App() {
               onSelectEntry={handleSelectEntry}
               onNewEntry={handleNewEntry}
             />
-          )}
-
-          {/* Search View */}
-          {currentView === 'search' && (
-            <SearchView onSelectEntry={handleSelectEntry} />
           )}
 
           {/* On This Day View */}

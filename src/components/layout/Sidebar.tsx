@@ -13,7 +13,7 @@
 import { useState } from 'react';
 import { SidebarItem } from './SidebarItem';
 
-export type ViewType = 'writing' | 'timeline' | 'search' | 'onthisday' | 'insights' | 'settings';
+export type ViewType = 'writing' | 'timeline' | 'onthisday' | 'insights' | 'settings';
 
 interface SidebarProps {
   currentView: ViewType;
@@ -100,18 +100,6 @@ export function Sidebar({ currentView, onNavigate, onLock }: SidebarProps) {
           icon={
             <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          }
-        />
-
-        <SidebarItem
-          label="Search"
-          isActive={currentView === 'search'}
-          onClick={() => onNavigate('search')}
-          collapsed={collapsed}
-          icon={
-            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
             </svg>
           }
         />

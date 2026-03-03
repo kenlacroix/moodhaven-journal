@@ -121,6 +121,7 @@ export function JournalEditor({
         content: content.trim(),
         mood,
         tags: [], // Tags can be added in a future iteration
+        privacyMode: 0,
       });
 
       // Clear form after successful save (only for new entries)

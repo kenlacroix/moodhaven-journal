@@ -1,4 +1,4 @@
-import { extractEntryMetadata, aggregateMetadata } from './metadataExtractor';
+import { extractEntryMetadata, aggregateMetadata, calculateGratitudeStreak } from './metadataExtractor';
 import type { JournalEntry, MoodLevel } from '../types/journal';
 
 /**
@@ -10,6 +10,7 @@ function createTestEntry(overrides: Partial<JournalEntry> = {}): JournalEntry {
     content: overrides.content ?? 'Test journal entry content',
     mood: overrides.mood ?? 3,
     tags: overrides.tags ?? [],
+    privacyMode: overrides.privacyMode ?? 0,
     created_at: overrides.created_at ?? '2024-06-15T14:00:00.000Z',
     updated_at: overrides.updated_at ?? '2024-06-15T14:00:00.000Z',
   };
@@ -603,6 +604,122 @@ describe('metadataExtractor', () => {
           result.sentimentBreakdown.mixed;
         expect(total).toBeCloseTo(1.0, 1);
       });
+    });
+
+    describe('privacy mode filtering', () => {
+      it('excludes privacyMode=2 (Private) entries from local analysis', () => {
+        const entries = [
+          createTestEntry({ id: 'e1', mood: 5, privacyMode: 0 }),
+          createTestEntry({ id: 'e2', mood: 5, privacyMode: 0 }),
+          // This private entry should be excluded — mood 1 would drag the average down
+          createTestEntry({ id: 'e3', mood: 1, privacyMode: 2 }),
+        ];
+        const result = aggregateMetadata(entries, 30, false);
+        expect(result.totalEntries).toBe(2);
+        expect(result.moodStats.average).toBe(5);
+      });
+
+      it('includes privacyMode=1 (Mindful) entries in local analysis', () => {
+        const entries = [
+          createTestEntry({ id: 'e1', mood: 4, privacyMode: 0 }),
+          createTestEntry({ id: 'e2', mood: 4, privacyMode: 1 }),
+        ];
+        const result = aggregateMetadata(entries, 30, false);
+        expect(result.totalEntries).toBe(2);
+      });
+
+      it('excludes privacyMode=1 (Mindful) entries when forLLM=true', () => {
+        const entries = [
+          createTestEntry({ id: 'e1', mood: 5, privacyMode: 0 }),
+          // Mindful entry should be excluded from LLM aggregation
+          createTestEntry({ id: 'e2', mood: 1, privacyMode: 1 }),
+        ];
+        const result = aggregateMetadata(entries, 30, true);
+        expect(result.totalEntries).toBe(1);
+        expect(result.moodStats.average).toBe(5);
+      });
+
+      it('returns empty metadata when all entries are Private and forLLM=true', () => {
+        const entries = [
+          createTestEntry({ id: 'e1', privacyMode: 1 }),
+          createTestEntry({ id: 'e2', privacyMode: 2 }),
+        ];
+        const result = aggregateMetadata(entries, 30, true);
+        expect(result.totalEntries).toBe(0);
+      });
+    });
+  });
+
+  // =============================================
+  // calculateGratitudeStreak
+  // =============================================
+
+  describe('calculateGratitudeStreak', () => {
+    it('returns 0 streak when no entries have gratitude', () => {
+      const entries = [
+        createTestEntry({ content: 'I feel neutral today', privacyMode: 0 }),
+      ];
+      const result = calculateGratitudeStreak(entries);
+      expect(result.currentStreak).toBe(0);
+      expect(result.longestStreak).toBe(0);
+    });
+
+    it('counts days with gratitude keywords', () => {
+      const entries = [
+        createTestEntry({
+          id: 'e1',
+          content: 'I am grateful for today',
+          privacyMode: 0,
+          created_at: new Date(Date.now() - 0 * 86400000).toISOString(),
+        }),
+        createTestEntry({
+          id: 'e2',
+          content: 'Feeling thankful today',
+          privacyMode: 0,
+          created_at: new Date(Date.now() - 1 * 86400000).toISOString(),
+        }),
+      ];
+      const result = calculateGratitudeStreak(entries);
+      expect(result.currentStreak).toBeGreaterThanOrEqual(2);
+    });
+
+    it('excludes Private (privacyMode=2) entries from gratitude streak', () => {
+      const entries = [
+        createTestEntry({
+          id: 'e1',
+          content: 'I am so grateful today',
+          privacyMode: 0,
+          created_at: new Date(Date.now() - 0 * 86400000).toISOString(),
+        }),
+        createTestEntry({
+          id: 'e2',
+          content: 'I am grateful but this is private',
+          privacyMode: 2,
+          created_at: new Date(Date.now() - 1 * 86400000).toISOString(),
+        }),
+      ];
+      // Only day 0 counts — day 1 is private
+      const result = calculateGratitudeStreak(entries);
+      expect(result.currentStreak).toBe(1);
+    });
+
+    it('includes Mindful (privacyMode=1) entries in gratitude streak', () => {
+      const entries = [
+        createTestEntry({
+          id: 'e1',
+          content: 'Grateful today',
+          privacyMode: 0,
+          created_at: new Date(Date.now() - 0 * 86400000).toISOString(),
+        }),
+        createTestEntry({
+          id: 'e2',
+          content: 'Still thankful, mindful entry',
+          privacyMode: 1,
+          created_at: new Date(Date.now() - 1 * 86400000).toISOString(),
+        }),
+      ];
+      const result = calculateGratitudeStreak(entries);
+      expect(result.currentStreak).toBeGreaterThanOrEqual(2);
     });
   });
 });

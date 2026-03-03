@@ -35,6 +35,10 @@ interface RichTextEditorProps {
   className?: string;
   onOpenContextMenu?: () => void;
   onNavigateToSTTSettings?: () => void;
+  /** When set, inserts this text at the current cursor position */
+  insertText?: string | null;
+  /** Called after insertText has been consumed so the parent can clear it */
+  onInsertTextConsumed?: () => void;
 }
 
 export function RichTextEditor({
@@ -45,6 +49,8 @@ export function RichTextEditor({
   className = '',
   onOpenContextMenu,
   onNavigateToSTTSettings,
+  insertText,
+  onInsertTextConsumed,
 }: RichTextEditorProps) {
   const [toolbarExpanded, setToolbarExpanded] = useState(true);
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
@@ -111,6 +117,15 @@ export function RichTextEditor({
       onChange(html, text);
     },
   });
+
+  // Insert text at cursor when insertText prop is set (used by prompt suggestions)
+  useEffect(() => {
+    if (insertText && editor) {
+      editor.commands.focus('end');
+      editor.commands.insertContent(insertText);
+      onInsertTextConsumed?.();
+    }
+  }, [insertText, editor, onInsertTextConsumed]);
 
   // Sync external value changes
   useEffect(() => {

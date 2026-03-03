@@ -46,25 +46,34 @@ export function extractEntryMetadata(entry: JournalEntry): EntryMetadata {
 }
 
 /**
- * Aggregate metadata from multiple entries for AI context
- * This creates the anonymized summary sent to AI
+ * Aggregate metadata from multiple entries for AI context.
+ *
+ * @param entries - All decrypted journal entries
+ * @param periodDays - Time window for aggregation
+ * @param forLLM - When true, only include Open (privacyMode=0) entries.
+ *                 When false (local analysis), include Open and Mindful (privacyMode<2).
  */
 export function aggregateMetadata(
   entries: JournalEntry[],
-  periodDays: number = 30
+  periodDays: number = 30,
+  forLLM: boolean = false
 ): AggregatedMetadata {
-  if (entries.length === 0) {
+  const eligible = entries.filter((e) =>
+    forLLM ? e.privacyMode === 0 : (e.privacyMode ?? 0) < 2
+  );
+
+  if (eligible.length === 0) {
     return createEmptyMetadata(periodDays);
   }
 
-  const metadataList = entries.map(extractEntryMetadata);
+  const metadataList = eligible.map(extractEntryMetadata);
   const recentEntries = getRecentEntries(metadataList, 7);
 
   return {
     periodDays,
-    totalEntries: entries.length,
+    totalEntries: eligible.length,
     moodStats: calculateMoodStats(metadataList, recentEntries),
-    patterns: calculatePatterns(metadataList, entries),
+    patterns: calculatePatterns(metadataList, eligible),
     emotionalProfile: calculateEmotionalProfile(metadataList, recentEntries),
     sentimentBreakdown: calculateSentimentBreakdown(metadataList),
   };
@@ -276,12 +285,14 @@ function calculateFrequency(entries: JournalEntry[]): FrequencyPattern {
   return 'rare';
 }
 
-function calculateStreaks(metadataList: EntryMetadata[]): {
+/**
+ * Core streak calculation over a sorted-descending list of date strings (YYYY-MM-DD).
+ * Shared by calculateStreaks and calculateGratitudeStreak.
+ */
+function calculateStreaksFromDates(dates: string[]): {
   currentStreak: number;
   longestStreak: number;
 } {
-  const dates = [...new Set(metadataList.map((m) => m.date))].sort().reverse();
-
   if (dates.length === 0) return { currentStreak: 0, longestStreak: 0 };
 
   let currentStreak = 0;
@@ -321,6 +332,38 @@ function calculateStreaks(metadataList: EntryMetadata[]): {
   longestStreak = Math.max(longestStreak, tempStreak, currentStreak);
 
   return { currentStreak, longestStreak };
+}
+
+function calculateStreaks(metadataList: EntryMetadata[]): {
+  currentStreak: number;
+  longestStreak: number;
+} {
+  const dates = [...new Set(metadataList.map((m) => m.date))].sort().reverse();
+  return calculateStreaksFromDates(dates);
+}
+
+/**
+ * Calculate gratitude-specific streak.
+ * Only days where at least one entry contains gratitude indicators count.
+ * Respects privacy: pass only eligible entries (privacyMode < 2).
+ */
+export function calculateGratitudeStreak(entries: JournalEntry[]): {
+  currentStreak: number;
+  longestStreak: number;
+} {
+  const eligibleEntries = entries.filter((e) => (e.privacyMode ?? 0) < 2);
+
+  const gratitudeDates = [
+    ...new Set(
+      eligibleEntries
+        .filter((e) => extractEntryMetadata(e).hasGratitude)
+        .map((e) => new Date(e.created_at).toISOString().split('T')[0])
+    ),
+  ]
+    .sort()
+    .reverse();
+
+  return calculateStreaksFromDates(gratitudeDates);
 }
 
 function calculateEmotionalProfile(

@@ -35,13 +35,19 @@ pub fn create_journal_entry(
     id: String,
     encrypted_content: EncryptedContent,
     mood: i32,
+    privacy_mode: Option<i32>,
 ) -> Result<JournalEntryRow, String> {
     // Validate mood range
     if !(1..=5).contains(&mood) {
         return Err("Mood must be between 1 and 5".to_string());
     }
 
-    db::create_entry(&db, &id, &encrypted_content, mood)
+    let pm = privacy_mode.unwrap_or(0);
+    if !(0..=2).contains(&pm) {
+        return Err("Privacy mode must be 0, 1, or 2".to_string());
+    }
+
+    db::create_entry(&db, &id, &encrypted_content, mood, pm)
 }
 
 /// Get a single journal entry by ID
@@ -76,12 +82,18 @@ pub fn update_journal_entry(
     id: String,
     encrypted_content: EncryptedContent,
     mood: i32,
+    privacy_mode: Option<i32>,
 ) -> Result<JournalEntryRow, String> {
     if !(1..=5).contains(&mood) {
         return Err("Mood must be between 1 and 5".to_string());
     }
 
-    db::update_entry(&db, &id, &encrypted_content, mood)
+    let pm = privacy_mode.unwrap_or(0);
+    if !(0..=2).contains(&pm) {
+        return Err("Privacy mode must be 0, 1, or 2".to_string());
+    }
+
+    db::update_entry(&db, &id, &encrypted_content, mood, pm)
 }
 
 /// Delete a journal entry

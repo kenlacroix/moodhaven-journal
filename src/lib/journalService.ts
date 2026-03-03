@@ -18,6 +18,7 @@ import type {
   JournalEntryFormData,
   MoodLevel,
   MoodStatistics,
+  PrivacyMode,
 } from '../types/journal';
 
 // ============================================================================
@@ -28,6 +29,7 @@ interface EncryptedJournalEntryRow {
   id: string;
   encrypted_content: EncryptedData;
   mood: number;
+  privacy_mode: number;
   created_at: string;
   updated_at: string;
 }
@@ -151,6 +153,7 @@ export async function createEntry(
     id,
     encryptedContent: result.data,
     mood: data.mood,
+    privacyMode: data.privacyMode,
   });
 
   // Return decrypted entry
@@ -158,6 +161,7 @@ export async function createEntry(
     id: row.id,
     content: data.content, // We already have the plaintext
     mood: row.mood as MoodLevel,
+    privacyMode: (row.privacy_mode ?? 0) as PrivacyMode,
     tags: data.tags,
     created_at: row.created_at,
     updated_at: row.updated_at,
@@ -247,12 +251,14 @@ export async function updateEntry(
     id,
     encryptedContent: result.data,
     mood: data.mood,
+    privacyMode: data.privacyMode,
   });
 
   return {
     id: row.id,
     content: data.content,
     mood: row.mood as MoodLevel,
+    privacyMode: (row.privacy_mode ?? 0) as PrivacyMode,
     tags: data.tags,
     created_at: row.created_at,
     updated_at: row.updated_at,
@@ -322,6 +328,7 @@ async function decryptEntry(
     id: row.id,
     content: result.data,
     mood: row.mood as MoodLevel,
+    privacyMode: (row.privacy_mode ?? 0) as PrivacyMode,
     tags: [], // TODO: Fetch from entry_tags table
     created_at: row.created_at,
     updated_at: row.updated_at,
@@ -354,11 +361,13 @@ export async function saveEntry(data: {
   title?: string;
   content: string;
   mood?: number;
+  privacyMode?: PrivacyMode;
 }): Promise<JournalEntry> {
   const formData: JournalEntryFormData = {
     content: data.content,
     mood: (data.mood || 3) as MoodLevel,
     tags: [],
+    privacyMode: data.privacyMode ?? 0,
   };
 
   if (data.id) {

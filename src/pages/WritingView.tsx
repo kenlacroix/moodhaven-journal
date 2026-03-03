@@ -400,24 +400,51 @@ export function WritingView({ entryId, onEntrySaved, onNavigateToSTTSettings }: 
                 )}
               </div>
 
-              {/* Privacy segmented control */}
-              <div className="flex items-center gap-0.5 bg-slate-100 dark:bg-slate-800 rounded-lg p-0.5">
-                {([0, 1, 2] as PrivacyMode[]).map((mode) => (
-                  <button
-                    key={mode}
-                    type="button"
-                    onClick={() => setPrivacyMode(mode)}
-                    title={PRIVACY_MODE_DESCRIPTIONS[mode]}
-                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all duration-200 ${
-                      privacyMode === mode
-                        ? `bg-white dark:bg-slate-700 shadow-sm ${PRIVACY_ACTIVE_COLORS[mode]}`
-                        : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'
-                    }`}
-                  >
-                    {PRIVACY_ICONS[mode]}
-                    <span>{PRIVACY_MODE_LABELS[mode]}</span>
-                  </button>
-                ))}
+              {/* Privacy segmented control + focus mode toggle */}
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-0.5 bg-slate-100 dark:bg-slate-800 rounded-lg p-0.5">
+                  {([0, 1, 2] as PrivacyMode[]).map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => setPrivacyMode(mode)}
+                      title={PRIVACY_MODE_DESCRIPTIONS[mode]}
+                      className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all duration-200 ${
+                        privacyMode === mode
+                          ? `bg-white dark:bg-slate-700 shadow-sm ${PRIVACY_ACTIVE_COLORS[mode]}`
+                          : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'
+                      }`}
+                    >
+                      {PRIVACY_ICONS[mode]}
+                      <span>{PRIVACY_MODE_LABELS[mode]}</span>
+                    </button>
+                  ))}
+                </div>
+
+                {/* Divider */}
+                <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 flex-shrink-0" />
+
+                {/* Focus mode toggle */}
+                <button
+                  type="button"
+                  onClick={() => setDistractionFree(!distractionFree)}
+                  title={distractionFree ? 'Exit focus mode (Ctrl+Shift+F)' : 'Focus mode (Ctrl+Shift+F)'}
+                  className={`p-1.5 rounded-lg transition-all duration-200 ${
+                    distractionFree
+                      ? 'text-violet-500 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/20'
+                      : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  {distractionFree ? (
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5m0-4.5l5.25 5.25" />
+                    </svg>
+                  ) : (
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
+                    </svg>
+                  )}
+                </button>
               </div>
             </div>
 
@@ -498,29 +525,8 @@ export function WritingView({ entryId, onEntrySaved, onNavigateToSTTSettings }: 
               )}
             </div>
 
-            {/* Right: distraction-free toggle + save indicator */}
-            <div className="flex-1 flex items-center justify-end gap-3">
-              {/* Distraction-free toggle */}
-              <button
-                type="button"
-                onClick={() => setDistractionFree(!distractionFree)}
-                title={distractionFree ? 'Exit focus mode (Ctrl+Shift+F)' : 'Focus mode (Ctrl+Shift+F)'}
-                className="text-slate-300 dark:text-slate-600 hover:text-slate-500 dark:hover:text-slate-400 transition-colors"
-              >
-                {distractionFree ? (
-                  /* compress / exit icon */
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5m0-4.5l5.25 5.25" />
-                  </svg>
-                ) : (
-                  /* expand / enter icon */
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
-                  </svg>
-                )}
-              </button>
-
-              {/* Save indicator */}
+            {/* Right: save indicator */}
+            <div className="flex-1 flex items-center justify-end gap-1.5">
               {isSaving ? (
                 <span className="flex items-center gap-1.5">
                   <span className="w-3 h-3 border-[1.5px] border-slate-300 dark:border-slate-600 border-t-violet-500 rounded-full animate-spin" />

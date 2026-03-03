@@ -217,8 +217,14 @@ pub async fn import_data(
             .and_then(|v| v.as_i64())
             .ok_or("Invalid entry: missing mood")? as i32;
 
+        let privacy_mode = entry.get("privacy_mode")
+            .and_then(|v| v.as_i64())
+            .map(|v| v as i32)
+            .unwrap_or(0)
+            .clamp(0, 2);
+
         // Try to create entry (skip if already exists)
-        match db::create_entry(&db, id, &ec, mood) {
+        match db::create_entry(&db, id, &ec, mood, privacy_mode) {
             Ok(_) => imported_count += 1,
             Err(e) if e.contains("UNIQUE constraint") => continue,
             Err(e) => return Err(e),

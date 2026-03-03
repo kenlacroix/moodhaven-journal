@@ -13,6 +13,7 @@ import type {
   DayOfWeek,
   StorageBackend,
   WebDAVConfig,
+  STTModel,
 } from '../types/settings';
 import { createDefaultSettings } from '../types/settings';
 import {
@@ -22,12 +23,16 @@ import {
   resetSettings as resetSettingsService,
 } from '../lib/settingsService';
 
+// Section to scroll to when settings page opens
+export type SettingsScrollTarget = 'speech-to-text' | null;
+
 interface SettingsState {
   settings: AppSettings;
   appVersion: string;
   isLoading: boolean;
   error: string | null;
   hasUnsavedChanges: boolean;
+  scrollToSection: SettingsScrollTarget;
 
   // Actions
   loadSettings: () => Promise<void>;
@@ -71,6 +76,15 @@ interface SettingsState {
 
   // Tutorial
   setHasSeenTutorial: (seen: boolean) => void;
+
+  // Speech-to-Text
+  setSTTEnabled: (enabled: boolean) => void;
+  setSTTModel: (model: STTModel) => void;
+  setSTTModelDownloaded: (downloaded: boolean) => void;
+  setSTTDownloadProgress: (progress: number | null) => void;
+
+  // Navigation
+  setScrollToSection: (section: SettingsScrollTarget) => void;
 }
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({
@@ -79,6 +93,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   isLoading: true,
   error: null,
   hasUnsavedChanges: false,
+  scrollToSection: null,
 
   loadSettings: async () => {
     set({ isLoading: true, error: null });
@@ -399,6 +414,52 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       },
       hasUnsavedChanges: true,
     }));
+  },
+
+  // Speech-to-Text
+  setSTTEnabled: (enabled) => {
+    set((state) => ({
+      settings: {
+        ...state.settings,
+        speechToText: { ...state.settings.speechToText, enabled },
+      },
+      hasUnsavedChanges: true,
+    }));
+  },
+
+  setSTTModel: (model) => {
+    set((state) => ({
+      settings: {
+        ...state.settings,
+        speechToText: { ...state.settings.speechToText, model, modelDownloaded: false },
+      },
+      hasUnsavedChanges: true,
+    }));
+  },
+
+  setSTTModelDownloaded: (modelDownloaded) => {
+    set((state) => ({
+      settings: {
+        ...state.settings,
+        speechToText: { ...state.settings.speechToText, modelDownloaded },
+      },
+      hasUnsavedChanges: true,
+    }));
+  },
+
+  setSTTDownloadProgress: (downloadProgress) => {
+    set((state) => ({
+      settings: {
+        ...state.settings,
+        speechToText: { ...state.settings.speechToText, downloadProgress },
+      },
+      // Don't mark as unsaved for progress updates
+    }));
+  },
+
+  // Navigation
+  setScrollToSection: (scrollToSection) => {
+    set({ scrollToSection });
   },
 }));
 

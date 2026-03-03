@@ -24,6 +24,8 @@ import TaskItem from '@tiptap/extension-task-item';
 import { FloatingToolbar } from './FloatingToolbar';
 import { EmojiPicker } from './EmojiPicker';
 import { SlashCommands } from './slashCommands';
+import { useSpeechToText, type STTState } from '../../hooks/useSpeechToText';
+import { useSettingsStore } from '../../stores/settingsStore';
 
 interface RichTextEditorProps {
   value: string;
@@ -32,6 +34,7 @@ interface RichTextEditorProps {
   autoFocus?: boolean;
   className?: string;
   onOpenContextMenu?: () => void;
+  onNavigateToSTTSettings?: () => void;
 }
 
 export function RichTextEditor({
@@ -41,11 +44,16 @@ export function RichTextEditor({
   autoFocus = false,
   className = '',
   onOpenContextMenu,
+  onNavigateToSTTSettings,
 }: RichTextEditorProps) {
   const [toolbarExpanded, setToolbarExpanded] = useState(true);
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const [linkDialogInitialUrl, setLinkDialogInitialUrl] = useState('');
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
+
+  // Speech-to-text
+  const sttSettings = useSettingsStore((s) => s.settings.speechToText);
+  const { state: sttState, error: sttError, startRecording, stopAndTranscribe, cancel: cancelSTT } = useSpeechToText();
 
   // Ref so the Tiptap extension can call the latest opener without stale closures
   const openLinkDialogRef = useRef<() => void>(() => {});
@@ -224,6 +232,32 @@ export function RichTextEditor({
     setEmojiPickerOpen(false);
   }, [editor]);
 
+  // Check if STT is ready (enabled and model downloaded)
+  const sttReady = sttSettings.enabled && sttSettings.modelDownloaded;
+
+  // Handle mic button click for speech-to-text
+  const handleMicClick = useCallback(async () => {
+    if (!editor) return;
+
+    // If STT is not ready, navigate to settings
+    if (!sttReady) {
+      onNavigateToSTTSettings?.();
+      return;
+    }
+
+    if (sttState === 'recording') {
+      // Stop recording and transcribe
+      const text = await stopAndTranscribe();
+      if (text) {
+        editor.chain().focus().insertContent(text).run();
+      }
+    } else if (sttState === 'idle') {
+      // Start recording
+      await startRecording();
+    }
+    // If transcribing or processing, do nothing (button should be disabled)
+  }, [editor, sttState, sttReady, startRecording, stopAndTranscribe, onNavigateToSTTSettings]);
+
   // Show loading state while editor initializes
   if (!editor) {
     return (
@@ -246,6 +280,11 @@ export function RichTextEditor({
         onToggle={setToolbarExpanded}
         onLinkClick={handleOpenLinkDialog}
         onEmojiClick={() => setEmojiPickerOpen(true)}
+        sttReady={sttReady}
+        sttState={sttState}
+        sttError={sttError}
+        onMicClick={handleMicClick}
+        onMicCancel={cancelSTT}
       />
 
       {/* Editor content */}
@@ -537,9 +576,28 @@ interface CollapsibleToolbarProps {
   onToggle: (expanded: boolean) => void;
   onLinkClick: () => void;
   onEmojiClick: () => void;
+  // Speech-to-text
+  sttReady?: boolean; // true if enabled AND model downloaded
+  sttState?: STTState;
+  sttError?: string | null;
+  onMicClick?: () => void;
+  onMicCancel?: () => void;
 }
 
-function CollapsibleToolbar({ editor, onFormat, getFormatState, expanded, onToggle, onLinkClick, onEmojiClick }: CollapsibleToolbarProps) {
+function CollapsibleToolbar({
+  editor,
+  onFormat,
+  getFormatState,
+  expanded,
+  onToggle,
+  onLinkClick,
+  onEmojiClick,
+  sttReady = false,
+  sttState = 'idle',
+  sttError,
+  onMicClick,
+  onMicCancel,
+}: CollapsibleToolbarProps) {
   const [formatState, setFormatState] = useState<Record<string, boolean>>({});
 
   // Track format state on selection/transaction changes
@@ -662,6 +720,20 @@ function CollapsibleToolbar({ editor, onFormat, getFormatState, expanded, onTogg
             label="Emoji"
             onClick={onEmojiClick}
           />
+
+          {/* Speech-to-text mic button - always visible */}
+          {onMicClick && (
+            <>
+              <TBDivider />
+              <MicButton
+                state={sttState}
+                error={sttError}
+                onClick={onMicClick}
+                onCancel={onMicCancel}
+                isReady={sttReady}
+              />
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -703,6 +775,93 @@ function ToolbarBtn({
 
 function TBDivider() {
   return <div className="w-px h-5 bg-slate-200 dark:bg-slate-700 mx-1" />;
+}
+
+// Mic button for speech-to-text
+function MicButton({
+  state,
+  error,
+  onClick,
+  onCancel,
+  isReady = false,
+}: {
+  state: STTState;
+  error?: string | null;
+  onClick: () => void;
+  onCancel?: () => void;
+  isReady?: boolean;
+}) {
+  const isRecording = state === 'recording';
+  const isProcessing = state === 'processing' || state === 'transcribing' || state === 'requesting';
+
+  // Determine button appearance based on state
+  let buttonClass = 'text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-600 dark:hover:text-slate-300';
+  let title = isReady ? 'Start dictation' : 'Set up speech-to-text';
+
+  if (!isReady) {
+    // Not configured - show setup hint
+    buttonClass = 'text-slate-300 dark:text-slate-600 hover:bg-violet-50 dark:hover:bg-violet-900/20 hover:text-violet-500 dark:hover:text-violet-400';
+  } else if (isRecording) {
+    buttonClass = 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 animate-pulse';
+    title = 'Stop recording';
+  } else if (isProcessing) {
+    buttonClass = 'bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400';
+    title = state === 'transcribing' ? 'Transcribing...' : 'Processing...';
+  } else if (error) {
+    buttonClass = 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400';
+    title = error;
+  }
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={(e) => {
+          e.preventDefault();
+          onClick();
+        }}
+        disabled={isProcessing}
+        className={`p-1.5 rounded transition-all duration-150 active:scale-90 ${buttonClass} ${isProcessing ? 'cursor-wait' : ''}`}
+        title={title}
+      >
+        {isProcessing ? (
+          <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+          </svg>
+        ) : (
+          <TBMicIcon isRecording={isRecording} />
+        )}
+      </button>
+
+      {/* Cancel button shown during recording */}
+      {isRecording && onCancel && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onCancel();
+          }}
+          className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-300 dark:hover:bg-slate-600 flex items-center justify-center text-xs"
+          title="Cancel recording"
+        >
+          <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      )}
+    </div>
+  );
+}
+
+function TBMicIcon({ isRecording }: { isRecording?: boolean }) {
+  return (
+    <svg className="w-4 h-4" fill={isRecording ? 'currentColor' : 'none'} viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z" />
+    </svg>
+  );
 }
 
 // ============================================

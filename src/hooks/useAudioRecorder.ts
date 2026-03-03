@@ -1,0 +1,252 @@
+/**
+ * useAudioRecorder - Hook for recording audio using Web Audio API
+ *
+ * Privacy-first approach:
+ * - All audio processing happens locally
+ * - Audio is encoded to WAV format for whisper.cpp compatibility
+ * - No audio data leaves the device
+ */
+
+import { useState, useRef, useCallback } from 'react';
+
+export type RecordingState = 'idle' | 'requesting' | 'recording' | 'processing';
+
+interface UseAudioRecorderResult {
+  state: RecordingState;
+  error: string | null;
+  startRecording: () => Promise<void>;
+  stopRecording: () => Promise<ArrayBuffer | null>;
+  cancelRecording: () => void;
+}
+
+// WAV encoding parameters for whisper.cpp compatibility
+const SAMPLE_RATE = 16000; // whisper.cpp expects 16kHz
+const NUM_CHANNELS = 1; // Mono audio
+
+/**
+ * Encode raw PCM samples to WAV format
+ */
+function encodeWAV(samples: Float32Array, sampleRate: number): ArrayBuffer {
+  const buffer = new ArrayBuffer(44 + samples.length * 2);
+  const view = new DataView(buffer);
+
+  // WAV header
+  // "RIFF" chunk descriptor
+  writeString(view, 0, 'RIFF');
+  view.setUint32(4, 36 + samples.length * 2, true); // File size - 8
+  writeString(view, 8, 'WAVE');
+
+  // "fmt " sub-chunk
+  writeString(view, 12, 'fmt ');
+  view.setUint32(16, 16, true); // Subchunk1Size (16 for PCM)
+  view.setUint16(20, 1, true); // AudioFormat (1 = PCM)
+  view.setUint16(22, NUM_CHANNELS, true); // NumChannels
+  view.setUint32(24, sampleRate, true); // SampleRate
+  view.setUint32(28, sampleRate * NUM_CHANNELS * 2, true); // ByteRate
+  view.setUint16(32, NUM_CHANNELS * 2, true); // BlockAlign
+  view.setUint16(34, 16, true); // BitsPerSample
+
+  // "data" sub-chunk
+  writeString(view, 36, 'data');
+  view.setUint32(40, samples.length * 2, true); // Subchunk2Size
+
+  // Write PCM samples as 16-bit integers
+  let offset = 44;
+  for (let i = 0; i < samples.length; i++) {
+    // Clamp to [-1, 1] and convert to 16-bit signed integer
+    const sample = Math.max(-1, Math.min(1, samples[i]));
+    const intSample = sample < 0 ? sample * 0x8000 : sample * 0x7fff;
+    view.setInt16(offset, intSample, true);
+    offset += 2;
+  }
+
+  return buffer;
+}
+
+function writeString(view: DataView, offset: number, string: string): void {
+  for (let i = 0; i < string.length; i++) {
+    view.setUint8(offset + i, string.charCodeAt(i));
+  }
+}
+
+/**
+ * Resample audio to target sample rate using linear interpolation
+ */
+function resample(
+  inputBuffer: Float32Array,
+  inputSampleRate: number,
+  outputSampleRate: number
+): Float32Array {
+  if (inputSampleRate === outputSampleRate) {
+    return inputBuffer;
+  }
+
+  const ratio = inputSampleRate / outputSampleRate;
+  const outputLength = Math.floor(inputBuffer.length / ratio);
+  const output = new Float32Array(outputLength);
+
+  for (let i = 0; i < outputLength; i++) {
+    const srcIndex = i * ratio;
+    const srcIndexFloor = Math.floor(srcIndex);
+    const srcIndexCeil = Math.min(srcIndexFloor + 1, inputBuffer.length - 1);
+    const t = srcIndex - srcIndexFloor;
+
+    // Linear interpolation
+    output[i] = inputBuffer[srcIndexFloor] * (1 - t) + inputBuffer[srcIndexCeil] * t;
+  }
+
+  return output;
+}
+
+export function useAudioRecorder(): UseAudioRecorderResult {
+  const [state, setState] = useState<RecordingState>('idle');
+  const [error, setError] = useState<string | null>(null);
+
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const processorRef = useRef<ScriptProcessorNode | null>(null);
+  const chunksRef = useRef<Float32Array[]>([]);
+
+  const cleanup = useCallback(() => {
+    // Stop all tracks
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+      mediaStreamRef.current = null;
+    }
+
+    // Disconnect processor
+    if (processorRef.current) {
+      processorRef.current.disconnect();
+      processorRef.current = null;
+    }
+
+    // Close audio context
+    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+      audioContextRef.current.close();
+      audioContextRef.current = null;
+    }
+
+    chunksRef.current = [];
+  }, []);
+
+  const startRecording = useCallback(async () => {
+    setError(null);
+    setState('requesting');
+
+    try {
+      // Request microphone access
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          channelCount: NUM_CHANNELS,
+          sampleRate: { ideal: SAMPLE_RATE },
+          echoCancellation: true,
+          noiseSuppression: true,
+        },
+      });
+
+      mediaStreamRef.current = stream;
+
+      // Create audio context
+      const audioContext = new AudioContext({ sampleRate: SAMPLE_RATE });
+      audioContextRef.current = audioContext;
+
+      // Create source from stream
+      const source = audioContext.createMediaStreamSource(stream);
+
+      // Use ScriptProcessorNode to capture raw audio data
+      // Note: ScriptProcessorNode is deprecated but AudioWorklet requires more setup
+      // and may not work well in all WebView environments
+      const bufferSize = 4096;
+      const processor = audioContext.createScriptProcessor(bufferSize, NUM_CHANNELS, NUM_CHANNELS);
+      processorRef.current = processor;
+
+      chunksRef.current = [];
+
+      processor.onaudioprocess = (event) => {
+        const inputData = event.inputBuffer.getChannelData(0);
+        // Copy the data since the buffer will be reused
+        chunksRef.current.push(new Float32Array(inputData));
+      };
+
+      // Connect the chain: source -> processor -> destination
+      source.connect(processor);
+      processor.connect(audioContext.destination);
+
+      setState('recording');
+    } catch (err) {
+      cleanup();
+      setState('idle');
+
+      if (err instanceof DOMException) {
+        if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+          setError('Microphone access was denied. Please allow microphone access in your system settings.');
+        } else if (err.name === 'NotFoundError') {
+          setError('No microphone found. Please connect a microphone and try again.');
+        } else {
+          setError(`Microphone error: ${err.message}`);
+        }
+      } else {
+        setError('Failed to start recording. Please try again.');
+      }
+    }
+  }, [cleanup]);
+
+  const stopRecording = useCallback(async (): Promise<ArrayBuffer | null> => {
+    if (state !== 'recording') {
+      return null;
+    }
+
+    setState('processing');
+
+    try {
+      const chunks = chunksRef.current;
+      const actualSampleRate = audioContextRef.current?.sampleRate ?? SAMPLE_RATE;
+
+      // Cleanup streams and context
+      cleanup();
+
+      if (chunks.length === 0) {
+        setState('idle');
+        setError('No audio was recorded.');
+        return null;
+      }
+
+      // Merge all chunks into a single buffer
+      const totalLength = chunks.reduce((acc, chunk) => acc + chunk.length, 0);
+      const merged = new Float32Array(totalLength);
+      let offset = 0;
+      for (const chunk of chunks) {
+        merged.set(chunk, offset);
+        offset += chunk.length;
+      }
+
+      // Resample to 16kHz if needed
+      const resampled = resample(merged, actualSampleRate, SAMPLE_RATE);
+
+      // Encode to WAV
+      const wavBuffer = encodeWAV(resampled, SAMPLE_RATE);
+
+      setState('idle');
+      return wavBuffer;
+    } catch (err) {
+      cleanup();
+      setState('idle');
+      setError('Failed to process recording.');
+      return null;
+    }
+  }, [state, cleanup]);
+
+  const cancelRecording = useCallback(() => {
+    cleanup();
+    setState('idle');
+    setError(null);
+  }, [cleanup]);
+
+  return {
+    state,
+    error,
+    startRecording,
+    stopRecording,
+    cancelRecording,
+  };
+}

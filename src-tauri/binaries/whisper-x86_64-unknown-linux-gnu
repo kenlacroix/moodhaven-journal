@@ -1,0 +1,3 @@
+#!/bin/sh
+echo "Whisper sidecar not installed. Please download the model from settings."
+exit 1

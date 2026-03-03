@@ -73,6 +73,14 @@ function App() {
     setCurrentView('writing');
   }, []);
 
+  // Navigate to settings with optional section scroll target
+  const handleNavigateToSettings = useCallback((section?: 'speech-to-text') => {
+    if (section) {
+      useSettingsStore.getState().setScrollToSection(section);
+    }
+    setCurrentView('settings');
+  }, []);
+
   // Loading state
   if (isLoading) {
     return (
@@ -114,6 +122,7 @@ function App() {
               onEntrySaved={() => {
                 // Optionally refresh timeline, etc.
               }}
+              onNavigateToSTTSettings={() => handleNavigateToSettings('speech-to-text')}
             />
           )}
 

@@ -89,6 +89,13 @@ pub fn run() {
             commands::hardware_key_verify,
             commands::hardware_key_disable,
             commands::hardware_key_required,
+            // Speech-to-Text (local whisper.cpp)
+            commands::stt_check_sidecar,
+            commands::stt_get_models_dir,
+            commands::stt_check_model,
+            commands::stt_download_model,
+            commands::stt_delete_model,
+            commands::stt_transcribe,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

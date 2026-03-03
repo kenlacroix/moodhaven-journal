@@ -17,9 +17,10 @@ import { RichTextEditor } from '../components/editor';
 interface WritingViewProps {
   entryId?: string | null;
   onEntrySaved?: () => void;
+  onNavigateToSTTSettings?: () => void;
 }
 
-export function WritingView({ entryId, onEntrySaved }: WritingViewProps) {
+export function WritingView({ entryId, onEntrySaved, onNavigateToSTTSettings }: WritingViewProps) {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [contentText, setContentText] = useState('');
@@ -168,6 +169,7 @@ export function WritingView({ entryId, onEntrySaved }: WritingViewProps) {
               placeholder="Start writing..."
               autoFocus={!entryId}
               className="flex-1 min-h-0"
+              onNavigateToSTTSettings={onNavigateToSTTSettings}
             />
           </div>
 

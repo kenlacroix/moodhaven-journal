@@ -104,6 +104,34 @@ export interface TutorialSettings {
   hasSeenTutorial: boolean;
 }
 
+// Speech-to-Text model options (whisper.cpp models)
+export type STTModel = 'tiny.en' | 'base.en' | 'small.en' | 'medium.en';
+
+// Speech-to-Text model metadata
+export interface STTModelInfo {
+  id: STTModel;
+  name: string;
+  size: string; // Human-readable size
+  quality: string;
+  speed: string;
+}
+
+// Available STT models
+export const STT_MODELS: STTModelInfo[] = [
+  { id: 'tiny.en', name: 'Tiny (English)', size: '~75 MB', quality: 'Acceptable', speed: 'Fast' },
+  { id: 'base.en', name: 'Base (English)', size: '~142 MB', quality: 'Good', speed: 'Fast' },
+  { id: 'small.en', name: 'Small (English)', size: '~466 MB', quality: 'Very good', speed: 'Moderate' },
+  { id: 'medium.en', name: 'Medium (English)', size: '~1.5 GB', quality: 'Excellent', speed: 'Slower' },
+];
+
+// Speech-to-Text settings
+export interface SpeechToTextSettings {
+  enabled: boolean;
+  model: STTModel;
+  modelDownloaded: boolean;
+  downloadProgress: number | null; // 0-100 during download, null otherwise
+}
+
 // Complete app settings
 export interface AppSettings {
   version: string; // Settings schema version
@@ -114,6 +142,7 @@ export interface AppSettings {
   reminders: ReminderSettings;
   storage: StorageSettings;
   tutorial: TutorialSettings;
+  speechToText: SpeechToTextSettings;
 }
 
 // Default settings factory
@@ -178,6 +207,12 @@ export function createDefaultSettings(): AppSettings {
     },
     tutorial: {
       hasSeenTutorial: false,
+    },
+    speechToText: {
+      enabled: false,
+      model: 'base.en',
+      modelDownloaded: false,
+      downloadProgress: null,
     },
   };
 }

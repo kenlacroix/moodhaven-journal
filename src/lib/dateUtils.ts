@@ -177,12 +177,18 @@ export function formatDisplayDate(date: Date | string): string {
 
 /**
  * Get relative date label (Today, Yesterday, X days ago)
+ * Compares calendar days, not timestamps (so 11pm yesterday is still "Yesterday" at 1am today)
  */
 export function getRelativeDateLabel(date: Date | string): string {
   const d = typeof date === 'string' ? parseDate(date) : date;
+
+  // Normalize both dates to midnight for calendar-day comparison
+  const entryDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
   const today = new Date();
-  const diffTime = today.getTime() - d.getTime();
-  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+  const todayDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
+  const diffTime = todayDay.getTime() - entryDay.getTime();
+  const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
 
   if (diffDays === 0) return 'Today';
   if (diffDays === 1) return 'Yesterday';

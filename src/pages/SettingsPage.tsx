@@ -34,8 +34,15 @@ import {
 } from '../lib/twoFactorService';
 import { TotpSetup, HardwareKeySetup, BackupCodesDisplay } from '../components/twoFactor';
 import type { TwoFactorStatus, BackupCodes } from '../types/twoFactor';
-import type { ReminderFrequency, StorageBackend } from '../types/settings';
+import type { ReminderFrequency, StorageBackend, STTModel } from '../types/settings';
+import { STT_MODELS } from '../types/settings';
 import { sendTestNotification } from '../lib/reminderService';
+import {
+  checkModelStatus,
+  downloadModel,
+  deleteModel,
+  checkSidecarAvailable,
+} from '../lib/speechToTextService';
 import { verifyUserPassword } from '../lib/journalService';
 import {
   loadRateLimitState,
@@ -63,7 +70,7 @@ const TABS: TabConfig[] = [
     id: 'general',
     label: 'General',
     icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z',
-    keywords: ['appearance', 'theme', 'dark', 'light', 'compact', 'animations', 'journal', 'prompts', 'auto-save', 'reminders', 'notifications', 'tutorial', 'help', 'tour'],
+    keywords: ['appearance', 'theme', 'dark', 'light', 'compact', 'animations', 'journal', 'prompts', 'auto-save', 'reminders', 'notifications', 'tutorial', 'help', 'tour', 'speech', 'voice', 'dictation', 'whisper', 'microphone', 'transcription'],
   },
   {
     id: 'privacy',
@@ -116,11 +123,21 @@ export function SettingsPage() {
     setWebDAVConfig,
     setLastSyncDate,
     setHasSeenTutorial,
+    setSTTEnabled,
+    setSTTModel,
+    setSTTModelDownloaded,
+    setSTTDownloadProgress,
   } = useSettingsStore();
+
+  const scrollToSection = useSettingsStore((s) => s.scrollToSection);
+  const setScrollToSection = useSettingsStore((s) => s.setScrollToSection);
 
   const [activeTab, setActiveTab] = useState<SettingsTab>('general');
   const [searchQuery, setSearchQuery] = useState('');
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+
+  // Ref for scrolling to STT section
+  const sttSectionRef = useRef<HTMLDivElement>(null);
 
   // Data management state
   const [showResetConfirm, setShowResetConfirm] = useState(false);
@@ -142,11 +159,60 @@ export function SettingsPage() {
   const [testingNotification, setTestingNotification] = useState(false);
   const [notificationTestResult, setNotificationTestResult] = useState<string | null>(null);
 
+  // Speech-to-Text state
+  const [sttDownloading, setSTTDownloading] = useState(false);
+  const [sttDownloadError, setSTTDownloadError] = useState<string | null>(null);
+  const [sttSidecarAvailable, setSTTSidecarAvailable] = useState<boolean | null>(null);
+
   // Tutorial state
   const handleShowTutorial = useCallback(async () => {
     setHasSeenTutorial(false);
     await saveSettings();
   }, [setHasSeenTutorial, saveSettings]);
+
+  // Check STT model and sidecar on mount
+  useEffect(() => {
+    checkSidecarAvailable().then(setSTTSidecarAvailable);
+    if (settings.speechToText.model) {
+      checkModelStatus(settings.speechToText.model).then((status) => {
+        if (status.downloaded !== settings.speechToText.modelDownloaded) {
+          setSTTModelDownloaded(status.downloaded);
+        }
+      });
+    }
+  }, [settings.speechToText.model, settings.speechToText.modelDownloaded, setSTTModelDownloaded]);
+
+  // Handle STT model download
+  const handleSTTModelDownload = useCallback(async () => {
+    setSTTDownloading(true);
+    setSTTDownloadError(null);
+    setSTTDownloadProgress(0);
+
+    try {
+      await downloadModel(settings.speechToText.model, (progress) => {
+        setSTTDownloadProgress(progress.percentage);
+      });
+      setSTTModelDownloaded(true);
+      setSTTDownloadProgress(null);
+      await saveSettings();
+    } catch (error) {
+      setSTTDownloadError(error instanceof Error ? error.message : 'Download failed');
+      setSTTDownloadProgress(null);
+    } finally {
+      setSTTDownloading(false);
+    }
+  }, [settings.speechToText.model, setSTTModelDownloaded, setSTTDownloadProgress, saveSettings]);
+
+  // Handle STT model delete
+  const handleSTTModelDelete = useCallback(async () => {
+    try {
+      await deleteModel(settings.speechToText.model);
+      setSTTModelDownloaded(false);
+      await saveSettings();
+    } catch (error) {
+      setSTTDownloadError(error instanceof Error ? error.message : 'Delete failed');
+    }
+  }, [settings.speechToText.model, setSTTModelDownloaded, saveSettings]);
 
   // Cloud sync state
   const [isSyncing, setIsSyncing] = useState(false);
@@ -167,6 +233,20 @@ export function SettingsPage() {
   useEffect(() => {
     loadSettings();
   }, [loadSettings]);
+
+  // Handle scroll-to-section navigation from other pages
+  useEffect(() => {
+    if (scrollToSection === 'speech-to-text') {
+      // Switch to general tab (where STT settings are)
+      setActiveTab('general');
+      // Clear the scroll target
+      setScrollToSection(null);
+      // Scroll to the section after a brief delay for the tab to render
+      setTimeout(() => {
+        sttSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 100);
+    }
+  }, [scrollToSection, setScrollToSection]);
 
   // Load data stats and 2FA status when privacy tab is active
   useEffect(() => {
@@ -668,6 +748,108 @@ export function SettingsPage() {
                 </>
               )}
             </SettingSection>
+
+            <div ref={sttSectionRef}>
+            <SettingSection
+              title="Speech to Text"
+              description="Dictate journal entries using your voice"
+            >
+              {sttSidecarAvailable === false && (
+                <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-200 text-sm mb-3">
+                  <p className="font-medium">Whisper engine not installed</p>
+                  <p className="text-xs mt-1 text-amber-700 dark:text-amber-300">
+                    Speech-to-text requires the Whisper sidecar. This feature will be available in a future release.
+                  </p>
+                </div>
+              )}
+
+              <SettingToggle
+                label="Enable speech to text"
+                description="Show microphone button in the editor toolbar"
+                checked={settings.speechToText.enabled}
+                onChange={setSTTEnabled}
+                disabled={sttSidecarAvailable === false}
+              />
+
+              {settings.speechToText.enabled && (
+                <>
+                  <SettingSelect
+                    label="Model"
+                    description="Choose quality vs. speed tradeoff"
+                    value={settings.speechToText.model}
+                    options={STT_MODELS.map((m) => ({
+                      value: m.id,
+                      label: `${m.name} (${m.size})`,
+                    }))}
+                    onChange={(v) => setSTTModel(v as STTModel)}
+                  />
+
+                  <div className="py-2">
+                    <div className="flex items-center justify-between mb-2">
+                      <div>
+                        <p className="font-medium text-slate-700 dark:text-slate-200 text-sm">
+                          Model Status
+                        </p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          {settings.speechToText.modelDownloaded
+                            ? `${STT_MODELS.find(m => m.id === settings.speechToText.model)?.name} is ready to use`
+                            : 'Model needs to be downloaded for offline use'}
+                        </p>
+                      </div>
+
+                      {settings.speechToText.modelDownloaded ? (
+                        <button
+                          type="button"
+                          onClick={handleSTTModelDelete}
+                          className="px-3 py-1.5 text-sm font-medium text-rose-600 dark:text-rose-400 bg-rose-100 dark:bg-rose-900/30 rounded-lg hover:bg-rose-200 dark:hover:bg-rose-900/50 transition-colors"
+                        >
+                          Delete Model
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={handleSTTModelDownload}
+                          disabled={sttDownloading}
+                          className="px-3 py-1.5 text-sm font-medium text-violet-600 dark:text-violet-400 bg-violet-100 dark:bg-violet-900/30 rounded-lg hover:bg-violet-200 dark:hover:bg-violet-900/50 transition-colors disabled:opacity-50"
+                        >
+                          {sttDownloading ? 'Downloading...' : 'Download Model'}
+                        </button>
+                      )}
+                    </div>
+
+                    {sttDownloading && settings.speechToText.downloadProgress !== null && (
+                      <div className="mt-2">
+                        <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400 mb-1">
+                          <span>Downloading...</span>
+                          <span>{Math.round(settings.speechToText.downloadProgress)}%</span>
+                        </div>
+                        <div className="h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-violet-500 transition-all duration-300"
+                            style={{ width: `${settings.speechToText.downloadProgress}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {sttDownloadError && (
+                      <p className="text-sm text-rose-600 dark:text-rose-400 mt-2">
+                        {sttDownloadError}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="text-xs text-slate-500 dark:text-slate-400 p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50">
+                    <p className="font-medium text-slate-600 dark:text-slate-300 mb-1">Privacy Notice</p>
+                    <p>
+                      All speech recognition happens locally on your device. No audio data is ever sent to external servers.
+                      Models are downloaded from Hugging Face once and stored locally.
+                    </p>
+                  </div>
+                </>
+              )}
+            </SettingSection>
+            </div>
 
             <SettingSection
               title="Help"

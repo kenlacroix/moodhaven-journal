@@ -44,6 +44,7 @@ import {
   checkSidecarAvailable,
 } from '../lib/speechToTextService';
 import { verifyUserPassword } from '../lib/journalService';
+import { OuraConnectionCard } from '../components/oura/OuraConnectionCard';
 import {
   loadRateLimitState,
   recordFailedAttempt,
@@ -56,7 +57,7 @@ import {
   type RateLimitState,
 } from '../lib/rateLimitService';
 
-type SettingsTab = 'general' | 'privacy' | 'ai' | 'about';
+type SettingsTab = 'general' | 'privacy' | 'ai' | 'health' | 'about';
 
 interface TabConfig {
   id: SettingsTab;
@@ -83,6 +84,12 @@ const TABS: TabConfig[] = [
     label: 'AI Features',
     icon: 'M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z',
     keywords: ['openai', 'ollama', 'local', 'insights', 'prompts', 'wellness', 'reflections', 'api key'],
+  },
+  {
+    id: 'health',
+    label: 'Health',
+    icon: 'M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z',
+    keywords: ['oura', 'ring', 'sleep', 'readiness', 'activity', 'stress', 'heart rate', 'health', 'biometrics', 'wearable'],
   },
   {
     id: 'about',
@@ -127,6 +134,8 @@ export function SettingsPage() {
     setSTTModel,
     setSTTModelDownloaded,
     setSTTDownloadProgress,
+    setOuraEnabled,
+    setOuraSettings,
   } = useSettingsStore();
 
   const scrollToSection = useSettingsStore((s) => s.scrollToSection);
@@ -1567,6 +1576,86 @@ export function SettingsPage() {
                   )}
                 </>
               )}
+            </SettingSection>
+          </div>
+        )}
+
+        {/* Health Tab */}
+        {activeTab === 'health' && (
+          <div id="panel-health" role="tabpanel" className="space-y-6">
+            <SettingSection
+              title="Oura Ring"
+              description="Connect your Oura Ring to enrich journal writing prompts with today's sleep, readiness, and stress context. Health data stays on your device."
+            >
+              {/* Enable toggle */}
+              <SettingToggle
+                label="Enable Oura Integration"
+                description="Show health context in the writing view and optionally enrich AI prompts"
+                checked={settings.oura.enabled}
+                onChange={(v) => {
+                  setOuraEnabled(v);
+                  void saveSettings();
+                }}
+              />
+
+              {settings.oura.enabled && (
+                <div className="mt-4 space-y-4">
+                  <OuraConnectionCard
+                    onConnected={() => {
+                      setOuraSettings({ connectedAt: new Date().toISOString() });
+                      void saveSettings();
+                    }}
+                    onDisconnected={() => {
+                      setOuraSettings({ connectedAt: null, lastSyncAt: null });
+                      void saveSettings();
+                    }}
+                  />
+
+                  <SettingToggle
+                    label="Auto-sync on open"
+                    description="Fetch today's health data automatically when you open the app"
+                    checked={settings.oura.autoSyncOnOpen}
+                    onChange={(v) => {
+                      setOuraSettings({ autoSyncOnOpen: v });
+                      void saveSettings();
+                    }}
+                  />
+
+                  <SettingToggle
+                    label="Enrich writing prompts"
+                    description="Include health context when generating AI writing prompts (qualitative labels only — no raw biometrics sent)"
+                    checked={settings.oura.enrichPrompts}
+                    onChange={(v) => {
+                      setOuraSettings({ enrichPrompts: v });
+                      void saveSettings();
+                    }}
+                  />
+                </div>
+              )}
+            </SettingSection>
+
+            <SettingSection
+              title="Privacy"
+              description="How your health data is handled"
+            >
+              <div className="space-y-3 text-sm text-slate-600 dark:text-slate-400">
+                <div className="flex gap-2.5">
+                  <span className="text-emerald-500 mt-0.5">✓</span>
+                  <span>Health data is fetched directly from Oura's API and stored locally in your encrypted database</span>
+                </div>
+                <div className="flex gap-2.5">
+                  <span className="text-emerald-500 mt-0.5">✓</span>
+                  <span>When AI prompt enrichment is on, only qualitative labels are included (e.g., "user is well rested") — never raw scores or biometrics</span>
+                </div>
+                <div className="flex gap-2.5">
+                  <span className="text-emerald-500 mt-0.5">✓</span>
+                  <span>Your Personal Access Token is stored in your local database — it never leaves your device except to connect to Oura's API</span>
+                </div>
+                <div className="flex gap-2.5">
+                  <span className="text-emerald-500 mt-0.5">✓</span>
+                  <span>All health data is included in your encrypted backup when you export your journal</span>
+                </div>
+              </div>
             </SettingSection>
           </div>
         )}

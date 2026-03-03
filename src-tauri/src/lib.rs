@@ -96,6 +96,12 @@ pub fn run() {
             commands::stt_download_model,
             commands::stt_delete_model,
             commands::stt_transcribe,
+            // Oura Ring health integration
+            commands::oura_save_pat,
+            commands::oura_disconnect,
+            commands::oura_get_status,
+            commands::oura_sync_today,
+            commands::oura_get_context,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -132,6 +132,16 @@ export interface SpeechToTextSettings {
   downloadProgress: number | null; // 0-100 during download, null otherwise
 }
 
+// Oura Ring integration settings
+export interface OuraSettings {
+  enabled: boolean;
+  autoSyncOnOpen: boolean; // Sync today's data when app unlocks
+  enrichPrompts: boolean;  // Include health context in writing prompts
+  // Connection metadata (actual PAT stored in SQLite, not here)
+  connectedAt: string | null;  // ISO timestamp
+  lastSyncAt: string | null;   // ISO timestamp
+}
+
 // Complete app settings
 export interface AppSettings {
   version: string; // Settings schema version
@@ -143,6 +153,7 @@ export interface AppSettings {
   storage: StorageSettings;
   tutorial: TutorialSettings;
   speechToText: SpeechToTextSettings;
+  oura: OuraSettings;
 }
 
 // Default settings factory
@@ -213,6 +224,13 @@ export function createDefaultSettings(): AppSettings {
       model: 'base.en',
       modelDownloaded: false,
       downloadProgress: null,
+    },
+    oura: {
+      enabled: false,
+      autoSyncOnOpen: true,
+      enrichPrompts: true,
+      connectedAt: null,
+      lastSyncAt: null,
     },
   };
 }

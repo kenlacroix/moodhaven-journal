@@ -20,6 +20,8 @@ import {
   createAIServiceConfig,
 } from '../lib/aiService';
 import { useSettingsStore } from '../stores/settingsStore';
+import { getTodayContext } from '../lib/ouraService';
+import { buildHealthSummary } from './useOuraContext';
 import type { AIPrompt, RecurringPattern } from '../types/ai';
 
 function deriveNudge(patterns: RecurringPattern[]): string | null {
@@ -51,7 +53,21 @@ export function useJournalPrompts(isNewEntry: boolean) {
       if (settings.ai.enabled && settings.ai.features.contextualPrompts) {
         const llmMetadata = aggregateMetadata(entries, 30, true);
         const config = createAIServiceConfig(settings);
-        const result = await generatePrompts(config, llmMetadata, 3);
+
+        // Enrich with Oura health context if enabled (qualitative modifiers only)
+        let healthModifiers: string[] = [];
+        if (settings.oura.enabled && settings.oura.enrichPrompts) {
+          try {
+            const ctx = await getTodayContext(false); // use cache only, don't auto-sync here
+            if (ctx) {
+              healthModifiers = buildHealthSummary(ctx).promptModifiers;
+            }
+          } catch {
+            // Health enrichment is best-effort — never block prompt generation
+          }
+        }
+
+        const result = await generatePrompts(config, llmMetadata, 3, healthModifiers);
         if (result.success && result.data && result.data.length > 0) {
           setPrompts(result.data);
         } else {

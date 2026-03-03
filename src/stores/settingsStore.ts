@@ -14,6 +14,7 @@ import type {
   StorageBackend,
   WebDAVConfig,
   STTModel,
+  OuraSettings,
 } from '../types/settings';
 import { createDefaultSettings } from '../types/settings';
 import {
@@ -82,6 +83,10 @@ interface SettingsState {
   setSTTModel: (model: STTModel) => void;
   setSTTModelDownloaded: (downloaded: boolean) => void;
   setSTTDownloadProgress: (progress: number | null) => void;
+
+  // Oura Ring
+  setOuraEnabled: (enabled: boolean) => void;
+  setOuraSettings: (updates: Partial<OuraSettings>) => void;
 
   // Navigation
   setScrollToSection: (section: SettingsScrollTarget) => void;
@@ -454,6 +459,27 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         speechToText: { ...state.settings.speechToText, downloadProgress },
       },
       // Don't mark as unsaved for progress updates
+    }));
+  },
+
+  // Oura Ring
+  setOuraEnabled: (enabled) => {
+    set((state) => ({
+      settings: {
+        ...state.settings,
+        oura: { ...state.settings.oura, enabled },
+      },
+      hasUnsavedChanges: true,
+    }));
+  },
+
+  setOuraSettings: (updates) => {
+    set((state) => ({
+      settings: {
+        ...state.settings,
+        oura: { ...state.settings.oura, ...updates },
+      },
+      hasUnsavedChanges: true,
     }));
   },
 

@@ -35,7 +35,15 @@ interface AIServiceConfig {
 // PROMPT TEMPLATES
 // ============================================
 
-function buildPromptGenerationPrompt(metadata: AggregatedMetadata, count: number): string {
+function buildPromptGenerationPrompt(
+  metadata: AggregatedMetadata,
+  count: number,
+  healthModifiers: string[] = []
+): string {
+  const healthSection = healthModifiers.length > 0
+    ? `\nTODAY'S HEALTH CONTEXT (qualitative only, no raw biometrics):\n${healthModifiers.map(m => `- ${m}`).join('\n')}\n`
+    : '';
+
   return `You are a compassionate journaling assistant. Based on the user's journaling patterns (NOT their actual journal content), generate ${count} thoughtful writing prompts.
 
 USER'S JOURNALING PATTERNS (anonymized metadata only):
@@ -48,12 +56,12 @@ USER'S JOURNALING PATTERNS (anonymized metadata only):
 - Best day for journaling: ${metadata.patterns.bestDayOfWeek}
 - Gratitude mentions: ${Math.round(metadata.emotionalProfile.gratitudeFrequency * 100)}% of entries
 - Goal mentions: ${Math.round(metadata.emotionalProfile.goalsFrequency * 100)}% of entries
-
+${healthSection}
 Generate prompts that are:
-1. Relevant to their emotional patterns
+1. Relevant to their emotional patterns${healthModifiers.length > 0 ? ' and today\'s physical state' : ''}
 2. Encouraging but not dismissive of struggles
 3. Varied in category (gratitude, reflection, goals, emotions, self-care)
-
+${healthModifiers.length > 0 ? '4. Sensitive to the user\'s energy and stress levels today\n' : ''}
 Respond in JSON format:
 {
   "prompts": [
@@ -225,19 +233,21 @@ export function createAIServiceConfig(settings: AppSettings): AIServiceConfig {
 }
 
 /**
- * Generate journal prompts based on user patterns
+ * Generate journal prompts based on user patterns.
+ * healthModifiers: qualitative health labels (NOT raw biometrics) from Oura.
  */
 export async function generatePrompts(
   config: AIServiceConfig,
   metadata: AggregatedMetadata,
-  count: number = 3
+  count: number = 3,
+  healthModifiers: string[] = []
 ): Promise<AIResponse<AIPrompt[]>> {
   if (config.provider === 'none') {
     return { success: false, error: 'AI is not enabled' };
   }
 
   try {
-    const prompt = buildPromptGenerationPrompt(metadata, count);
+    const prompt = buildPromptGenerationPrompt(metadata, count, healthModifiers);
     const response = await callAI(config, prompt);
     const parsed = parseJSONResponse<{ prompts: Array<Omit<AIPrompt, 'id' | 'relevance'>> }>(response);
 

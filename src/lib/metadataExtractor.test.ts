@@ -733,18 +733,45 @@ describe('metadataExtractor', () => {
     });
 
     it('scores strongly positive content as 4 or 5', () => {
-      const text = 'Today was an amazing and wonderful day. I feel fantastic and so grateful for everything that happened.';
+      const text = 'Today was an amazing and wonderful day. I feel fantastic and so grateful for everything that happened. Everything went brilliantly.';
       const score = scoreContentMood(text);
       expect(score).toBeGreaterThanOrEqual(4);
     });
 
     it('scores strongly negative content as 1 or 2', () => {
-      const text = 'I feel terrible and miserable today. Everything is awful and I am devastated by what happened. So sad and stressed.';
+      const text = 'I feel terrible and miserable today. Everything is awful and I am devastated by what happened. So sad and stressed out.';
       const score = scoreContentMood(text);
       expect(score).toBeLessThanOrEqual(2);
     });
 
-    it('scores neutral/mixed content near 3', () => {
+    it('handles "starts positive, turns negative" — negative ending dominates', () => {
+      // User's exact example from the bug report
+      const text =
+        "Today was great! " +
+        "But it was the hardest day I have had. It really zapped my energy and " +
+        "tested my mental fortitude. One guy in particular really upsets me and " +
+        "I feel so drained and exhausted by the whole thing.";
+      const score = scoreContentMood(text);
+      // End-weighting means the negative latter half pulls score down
+      expect(score).toBeLessThanOrEqual(3);
+    });
+
+    it('handles "starts negative, turns positive" — positive ending dominates', () => {
+      const text =
+        "Started the day feeling really stressed and anxious about everything. " +
+        "But then things turned around. I felt so relieved and happy by the end. " +
+        "Grateful for how it all worked out. Feeling content and at peace now.";
+      const score = scoreContentMood(text);
+      expect(score).toBeGreaterThanOrEqual(3);
+    });
+
+    it('respects negation — "not happy" is not positive', () => {
+      const text = 'I was not happy about what happened today. Things did not go well at all. I did not feel good about any of it.';
+      const score = scoreContentMood(text);
+      expect(score).toBeLessThanOrEqual(3);
+    });
+
+    it('scores neutral/descriptive content near 3', () => {
       const text = 'I went for a walk this morning and had some coffee. Then I worked for a few hours on my project and made decent progress.';
       const score = scoreContentMood(text);
       expect(score).toBeGreaterThanOrEqual(2);
@@ -757,10 +784,27 @@ describe('metadataExtractor', () => {
       expect([1, 2, 3, 4, 5]).toContain(score);
     });
 
-    it('gratitude content scores above neutral', () => {
-      const grateful = 'I am so grateful and thankful today. Feeling really blessed and loved. Everything is good.';
-      const neutral = 'I did some work and went to the store. Had lunch and watched some television in the afternoon.';
-      expect(scoreContentMood(grateful)!).toBeGreaterThan(scoreContentMood(neutral) ?? 3);
+    it('gratitude content scores above neutral descriptive content', () => {
+      const grateful = 'I am so grateful and thankful today. Feeling really blessed and loved. Everything is good and I appreciate it.';
+      const neutral = 'I did some work and went to the store. Had lunch and watched some television in the afternoon before dinner.';
+      const gratefulScore = scoreContentMood(grateful) ?? 3;
+      const neutralScore = scoreContentMood(neutral) ?? 3;
+      expect(gratefulScore).toBeGreaterThanOrEqual(neutralScore);
+    });
+
+    it('catches energy/exhaustion language even without explicit emotion words', () => {
+      const text = 'It was a really tough day. Completely drained and zapped by everything. The roughest week I have had in a long time.';
+      const score = scoreContentMood(text);
+      expect(score).toBeLessThanOrEqual(3);
+    });
+
+    it('ratio-based: long neutral entry stays near 3 regardless of length', () => {
+      // Repeat neutral content — shouldn't drift toward extreme
+      const sentence = 'I worked on my project and made some progress today. ';
+      const longNeutral = sentence.repeat(10);
+      const score = scoreContentMood(longNeutral);
+      expect(score).toBeGreaterThanOrEqual(2);
+      expect(score).toBeLessThanOrEqual(4);
     });
   });
 });

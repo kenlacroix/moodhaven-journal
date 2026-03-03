@@ -26,58 +26,133 @@ import {
 // MOOD AUTO-SCORING (Local, runs on-device)
 // ============================================
 
-// Weighted word pools for mood scoring
-const STRONG_POSITIVE = [
+// Signal words — intentionally broad to catch natural expression
+const STRONG_POSITIVE_SIGNALS = [
   'amazing', 'fantastic', 'wonderful', 'incredible', 'ecstatic', 'thrilled',
   'euphoric', 'overjoyed', 'excellent', 'extraordinary', 'phenomenal',
-  'brilliant', 'perfect day', 'best day', 'so happy', 'so proud',
+  'brilliant', 'best day', 'so happy', 'so proud', 'absolutely love',
+  'over the moon', 'on top of the world', 'best i have', "best i've",
 ];
 
-const MODERATE_POSITIVE = [
-  'happy', 'good', 'glad', 'great', 'nice', 'enjoyed', 'pleased', 'positive',
-  'better', 'well', 'lovely', 'smile', 'fun', 'exciting', 'proud',
-  'accomplished', 'relieved', 'hopeful', 'grateful', 'thankful', 'blessed',
-  'peaceful', 'calm', 'relaxed', 'motivated', 'inspired', 'confident',
-  'loved', 'supported', 'refreshed', 'energized', 'content', 'satisfied',
+const MODERATE_POSITIVE_SIGNALS = [
+  'happy', 'good', 'glad', 'great', 'nice', 'enjoyed', 'enjoy', 'pleased',
+  'positive', 'better', 'lovely', 'smile', 'smiling', 'fun', 'exciting',
+  'excited', 'proud', 'accomplished', 'achievement', 'relieved', 'hopeful',
+  'grateful', 'thankful', 'blessed', 'appreciate', 'peaceful', 'calm',
+  'relaxed', 'motivated', 'inspired', 'confident', 'loved', 'supported',
+  'refreshed', 'energized', 'content', 'satisfied', 'uplifted', 'joyful',
+  'cheerful', 'delighted', 'thriving', 'flourishing', 'lucky', 'fortunate',
 ];
 
-const STRONG_NEGATIVE = [
+const STRONG_NEGATIVE_SIGNALS = [
   'terrible', 'awful', 'horrible', 'devastated', 'miserable', 'heartbroken',
-  'hopeless', 'worthless', 'unbearable', 'nightmare', 'catastrophe', 'despair',
-  'shattered', 'rock bottom', 'falling apart', 'hate my life', 'cannot cope',
-  "can't cope", 'giving up',
+  'hopeless', 'worthless', 'unbearable', 'nightmare', 'catastrophe',
+  'despair', 'shattered', 'rock bottom', 'falling apart', 'hate my life',
+  'cannot cope', "can't cope", "can't take it", 'breaking point', 'giving up',
+  'want to give up', 'at my wit', 'hit a wall',
 ];
 
-const MODERATE_NEGATIVE = [
-  'sad', 'bad', 'upset', 'worried', 'anxious', 'stressed', 'frustrated',
-  'angry', 'disappointed', 'hurt', 'struggling', 'hard', 'rough', 'tired',
-  'exhausted', 'depressed', 'lonely', 'scared', 'nervous', 'overwhelmed',
-  'annoyed', 'irritated', 'lost', 'confused', 'uncertain', 'drained',
-  'miserable', 'upset', 'crying', 'tears', 'hate', 'regret',
+const MODERATE_NEGATIVE_SIGNALS = [
+  // Emotional states
+  'sad', 'upset', 'worried', 'anxious', 'stressed', 'frustrated', 'angry',
+  'disappointed', 'hurt', 'depressed', 'lonely', 'scared', 'nervous',
+  'overwhelmed', 'annoyed', 'irritated', 'lost', 'confused', 'regret',
+  'guilty', 'ashamed', 'embarrassed', 'jealous', 'bitter', 'resentful',
+  'dread', 'dreading', 'afraid', 'fearful',
+  // Physical/energy signals
+  'exhausted', 'drained', 'depleted', 'zapped', 'wiped out', 'burned out',
+  'burnt out', 'run down', 'worn out', 'weary', 'fatigued', 'sluggish',
+  'lethargic', 'heavy', 'no energy',
+  // Struggle phrases
+  'struggling', 'hard day', 'tough day', 'rough day', 'hardest', 'toughest',
+  'roughest', 'difficult', 'tough', 'rough', 'challenging', 'hard time',
+  'tough time', 'rough time', 'getting to me', 'wearing me', 'takes a toll',
+  'took a toll', 'tested me', 'pushed me', 'getting worse', 'not okay',
+  "didn't go well", 'went wrong', 'went badly',
+  // Social/interpersonal negative
+  'upsets me', 'upsetting', 'bothers me', 'bothering', 'irritates me',
+  'getting on my nerves', 'conflict', 'argument', 'fight with',
+  // General negative
+  'bad', 'hate', 'crying', 'tears', 'missing', 'lost something',
+];
+
+// Negation words that flip the following signal
+const NEGATIONS = [
+  "not", "don't", "dont", "didn't", "didnt", "wasn't", "wasnt",
+  "aren't", "arent", "isn't", "isnt", "never", "hardly", "barely",
+  "couldn't", "couldnt", "wouldn't", "wouldnt", "can't", "cant",
 ];
 
 /**
- * Score the mood of a piece of text on a 1-5 scale.
- * Runs entirely on-device — used for auto-detecting entry mood in WritingView.
+ * Count how many signals from a list appear in text.
+ * Respects simple negation: if "not", "don't", etc. precede a signal word,
+ * the hit is SUBTRACTED instead (e.g. "not happy" → -1 positive hit).
  *
- * Returns null when the text is too short to score reliably (< 8 words).
+ * Returns net count (can be negative when negation dominates).
+ */
+function countSignals(text: string, signals: string[]): number {
+  let count = 0;
+  for (const signal of signals) {
+    let idx = text.indexOf(signal);
+    while (idx !== -1) {
+      // Grab the 25 chars before this match to check for negation
+      const before = text.slice(Math.max(0, idx - 25), idx).trim();
+      const lastWord = before.split(/\s+/).pop() ?? '';
+      const isNegated = NEGATIONS.includes(lastWord);
+      count += isNegated ? -1 : 1;
+      idx = text.indexOf(signal, idx + signal.length);
+    }
+  }
+  return count;
+}
+
+/**
+ * Score a block of text, returning a signed ratio in [-1, +1].
+ * Ratio-based: immune to entry length (long entries don't skew extreme).
+ */
+function scoreBlock(text: string): number {
+  const pos =
+    countSignals(text, STRONG_POSITIVE_SIGNALS) * 2 +
+    countSignals(text, MODERATE_POSITIVE_SIGNALS);
+  const neg =
+    countSignals(text, STRONG_NEGATIVE_SIGNALS) * 2 +
+    countSignals(text, MODERATE_NEGATIVE_SIGNALS);
+
+  const total = Math.abs(pos) + Math.abs(neg);
+  if (total === 0) return 0;
+  return (pos - neg) / (total + 1); // Shrink toward 0 slightly to avoid extremes
+}
+
+/**
+ * Score the emotional tone of journal text and map to MoodLevel 1-5.
+ * Runs entirely on-device.
+ *
+ * Algorithm:
+ *  - Splits text into first half and second half
+ *  - Weights second half 2× (the emotional arc / how you finish matters more)
+ *  - Ratio-based scoring within each half (immune to entry length)
+ *  - Returns null when text is too short (< 8 words) to score reliably
  */
 export function scoreContentMood(text: string): MoodLevel | null {
-  const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
-  if (wordCount < 8) return null;
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  if (words.length < 8) return null;
 
   const lower = text.toLowerCase();
-  let score = 0;
 
-  for (const w of STRONG_POSITIVE)   { if (lower.includes(w)) score += 2; }
-  for (const w of MODERATE_POSITIVE) { if (lower.includes(w)) score += 1; }
-  for (const w of STRONG_NEGATIVE)   { if (lower.includes(w)) score -= 2; }
-  for (const w of MODERATE_NEGATIVE) { if (lower.includes(w)) score -= 1; }
+  // Split at midpoint — latter half weighted 2× (emotional arc)
+  const mid = Math.floor(lower.length / 2);
+  const firstHalf = lower.slice(0, mid);
+  const secondHalf = lower.slice(mid);
 
-  // Clamp raw score to [-8, +8] then map to 1-5
-  const clamped = Math.max(-8, Math.min(8, score));
-  const normalized = 3 + clamped / 4;
-  return Math.max(1, Math.min(5, Math.round(normalized))) as MoodLevel;
+  const firstScore  = scoreBlock(firstHalf);
+  const secondScore = scoreBlock(secondHalf);
+
+  // Weighted blend: 33% first half, 67% second half
+  const blended = firstScore * 0.33 + secondScore * 0.67;
+
+  // Map [-1, +1] → [1, 5], centered at 3
+  const raw = 3 + blended * 2.5;
+  return Math.max(1, Math.min(5, Math.round(raw))) as MoodLevel;
 }
 
 /**

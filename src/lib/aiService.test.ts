@@ -209,9 +209,11 @@ describe('aiService', () => {
       expect(prompts).toHaveLength(3);
     });
 
-    it('returns at most 5 prompts', () => {
-      const prompts = getFallbackPrompts(10);
-      expect(prompts).toHaveLength(5);
+    it('returns at most pool-size prompts', () => {
+      // Pool now contains 12 prompts (expanded for the drawer gallery)
+      const prompts = getFallbackPrompts(20);
+      expect(prompts.length).toBeLessThanOrEqual(12);
+      expect(prompts.length).toBeGreaterThan(0);
     });
 
     it('each prompt has required fields', () => {

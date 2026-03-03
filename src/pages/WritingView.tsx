@@ -17,8 +17,9 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { saveEntry, getEntryById } from '../lib/journalService';
 import { RichTextEditor } from '../components/editor';
 import { MoodDotPicker } from '../components/editor/MoodDotPicker';
-import { PromptSuggestions } from '../components/ai/PromptSuggestions';
+import { PromptDrawer } from '../components/ai/PromptDrawer';
 import { useJournalPrompts } from '../hooks/useJournalPrompts';
+import { useSettingsStore } from '../stores/settingsStore';
 import { useOuraContext } from '../hooks/useOuraContext';
 import { HealthContextBadge } from '../components/oura/HealthContextBadge';
 import { scoreContentMood } from '../lib/metadataExtractor';
@@ -74,8 +75,21 @@ export function WritingView({ entryId, onEntrySaved, onNavigateToSTTSettings }: 
   const agoIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const moodScoreTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const setShowPrompts = useSettingsStore((s) => s.setShowPrompts);
+  const showPrompts = useSettingsStore((s) => s.settings.journal.showPrompts);
+
   const isNewEntry = !entryId;
-  const { prompts, nudge, isLoading: promptsLoading, isAIEnabled, dismissPrompt, refresh: refreshPrompts } = useJournalPrompts(isNewEntry);
+  const {
+    forYouPrompts,
+    generalPrompts,
+    healthPrompts,
+    nudge,
+    isLoading: promptsLoading,
+    isAIEnabled,
+    hasNewPrompts,
+    refresh: refreshPrompts,
+  } = useJournalPrompts(isNewEntry);
   const { summary: healthSummary, isSyncing: healthSyncing, isEnabled: ouraEnabled, refresh: refreshHealth } = useOuraContext();
 
   // Load existing entry if editing
@@ -201,8 +215,8 @@ export function WritingView({ entryId, onEntrySaved, onNavigateToSTTSettings }: 
   }, []);
 
   // Insert a prompt into the editor
-  const handleUsePrompt = useCallback((text: string) => {
-    setPendingInsert(text + '\n\n');
+  const handleUsePrompt = useCallback((prompt: { text: string }) => {
+    setPendingInsert(prompt.text + '\n\n');
   }, []);
 
   return (
@@ -247,18 +261,6 @@ export function WritingView({ entryId, onEntrySaved, onNavigateToSTTSettings }: 
                 isSyncing={healthSyncing}
               />
             </div>
-          )}
-
-          {/* Writing prompts - new entries only */}
-          {isNewEntry && (
-            <PromptSuggestions
-              prompts={prompts}
-              isLoading={promptsLoading}
-              isAIEnabled={isAIEnabled}
-              onUsePrompt={(p) => handleUsePrompt(p.text)}
-              onDismissPrompt={dismissPrompt}
-              onRefresh={refreshPrompts}
-            />
           )}
 
           {/* Editor surface with subtle contrast - lifts on focus */}
@@ -325,6 +327,24 @@ export function WritingView({ entryId, onEntrySaved, onNavigateToSTTSettings }: 
                 wordCount={contentText.trim().split(/\s+/).filter(Boolean).length}
                 onChange={(m) => { setMood(m); setMoodIsAuto(false); }}
               />
+
+              {/* Prompt drawer trigger — only for new entries when prompts enabled */}
+              {isNewEntry && showPrompts && (
+                <button
+                  type="button"
+                  onClick={() => setDrawerOpen(true)}
+                  title="Writing prompts"
+                  className="relative text-slate-400 dark:text-slate-500 hover:text-violet-500 dark:hover:text-violet-400 transition-colors"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 18v-5.25m0 0a6.01 6.01 0 001.5-.189m-1.5.189a6.01 6.01 0 01-1.5-.189m3.75 7.478a12.06 12.06 0 01-4.5 0m3.75 2.383a14.406 14.406 0 01-3 0M14.25 18v-.192c0-.983.658-1.823 1.508-2.316a7.5 7.5 0 10-7.517 0c.85.493 1.509 1.333 1.509 2.316V18" />
+                  </svg>
+                  {/* Badge dot: visible when new prompts loaded and drawer is closed */}
+                  {hasNewPrompts && !drawerOpen && (
+                    <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-violet-500" />
+                  )}
+                </button>
+              )}
             </div>
 
             {/* Word count - pinned center */}
@@ -359,6 +379,22 @@ export function WritingView({ entryId, onEntrySaved, onNavigateToSTTSettings }: 
           </div>
         </div>
       </div>
+
+      {/* Prompt drawer — slide-up panel, only for new entries */}
+      {isNewEntry && showPrompts && (
+        <PromptDrawer
+          isOpen={drawerOpen}
+          onClose={() => setDrawerOpen(false)}
+          forYouPrompts={forYouPrompts}
+          generalPrompts={generalPrompts}
+          healthPrompts={healthPrompts}
+          isLoading={promptsLoading}
+          isAIEnabled={isAIEnabled}
+          onUsePrompt={handleUsePrompt}
+          onRefresh={refreshPrompts}
+          onDisablePrompts={() => setShowPrompts(false)}
+        />
+      )}
     </div>
   );
 }

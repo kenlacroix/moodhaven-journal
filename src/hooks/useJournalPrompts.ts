@@ -1,12 +1,16 @@
 /**
  * useJournalPrompts
  *
- * Loads AI-generated (or fallback) writing prompts and a local pattern nudge
- * for the writing view. Fires once on mount for new entries.
+ * Loads writing prompts for the PromptDrawer. Fires once on mount for new entries.
+ *
+ * Returns three separate arrays for the drawer's tab system:
+ *   forYouPrompts  — AI-personalised (or smart fallback when AI is off)
+ *   generalPrompts — always-local, all categories, never requires AI
+ *   healthPrompts  — locally generated from Oura context (empty if no data / < 3 days)
  *
  * Privacy contract:
- * - Fallback prompts are always purely local (no network)
- * - AI prompts only use aggregated metadata with forLLM=true (Open entries only)
+ * - generalPrompts and healthPrompts are always purely local (no network)
+ * - forYouPrompts only calls the AI API with aggregated metadata (Open entries only)
  * - The actual journal text never leaves the device
  */
 
@@ -16,12 +20,13 @@ import { aggregateMetadata } from '../lib/metadataExtractor';
 import {
   generatePrompts,
   getFallbackPrompts,
+  buildHealthContextPrompts,
   detectRecurringPatterns,
   createAIServiceConfig,
 } from '../lib/aiService';
 import { useSettingsStore } from '../stores/settingsStore';
-import { getTodayContext } from '../lib/ouraService';
-import { buildHealthSummary } from './useOuraContext';
+import { getHistory } from '../lib/ouraService';
+import { buildMergedContext } from './useOuraContext';
 import type { AIPrompt, RecurringPattern } from '../types/ai';
 
 function deriveNudge(patterns: RecurringPattern[]): string | null {
@@ -33,9 +38,13 @@ function deriveNudge(patterns: RecurringPattern[]): string | null {
 
 export function useJournalPrompts(isNewEntry: boolean) {
   const settings = useSettingsStore((s) => s.settings);
-  const [prompts, setPrompts] = useState<AIPrompt[]>([]);
+
+  const [forYouPrompts, setForYouPrompts] = useState<AIPrompt[]>([]);
+  const [generalPrompts, setGeneralPrompts] = useState<AIPrompt[]>([]);
+  const [healthPrompts, setHealthPrompts] = useState<AIPrompt[]>([]);
   const [nudge, setNudge] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [hasNewPrompts, setHasNewPrompts] = useState(false);
 
   const load = useCallback(async () => {
     if (!isNewEntry || !settings.journal.showPrompts) return;
@@ -44,40 +53,46 @@ export function useJournalPrompts(isNewEntry: boolean) {
     try {
       const entries = await getAllEntries();
 
-      // Local pattern nudge — uses local entries only (privacyMode < 2)
+      // Local pattern nudge (privacy-safe, uses all entries)
       const localMetadata = aggregateMetadata(entries, 30, false);
       const patterns = detectRecurringPatterns(localMetadata);
       setNudge(deriveNudge(patterns));
 
-      // Prompts — AI if enabled, fallback otherwise
+      // ── General prompts ── always local, all categories, no AI needed
+      setGeneralPrompts(getFallbackPrompts(6));
+
+      // ── For You prompts ── AI if enabled, otherwise smart fallback
       if (settings.ai.enabled && settings.ai.features.contextualPrompts) {
         const llmMetadata = aggregateMetadata(entries, 30, true);
         const config = createAIServiceConfig(settings);
-
-        // Enrich with Oura health context if enabled (qualitative modifiers only)
-        let healthModifiers: string[] = [];
-        if (settings.oura.enabled && settings.oura.enrichPrompts) {
-          try {
-            const ctx = await getTodayContext(false); // use cache only, don't auto-sync here
-            if (ctx) {
-              healthModifiers = buildHealthSummary(ctx).promptModifiers;
-            }
-          } catch {
-            // Health enrichment is best-effort — never block prompt generation
-          }
-        }
-
-        const result = await generatePrompts(config, llmMetadata, 3, healthModifiers);
+        const result = await generatePrompts(config, llmMetadata, 4, []);
         if (result.success && result.data && result.data.length > 0) {
-          setPrompts(result.data);
+          setForYouPrompts(result.data);
         } else {
-          setPrompts(getFallbackPrompts(3));
+          setForYouPrompts(getFallbackPrompts(4));
         }
       } else {
-        setPrompts(getFallbackPrompts(3));
+        setForYouPrompts(getFallbackPrompts(4));
       }
+
+      // ── Health prompts ── locally generated from Oura cache (no API call)
+      if (settings.oura.enabled && settings.oura.enrichPrompts) {
+        try {
+          const history = await getHistory(7);
+          const merged = buildMergedContext(history);
+          if (merged) {
+            const hp = buildHealthContextPrompts(merged, history.length);
+            setHealthPrompts(hp);
+          }
+        } catch {
+          // Non-critical — health prompts are best-effort
+        }
+      }
+
+      setHasNewPrompts(true);
     } catch {
-      setPrompts(getFallbackPrompts(3));
+      setForYouPrompts(getFallbackPrompts(4));
+      setGeneralPrompts(getFallbackPrompts(6));
     } finally {
       setIsLoading(false);
     }
@@ -87,21 +102,22 @@ export function useJournalPrompts(isNewEntry: boolean) {
     void load();
   }, [load]);
 
-  const dismissPrompt = useCallback((id: string) => {
-    setPrompts((prev) => prev.filter((p) => p.id !== id));
-  }, []);
-
   const refresh = useCallback(() => {
-    setPrompts([]);
+    setForYouPrompts([]);
+    setGeneralPrompts([]);
+    setHealthPrompts([]);
+    setHasNewPrompts(false);
     void load();
   }, [load]);
 
   return {
-    prompts,
+    forYouPrompts,
+    generalPrompts,
+    healthPrompts,
     nudge,
     isLoading,
     isAIEnabled: settings.ai.enabled,
-    dismissPrompt,
+    hasNewPrompts,
     refresh,
   };
 }

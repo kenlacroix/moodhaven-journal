@@ -424,6 +424,7 @@ export function detectRecurringPatterns(metadata: AggregatedMetadata): Recurring
 // ============================================
 
 const FALLBACK_PROMPTS: AIPrompt[] = [
+  // Gratitude
   {
     id: 'fallback-1',
     text: 'What are three things you\'re grateful for today, no matter how small?',
@@ -432,12 +433,28 @@ const FALLBACK_PROMPTS: AIPrompt[] = [
     relevance: 0.9,
   },
   {
+    id: 'fallback-g2',
+    text: 'Who made a positive difference in your life recently, and what did they do?',
+    category: 'gratitude',
+    reasoning: 'Recognizing others deepens connection and appreciation.',
+    relevance: 0.8,
+  },
+  // Reflection
+  {
     id: 'fallback-2',
     text: 'If you could give your future self one piece of advice, what would it be?',
     category: 'reflection',
     reasoning: 'Self-reflection helps build self-awareness.',
     relevance: 0.8,
   },
+  {
+    id: 'fallback-r2',
+    text: 'What did today teach you that yesterday didn\'t?',
+    category: 'reflection',
+    reasoning: 'Daily reflection surfaces small but meaningful growth.',
+    relevance: 0.75,
+  },
+  // Goals
   {
     id: 'fallback-3',
     text: 'What\'s one small step you can take today toward something you care about?',
@@ -446,6 +463,14 @@ const FALLBACK_PROMPTS: AIPrompt[] = [
     relevance: 0.7,
   },
   {
+    id: 'fallback-go2',
+    text: 'What would a "good enough" version of your day look like right now?',
+    category: 'goals',
+    reasoning: 'Reframing goals as achievable reduces pressure.',
+    relevance: 0.7,
+  },
+  // Emotions
+  {
     id: 'fallback-4',
     text: 'How are you really feeling right now? Take a moment to check in with yourself.',
     category: 'emotions',
@@ -453,16 +478,138 @@ const FALLBACK_PROMPTS: AIPrompt[] = [
     relevance: 0.85,
   },
   {
+    id: 'fallback-e2',
+    text: 'What emotion has been most present for you today, and where do you feel it in your body?',
+    category: 'emotions',
+    reasoning: 'Linking emotions to physical sensations builds somatic awareness.',
+    relevance: 0.8,
+  },
+  // Self-care
+  {
     id: 'fallback-5',
     text: 'What brought you a moment of peace or joy recently?',
     category: 'self-care',
     reasoning: 'Recognizing positive moments builds resilience.',
     relevance: 0.75,
   },
+  {
+    id: 'fallback-sc2',
+    text: 'What does your body or mind need most from you right now?',
+    category: 'self-care',
+    reasoning: 'Checking in with physical and mental needs promotes self-compassion.',
+    relevance: 0.8,
+  },
+  // Exploration
+  {
+    id: 'fallback-ex1',
+    text: 'If this chapter of your life had a title, what would it be?',
+    category: 'exploration',
+    reasoning: 'Narrative framing helps give meaning to experience.',
+    relevance: 0.7,
+  },
+  {
+    id: 'fallback-ex2',
+    text: 'What\'s something you\'ve been avoiding thinking about? What would happen if you faced it on the page?',
+    category: 'exploration',
+    reasoning: 'Journaling is a safe space to explore difficult thoughts.',
+    relevance: 0.75,
+  },
 ];
 
 export function getFallbackPrompts(count: number = 3): AIPrompt[] {
-  // Shuffle and return requested count
   const shuffled = [...FALLBACK_PROMPTS].sort(() => Math.random() - 0.5);
   return shuffled.slice(0, count);
+}
+
+/**
+ * Build health-context prompts from Oura data — runs entirely locally,
+ * no AI call required. Returns 1-3 prompts based on what data is available.
+ * Requires at least 3 days of history before surfacing prompts.
+ */
+export function buildHealthContextPrompts(
+  ctx: {
+    sleepScore?: number | null;
+    readinessScore?: number | null;
+    stressSummary?: string | null;
+    activityScore?: number | null;
+  },
+  historyDepth: number
+): AIPrompt[] {
+  if (historyDepth < 3) return [];
+
+  const prompts: AIPrompt[] = [];
+
+  // Sleep-based
+  if (ctx.sleepScore != null) {
+    if (ctx.sleepScore < 70) {
+      prompts.push({
+        id: 'health-sleep-poor',
+        text: 'What helps you restore your energy on days when rest has been hard to come by?',
+        category: 'self-care',
+        reasoning: `Sleep score ${ctx.sleepScore} — below optimal range`,
+        relevance: 0.9,
+      });
+    } else if (ctx.sleepScore >= 85) {
+      prompts.push({
+        id: 'health-sleep-great',
+        text: 'You\'re well-rested today. What would you like to make of this energy?',
+        category: 'goals',
+        reasoning: `Sleep score ${ctx.sleepScore} — a great night`,
+        relevance: 0.9,
+      });
+    }
+  }
+
+  // Stress-based (from yesterday's finalized data)
+  if (ctx.stressSummary === 'stressful' || ctx.stressSummary === 'demanding') {
+    prompts.push({
+      id: 'health-stress-elevated',
+      text: 'What\'s been weighing on you most lately, and what would it mean to set a little of it down?',
+      category: 'emotions',
+      reasoning: 'Stress levels have been elevated recently',
+      relevance: 0.85,
+    });
+  } else if (ctx.stressSummary === 'restored') {
+    prompts.push({
+      id: 'health-stress-restored',
+      text: 'Your body is in recovery mode today. What\'s been helping you feel restored?',
+      category: 'reflection',
+      reasoning: 'Recovery data shows you\'re in a good state',
+      relevance: 0.8,
+    });
+  }
+
+  // Readiness-based (fallback when no sleep/stress data)
+  if (prompts.length === 0 && ctx.readinessScore != null) {
+    if (ctx.readinessScore < 70) {
+      prompts.push({
+        id: 'health-readiness-low',
+        text: 'What\'s one small, kind thing you could do for yourself today?',
+        category: 'self-care',
+        reasoning: 'Readiness is low — your body may need extra care',
+        relevance: 0.8,
+      });
+    } else if (ctx.readinessScore >= 85) {
+      prompts.push({
+        id: 'health-readiness-high',
+        text: 'You\'re feeling ready today. What intention would you like to carry into the day?',
+        category: 'goals',
+        reasoning: `Readiness score ${ctx.readinessScore} — you\'re primed`,
+        relevance: 0.8,
+      });
+    }
+  }
+
+  // Trend prompt if 7+ days available
+  if (historyDepth >= 7 && prompts.length < 3) {
+    prompts.push({
+      id: 'health-trend-reflect',
+      text: 'Looking back over the past week, what patterns do you notice in how you\'ve been feeling?',
+      category: 'reflection',
+      reasoning: '7-day history available — a good time to look for patterns',
+      relevance: 0.75,
+    });
+  }
+
+  return prompts.slice(0, 3);
 }

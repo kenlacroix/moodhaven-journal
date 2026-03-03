@@ -36,8 +36,9 @@ import type { OuraHealthContext, OuraHealthSummary, OuraHealthBadge } from '../t
 /**
  * Build a merged context from a 7-day history.
  * Takes sleep/readiness/SpO2 from today, activity/stress from yesterday.
+ * Exported so useJournalPrompts can build health prompts from the same cache.
  */
-function buildMergedContext(history: OuraHealthContext[]): OuraHealthContext | null {
+export function buildMergedContext(history: OuraHealthContext[]): OuraHealthContext | null {
   if (history.length === 0) return null;
 
   const today = new Date().toISOString().slice(0, 10);

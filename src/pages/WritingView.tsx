@@ -16,11 +16,13 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { saveEntry, getEntryById } from '../lib/journalService';
 import { RichTextEditor } from '../components/editor';
+import { MoodDotPicker } from '../components/editor/MoodDotPicker';
 import { PromptSuggestions } from '../components/ai/PromptSuggestions';
 import { useJournalPrompts } from '../hooks/useJournalPrompts';
 import { useOuraContext } from '../hooks/useOuraContext';
 import { HealthContextBadge } from '../components/oura/HealthContextBadge';
-import type { PrivacyMode } from '../types/journal';
+import { scoreContentMood } from '../lib/metadataExtractor';
+import type { MoodLevel, PrivacyMode } from '../types/journal';
 import { PRIVACY_MODE_LABELS, PRIVACY_MODE_DESCRIPTIONS } from '../types/journal';
 
 interface WritingViewProps {
@@ -65,8 +67,12 @@ export function WritingView({ entryId, onEntrySaved, onNavigateToSTTSettings }: 
   const [isEditorFocused, setIsEditorFocused] = useState(false);
   const [nudgeDismissed, setNudgeDismissed] = useState(false);
   const [pendingInsert, setPendingInsert] = useState<string | null>(null);
+  // Mood auto-detection
+  const [mood, setMood] = useState<MoodLevel | null>(null);
+  const [moodIsAuto, setMoodIsAuto] = useState(true); // false = user manually set
   const autoSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const agoIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const moodScoreTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isNewEntry = !entryId;
   const { prompts, nudge, isLoading: promptsLoading, isAIEnabled, dismissPrompt, refresh: refreshPrompts } = useJournalPrompts(isNewEntry);
@@ -81,14 +87,19 @@ export function WritingView({ entryId, onEntrySaved, onNavigateToSTTSettings }: 
           setContent(entry.content);
           setContentText(entry.content);
           setPrivacyMode(entry.privacyMode ?? 0);
+          if (entry.mood) { setMood(entry.mood); setMoodIsAuto(false); }
         }
       });
     }
   }, [entryId]);
 
-  // Reset nudge dismissal when switching to a new entry
+  // Reset nudge dismissal and mood when switching to a new entry
   useEffect(() => {
-    if (isNewEntry) setNudgeDismissed(false);
+    if (isNewEntry) {
+      setNudgeDismissed(false);
+      setMood(null);
+      setMoodIsAuto(true);
+    }
   }, [isNewEntry]);
 
   // Cleanup timeouts and intervals
@@ -96,8 +107,19 @@ export function WritingView({ entryId, onEntrySaved, onNavigateToSTTSettings }: 
     return () => {
       if (autoSaveTimeoutRef.current) clearTimeout(autoSaveTimeoutRef.current);
       if (agoIntervalRef.current) clearInterval(agoIntervalRef.current);
+      if (moodScoreTimeoutRef.current) clearTimeout(moodScoreTimeoutRef.current);
     };
   }, []);
+
+  // Auto-score mood from content (only when user hasn't manually set it)
+  useEffect(() => {
+    if (!moodIsAuto) return; // Don't override user's choice
+    if (moodScoreTimeoutRef.current) clearTimeout(moodScoreTimeoutRef.current);
+    moodScoreTimeoutRef.current = setTimeout(() => {
+      const scored = scoreContentMood(contentText);
+      if (scored !== null) setMood(scored);
+    }, 1500); // 1.5s after typing stops
+  }, [contentText, moodIsAuto]);
 
   // Update "saved X ago" text every 10 seconds
   useEffect(() => {
@@ -139,6 +161,7 @@ export function WritingView({ entryId, onEntrySaved, onNavigateToSTTSettings }: 
         id: entryId || undefined,
         title: title || undefined,
         content: contentText,
+        mood: mood ?? undefined,
         privacyMode,
       })
         .then(() => {
@@ -275,7 +298,7 @@ export function WritingView({ entryId, onEntrySaved, onNavigateToSTTSettings }: 
 
           {/* Bottom status bar - encryption badge + privacy mode + word count + save indicator */}
           <div className="flex items-center mt-3 px-1">
-            {/* Encryption + Privacy mode - pinned left */}
+            {/* Encryption + Privacy mode + Mood picker - pinned left */}
             <div className="flex-1 flex items-center gap-3">
               <div className="flex items-center gap-1.5 text-xs text-slate-400 dark:text-slate-500">
                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -294,6 +317,14 @@ export function WritingView({ entryId, onEntrySaved, onNavigateToSTTSettings }: 
                 {PRIVACY_ICONS[privacyMode]}
                 <span>{PRIVACY_MODE_LABELS[privacyMode]}</span>
               </button>
+
+              {/* Mood dot picker — auto-scored, single-click to override */}
+              <MoodDotPicker
+                mood={mood}
+                isAutoDetected={moodIsAuto}
+                wordCount={contentText.trim().split(/\s+/).filter(Boolean).length}
+                onChange={(m) => { setMood(m); setMoodIsAuto(false); }}
+              />
             </div>
 
             {/* Word count - pinned center */}

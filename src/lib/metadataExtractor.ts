@@ -22,6 +22,64 @@ import {
   QUESTION_PATTERNS,
 } from '../types/ai';
 
+// ============================================
+// MOOD AUTO-SCORING (Local, runs on-device)
+// ============================================
+
+// Weighted word pools for mood scoring
+const STRONG_POSITIVE = [
+  'amazing', 'fantastic', 'wonderful', 'incredible', 'ecstatic', 'thrilled',
+  'euphoric', 'overjoyed', 'excellent', 'extraordinary', 'phenomenal',
+  'brilliant', 'perfect day', 'best day', 'so happy', 'so proud',
+];
+
+const MODERATE_POSITIVE = [
+  'happy', 'good', 'glad', 'great', 'nice', 'enjoyed', 'pleased', 'positive',
+  'better', 'well', 'lovely', 'smile', 'fun', 'exciting', 'proud',
+  'accomplished', 'relieved', 'hopeful', 'grateful', 'thankful', 'blessed',
+  'peaceful', 'calm', 'relaxed', 'motivated', 'inspired', 'confident',
+  'loved', 'supported', 'refreshed', 'energized', 'content', 'satisfied',
+];
+
+const STRONG_NEGATIVE = [
+  'terrible', 'awful', 'horrible', 'devastated', 'miserable', 'heartbroken',
+  'hopeless', 'worthless', 'unbearable', 'nightmare', 'catastrophe', 'despair',
+  'shattered', 'rock bottom', 'falling apart', 'hate my life', 'cannot cope',
+  "can't cope", 'giving up',
+];
+
+const MODERATE_NEGATIVE = [
+  'sad', 'bad', 'upset', 'worried', 'anxious', 'stressed', 'frustrated',
+  'angry', 'disappointed', 'hurt', 'struggling', 'hard', 'rough', 'tired',
+  'exhausted', 'depressed', 'lonely', 'scared', 'nervous', 'overwhelmed',
+  'annoyed', 'irritated', 'lost', 'confused', 'uncertain', 'drained',
+  'miserable', 'upset', 'crying', 'tears', 'hate', 'regret',
+];
+
+/**
+ * Score the mood of a piece of text on a 1-5 scale.
+ * Runs entirely on-device — used for auto-detecting entry mood in WritingView.
+ *
+ * Returns null when the text is too short to score reliably (< 8 words).
+ */
+export function scoreContentMood(text: string): MoodLevel | null {
+  const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
+  if (wordCount < 8) return null;
+
+  const lower = text.toLowerCase();
+  let score = 0;
+
+  for (const w of STRONG_POSITIVE)   { if (lower.includes(w)) score += 2; }
+  for (const w of MODERATE_POSITIVE) { if (lower.includes(w)) score += 1; }
+  for (const w of STRONG_NEGATIVE)   { if (lower.includes(w)) score -= 2; }
+  for (const w of MODERATE_NEGATIVE) { if (lower.includes(w)) score -= 1; }
+
+  // Clamp raw score to [-8, +8] then map to 1-5
+  const clamped = Math.max(-8, Math.min(8, score));
+  const normalized = 3 + clamped / 4;
+  return Math.max(1, Math.min(5, Math.round(normalized))) as MoodLevel;
+}
+
 /**
  * Extract metadata from a single journal entry
  * This runs entirely on the user's device

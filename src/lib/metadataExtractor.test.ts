@@ -1,4 +1,4 @@
-import { extractEntryMetadata, aggregateMetadata, calculateGratitudeStreak } from './metadataExtractor';
+import { extractEntryMetadata, aggregateMetadata, calculateGratitudeStreak, scoreContentMood } from './metadataExtractor';
 import type { JournalEntry, MoodLevel } from '../types/journal';
 
 /**
@@ -720,6 +720,47 @@ describe('metadataExtractor', () => {
       ];
       const result = calculateGratitudeStreak(entries);
       expect(result.currentStreak).toBeGreaterThanOrEqual(2);
+    });
+  });
+
+  // ============================================================
+  // scoreContentMood
+  // ============================================================
+  describe('scoreContentMood', () => {
+    it('returns null for very short text (< 8 words)', () => {
+      expect(scoreContentMood('short')).toBeNull();
+      expect(scoreContentMood('only a few words here')).toBeNull();
+    });
+
+    it('scores strongly positive content as 4 or 5', () => {
+      const text = 'Today was an amazing and wonderful day. I feel fantastic and so grateful for everything that happened.';
+      const score = scoreContentMood(text);
+      expect(score).toBeGreaterThanOrEqual(4);
+    });
+
+    it('scores strongly negative content as 1 or 2', () => {
+      const text = 'I feel terrible and miserable today. Everything is awful and I am devastated by what happened. So sad and stressed.';
+      const score = scoreContentMood(text);
+      expect(score).toBeLessThanOrEqual(2);
+    });
+
+    it('scores neutral/mixed content near 3', () => {
+      const text = 'I went for a walk this morning and had some coffee. Then I worked for a few hours on my project and made decent progress.';
+      const score = scoreContentMood(text);
+      expect(score).toBeGreaterThanOrEqual(2);
+      expect(score).toBeLessThanOrEqual(4);
+    });
+
+    it('returns a valid MoodLevel (1-5)', () => {
+      const text = 'I am happy and grateful for everything in my life today, feeling really good about how things are going.';
+      const score = scoreContentMood(text);
+      expect([1, 2, 3, 4, 5]).toContain(score);
+    });
+
+    it('gratitude content scores above neutral', () => {
+      const grateful = 'I am so grateful and thankful today. Feeling really blessed and loved. Everything is good.';
+      const neutral = 'I did some work and went to the store. Had lunch and watched some television in the afternoon.';
+      expect(scoreContentMood(grateful)!).toBeGreaterThan(scoreContentMood(neutral) ?? 3);
     });
   });
 });

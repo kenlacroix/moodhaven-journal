@@ -102,6 +102,8 @@ pub fn run() {
             commands::oura_get_status,
             commands::oura_sync_today,
             commands::oura_get_context,
+            commands::oura_get_history,
+            commands::oura_backfill,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

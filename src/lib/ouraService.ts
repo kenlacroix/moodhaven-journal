@@ -46,3 +46,13 @@ export async function getTodayContext(autoSync = true): Promise<OuraHealthContex
     return null;
   }
 }
+
+/** Get last N days of cached health contexts, sorted ascending by date */
+export async function getHistory(days: number): Promise<OuraHealthContext[]> {
+  return invoke<OuraHealthContext[]>('oura_get_history', { days });
+}
+
+/** Fetch and cache health data for the last N days. Returns count of newly fetched days. */
+export async function backfill(days: number): Promise<number> {
+  return invoke<number>('oura_backfill', { days });
+}

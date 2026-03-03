@@ -6,7 +6,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { savePAT, disconnect, getStatus, syncToday } from '../../lib/ouraService';
+import { savePAT, disconnect, getStatus, syncToday, backfill } from '../../lib/ouraService';
 import type { OuraStatusResponse } from '../../types/oura';
 
 interface OuraConnectionCardProps {
@@ -39,10 +39,12 @@ export function OuraConnectionCard({ onConnected, onDisconnected }: OuraConnecti
     setIsSaving(true);
     try {
       await savePAT(pat.trim());
+      // Prime the 7-day history so trend-aware prompts work immediately
+      try { await backfill(7); } catch { /* non-critical */ }
       const newStatus = await getStatus();
       setStatus(newStatus);
       setPat('');
-      setSuccessMsg('Connected successfully!');
+      setSuccessMsg('Connected! Loading 7-day history complete.');
       onConnected?.();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to connect');

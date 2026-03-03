@@ -20,8 +20,6 @@ import { MoodDotPicker } from '../components/editor/MoodDotPicker';
 import { PromptDrawer } from '../components/ai/PromptDrawer';
 import { useJournalPrompts } from '../hooks/useJournalPrompts';
 import { useSettingsStore } from '../stores/settingsStore';
-import { useOuraContext } from '../hooks/useOuraContext';
-import { HealthContextBadge } from '../components/oura/HealthContextBadge';
 import { scoreContentMood } from '../lib/metadataExtractor';
 import type { MoodLevel, PrivacyMode } from '../types/journal';
 import { PRIVACY_MODE_LABELS, PRIVACY_MODE_DESCRIPTIONS } from '../types/journal';
@@ -90,8 +88,6 @@ export function WritingView({ entryId, onEntrySaved, onNavigateToSTTSettings }: 
     hasNewPrompts,
     refresh: refreshPrompts,
   } = useJournalPrompts(isNewEntry);
-  const { summary: healthSummary, isSyncing: healthSyncing, isEnabled: ouraEnabled, refresh: refreshHealth } = useOuraContext();
-
   // Load existing entry if editing
   useEffect(() => {
     if (entryId) {
@@ -249,17 +245,6 @@ export function WritingView({ entryId, onEntrySaved, onNavigateToSTTSettings }: 
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
-            </div>
-          )}
-
-          {/* Oura health context badge - new entries only, when connected */}
-          {isNewEntry && ouraEnabled && healthSummary && (
-            <div className="mb-3">
-              <HealthContextBadge
-                summary={healthSummary}
-                onRefresh={refreshHealth}
-                isSyncing={healthSyncing}
-              />
             </div>
           )}
 

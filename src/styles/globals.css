@@ -125,6 +125,14 @@
     @apply transition-colors duration-200;
   }
 
+  /* Writing view ambient background gradient */
+  .writing-bg {
+    background: radial-gradient(ellipse 130% 60% at 50% 0%, #f5f3ff 0%, #f8fafc 55%);
+  }
+  .dark .writing-bg {
+    background: radial-gradient(ellipse 130% 60% at 50% 0%, #1e1b2e 0%, #020617 55%);
+  }
+
   /* Hide scrollbar utility */
   .scrollbar-hide {
     -ms-overflow-style: none;

@@ -44,7 +44,7 @@ interface RichTextEditorProps {
 export function RichTextEditor({
   value,
   onChange,
-  placeholder = 'Start writing...',
+  placeholder = 'Start writing — there are no rules here.',
   autoFocus = false,
   className = '',
   onOpenContextMenu,
@@ -108,7 +108,7 @@ export function RichTextEditor({
     autofocus: autoFocus ? 'end' : false,
     editorProps: {
       attributes: {
-        class: 'outline-none min-h-full text-lg leading-relaxed text-slate-700 dark:text-slate-200',
+        class: 'outline-none min-h-full text-lg leading-[1.8] text-slate-700 dark:text-slate-200',
       },
     },
     onUpdate: ({ editor }) => {
@@ -391,7 +391,7 @@ export function RichTextEditor({
 
         /* Paragraph spacing */
         .ProseMirror p {
-          margin: 0.25em 0;
+          margin: 0.75em 0;
         }
 
         /* Headings */

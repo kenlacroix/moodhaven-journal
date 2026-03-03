@@ -90,6 +90,10 @@ interface SettingsState {
 
   // Navigation
   setScrollToSection: (section: SettingsScrollTarget) => void;
+
+  // Session UI (not persisted)
+  distractionFree: boolean;
+  setDistractionFree: (v: boolean) => void;
 }
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({
@@ -99,6 +103,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   error: null,
   hasUnsavedChanges: false,
   scrollToSection: null,
+  distractionFree: false,
 
   loadSettings: async () => {
     set({ isLoading: true, error: null });
@@ -487,6 +492,9 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   setScrollToSection: (scrollToSection) => {
     set({ scrollToSection });
   },
+
+  // Session UI
+  setDistractionFree: (distractionFree) => set({ distractionFree }),
 }));
 
 // Helper to apply theme to document

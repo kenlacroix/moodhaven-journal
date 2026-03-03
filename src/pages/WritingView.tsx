@@ -1,13 +1,15 @@
 /**
  * WritingView - Calm writing space (default view)
  *
- * Layout:
- * - Centered writing column (768px base, scales to 75% on large screens)
- * - Card header: Mood picker (5 dots) + Privacy segmented control (Open/Mindful/Private)
- * - Title field + Rich text body
- * - Blank-page prompts CTA: visible when editor is empty, fades as user writes
- * - Bottom status bar: E2E badge · word count · save indicator (all subtle)
- * - Slide-up PromptDrawer triggered by blank-page CTA (new entries only)
+ * Polish:
+ * 1. Time-aware greeting + human-readable date in heading
+ * 2. Mood-reactive card header separator (border color follows mood)
+ * 3. Warm ambient gradient background (.writing-bg)
+ * 4. Violet focus glow on editor card
+ * 5. Focus fade — heading + E2E badge dim at ≥20 words so writing takes focus
+ * 6. Streak + entry count line in heading
+ * 7. Generous editor typography (handled in RichTextEditor)
+ * 8. Distraction-free mode — sidebar hidden, Cmd/Ctrl+Shift+F to toggle
  */
 
 import { useState, useCallback, useEffect, useRef } from 'react';
@@ -17,6 +19,7 @@ import { PromptDrawer } from '../components/ai/PromptDrawer';
 import { useJournalPrompts } from '../hooks/useJournalPrompts';
 import { useSettingsStore } from '../stores/settingsStore';
 import { scoreContentMood } from '../lib/metadataExtractor';
+import { getStreakStats, getOverallStats } from '../lib/analyticsService';
 import type { MoodLevel, PrivacyMode } from '../types/journal';
 import { MOOD_OPTIONS, PRIVACY_MODE_LABELS, PRIVACY_MODE_DESCRIPTIONS } from '../types/journal';
 
@@ -24,6 +27,23 @@ interface WritingViewProps {
   entryId?: string | null;
   onEntrySaved?: () => void;
   onNavigateToSTTSettings?: () => void;
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function getGreeting(hour: number): string {
+  if (hour < 12) return 'Good morning.';
+  if (hour < 17) return 'Good afternoon.';
+  return 'Good evening.';
+}
+
+function getFormattedDate(d: Date): string {
+  return d.toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
 }
 
 // ── Mood dot colours ──────────────────────────────────────────────────────────
@@ -42,6 +62,15 @@ const RING_COLORS: Record<MoodLevel, string> = {
   3: 'ring-amber-300',
   4: 'ring-lime-300',
   5: 'ring-emerald-400',
+};
+
+/** Card header border transitions to the mood colour */
+const MOOD_BORDER: Record<MoodLevel, string> = {
+  1: 'border-rose-200 dark:border-rose-900/50',
+  2: 'border-orange-200 dark:border-orange-900/50',
+  3: 'border-amber-200 dark:border-amber-900/50',
+  4: 'border-lime-200 dark:border-lime-900/50',
+  5: 'border-emerald-200 dark:border-emerald-900/50',
 };
 
 // ── Privacy segmented control ─────────────────────────────────────────────────
@@ -91,6 +120,13 @@ export function WritingView({ entryId, onEntrySaved, onNavigateToSTTSettings }: 
   const [moodPulse, setMoodPulse] = useState(false);
   const prevMoodRef = useRef<MoodLevel | null>(null);
 
+  // Clock for time-aware greeting
+  const [now, setNow] = useState(() => new Date());
+
+  // Streak + total entries (Item 6)
+  const [currentStreak, setCurrentStreak] = useState(0);
+  const [totalEntries, setTotalEntries] = useState(0);
+
   const autoSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const agoIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const moodScoreTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -98,10 +134,18 @@ export function WritingView({ entryId, onEntrySaved, onNavigateToSTTSettings }: 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const setShowPrompts = useSettingsStore((s) => s.setShowPrompts);
   const showPrompts = useSettingsStore((s) => s.settings.journal.showPrompts);
+  const distractionFree = useSettingsStore((s) => s.distractionFree);
+  const setDistractionFree = useSettingsStore((s) => s.setDistractionFree);
 
   const isNewEntry = !entryId;
   const isEditorEmpty = !contentText.trim();
   const wordCount = contentText.trim() ? contentText.trim().split(/\s+/).length : 0;
+  /** Heading + subtle UI dims once user is in writing flow */
+  const inFlow = wordCount >= 20;
+
+  const greeting = getGreeting(now.getHours());
+  const formattedDate = getFormattedDate(now);
+  const headerBorderColor = mood ? MOOD_BORDER[mood] : 'border-slate-100 dark:border-slate-800';
 
   const {
     forYouPrompts,
@@ -112,6 +156,34 @@ export function WritingView({ entryId, onEntrySaved, onNavigateToSTTSettings }: 
     isAIEnabled,
     refresh: refreshPrompts,
   } = useJournalPrompts(isNewEntry);
+
+  // Tick clock every minute so greeting stays accurate across day transitions
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Load streak + entry count once on mount
+  useEffect(() => {
+    Promise.all([getStreakStats(), getOverallStats()])
+      .then(([streakStats, overallStats]) => {
+        setCurrentStreak(streakStats.currentStreak);
+        setTotalEntries(overallStats.totalEntries);
+      })
+      .catch(() => { /* silent — non-critical */ });
+  }, []);
+
+  // Cmd/Ctrl+Shift+F to toggle distraction-free mode
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'f') {
+        e.preventDefault();
+        setDistractionFree(!distractionFree);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [distractionFree, setDistractionFree]);
 
   // Load existing entry if editing
   useEffect(() => {
@@ -222,16 +294,39 @@ export function WritingView({ entryId, onEntrySaved, onNavigateToSTTSettings }: 
   }, []);
 
   return (
-    <div className="h-full flex flex-col bg-slate-50 dark:bg-slate-950">
+    <div className="h-full flex flex-col writing-bg">
       <div className="flex-1 flex flex-col min-h-0 px-6 sm:px-12 lg:px-20 py-12">
         <div className="flex-1 flex flex-col max-w-3xl lg:max-w-[75%] w-full mx-auto min-h-0 relative">
 
-          {/* Inviting heading — new entries only */}
+          {/* ── Heading block: greeting + date + streak (new entries only) ── */}
           {!entryId && (
-            <div className="mb-4">
-              <h1 className="text-2xl font-light text-slate-400 dark:text-slate-500 tracking-wide">
-                What's on your mind?
+            <div
+              className={`mb-6 transition-all duration-700 ${
+                inFlow ? 'opacity-25 pointer-events-none' : 'opacity-100'
+              }`}
+            >
+              {/* Time-aware greeting */}
+              <h1 className="text-3xl font-light text-slate-700 dark:text-slate-300 tracking-tight mb-1">
+                {greeting}
               </h1>
+
+              {/* Date */}
+              <p className="text-sm text-slate-400 dark:text-slate-500">
+                {formattedDate}
+              </p>
+
+              {/* Streak + entry count — shown once there are entries */}
+              {totalEntries > 0 && (
+                <div className="flex items-center gap-2 mt-2 text-[11px] text-slate-400 dark:text-slate-500">
+                  <span>Entry #{totalEntries + 1}</span>
+                  {currentStreak >= 2 && (
+                    <>
+                      <span className="opacity-40">·</span>
+                      <span>🔥 {currentStreak}-day streak</span>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -253,17 +348,20 @@ export function WritingView({ entryId, onEntrySaved, onNavigateToSTTSettings }: 
             </div>
           )}
 
-          {/* ── Editor card — lifts on focus ── */}
+          {/* ── Editor card — violet glow on focus ── */}
           <div
             onFocus={() => setIsEditorFocused(true)}
             onBlur={() => setIsEditorFocused(false)}
-            className={`flex-1 flex flex-col min-h-0 bg-white dark:bg-slate-900 rounded-2xl px-8 pt-5 pb-8 transition-shadow duration-300 relative ${
-              isEditorFocused ? 'shadow-md' : 'shadow-sm'
+            className={`flex-1 flex flex-col min-h-0 bg-white dark:bg-slate-900 rounded-2xl px-8 pt-5 pb-8 transition-all duration-300 relative ${
+              isEditorFocused
+                ? 'shadow-lg shadow-violet-500/10 ring-1 ring-violet-500/10'
+                : 'shadow-sm'
             }`}
           >
             {/* ── Card header: Mood picker + Privacy segmented control ── */}
-            <div className="flex items-center justify-between mb-5 pb-4 border-b border-slate-100 dark:border-slate-800 flex-shrink-0">
-
+            <div
+              className={`flex items-center justify-between mb-5 pb-4 border-b transition-colors duration-500 flex-shrink-0 ${headerBorderColor}`}
+            >
               {/* Mood picker */}
               <div className="flex items-center gap-2.5">
                 <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 select-none">
@@ -343,7 +441,6 @@ export function WritingView({ entryId, onEntrySaved, onNavigateToSTTSettings }: 
             <RichTextEditor
               value={content}
               onChange={handleContentChange}
-              placeholder="Start writing..."
               autoFocus={!entryId}
               className="flex-1 min-h-0"
               onNavigateToSTTSettings={onNavigateToSTTSettings}
@@ -379,11 +476,15 @@ export function WritingView({ entryId, onEntrySaved, onNavigateToSTTSettings }: 
             )}
           </div>
 
-          {/* ── Bottom status bar — subtle, consistent ── */}
+          {/* ── Bottom status bar ── */}
           <div className="flex items-center mt-3 px-1 text-xs text-slate-400 dark:text-slate-500">
 
-            {/* Left: E2E badge */}
-            <div className="flex-1 flex items-center gap-1.5">
+            {/* Left: E2E badge — fades in flow */}
+            <div
+              className={`flex-1 flex items-center gap-1.5 transition-all duration-700 ${
+                inFlow ? 'opacity-25' : 'opacity-100'
+              }`}
+            >
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
               </svg>
@@ -397,8 +498,29 @@ export function WritingView({ entryId, onEntrySaved, onNavigateToSTTSettings }: 
               )}
             </div>
 
-            {/* Right: save indicator */}
-            <div className="flex-1 flex items-center justify-end gap-1.5">
+            {/* Right: distraction-free toggle + save indicator */}
+            <div className="flex-1 flex items-center justify-end gap-3">
+              {/* Distraction-free toggle */}
+              <button
+                type="button"
+                onClick={() => setDistractionFree(!distractionFree)}
+                title={distractionFree ? 'Exit focus mode (Ctrl+Shift+F)' : 'Focus mode (Ctrl+Shift+F)'}
+                className="text-slate-300 dark:text-slate-600 hover:text-slate-500 dark:hover:text-slate-400 transition-colors"
+              >
+                {distractionFree ? (
+                  /* compress / exit icon */
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5m0-4.5l5.25 5.25" />
+                  </svg>
+                ) : (
+                  /* expand / enter icon */
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
+                  </svg>
+                )}
+              </button>
+
+              {/* Save indicator */}
               {isSaving ? (
                 <span className="flex items-center gap-1.5">
                   <span className="w-3 h-3 border-[1.5px] border-slate-300 dark:border-slate-600 border-t-violet-500 rounded-full animate-spin" />

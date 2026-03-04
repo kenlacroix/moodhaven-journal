@@ -42,6 +42,20 @@ export const MOOD_OPTIONS: MoodOption[] = [
   { level: 5, label: 'Great', emoji: '😊', color: 'bg-emerald-500' },
 ];
 
+/**
+ * Weather and location context captured at the time of writing.
+ * Only city/region-level data is stored — precise coordinates are never persisted.
+ * Captured via browser Geolocation API + Open-Meteo (weather) + Nominatim (geocoding).
+ */
+export interface LocationWeather {
+  city?: string;          // e.g. "Amsterdam"
+  region?: string;        // e.g. "North Holland"
+  condition?: string;     // e.g. "Partly cloudy"
+  temperature?: number;   // Celsius
+  weatherCode?: number;   // WMO code (https://open-meteo.com/en/docs#weathervariables)
+  capturedAt: string;     // ISO timestamp
+}
+
 // Decrypted journal entry (used in memory)
 export interface JournalEntry {
   id: string;
@@ -50,6 +64,7 @@ export interface JournalEntry {
   mood: MoodLevel | null;
   tags: string[];
   privacyMode: PrivacyMode;
+  locationWeather?: LocationWeather;
   created_at: string; // ISO string for easy serialization
   updated_at: string;
 }

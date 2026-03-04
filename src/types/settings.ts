@@ -49,6 +49,8 @@ export interface JournalPreferences {
   showPrompts: boolean;
   autoSave: boolean;
   autoSaveInterval: number; // seconds
+  /** Automatically capture weather + city when creating a new entry (opt-in; contacts Open-Meteo and Nominatim) */
+  autoLocationWeather: boolean;
 }
 
 // Privacy settings
@@ -189,6 +191,7 @@ export function createDefaultSettings(): AppSettings {
       showPrompts: true,
       autoSave: true,
       autoSaveInterval: 30,
+      autoLocationWeather: false,
     },
     privacy: {
       autoLockTimeout: 5,

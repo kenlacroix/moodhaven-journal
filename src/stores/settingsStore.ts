@@ -61,6 +61,7 @@ interface SettingsState {
 
   // Journal
   setShowPrompts: (enabled: boolean) => void;
+  setAutoLocationWeather: (enabled: boolean) => void;
 
   // Reminders
   setReminderEnabled: (enabled: boolean) => void;
@@ -311,6 +312,16 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       settings: {
         ...state.settings,
         journal: { ...state.settings.journal, showPrompts },
+      },
+      hasUnsavedChanges: true,
+    }));
+  },
+
+  setAutoLocationWeather: (autoLocationWeather) => {
+    set((state) => ({
+      settings: {
+        ...state.settings,
+        journal: { ...state.settings.journal, autoLocationWeather },
       },
       hasUnsavedChanges: true,
     }));

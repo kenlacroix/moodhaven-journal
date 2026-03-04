@@ -1,4 +1,4 @@
-import { extractEntryMetadata, aggregateMetadata, calculateGratitudeStreak, scoreContentMood } from './metadataExtractor';
+import { extractEntryMetadata, aggregateMetadata, calculateGratitudeStreak, scoreContentMood, scoreEmojiSentiment } from './metadataExtractor';
 import type { JournalEntry, MoodLevel } from '../types/journal';
 
 /**
@@ -727,9 +727,9 @@ describe('metadataExtractor', () => {
   // scoreContentMood
   // ============================================================
   describe('scoreContentMood', () => {
-    it('returns null for very short text (< 8 words)', () => {
+    it('returns null for very short text (< 5 words)', () => {
       expect(scoreContentMood('short')).toBeNull();
-      expect(scoreContentMood('only a few words here')).toBeNull();
+      expect(scoreContentMood('only four words')).toBeNull();
     });
 
     it('scores strongly positive content as 4 or 5', () => {
@@ -805,6 +805,82 @@ describe('metadataExtractor', () => {
       const score = scoreContentMood(longNeutral);
       expect(score).toBeGreaterThanOrEqual(2);
       expect(score).toBeLessThanOrEqual(4);
+    });
+
+    it('scores "love" content as positive, not stuck at 3 (regression: "love" was missing from signal list)', () => {
+      // Short text with one signal word can only score ~3-4 depending on split position
+      const shortScore = scoreContentMood('I love life and everything about it!');
+      expect(shortScore).toBeGreaterThanOrEqual(3);
+
+      // Slightly longer positive text with multiple love/awesome/joy signals scores ≥4
+      const richerScore = scoreContentMood('I really love life and feel awesome. Everything brings me such joy and I am grateful to be alive.');
+      expect(richerScore).toBeGreaterThanOrEqual(4);
+    });
+
+    it('scores "awesome" content as positive (regression: "awesome" was missing from signal list)', () => {
+      const score = scoreContentMood('Today was absolutely awesome and I feel so alive and beautiful.');
+      expect(score).toBeGreaterThanOrEqual(4);
+    });
+
+    it('scores content with writing-prompt prefix correctly (prompt words stay neutral)', () => {
+      // A neutral prompt followed by genuinely positive content should be positive
+      const text = 'Reflect on a recent experience where you felt neutral or indifferent; what do you think contributed to that feeling? I love life and feel awesome!';
+      const score = scoreContentMood(text);
+      expect(score).toBeGreaterThanOrEqual(3);
+    });
+
+    it('emoji supplement: positive emojis boost score for neutral-word text', () => {
+      // No English signal words but three happy emojis — should score above neutral
+      const text = 'Heute war ein langer Tag 😊 😄 🎉 und ich bin froh.';
+      const score = scoreContentMood(text);
+      expect(score).toBeGreaterThanOrEqual(3);
+    });
+
+    it('emoji supplement: negative emojis lower score for neutral-word text', () => {
+      const text = 'Heute war ein langer Tag 😭 😞 😢 und alles war schlimm.';
+      const score = scoreContentMood(text);
+      expect(score).toBeLessThanOrEqual(3);
+    });
+
+    it('emoji supplement: emojis reinforce word signals', () => {
+      const positive = 'I feel great and happy 😊 🎉 things are looking up!';
+      const negative = 'I feel terrible and sad 😭 😞 everything went wrong today.';
+      const posScore = scoreContentMood(positive) ?? 3;
+      const negScore = scoreContentMood(negative) ?? 3;
+      expect(posScore).toBeGreaterThan(negScore);
+    });
+  });
+
+  // ============================================================
+  // scoreEmojiSentiment
+  // ============================================================
+  describe('scoreEmojiSentiment', () => {
+    it('returns null for text with no emojis', () => {
+      expect(scoreEmojiSentiment('plain text no emoji here at all')).toBeNull();
+    });
+
+    it('returns positive ratio for positive emojis', () => {
+      const score = scoreEmojiSentiment('😊 😄 🎉');
+      expect(score).not.toBeNull();
+      expect(score!).toBeGreaterThan(0);
+    });
+
+    it('returns negative ratio for negative emojis', () => {
+      const score = scoreEmojiSentiment('😭 😢 😞');
+      expect(score).not.toBeNull();
+      expect(score!).toBeLessThan(0);
+    });
+
+    it('returns near-zero for balanced positive and negative emojis', () => {
+      const score = scoreEmojiSentiment('😊 😭') ?? 0;
+      // (1-1)/(2+1) = 0
+      expect(score).toBe(0);
+    });
+
+    it('result is always in [-1, +1]', () => {
+      const score = scoreEmojiSentiment('😊 😊 😊 😊 😊') ?? 0;
+      expect(score).toBeGreaterThanOrEqual(-1);
+      expect(score).toBeLessThanOrEqual(1);
     });
   });
 });

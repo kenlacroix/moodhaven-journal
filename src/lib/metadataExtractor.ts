@@ -26,6 +26,48 @@ import {
 // MOOD AUTO-SCORING (Local, runs on-device)
 // ============================================
 
+// ── Emoji sentiment sets (language-agnostic supplement) ──────────────────────
+// Using individual code points so `for...of` iteration works correctly with
+// multi-byte emoji.  Only unambiguously positive/negative emojis are included.
+
+const POSITIVE_EMOJIS = new Set([
+  '😊', '😄', '😃', '😁', '😀', '😆', '🤣', '😂', '🥰', '😍',
+  '🤩', '😘', '😗', '😙', '😚', '🙂', '😌', '😎', '🤗', '🥳',
+  '🎉', '🎊', '🎈', '🎁', '🏆', '🥇', '🌟', '⭐', '✨', '🌈',
+  '❤', '🧡', '💛', '💚', '💙', '💜', '💕', '💖', '💗', '💓',
+  '💞', '💝', '💘', '💟', '☺', '😸', '🌺', '🌸', '🌼', '🌻',
+  '🍀', '🙌', '👍', '💪', '🤝', '✅', '🎶', '🎵', '🥂', '🍾',
+  '☀', '🌤', '🌞', '😜', '😝', '🤪', '😋', '✌', '🤞',
+]);
+
+const NEGATIVE_EMOJIS = new Set([
+  '😔', '😟', '😢', '😭', '😞', '😩', '😫', '😖', '😤', '😡',
+  '🤬', '😠', '😒', '🙁', '☹', '😣', '💔', '😪', '😥', '😓',
+  '🥺', '😰', '😨', '😱', '😳', '🤯', '😑', '😬', '💀', '☠',
+  '🤮', '🤢', '🥀', '👎', '🚫', '❌', '💩',
+]);
+
+/**
+ * Score sentiment from emojis in text.
+ * Language-agnostic — works regardless of written language.
+ *
+ * Returns a ratio in [-1, +1], or null when no emoji signals are found.
+ */
+export function scoreEmojiSentiment(text: string): number | null {
+  let positive = 0;
+  let negative = 0;
+
+  // `for...of` iterates by Unicode code point, correctly handling emoji
+  for (const char of text) {
+    if (POSITIVE_EMOJIS.has(char)) positive++;
+    else if (NEGATIVE_EMOJIS.has(char)) negative++;
+  }
+
+  const total = positive + negative;
+  if (total === 0) return null;
+  return (positive - negative) / (total + 1);
+}
+
 // Signal words — intentionally broad to catch natural expression
 const STRONG_POSITIVE_SIGNALS = [
   'amazing', 'fantastic', 'wonderful', 'incredible', 'ecstatic', 'thrilled',
@@ -39,9 +81,12 @@ const MODERATE_POSITIVE_SIGNALS = [
   'positive', 'better', 'lovely', 'smile', 'smiling', 'fun', 'exciting',
   'excited', 'proud', 'accomplished', 'achievement', 'relieved', 'hopeful',
   'grateful', 'thankful', 'blessed', 'appreciate', 'peaceful', 'calm',
-  'relaxed', 'motivated', 'inspired', 'confident', 'loved', 'supported',
-  'refreshed', 'energized', 'content', 'satisfied', 'uplifted', 'joyful',
-  'cheerful', 'delighted', 'thriving', 'flourishing', 'lucky', 'fortunate',
+  'relaxed', 'motivated', 'inspired', 'confident', 'love', 'supported',
+  'refreshed', 'energized', 'content', 'satisfied', 'uplifted', 'joy',
+  'cheerful', 'delight', 'thriving', 'flourishing', 'lucky', 'fortunate',
+  // Common words absent from the original list
+  'awesome', 'laugh', 'laughing', 'laughter', 'beautiful', 'alive', 'perfect',
+  'grateful for', 'thankful for', 'looking forward', 'proud of',
 ];
 
 const STRONG_NEGATIVE_SIGNALS = [
@@ -74,6 +119,9 @@ const MODERATE_NEGATIVE_SIGNALS = [
   'getting on my nerves', 'conflict', 'argument', 'fight with',
   // General negative
   'bad', 'hate', 'crying', 'tears', 'missing', 'lost something',
+  // Common words absent from the original list
+  'tired', 'exhausted of', 'sick of', 'sick and tired', 'bored', 'pain',
+  'ache', 'aching', 'numb', 'empty', 'hollow', 'pointless', 'dull',
 ];
 
 // Negation words that flip the following signal
@@ -131,11 +179,11 @@ function scoreBlock(text: string): number {
  *  - Splits text into first half and second half
  *  - Weights second half 2× (the emotional arc / how you finish matters more)
  *  - Ratio-based scoring within each half (immune to entry length)
- *  - Returns null when text is too short (< 8 words) to score reliably
+ *  - Returns null when text is too short (< 5 words) to score reliably
  */
 export function scoreContentMood(text: string): MoodLevel | null {
   const words = text.trim().split(/\s+/).filter(Boolean);
-  if (words.length < 8) return null;
+  if (words.length < 5) return null;
 
   const lower = text.toLowerCase();
 
@@ -148,7 +196,16 @@ export function scoreContentMood(text: string): MoodLevel | null {
   const secondScore = scoreBlock(secondHalf);
 
   // Weighted blend: 33% first half, 67% second half
-  const blended = firstScore * 0.33 + secondScore * 0.67;
+  let blended = firstScore * 0.33 + secondScore * 0.67;
+
+  // Blend in emoji sentiment when present.
+  // When word signals dominate, emoji contributes 20%.
+  // When words are neutral (different language / sparse signals), emoji gets 50%.
+  const emojiScore = scoreEmojiSentiment(lower);
+  if (emojiScore !== null) {
+    const emojiWeight = Math.abs(blended) > 0.01 ? 0.2 : 0.5;
+    blended = blended * (1 - emojiWeight) + emojiScore * emojiWeight;
+  }
 
   // Map [-1, +1] → [1, 5], centered at 3
   const raw = 3 + blended * 2.5;

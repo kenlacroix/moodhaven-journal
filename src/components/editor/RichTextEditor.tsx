@@ -39,6 +39,8 @@ interface RichTextEditorProps {
   insertText?: string | null;
   /** Called after insertText has been consumed so the parent can clear it */
   onInsertTextConsumed?: () => void;
+  /** When true, keeps the cursor at ~38% from top of the scroll container (typewriter mode) */
+  distractionFree?: boolean;
 }
 
 export function RichTextEditor({
@@ -51,7 +53,10 @@ export function RichTextEditor({
   onNavigateToSTTSettings,
   insertText,
   onInsertTextConsumed,
+  distractionFree = false,
 }: RichTextEditorProps) {
+  const distractionFreeRef = useRef(distractionFree);
+  useEffect(() => { distractionFreeRef.current = distractionFree; }, [distractionFree]);
   const [toolbarExpanded, setToolbarExpanded] = useState(true);
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const [linkDialogInitialUrl, setLinkDialogInitialUrl] = useState('');
@@ -115,6 +120,20 @@ export function RichTextEditor({
       const html = editor.getHTML();
       const text = editor.getText();
       onChange(html, text);
+
+      // Typewriter scroll — keep cursor at ~38% from top in distraction-free mode
+      if (distractionFreeRef.current) {
+        const { from } = editor.state.selection;
+        const coords = editor.view.coordsAtPos(from);
+        const container = editor.view.dom.closest('.editor-scroll-container') as HTMLElement | null;
+        if (container) {
+          const targetTop = container.clientHeight * 0.38;
+          const currentTop = coords.top - container.getBoundingClientRect().top;
+          if (Math.abs(currentTop - targetTop) > 40) {
+            container.scrollBy({ top: currentTop - targetTop, behavior: 'smooth' });
+          }
+        }
+      }
     },
   });
 

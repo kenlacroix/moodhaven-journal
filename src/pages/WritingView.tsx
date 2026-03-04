@@ -4,32 +4,50 @@
  * Polish:
  * 1. Time-aware greeting + human-readable date in heading
  * 2. Mood-reactive card header separator (border color follows mood)
- * 3. Warm ambient gradient background (.writing-bg)
+ * 3. Warm ambient gradient background (.writing-bg) / flat .focus-bg in distraction-free
  * 4. Violet focus glow on editor card
  * 5. Focus fade — heading + E2E badge dim at ≥20 words so writing takes focus
  * 6. Streak + entry count line in heading
  * 7. Generous editor typography (handled in RichTextEditor)
- * 8. Distraction-free mode — sidebar hidden, Cmd/Ctrl+Shift+F to toggle
+ * 8. Distraction-free mode — sidebar + TopBar hidden, card header collapses,
+ *    title hides, Cmd/Ctrl+Shift+F to toggle
+ *
+ * Mood auto-detection:
+ * - Pulses the active dot on every auto-mood change (not just first detection)
+ * - Shows 🔒 lock icon when user has manually set mood; click to re-enable auto
+ * - Shows soft scanning animation while word count is 1–4 (too short to score)
+ *
+ * Save semantics:
+ * - Auto-saves HTML content 2s after the last keystroke (≥5 words for first save)
+ * - savedEntryIdRef tracks the created ID so each session saves ONE entry (not duplicates)
+ * - Rich text (HTML) is preserved; plain text is derived for mood scoring only
  */
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { saveEntry, getEntryById } from '../lib/journalService';
+import { captureLocationWeather, getWeatherEmoji } from '../lib/locationWeatherService';
 import { RichTextEditor } from '../components/editor';
 import { PromptDrawer } from '../components/ai/PromptDrawer';
 import { useJournalPrompts } from '../hooks/useJournalPrompts';
 import { useSettingsStore } from '../stores/settingsStore';
 import { scoreContentMood } from '../lib/metadataExtractor';
 import { getStreakStats, getOverallStats } from '../lib/analyticsService';
-import type { MoodLevel, PrivacyMode } from '../types/journal';
+import type { LocationWeather, MoodLevel, PrivacyMode } from '../types/journal';
 import { MOOD_OPTIONS, PRIVACY_MODE_LABELS, PRIVACY_MODE_DESCRIPTIONS } from '../types/journal';
 
 interface WritingViewProps {
   entryId?: string | null;
   onEntrySaved?: () => void;
+  onNewEntry?: () => void;
   onNavigateToSTTSettings?: () => void;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+/** Strip HTML tags to plain text for mood scoring and word counting */
+function stripHtml(html: string): string {
+  return html.replace(/<[^>]*>/g, ' ').replace(/&[a-z]+;/gi, ' ').replace(/\s+/g, ' ').trim();
+}
 
 function getGreeting(hour: number): string {
   if (hour < 12) return 'Good morning.';
@@ -101,7 +119,7 @@ const PRIVACY_ACTIVE_COLORS: Record<PrivacyMode, string> = {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function WritingView({ entryId, onEntrySaved, onNavigateToSTTSettings }: WritingViewProps) {
+export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, onNavigateToSTTSettings }: WritingViewProps) {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [contentText, setContentText] = useState('');
@@ -111,19 +129,26 @@ export function WritingView({ entryId, onEntrySaved, onNavigateToSTTSettings }: 
   const [savedAgoText, setSavedAgoText] = useState('');
   const [showCheckmark, setShowCheckmark] = useState(false);
   const [isEditorFocused, setIsEditorFocused] = useState(false);
-  const [nudgeDismissed, setNudgeDismissed] = useState(false);
   const [pendingInsert, setPendingInsert] = useState<string | null>(null);
+
+  /**
+   * Tracks the DB entry ID created by the first auto-save.
+   * Subsequent saves update the same row instead of creating duplicates.
+   * A ref (not state) so reads are always current inside setTimeout closures
+   * without triggering extra renders.
+   */
+  const savedEntryIdRef = useRef<string | null>(entryId || null);
 
   // Mood auto-detection
   const [mood, setMood] = useState<MoodLevel | null>(null);
   const [moodIsAuto, setMoodIsAuto] = useState(true);
   const [moodPulse, setMoodPulse] = useState(false);
-  const prevMoodRef = useRef<MoodLevel | null>(null);
+  const prevAutoMoodRef = useRef<MoodLevel | null>(null);
 
   // Clock for time-aware greeting
   const [now, setNow] = useState(() => new Date());
 
-  // Streak + total entries (Item 6)
+  // Streak + total entries
   const [currentStreak, setCurrentStreak] = useState(0);
   const [totalEntries, setTotalEntries] = useState(0);
 
@@ -136,12 +161,19 @@ export function WritingView({ entryId, onEntrySaved, onNavigateToSTTSettings }: 
   const showPrompts = useSettingsStore((s) => s.settings.journal.showPrompts);
   const distractionFree = useSettingsStore((s) => s.distractionFree);
   const setDistractionFree = useSettingsStore((s) => s.setDistractionFree);
+  const autoLocationWeather = useSettingsStore((s) => s.settings.journal.autoLocationWeather);
+
+  // Weather / location context captured in background on mount
+  const locationWeatherRef = useRef<LocationWeather | null>(null);
+  const [locationWeather, setLocationWeather] = useState<LocationWeather | null>(null);
 
   const isNewEntry = !entryId;
   const isEditorEmpty = !contentText.trim();
   const wordCount = contentText.trim() ? contentText.trim().split(/\s+/).length : 0;
   /** Heading + subtle UI dims once user is in writing flow */
   const inFlow = wordCount >= 20;
+  /** Scanning state: user has started writing but not enough words for mood detection */
+  const isScanning = moodIsAuto && mood === null && wordCount > 0 && wordCount < 5;
 
   const greeting = getGreeting(now.getHours());
   const formattedDate = getFormattedDate(now);
@@ -151,7 +183,6 @@ export function WritingView({ entryId, onEntrySaved, onNavigateToSTTSettings }: 
     forYouPrompts,
     generalPrompts,
     healthPrompts,
-    nudge,
     isLoading: promptsLoading,
     isAIEnabled,
     refresh: refreshPrompts,
@@ -162,6 +193,20 @@ export function WritingView({ entryId, onEntrySaved, onNavigateToSTTSettings }: 
     const id = setInterval(() => setNow(new Date()), 60_000);
     return () => clearInterval(id);
   }, []);
+
+  // Capture weather + location in background when starting a new entry
+  useEffect(() => {
+    if (!autoLocationWeather || !isNewEntry) return;
+    let cancelled = false;
+    captureLocationWeather().then((w) => {
+      if (!cancelled && w) {
+        locationWeatherRef.current = w;
+        setLocationWeather(w);
+      }
+    });
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoLocationWeather]); // only re-run if setting changes; isNewEntry intentionally omitted
 
   // Load streak + entry count once on mount
   useEffect(() => {
@@ -192,7 +237,8 @@ export function WritingView({ entryId, onEntrySaved, onNavigateToSTTSettings }: 
         if (entry) {
           setTitle(entry.title || '');
           setContent(entry.content);
-          setContentText(entry.content);
+          // Derive plain text from stored HTML for word count / mood scoring
+          setContentText(stripHtml(entry.content));
           setPrivacyMode(entry.privacyMode ?? 0);
           if (entry.mood) { setMood(entry.mood); setMoodIsAuto(false); }
         }
@@ -200,25 +246,37 @@ export function WritingView({ entryId, onEntrySaved, onNavigateToSTTSettings }: 
     }
   }, [entryId]);
 
-  // Reset state when switching to a new entry
+  // Sync savedEntryIdRef when entryId prop changes (e.g. navigating to an existing entry)
+  useEffect(() => {
+    savedEntryIdRef.current = entryId || null;
+  }, [entryId]);
+
+  // Reset all editor state when switching to a fresh new entry
   useEffect(() => {
     if (isNewEntry) {
-      setNudgeDismissed(false);
+      setTitle('');
+      setContent('');
+      setContentText('');
+      setPrivacyMode(0);
       setMood(null);
       setMoodIsAuto(true);
-      prevMoodRef.current = null;
+      setLastSavedAt(null);
+      setSavedAgoText('');
+      setShowCheckmark(false);
+      savedEntryIdRef.current = null;
+      prevAutoMoodRef.current = null;
     }
   }, [isNewEntry]);
 
-  // Pulse once when mood first auto-detected
+  // Pulse the active mood dot on every auto-mood change (not just first detection)
   useEffect(() => {
-    if (mood !== null && prevMoodRef.current === null && moodIsAuto) {
+    if (!moodIsAuto || mood === null) return;
+    if (mood !== prevAutoMoodRef.current) {
       setMoodPulse(true);
-      const t = setTimeout(() => setMoodPulse(false), 1200);
-      prevMoodRef.current = mood;
+      const t = setTimeout(() => setMoodPulse(false), 900);
+      prevAutoMoodRef.current = mood;
       return () => clearTimeout(t);
     }
-    prevMoodRef.current = mood;
   }, [mood, moodIsAuto]);
 
   // Cleanup timeouts and intervals
@@ -257,17 +315,29 @@ export function WritingView({ entryId, onEntrySaved, onNavigateToSTTSettings }: 
   // Auto-save after 2 seconds of inactivity
   const scheduleAutoSave = useCallback(() => {
     if (autoSaveTimeoutRef.current) clearTimeout(autoSaveTimeoutRef.current);
+
+    // Don't save empty content.
+    // For brand-new entries (nothing saved yet) require ≥5 words to avoid
+    // accidentally persisting a stray keystroke.
     if (!contentText.trim()) return;
+    if (!savedEntryIdRef.current && wordCount < 5) return;
+
     autoSaveTimeoutRef.current = setTimeout(() => {
       setIsSaving(true);
       saveEntry({
-        id: entryId || undefined,
+        // Use the ref so subsequent saves update the same row (no duplicates)
+        id: savedEntryIdRef.current || undefined,
         title: title || undefined,
-        content: contentText,
+        // Save the rich-text HTML so formatting survives reload
+        content,
         mood: mood ?? undefined,
         privacyMode,
+        // Include location/weather only on the initial create (not updates)
+        locationWeather: !savedEntryIdRef.current ? locationWeatherRef.current ?? undefined : undefined,
       })
-        .then(() => {
+        .then((saved) => {
+          // Capture the created ID so the next auto-save updates instead of inserts
+          savedEntryIdRef.current = saved.id;
           setLastSavedAt(new Date());
           setShowCheckmark(true);
           setTimeout(() => setShowCheckmark(false), 1500);
@@ -276,12 +346,16 @@ export function WritingView({ entryId, onEntrySaved, onNavigateToSTTSettings }: 
         .catch((err) => { console.error('Auto-save failed:', err); })
         .finally(() => { setIsSaving(false); });
     }, 2000);
-  }, [contentText, title, entryId, privacyMode, onEntrySaved]);
+  // `mood` and `content` are intentionally included: a mood auto-detection or
+  // format change after the last keystroke should still be reflected in the save.
+  }, [content, contentText, wordCount, title, mood, privacyMode, onEntrySaved]);
 
   useEffect(() => { scheduleAutoSave(); }, [contentText, title, privacyMode, scheduleAutoSave]);
 
   const handleContentChange = useCallback((html: string, text: string) => {
     setContent(html);
+    // Tiptap's getText() gives us clean plain text — use it for word count and
+    // mood scoring. (The HTML itself is saved for rich-text persistence.)
     setContentText(text);
   }, []);
 
@@ -293,8 +367,15 @@ export function WritingView({ entryId, onEntrySaved, onNavigateToSTTSettings }: 
     setPendingInsert(prompt.text + '\n\n');
   }, []);
 
+  // Reset mood to auto mode
+  const handleResetMoodToAuto = useCallback(() => {
+    setMoodIsAuto(true);
+    setMood(null);
+    prevAutoMoodRef.current = null;
+  }, []);
+
   return (
-    <div className="h-full flex flex-col writing-bg">
+    <div className={`h-full flex flex-col transition-all duration-500 ${distractionFree ? 'focus-bg' : 'writing-bg'}`}>
       <div className="flex-1 flex flex-col min-h-0 px-6 sm:px-12 lg:px-20 py-12">
         <div className="flex-1 flex flex-col max-w-3xl lg:max-w-[75%] w-full mx-auto min-h-0 relative">
 
@@ -303,7 +384,7 @@ export function WritingView({ entryId, onEntrySaved, onNavigateToSTTSettings }: 
             <div
               className={`mb-6 transition-all duration-700 ${
                 inFlow ? 'opacity-25 pointer-events-none' : 'opacity-100'
-              }`}
+              } ${distractionFree ? 'max-h-0 overflow-hidden opacity-0 mb-0 pointer-events-none' : ''}`}
             >
               {/* Time-aware greeting */}
               <h1 className="text-3xl font-light text-slate-700 dark:text-slate-300 tracking-tight mb-1">
@@ -314,6 +395,24 @@ export function WritingView({ entryId, onEntrySaved, onNavigateToSTTSettings }: 
               <p className="text-sm text-slate-400 dark:text-slate-500">
                 {formattedDate}
               </p>
+
+              {/* Weather + location chip */}
+              {locationWeather && (
+                <p className="flex items-center gap-1 mt-0.5 text-xs text-slate-400 dark:text-slate-500">
+                  <span>{getWeatherEmoji(locationWeather.weatherCode)}</span>
+                  {locationWeather.temperature !== undefined && (
+                    <span>{Math.round(locationWeather.temperature)}°</span>
+                  )}
+                  {locationWeather.condition && (
+                    <span className="opacity-75">· {locationWeather.condition}</span>
+                  )}
+                  {locationWeather.city && (
+                    <span className="opacity-75">
+                      · {locationWeather.city}{locationWeather.region ? `, ${locationWeather.region}` : ''}
+                    </span>
+                  )}
+                </p>
+              )}
 
               {/* Streak + entry count — shown once there are entries */}
               {totalEntries > 0 && (
@@ -330,24 +429,6 @@ export function WritingView({ entryId, onEntrySaved, onNavigateToSTTSettings }: 
             </div>
           )}
 
-          {/* Local pattern nudge — dismissable, new entries only */}
-          {isNewEntry && nudge && !nudgeDismissed && (
-            <div className="mb-4 flex items-center gap-3 px-4 py-3 rounded-xl bg-violet-50 dark:bg-violet-900/10 border border-violet-100 dark:border-violet-800/50">
-              <span className="text-violet-500 text-base flex-shrink-0">✨</span>
-              <p className="flex-1 text-sm text-violet-700 dark:text-violet-300">{nudge}</p>
-              <button
-                type="button"
-                onClick={() => setNudgeDismissed(true)}
-                aria-label="Dismiss"
-                className="p-1 rounded-lg text-violet-400 hover:text-violet-600 hover:bg-violet-100 dark:hover:bg-violet-900/30 transition-colors"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-          )}
-
           {/* ── Editor card — violet glow on focus ── */}
           <div
             onFocus={() => setIsEditorFocused(true)}
@@ -356,52 +437,70 @@ export function WritingView({ entryId, onEntrySaved, onNavigateToSTTSettings }: 
               isEditorFocused
                 ? 'shadow-lg shadow-violet-500/10 ring-1 ring-violet-500/10'
                 : 'shadow-sm'
-            }`}
+            } ${distractionFree ? 'rounded-none shadow-none ring-0 px-12 pt-10' : ''}`}
           >
             {/* ── Card header: Mood picker + Privacy segmented control ── */}
+            {/* Collapses in distraction-free mode */}
             <div
-              className={`flex items-center justify-between mb-5 pb-4 border-b transition-colors duration-500 flex-shrink-0 ${headerBorderColor}`}
+              className={`transition-all duration-500 overflow-hidden flex-shrink-0 ${
+                distractionFree ? 'max-h-0 opacity-0 mb-0' : 'max-h-24 opacity-100'
+              }`}
             >
-              {/* Mood picker */}
-              <div className="flex items-center gap-2.5">
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 select-none">
-                  Mood
-                </span>
-                <div className="flex items-center gap-2">
-                  {([1, 2, 3, 4, 5] as MoodLevel[]).map((level) => {
-                    const isActive = level === mood;
-                    return (
-                      <button
-                        key={level}
-                        type="button"
-                        onClick={() => { setMood(level); setMoodIsAuto(false); }}
-                        title={`${MOOD_OPTIONS[level - 1].emoji} ${MOOD_OPTIONS[level - 1].label}`}
-                        className={`rounded-full transition-all duration-300 flex-shrink-0 ${
-                          isActive
-                            ? `w-4 h-4 ${DOT_COLORS[level]} shadow-sm ring-2 ring-offset-2 ring-offset-white dark:ring-offset-slate-900 ${RING_COLORS[level]} ${moodPulse ? 'animate-pulse' : ''}`
-                            : 'w-2.5 h-2.5 bg-slate-200 dark:bg-slate-700 hover:scale-125'
-                        }`}
-                      />
-                    );
-                  })}
-                </div>
-                {mood !== null && (
-                  <span className="flex items-center gap-0.5 text-sm leading-none">
-                    {MOOD_OPTIONS[mood - 1].emoji}
-                    {moodIsAuto && (
-                      <span
-                        className="text-[10px] text-violet-400 dark:text-violet-500"
-                        title="Auto-detected from your writing"
-                      >
-                        ✦
-                      </span>
-                    )}
+              <div
+                className={`flex items-center justify-between mb-5 pb-4 border-b transition-colors duration-500 ${headerBorderColor}`}
+              >
+                {/* Mood picker */}
+                <div className="flex items-center gap-2.5">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 select-none">
+                    Mood
                   </span>
-                )}
-              </div>
+                  <div className="flex items-center gap-2">
+                    {([1, 2, 3, 4, 5] as MoodLevel[]).map((level) => {
+                      const isActive = level === mood;
+                      return (
+                        <button
+                          key={level}
+                          type="button"
+                          onClick={() => { setMood(level); setMoodIsAuto(false); }}
+                          title={`${MOOD_OPTIONS[level - 1].emoji} ${MOOD_OPTIONS[level - 1].label}`}
+                          className={`rounded-full transition-all duration-300 flex-shrink-0 ${
+                            isActive
+                              ? `w-4 h-4 ${DOT_COLORS[level]} shadow-sm ring-2 ring-offset-2 ring-offset-white dark:ring-offset-slate-900 ${RING_COLORS[level]} ${moodPulse ? 'animate-mood-pop' : ''}`
+                              : isScanning
+                                ? 'w-2.5 h-2.5 bg-slate-200 dark:bg-slate-700 animate-pulse-soft'
+                                : 'w-2.5 h-2.5 bg-slate-200 dark:bg-slate-700 hover:scale-125'
+                          }`}
+                        />
+                      );
+                    })}
+                  </div>
 
-              {/* Privacy segmented control + focus mode toggle */}
-              <div className="flex items-center gap-2">
+                  {/* Auto-detected emoji + indicator */}
+                  {mood !== null && (
+                    <button
+                      type="button"
+                      title={moodIsAuto ? 'Auto-detected from your writing' : 'Mood set manually — click to re-enable auto'}
+                      onClick={() => { if (!moodIsAuto) handleResetMoodToAuto(); }}
+                      className={`flex items-center gap-0.5 text-sm leading-none ${moodIsAuto ? 'cursor-default' : 'cursor-pointer'}`}
+                    >
+                      {MOOD_OPTIONS[mood - 1].emoji}
+                      {moodIsAuto ? (
+                        <span className="text-[10px] text-violet-400 dark:text-violet-500">✦</span>
+                      ) : (
+                        <span className="text-[10px] text-slate-300 dark:text-slate-600 hover:text-violet-400 dark:hover:text-violet-500 transition-colors">🔒</span>
+                      )}
+                    </button>
+                  )}
+
+                  {/* Scanning indicator */}
+                  {isScanning && (
+                    <span className="text-[10px] text-slate-300 dark:text-slate-600 animate-pulse-soft select-none">
+                      scanning…
+                    </span>
+                  )}
+                </div>
+
+                {/* Privacy segmented control */}
                 <div className="flex items-center gap-0.5 bg-slate-100 dark:bg-slate-800 rounded-lg p-0.5">
                   {([0, 1, 2] as PrivacyMode[]).map((mode) => (
                     <button
@@ -420,49 +519,30 @@ export function WritingView({ entryId, onEntrySaved, onNavigateToSTTSettings }: 
                     </button>
                   ))}
                 </div>
-
-                {/* Divider */}
-                <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 flex-shrink-0" />
-
-                {/* Focus mode toggle */}
-                <button
-                  type="button"
-                  onClick={() => setDistractionFree(!distractionFree)}
-                  title={distractionFree ? 'Exit focus mode (Ctrl+Shift+F)' : 'Focus mode (Ctrl+Shift+F)'}
-                  className={`p-1.5 rounded-lg transition-all duration-200 ${
-                    distractionFree
-                      ? 'text-violet-500 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/20'
-                      : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                  }`}
-                >
-                  {distractionFree ? (
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5m0-4.5l5.25 5.25" />
-                    </svg>
-                  ) : (
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
-                    </svg>
-                  )}
-                </button>
               </div>
             </div>
 
-            {/* Title input */}
-            <input
-              type="text"
-              value={title}
-              onChange={handleTitleChange}
-              placeholder="Title (optional)"
-              className="
-                w-full text-2xl font-medium
-                bg-transparent border-none outline-none
-                focus-visible:ring-0 focus-visible:ring-offset-0
-                text-slate-600 dark:text-slate-300
-                placeholder:text-slate-300 dark:placeholder:text-slate-600
-                mb-6 flex-shrink-0
-              "
-            />
+            {/* Title input — collapses in distraction-free mode */}
+            <div
+              className={`transition-all duration-500 overflow-hidden flex-shrink-0 ${
+                distractionFree ? 'max-h-0 opacity-0' : 'max-h-20 opacity-100'
+              }`}
+            >
+              <input
+                type="text"
+                value={title}
+                onChange={handleTitleChange}
+                placeholder="Title (optional)"
+                className="
+                  w-full text-2xl font-medium
+                  bg-transparent border-none outline-none
+                  focus-visible:ring-0 focus-visible:ring-offset-0
+                  text-slate-600 dark:text-slate-300
+                  placeholder:text-slate-300 dark:placeholder:text-slate-600
+                  mb-6
+                "
+              />
+            </div>
 
             {/* Rich text editor */}
             <RichTextEditor
@@ -473,10 +553,11 @@ export function WritingView({ entryId, onEntrySaved, onNavigateToSTTSettings }: 
               onNavigateToSTTSettings={onNavigateToSTTSettings}
               insertText={pendingInsert}
               onInsertTextConsumed={() => setPendingInsert(null)}
+              distractionFree={distractionFree}
             />
 
             {/* ── Blank-page prompts CTA — fades away as user writes ── */}
-            {isNewEntry && showPrompts && (
+            {isNewEntry && showPrompts && !distractionFree && (
               <div
                 className={`absolute inset-0 flex items-end justify-center pb-16 rounded-2xl transition-all duration-500 pointer-events-none ${
                   isEditorEmpty ? 'opacity-100' : 'opacity-0'
@@ -506,10 +587,10 @@ export function WritingView({ entryId, onEntrySaved, onNavigateToSTTSettings }: 
           {/* ── Bottom status bar ── */}
           <div className="flex items-center mt-3 px-1 text-xs text-slate-400 dark:text-slate-500">
 
-            {/* Left: E2E badge — fades in flow */}
+            {/* Left: E2E badge — hidden in distraction-free, fades in flow */}
             <div
               className={`flex-1 flex items-center gap-1.5 transition-all duration-700 ${
-                inFlow ? 'opacity-25' : 'opacity-100'
+                distractionFree ? 'opacity-0 pointer-events-none' : inFlow ? 'opacity-25' : 'opacity-100'
               }`}
             >
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -525,23 +606,25 @@ export function WritingView({ entryId, onEntrySaved, onNavigateToSTTSettings }: 
               )}
             </div>
 
-            {/* Right: save indicator */}
-            <div className="flex-1 flex items-center justify-end gap-1.5">
-              {isSaving ? (
-                <span className="flex items-center gap-1.5">
-                  <span className="w-3 h-3 border-[1.5px] border-slate-300 dark:border-slate-600 border-t-violet-500 rounded-full animate-spin" />
-                  Saving...
-                </span>
-              ) : showCheckmark ? (
-                <span className="flex items-center gap-1.5 animate-fade-in">
-                  <svg className="w-3.5 h-3.5 text-emerald-500 animate-check-bounce" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                  </svg>
-                  {savedAgoText}
-                </span>
-              ) : (
-                <span>{savedAgoText}</span>
-              )}
+            {/* Right: save indicator only */}
+            <div className="flex-1 flex items-center justify-end">
+              <span className="flex items-center gap-1.5">
+                {isSaving ? (
+                  <>
+                    <span className="w-3 h-3 border-[1.5px] border-slate-300 dark:border-slate-600 border-t-violet-500 rounded-full animate-spin" />
+                    Saving…
+                  </>
+                ) : showCheckmark ? (
+                  <span className="flex items-center gap-1.5 animate-fade-in">
+                    <svg className="w-3.5 h-3.5 text-emerald-500 animate-check-bounce" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                    </svg>
+                    {savedAgoText}
+                  </span>
+                ) : (
+                  <span>{savedAgoText}</span>
+                )}
+              </span>
             </div>
           </div>
         </div>

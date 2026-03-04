@@ -36,6 +36,7 @@ pub fn create_journal_entry(
     encrypted_content: EncryptedContent,
     mood: i32,
     privacy_mode: Option<i32>,
+    location_weather: Option<String>,
 ) -> Result<JournalEntryRow, String> {
     // Validate mood range
     if !(1..=5).contains(&mood) {
@@ -47,7 +48,7 @@ pub fn create_journal_entry(
         return Err("Privacy mode must be 0, 1, or 2".to_string());
     }
 
-    db::create_entry(&db, &id, &encrypted_content, mood, pm)
+    db::create_entry(&db, &id, &encrypted_content, mood, pm, location_weather.as_deref())
 }
 
 /// Get a single journal entry by ID

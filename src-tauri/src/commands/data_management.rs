@@ -224,7 +224,7 @@ pub async fn import_data(
             .clamp(0, 2);
 
         // Try to create entry (skip if already exists)
-        match db::create_entry(&db, id, &ec, mood, privacy_mode) {
+        match db::create_entry(&db, id, &ec, mood, privacy_mode, None) {
             Ok(_) => imported_count += 1,
             Err(e) if e.contains("UNIQUE constraint") => continue,
             Err(e) => return Err(e),

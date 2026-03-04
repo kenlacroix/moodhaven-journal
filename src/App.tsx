@@ -27,6 +27,12 @@ function App() {
   const [currentView, setCurrentView] = useState<ViewType>('writing');
   const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
   const [showTutorial, setShowTutorial] = useState(false);
+  /**
+   * Incremented each time the user starts a genuinely new entry while already
+   * in write mode. Changing this key remounts WritingView, giving a clean slate
+   * without needing to navigate away.
+   */
+  const [writingKey, setWritingKey] = useState(0);
 
   // Schedule reminder notifications (hook checks enabled state internally)
   useReminderScheduler();
@@ -55,9 +61,11 @@ function App() {
 
   const handleNavigate = useCallback((view: ViewType) => {
     setCurrentView(view);
-    // Clear selected entry when navigating to writing view for new entry
     if (view === 'writing') {
       setSelectedEntryId(null);
+      // Always increment writingKey so the sidebar "New Entry" button gives a
+      // fresh WritingView even when the user is already writing a new entry.
+      setWritingKey((k) => k + 1);
     }
   }, []);
 
@@ -67,10 +75,11 @@ function App() {
     setCurrentView('writing');
   }, []);
 
-  // Create new entry
+  // Create new entry — increments writingKey to force a clean WritingView remount
   const handleNewEntry = useCallback(() => {
     setSelectedEntryId(null);
     setCurrentView('writing');
+    setWritingKey((k) => k + 1);
   }, []);
 
   // Navigate to settings with optional section scroll target
@@ -118,10 +127,10 @@ function App() {
           {/* Writing View - calm writing space (default) */}
           {currentView === 'writing' && (
             <WritingView
+              key={selectedEntryId ?? `new-${writingKey}`}
               entryId={selectedEntryId}
-              onEntrySaved={() => {
-                // Optionally refresh timeline, etc.
-              }}
+              onEntrySaved={() => {/* timeline refreshes on next navigation */}}
+              onNewEntry={handleNewEntry}
               onNavigateToSTTSettings={() => handleNavigateToSettings('speech-to-text')}
             />
           )}

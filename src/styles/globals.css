@@ -133,6 +133,14 @@
     background: radial-gradient(ellipse 130% 60% at 50% 0%, #1e1b2e 0%, #020617 55%);
   }
 
+  /* Focus / distraction-free mode — flat, near-white background */
+  .focus-bg {
+    background: #fafafa;
+  }
+  .dark .focus-bg {
+    background: #0a0a0f;
+  }
+
   /* Hide scrollbar utility */
   .scrollbar-hide {
     -ms-overflow-style: none;

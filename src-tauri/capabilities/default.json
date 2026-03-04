@@ -9,6 +9,8 @@
     "notification:default",
     "http:default",
     "dialog:default",
-    "fs:default"
+    "fs:default",
+    "core:window:allow-set-fullscreen",
+    "core:window:allow-is-fullscreen"
   ]
 }

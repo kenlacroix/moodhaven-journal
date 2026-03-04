@@ -16,6 +16,7 @@ import {
 import type {
   JournalEntry,
   JournalEntryFormData,
+  LocationWeather,
   MoodLevel,
   MoodStatistics,
   PrivacyMode,
@@ -30,6 +31,7 @@ interface EncryptedJournalEntryRow {
   encrypted_content: EncryptedData;
   mood: number;
   privacy_mode: number;
+  location_weather?: string; // JSON-encoded LocationWeather, not encrypted
   created_at: string;
   updated_at: string;
 }
@@ -134,7 +136,7 @@ function getPassword(): string {
  * Create a new journal entry (encrypts content automatically)
  */
 export async function createEntry(
-  data: JournalEntryFormData
+  data: JournalEntryFormData & { locationWeather?: LocationWeather }
 ): Promise<JournalEntry> {
   const password = getPassword();
 
@@ -154,6 +156,7 @@ export async function createEntry(
     encryptedContent: result.data,
     mood: data.mood,
     privacyMode: data.privacyMode,
+    locationWeather: data.locationWeather ? JSON.stringify(data.locationWeather) : null,
   });
 
   // Return decrypted entry
@@ -163,6 +166,7 @@ export async function createEntry(
     mood: row.mood as MoodLevel,
     privacyMode: (row.privacy_mode ?? 0) as PrivacyMode,
     tags: data.tags,
+    locationWeather: row.location_weather ? (JSON.parse(row.location_weather) as LocationWeather) : undefined,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -330,6 +334,7 @@ async function decryptEntry(
     mood: row.mood as MoodLevel,
     privacyMode: (row.privacy_mode ?? 0) as PrivacyMode,
     tags: [], // TODO: Fetch from entry_tags table
+    locationWeather: row.location_weather ? (JSON.parse(row.location_weather) as LocationWeather) : undefined,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -354,7 +359,8 @@ export async function getEntryById(id: string): Promise<JournalEntry | null> {
 }
 
 /**
- * Save entry (create or update)
+ * Save entry (create or update).
+ * locationWeather is only applied on initial creation — not on subsequent updates.
  */
 export async function saveEntry(data: {
   id?: string;
@@ -362,6 +368,7 @@ export async function saveEntry(data: {
   content: string;
   mood?: number;
   privacyMode?: PrivacyMode;
+  locationWeather?: LocationWeather;
 }): Promise<JournalEntry> {
   const formData: JournalEntryFormData = {
     content: data.content,
@@ -373,7 +380,7 @@ export async function saveEntry(data: {
   if (data.id) {
     return updateEntry(data.id, formData);
   } else {
-    return createEntry(formData);
+    return createEntry({ ...formData, locationWeather: data.locationWeather });
   }
 }
 

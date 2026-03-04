@@ -27,6 +27,8 @@ pub struct JournalEntryRow {
     pub mood: i32,
     /// Privacy mode: 0 = Open, 1 = Mindful (local analysis only), 2 = Private (no analysis)
     pub privacy_mode: i32,
+    /// JSON-encoded LocationWeather captured at write time (not encrypted; city-level only)
+    pub location_weather: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -112,6 +114,12 @@ impl Database {
             [],
         );
 
+        // Runtime migration: add location_weather column (nullable TEXT)
+        let _ = conn.execute(
+            "ALTER TABLE journal_entries ADD COLUMN location_weather TEXT",
+            [],
+        );
+
         Ok(Self {
             conn: Mutex::new(conn),
         })
@@ -193,6 +201,7 @@ pub fn create_entry(
     encrypted_content: &EncryptedContent,
     mood: i32,
     privacy_mode: i32,
+    location_weather: Option<&str>,
 ) -> Result<JournalEntryRow, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
@@ -200,15 +209,15 @@ pub fn create_entry(
         .map_err(|e| format!("JSON serialization failed: {}", e))?;
 
     conn.execute(
-        "INSERT INTO journal_entries (id, encrypted_content, mood, privacy_mode)
-         VALUES (?1, ?2, ?3, ?4)",
-        params![id, content_json, mood, privacy_mode],
+        "INSERT INTO journal_entries (id, encrypted_content, mood, privacy_mode, location_weather)
+         VALUES (?1, ?2, ?3, ?4, ?5)",
+        params![id, content_json, mood, privacy_mode, location_weather],
     )
     .map_err(|e| format!("Failed to create entry: {}", e))?;
 
     // Fetch the created entry using the same connection (avoid deadlock)
     conn.query_row(
-        "SELECT id, encrypted_content, mood, privacy_mode, created_at, updated_at
+        "SELECT id, encrypted_content, mood, privacy_mode, location_weather, created_at, updated_at
          FROM journal_entries WHERE id = ?1",
         params![id],
         |row| {
@@ -221,8 +230,9 @@ pub fn create_entry(
                 encrypted_content: ec,
                 mood: row.get(2)?,
                 privacy_mode: row.get(3)?,
-                created_at: row.get(4)?,
-                updated_at: row.get(5)?,
+                location_weather: row.get(4)?,
+                created_at: row.get(5)?,
+                updated_at: row.get(6)?,
             })
         },
     )
@@ -234,7 +244,7 @@ pub fn get_entry(db: &Database, id: &str) -> Result<Option<JournalEntryRow>, Str
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
     let result = conn.query_row(
-        "SELECT id, encrypted_content, mood, privacy_mode, created_at, updated_at
+        "SELECT id, encrypted_content, mood, privacy_mode, location_weather, created_at, updated_at
          FROM journal_entries WHERE id = ?1",
         params![id],
         |row| {
@@ -247,8 +257,9 @@ pub fn get_entry(db: &Database, id: &str) -> Result<Option<JournalEntryRow>, Str
                 encrypted_content,
                 mood: row.get(2)?,
                 privacy_mode: row.get(3)?,
-                created_at: row.get(4)?,
-                updated_at: row.get(5)?,
+                location_weather: row.get(4)?,
+                created_at: row.get(5)?,
+                updated_at: row.get(6)?,
             })
         },
     );
@@ -268,7 +279,7 @@ pub fn get_all_entries(db: &Database, limit: Option<i32>) -> Result<Vec<JournalE
 
     let mut stmt = conn
         .prepare(&format!(
-            "SELECT id, encrypted_content, mood, privacy_mode, created_at, updated_at
+            "SELECT id, encrypted_content, mood, privacy_mode, location_weather, created_at, updated_at
              FROM journal_entries
              ORDER BY created_at DESC{}",
             limit_clause
@@ -286,8 +297,9 @@ pub fn get_all_entries(db: &Database, limit: Option<i32>) -> Result<Vec<JournalE
                 encrypted_content,
                 mood: row.get(2)?,
                 privacy_mode: row.get(3)?,
-                created_at: row.get(4)?,
-                updated_at: row.get(5)?,
+                location_weather: row.get(4)?,
+                created_at: row.get(5)?,
+                updated_at: row.get(6)?,
             })
         })
         .map_err(|e| format!("Query failed: {}", e))?
@@ -307,7 +319,7 @@ pub fn get_entries_by_date_range(
 
     let mut stmt = conn
         .prepare(
-            "SELECT id, encrypted_content, mood, privacy_mode, created_at, updated_at
+            "SELECT id, encrypted_content, mood, privacy_mode, location_weather, created_at, updated_at
              FROM journal_entries
              WHERE date(created_at) BETWEEN ?1 AND ?2
              ORDER BY created_at DESC",
@@ -325,8 +337,9 @@ pub fn get_entries_by_date_range(
                 encrypted_content,
                 mood: row.get(2)?,
                 privacy_mode: row.get(3)?,
-                created_at: row.get(4)?,
-                updated_at: row.get(5)?,
+                location_weather: row.get(4)?,
+                created_at: row.get(5)?,
+                updated_at: row.get(6)?,
             })
         })
         .map_err(|e| format!("Query failed: {}", e))?
@@ -364,7 +377,7 @@ pub fn update_entry(
 
     // Fetch the updated entry using the same connection (avoid deadlock/race)
     conn.query_row(
-        "SELECT id, encrypted_content, mood, privacy_mode, created_at, updated_at
+        "SELECT id, encrypted_content, mood, privacy_mode, location_weather, created_at, updated_at
          FROM journal_entries WHERE id = ?1",
         params![id],
         |row| {
@@ -377,8 +390,9 @@ pub fn update_entry(
                 encrypted_content: ec,
                 mood: row.get(2)?,
                 privacy_mode: row.get(3)?,
-                created_at: row.get(4)?,
-                updated_at: row.get(5)?,
+                location_weather: row.get(4)?,
+                created_at: row.get(5)?,
+                updated_at: row.get(6)?,
             })
         },
     )

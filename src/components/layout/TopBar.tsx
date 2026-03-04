@@ -9,9 +9,11 @@
  * unobstructed.
  */
 
+import { useState, useEffect } from 'react';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useOuraContext } from '../../hooks/useOuraContext';
 import { toggleFullscreen } from '../../lib/windowUtils';
+import { SearchModal } from '../search/SearchModal';
 import type { ViewType } from './Sidebar';
 import type { OuraHealthBadge } from '../../types/oura';
 
@@ -20,6 +22,8 @@ const VIEW_LABELS: Record<ViewType, string> = {
   timeline:   'All Entries',
   onthisday:  'On This Day',
   insights:   'Insights',
+  calendar:   'Calendar',
+  analytics:  'Analytics',
   settings:   'Settings',
 };
 
@@ -86,9 +90,11 @@ interface TopBarProps {
   currentView: ViewType;
   onNavigate: (view: ViewType) => void;
   onLock: () => void;
+  onSelectEntry?: (id: string) => void;
 }
 
-export function TopBar({ currentView, onNavigate, onLock }: TopBarProps) {
+export function TopBar({ currentView, onNavigate, onLock, onSelectEntry }: TopBarProps) {
+  const [showSearch, setShowSearch] = useState(false);
   const distractionFree = useSettingsStore((s) => s.distractionFree);
   const setDistractionFree = useSettingsStore((s) => s.setDistractionFree);
   const theme = useSettingsStore((s) => s.settings.appearance.theme);
@@ -96,6 +102,18 @@ export function TopBar({ currentView, onNavigate, onLock }: TopBarProps) {
 
   const { summary: healthSummary, isEnabled: ouraEnabled } = useOuraContext();
   const hasHealth = ouraEnabled && healthSummary && healthSummary.badges.length > 0;
+
+  // Ctrl+K / Cmd+K to open search
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setShowSearch(true);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   const cycleTheme = () => {
     if (theme === 'light') setTheme('dark');
@@ -106,6 +124,7 @@ export function TopBar({ currentView, onNavigate, onLock }: TopBarProps) {
   const themeLabel = theme === 'light' ? 'Light mode' : theme === 'dark' ? 'Dark mode' : 'System theme';
 
   return (
+    <>
     <div
       className={`flex-shrink-0 flex items-center justify-between px-4 h-11 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm border-b border-slate-100 dark:border-slate-800 transition-all duration-500 ${
         distractionFree ? '-translate-y-full opacity-0 pointer-events-none h-0 overflow-hidden' : 'translate-y-0 opacity-100'
@@ -134,6 +153,13 @@ export function TopBar({ currentView, onNavigate, onLock }: TopBarProps) {
             ))}
           </div>
         )}
+
+        {/* Search */}
+        <IconBtn onClick={() => setShowSearch(true)} title="Search entries (Ctrl+K)">
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+        </IconBtn>
 
         {/* Focus mode toggle — only when writing */}
         {currentView === 'writing' && (
@@ -192,5 +218,14 @@ export function TopBar({ currentView, onNavigate, onLock }: TopBarProps) {
         </IconBtn>
       </div>
     </div>
+
+    {/* Search modal — fixed overlay, works regardless of DOM position */}
+    {showSearch && onSelectEntry && (
+      <SearchModal
+        onClose={() => setShowSearch(false)}
+        onSelectEntry={(id) => { setShowSearch(false); onSelectEntry(id); }}
+      />
+    )}
+    </>
   );
 }

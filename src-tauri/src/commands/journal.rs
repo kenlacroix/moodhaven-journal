@@ -103,6 +103,17 @@ pub fn delete_journal_entry(db: State<Database>, id: String) -> Result<bool, Str
     db::delete_entry(&db, &id)
 }
 
+/// Attach location/weather data to an existing entry.
+/// Called when geolocation resolves after the initial auto-save has already created the row.
+#[tauri::command]
+pub fn patch_entry_location_weather(
+    db: State<Database>,
+    id: String,
+    location_weather: String,
+) -> Result<(), String> {
+    db::patch_entry_location_weather(&db, &id, &location_weather)
+}
+
 /// Get mood statistics for analytics
 #[tauri::command]
 pub fn get_mood_statistics(

@@ -48,6 +48,7 @@ pub fn run() {
             commands::get_journal_entries_by_date,
             commands::update_journal_entry,
             commands::delete_journal_entry,
+            commands::patch_entry_location_weather,
             // Statistics
             commands::get_mood_statistics,
             commands::get_overall_statistics,

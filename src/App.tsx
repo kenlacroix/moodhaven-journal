@@ -10,6 +10,8 @@ import { WritingView } from './pages/WritingView';
 import { TimelineView } from './pages/TimelineView';
 import { OnThisDayView } from './pages/OnThisDayView';
 import { InsightsView } from './pages/InsightsView';
+import { CalendarPage } from './pages/CalendarPage';
+import { AnalyticsPage } from './pages/AnalyticsPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { LockScreen } from './pages/LockScreen';
 import { SetupScreen } from './pages/SetupScreen';
@@ -121,6 +123,7 @@ function App() {
         currentView={currentView}
         onNavigate={handleNavigate}
         onLock={lock}
+        onSelectEntry={handleSelectEntry}
       >
         {/* Keyed wrapper replays fade animation on view change */}
         <div key={currentView} className="h-full animate-view-enter">
@@ -151,6 +154,16 @@ function App() {
           {/* Insights View - AI content only here */}
           {currentView === 'insights' && (
             <InsightsView />
+          )}
+
+          {/* Calendar View */}
+          {currentView === 'calendar' && (
+            <CalendarPage onNavigateToJournal={handleNewEntry} />
+          )}
+
+          {/* Analytics View */}
+          {currentView === 'analytics' && (
+            <AnalyticsPage />
           )}
 
           {/* Settings */}

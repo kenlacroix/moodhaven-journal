@@ -24,7 +24,7 @@
  */
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { saveEntry, getEntryById } from '../lib/journalService';
+import { saveEntry, getEntryById, patchEntryLocationWeather } from '../lib/journalService';
 import { captureLocationWeather, getWeatherEmoji } from '../lib/locationWeatherService';
 import { RichTextEditor } from '../components/editor';
 import { PromptDrawer } from '../components/ai/PromptDrawer';
@@ -34,6 +34,8 @@ import { scoreContentMood } from '../lib/metadataExtractor';
 import { getStreakStats, getOverallStats } from '../lib/analyticsService';
 import type { LocationWeather, MoodLevel, PrivacyMode } from '../types/journal';
 import { MOOD_OPTIONS, PRIVACY_MODE_LABELS, PRIVACY_MODE_DESCRIPTIONS } from '../types/journal';
+import type { JournalTemplate } from '../lib/journalTemplates';
+import { formatTemplateContent } from '../lib/journalTemplates';
 
 interface WritingViewProps {
   entryId?: string | null;
@@ -62,6 +64,25 @@ function getFormattedDate(d: Date): string {
     day: 'numeric',
     year: 'numeric',
   });
+}
+
+// ── Template usage tracking ───────────────────────────────────────────────────
+
+function getTodayKey(): string {
+  return `mb_used_templates_${new Date().toISOString().slice(0, 10)}`;
+}
+
+function getUsedTemplates(): string[] {
+  try { return JSON.parse(localStorage.getItem(getTodayKey()) ?? '[]') as string[]; }
+  catch { return []; }
+}
+
+function markTemplateUsed(id: string): void {
+  const used = getUsedTemplates();
+  if (!used.includes(id)) {
+    try { localStorage.setItem(getTodayKey(), JSON.stringify([...used, id])); }
+    catch { /* ignore */ }
+  }
 }
 
 // ── Mood dot colours ──────────────────────────────────────────────────────────
@@ -157,6 +178,7 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
   const moodScoreTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [usedTemplateIds, setUsedTemplateIds] = useState<string[]>(() => getUsedTemplates());
   const setShowPrompts = useSettingsStore((s) => s.setShowPrompts);
   const showPrompts = useSettingsStore((s) => s.settings.journal.showPrompts);
   const distractionFree = useSettingsStore((s) => s.distractionFree);
@@ -194,14 +216,21 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
     return () => clearInterval(id);
   }, []);
 
-  // Capture weather + location in background when starting a new entry
+  // Capture weather + location in background when starting a new entry.
+  // If geolocation resolves after the first auto-save has already created the row,
+  // we patch the weather onto the existing entry via a targeted SQL update.
   useEffect(() => {
     if (!autoLocationWeather || !isNewEntry) return;
     let cancelled = false;
     captureLocationWeather().then((w) => {
-      if (!cancelled && w) {
-        locationWeatherRef.current = w;
-        setLocationWeather(w);
+      if (cancelled || !w) return;
+      locationWeatherRef.current = w;
+      setLocationWeather(w);
+      // If entry was already saved before weather resolved, patch it now
+      if (savedEntryIdRef.current) {
+        patchEntryLocationWeather(savedEntryIdRef.current, w).catch((err) => {
+          console.error('Failed to patch location weather:', err);
+        });
       }
     });
     return () => { cancelled = true; };
@@ -365,6 +394,12 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
 
   const handleUsePrompt = useCallback((prompt: { text: string }) => {
     setPendingInsert(prompt.text + '\n\n');
+  }, []);
+
+  const handleUseTemplate = useCallback((template: JournalTemplate) => {
+    setPendingInsert(formatTemplateContent(template));
+    markTemplateUsed(template.id);
+    setUsedTemplateIds(getUsedTemplates());
   }, []);
 
   // Reset mood to auto mode
@@ -643,6 +678,8 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
           onUsePrompt={handleUsePrompt}
           onRefresh={refreshPrompts}
           onDisablePrompts={() => setShowPrompts(false)}
+          onUseTemplate={handleUseTemplate}
+          usedTemplateIds={usedTemplateIds}
         />
       )}
     </div>

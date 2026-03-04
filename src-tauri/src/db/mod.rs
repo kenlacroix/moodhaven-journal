@@ -239,6 +239,24 @@ pub fn create_entry(
     .map_err(|e| format!("Failed to fetch created entry: {}", e))
 }
 
+/// Attach (or replace) location_weather on an existing entry.
+/// Called when geolocation resolves after the first auto-save has already created the row.
+pub fn patch_entry_location_weather(
+    db: &Database,
+    id: &str,
+    location_weather: &str,
+) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+
+    conn.execute(
+        "UPDATE journal_entries SET location_weather = ?1 WHERE id = ?2",
+        params![location_weather, id],
+    )
+    .map_err(|e| format!("Failed to patch location_weather: {}", e))?;
+
+    Ok(())
+}
+
 /// Get a single entry by ID
 pub fn get_entry(db: &Database, id: &str) -> Result<Option<JournalEntryRow>, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;

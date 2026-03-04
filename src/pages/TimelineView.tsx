@@ -12,6 +12,8 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { getAllEntries, deleteEntry } from '../lib/journalService';
 import { getMoodColor } from '../lib/chartUtils';
 import { getRelativeDateLabel, formatDate } from '../lib/dateUtils';
+import { getWeatherEmoji } from '../lib/locationWeatherService';
+import { EntryActionsMenu } from '../components/journal/EntryActionsMenu';
 import type { JournalEntry } from '../types/journal';
 import { MOOD_OPTIONS } from '../types/journal';
 
@@ -33,8 +35,6 @@ export function TimelineView({ onSelectEntry, onNewEntry }: TimelineViewProps) {
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Delete confirmation (Feature 4)
-  const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
 
   // Date range (Feature 5)
   const [dateRange, setDateRange] = useState<'all' | 'week' | 'month' | '30days'>('all');
@@ -186,30 +186,15 @@ export function TimelineView({ onSelectEntry, onNewEntry }: TimelineViewProps) {
   const isAnyFilterActive =
     moodFilter !== null || dateRange !== 'all' || tagFilter !== null || debouncedQuery !== '';
 
-  // Handle delete with optimistic removal
-  const handleDelete = useCallback(
-    async (id: string, e: React.MouseEvent) => {
-      e.stopPropagation();
-      if (confirmingDeleteId === id) {
-        // Second click — perform delete
-        setEntries((prev) => prev.filter((entry) => entry.id !== id));
-        setConfirmingDeleteId(null);
-        try {
-          await deleteEntry(id);
-        } catch (err) {
-          console.error('Failed to delete entry:', err);
-          loadEntries(); // Re-fetch on failure
-        }
-      } else {
-        // First click — show confirmation
-        setConfirmingDeleteId(id);
-      }
-    },
-    [confirmingDeleteId],
-  );
-
-  const handleDeleteBlur = useCallback(() => {
-    setConfirmingDeleteId(null);
+  // Handle delete with optimistic removal (called by EntryActionsMenu after confirm)
+  const handleDelete = useCallback(async (id: string) => {
+    setEntries((prev) => prev.filter((entry) => entry.id !== id));
+    try {
+      await deleteEntry(id);
+    } catch (err) {
+      console.error('Failed to delete entry:', err);
+      loadEntries(); // Re-fetch on failure
+    }
   }, []);
 
   // Build relative date header (recalculates when currentDate changes)
@@ -501,7 +486,6 @@ export function TimelineView({ onSelectEntry, onNewEntry }: TimelineViewProps) {
             <div className="space-y-2">
               {dateEntries.map((entry, i) => {
                 const moodColor = getMoodColor(entry.mood ?? 0);
-                const isConfirmingDelete = confirmingDeleteId === entry.id;
                 return (
                   <button
                     key={entry.id}
@@ -513,25 +497,8 @@ export function TimelineView({ onSelectEntry, onNewEntry }: TimelineViewProps) {
                     }}
                     className="relative w-full text-left p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 border-l-4 hover:border-slate-200 dark:hover:border-slate-700 shadow-sm hover:shadow-md hover:-translate-y-px transition-all duration-200 group animate-entry-in"
                   >
-                    {/* Delete button (Feature 4) */}
-                    <button
-                      type="button"
-                      onClick={(e) => handleDelete(entry.id, e)}
-                      onBlur={handleDeleteBlur}
-                      className={`absolute top-3 right-3 z-10 flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-all duration-150 ${
-                        isConfirmingDelete
-                          ? 'opacity-100 bg-red-50 dark:bg-red-950 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900'
-                          : 'opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950'
-                      }`}
-                    >
-                      {isConfirmingDelete ? (
-                        'Delete?'
-                      ) : (
-                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      )}
-                    </button>
+                    {/* Actions dropdown (⋯) */}
+                    <EntryActionsMenu entry={entry} onDelete={handleDelete} />
 
                     <div className="flex items-start gap-3">
                       {/* Mood indicator */}
@@ -601,13 +568,24 @@ export function TimelineView({ onSelectEntry, onNewEntry }: TimelineViewProps) {
                           </div>
                         )}
 
-                        {/* Time */}
-                        <p className="text-xs text-slate-400 dark:text-slate-500 mt-2">
-                          {new Date(entry.created_at).toLocaleTimeString([], {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                        </p>
+                        {/* Footer: time + weather chip */}
+                        <div className="flex items-center gap-3 mt-2">
+                          <p className="text-xs text-slate-400 dark:text-slate-500">
+                            {new Date(entry.created_at).toLocaleTimeString([], {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </p>
+                          {entry.locationWeather?.city && (
+                            <span className="flex items-center gap-0.5 text-[10px] text-slate-400 dark:text-slate-500">
+                              <span>{getWeatherEmoji(entry.locationWeather.weatherCode)}</span>
+                              <span>{entry.locationWeather.city}</span>
+                              {entry.locationWeather.temperature !== undefined && (
+                                <span>· {Math.round(entry.locationWeather.temperature)}°</span>
+                              )}
+                            </span>
+                          )}
+                        </div>
                       </div>
 
                       {/* Arrow */}

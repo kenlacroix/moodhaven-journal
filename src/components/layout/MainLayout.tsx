@@ -17,10 +17,11 @@ interface MainLayoutProps {
   currentView: ViewType;
   onNavigate: (view: ViewType) => void;
   onLock: () => void;
+  onSelectEntry?: (id: string) => void;
   children: React.ReactNode;
 }
 
-export function MainLayout({ currentView, onNavigate, onLock, children }: MainLayoutProps) {
+export function MainLayout({ currentView, onNavigate, onLock, onSelectEntry, children }: MainLayoutProps) {
   const distractionFree = useSettingsStore((s) => s.distractionFree);
 
   return (
@@ -44,6 +45,7 @@ export function MainLayout({ currentView, onNavigate, onLock, children }: MainLa
           currentView={currentView}
           onNavigate={onNavigate}
           onLock={onLock}
+          onSelectEntry={onSelectEntry}
         />
         <main className="flex-1 min-h-0 overflow-auto bg-slate-50 dark:bg-slate-950">
           {children}

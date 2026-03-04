@@ -385,6 +385,20 @@ export async function saveEntry(data: {
 }
 
 /**
+ * Attach location/weather data to an already-created entry.
+ * Used when geolocation resolves after the first auto-save has fired.
+ */
+export async function patchEntryLocationWeather(
+  id: string,
+  weather: LocationWeather
+): Promise<void> {
+  await invoke('patch_entry_location_weather', {
+    id,
+    locationWeather: JSON.stringify(weather),
+  });
+}
+
+/**
  * Search entries by content
  */
 export async function searchEntries(query: string): Promise<JournalEntry[]> {

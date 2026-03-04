@@ -15,6 +15,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import type { AIPrompt } from '../../types/ai';
+import { TemplateSelector } from '../journal/TemplateSelector';
+import type { JournalTemplate } from '../../lib/journalTemplates';
 
 // ============================================================================
 // Category colours (shared with PromptCard)
@@ -149,7 +151,7 @@ function TabBtn({
 // Main drawer
 // ============================================================================
 
-type Tab = 'forYou' | 'general' | 'health';
+type Tab = 'forYou' | 'general' | 'health' | 'templates';
 
 interface PromptDrawerProps {
   isOpen: boolean;
@@ -162,6 +164,8 @@ interface PromptDrawerProps {
   onUsePrompt: (prompt: AIPrompt) => void;
   onRefresh: () => void;
   onDisablePrompts: () => void;
+  onUseTemplate?: (template: JournalTemplate) => void;
+  usedTemplateIds?: string[];
 }
 
 export function PromptDrawer({
@@ -175,6 +179,8 @@ export function PromptDrawer({
   onUsePrompt,
   onRefresh,
   onDisablePrompts,
+  onUseTemplate,
+  usedTemplateIds,
 }: PromptDrawerProps) {
   const [tab, setTab] = useState<Tab>('forYou');
 
@@ -207,7 +213,16 @@ export function PromptDrawer({
   const activePrompts =
     tab === 'forYou' ? forYouPrompts
     : tab === 'general' ? generalPrompts
-    : healthPrompts;
+    : tab === 'health' ? healthPrompts
+    : [];
+
+  const handleUseTemplate = useCallback(
+    (template: JournalTemplate) => {
+      onUseTemplate?.(template);
+      onClose();
+    },
+    [onUseTemplate, onClose],
+  );
 
   const showHealthTab = healthPrompts.length > 0 || isLoading;
 
@@ -305,31 +320,45 @@ export function PromptDrawer({
                   <span className="text-[11px]">🌿</span>
                 </TabBtn>
               )}
+              {onUseTemplate && (
+                <TabBtn active={tab === 'templates'} onClick={() => setTab('templates')}>
+                  Templates
+                </TabBtn>
+              )}
             </div>
           </div>
 
-          {/* ── Prompt grid (scrollable) ── */}
+          {/* ── Content (scrollable) ── */}
           <div className="flex-1 overflow-y-auto px-5 pb-2">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pb-2">
-              {isLoading ? (
-                <>
-                  <CardSkeleton />
-                  <CardSkeleton />
-                  <CardSkeleton />
-                  <CardSkeleton />
-                </>
-              ) : activePrompts.length > 0 ? (
-                activePrompts.map((p) => (
-                  <DrawerPromptCard key={p.id} prompt={p} onUse={handleUse} />
-                ))
-              ) : (
-                <div className="col-span-2 py-8 text-center text-sm text-slate-400 dark:text-slate-500">
-                  {tab === 'health'
-                    ? 'Connect your Oura Ring and journal for a few days to unlock health-aware prompts.'
-                    : 'No prompts available.'}
-                </div>
-              )}
-            </div>
+            {tab === 'templates' ? (
+              <div className="pt-1 pb-2">
+                <TemplateSelector
+                  onSelect={handleUseTemplate}
+                  usedTemplateIds={usedTemplateIds}
+                />
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pb-2">
+                {isLoading ? (
+                  <>
+                    <CardSkeleton />
+                    <CardSkeleton />
+                    <CardSkeleton />
+                    <CardSkeleton />
+                  </>
+                ) : activePrompts.length > 0 ? (
+                  activePrompts.map((p) => (
+                    <DrawerPromptCard key={p.id} prompt={p} onUse={handleUse} />
+                  ))
+                ) : (
+                  <div className="col-span-2 py-8 text-center text-sm text-slate-400 dark:text-slate-500">
+                    {tab === 'health'
+                      ? 'Connect your Oura Ring and journal for a few days to unlock health-aware prompts.'
+                      : 'No prompts available.'}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* ── Footer ── */}

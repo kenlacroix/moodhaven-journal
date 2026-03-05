@@ -2,25 +2,28 @@
  * InsightsView - Merged Insights + Analytics view
  *
  * Sections (top to bottom):
- *   ✦ AI Insights  [AI badge]
+ *   🤖 AI Insights  [Off / Beta / Active badge]
  *   ─────────────────────────────
  *   MoodWeatherCard
  *   GratitudeStreakCard (if streak > 0)
  *   InsightsPanel (patterns + AI observations)
  *   WeeklyReflectionCard (if AI enabled)
- *   ── If AI disabled: CTA card with link to Settings → AI ──
+ *   ── If AI disabled: feature explanation CTA card ──
  *
- *   📊 Local Analytics  [Computed on-device badge]
+ *   📊 Your Stats  [Computed on-device badge]
  *   ─────────────────────────────
+ *   Book filter chips (if multiple books)
  *   StatsSummary
  *   Mood Trend + Mood Distribution
  *   Sentiment Overview + Journaling Habits
  *   Emotional Trends + Day of Week
  */
 
+import { useState } from 'react';
 import { useInsights } from '../hooks/useInsights';
 import { useAnalytics } from '../hooks/useAnalytics';
 import { useAIInsights } from '../hooks/useAIInsights';
+import { useBooksStore } from '../stores/booksStore';
 import { MoodWeatherCard } from '../components/ai/MoodWeatherCard';
 import { GratitudeStreakCard } from '../components/ai/GratitudeStreakCard';
 import { InsightsPanel } from '../components/ai/InsightsPanel';
@@ -35,16 +38,78 @@ import {
   JournalingHabits,
 } from '../components/analytics';
 
-// ── Section divider ────────────────────────────────────────────────────────────
+// ── Section header ──────────────────────────────────────────────────────────────
 
-function SectionDivider({ label, badge }: { label: string; badge: string }) {
+function SectionHeader({
+  icon,
+  title,
+  badge,
+  badgeColor = 'slate',
+}: {
+  icon: string;
+  title: string;
+  badge: string;
+  badgeColor?: 'slate' | 'violet' | 'emerald' | 'amber';
+}) {
+  const badgeClasses = {
+    slate: 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400',
+    violet: 'bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400',
+    emerald: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400',
+    amber: 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400',
+  };
   return (
-    <div className="flex items-center gap-2 my-5">
-      <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">{label}</span>
-      <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 font-medium">
+    <div className="flex items-center gap-3 mt-8 mb-5">
+      <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+        <span>{icon}</span>
+        {title}
+      </h2>
+      <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wide ${badgeClasses[badgeColor]}`}>
         {badge}
       </span>
       <div className="flex-1 h-px bg-slate-100 dark:bg-slate-800" />
+    </div>
+  );
+}
+
+// ── AI disabled CTA ─────────────────────────────────────────────────────────────
+
+function AIDisabledCard({ onEnable }: { onEnable?: () => void }) {
+  return (
+    <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm p-6 mb-4">
+      <div className="flex items-center gap-3 mb-3">
+        <div className="w-9 h-9 rounded-xl bg-violet-50 dark:bg-violet-900/20 flex items-center justify-center text-lg">
+          🤖
+        </div>
+        <div>
+          <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">AI Insights — Off</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Get personalised journaling prompts and mood trend analysis powered by AI.
+          </p>
+        </div>
+      </div>
+
+      <div className="space-y-1.5 mb-4">
+        {[
+          'Only mood metadata is processed — never your journal content',
+          'Your journal text never leaves your device',
+          'You control which journals and entries are included',
+        ].map((item) => (
+          <div key={item} className="flex items-start gap-2">
+            <span className="text-emerald-500 text-xs mt-0.5 flex-shrink-0">✅</span>
+            <span className="text-xs text-slate-600 dark:text-slate-300">{item}</span>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={onEnable}
+          className="px-4 py-2 text-xs font-semibold bg-violet-500 text-white rounded-xl hover:bg-violet-600 transition-colors"
+        >
+          Enable AI Insights →
+        </button>
+      </div>
     </div>
   );
 }
@@ -73,7 +138,13 @@ export function InsightsView({ onNavigateToSettings }: InsightsViewProps) {
   const analytics = useAnalytics();
   const { metadata: aiMetadata, isLoading: isMetadataLoading } = useAIInsights();
 
+  const { books } = useBooksStore();
+  const [selectedBookFilter, setSelectedBookFilter] = useState<string | null>(null);
+
   const allIndicators = aiMetadata?.emotionalProfile.dominantIndicators || [];
+
+  const aiStatusBadge = isAIEnabled ? 'Active' : 'Off';
+  const aiStatusColor: 'emerald' | 'slate' = isAIEnabled ? 'emerald' : 'slate';
 
   // Empty state (no entries at all)
   if (!isLoading && !hasData) {
@@ -83,7 +154,7 @@ export function InsightsView({ onNavigateToSettings }: InsightsViewProps) {
           <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-3xl">
             🌱
           </div>
-          <h2 className="text-lg font-medium text-slate-800 dark:text-slate-100 mb-2">
+          <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-2">
             No entries yet
           </h2>
           <p className="text-slate-500 dark:text-slate-400 text-sm">
@@ -98,20 +169,20 @@ export function InsightsView({ onNavigateToSettings }: InsightsViewProps) {
     <div className="max-w-2xl mx-auto px-6 py-8">
 
       {/* ── AI Insights section ── */}
-      <SectionDivider label="✦ AI Insights" badge="Personalised" />
+      <SectionHeader
+        icon="🤖"
+        title="AI Insights"
+        badge={aiStatusBadge}
+        badgeColor={aiStatusColor}
+      />
 
-      {/* Header row */}
-      <div className="flex items-start justify-between mb-4">
-        <p className="text-sm text-slate-500 dark:text-slate-400">
-          {isAIEnabled
-            ? 'AI-powered observations based on your mood patterns'
-            : 'Your mood patterns — all analysis runs locally'}
-        </p>
+      {/* Refresh button */}
+      <div className="flex items-center justify-end mb-4">
         <button
           type="button"
           onClick={() => void refresh()}
           disabled={isLoading}
-          className="p-2 rounded-lg text-slate-400 hover:text-violet-600 dark:hover:text-violet-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors disabled:opacity-50 flex-shrink-0 ml-2"
+          className="p-2 rounded-lg text-slate-400 hover:text-violet-600 dark:hover:text-violet-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors disabled:opacity-50"
           aria-label="Refresh insights"
         >
           <svg
@@ -172,29 +243,9 @@ export function InsightsView({ onNavigateToSettings }: InsightsViewProps) {
         </div>
       )}
 
-      {/* AI disabled — CTA card */}
+      {/* AI disabled — feature explanation CTA */}
       {!isAIEnabled && (
-        <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 p-6 text-center mb-4">
-          <div className="w-10 h-10 mx-auto mb-3 rounded-full bg-violet-50 dark:bg-violet-900/20 flex items-center justify-center">
-            <svg className="w-5 h-5 text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
-            </svg>
-          </div>
-          <p className="text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">
-            Unlock AI Insights
-          </p>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mb-3 max-w-xs mx-auto">
-            Enable AI to get personalised prompts, wellness observations and weekly reflections based
-            on your anonymised mood patterns.
-          </p>
-          <button
-            type="button"
-            onClick={() => onNavigateToSettings?.('ai')}
-            className="text-xs font-medium text-violet-500 dark:text-violet-400 hover:text-violet-600 dark:hover:text-violet-300 transition-colors"
-          >
-            Enable in Settings → AI
-          </button>
-        </div>
+        <AIDisabledCard onEnable={() => onNavigateToSettings?.('ai')} />
       )}
 
       {/* Privacy note */}
@@ -210,7 +261,48 @@ export function InsightsView({ onNavigateToSettings }: InsightsViewProps) {
       </div>
 
       {/* ── Local Analytics section ── */}
-      <SectionDivider label="📊 Local Analytics" badge="Computed on-device" />
+      <SectionHeader
+        icon="📊"
+        title="Your Stats"
+        badge="Computed on-device"
+        badgeColor="slate"
+      />
+
+      {/* Book filter chips (if multiple books) */}
+      {books.length > 1 && (
+        <div className="flex flex-wrap gap-2 mb-5">
+          <button
+            type="button"
+            onClick={() => setSelectedBookFilter(null)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+              selectedBookFilter === null
+                ? 'bg-violet-500 text-white shadow-sm'
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+            }`}
+          >
+            📚 All books
+          </button>
+          {books.map((book) => (
+            <button
+              key={book.id}
+              type="button"
+              onClick={() => setSelectedBookFilter(book.id === selectedBookFilter ? null : book.id)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                selectedBookFilter === book.id
+                  ? 'bg-violet-500 text-white shadow-sm'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+              }`}
+            >
+              {book.emoji} {book.name}
+            </button>
+          ))}
+          {selectedBookFilter && (
+            <span className="flex items-center text-xs text-slate-400 italic">
+              — stats for selected journal
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Error */}
       {analytics.error && (
@@ -239,46 +331,66 @@ export function InsightsView({ onNavigateToSettings }: InsightsViewProps) {
 
       {/* Row 1: Mood Trend + Distribution */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        <MoodTrendChart
-          data={analytics.trendData}
-          period={analytics.trendPeriod}
-          onPeriodChange={analytics.setTrendPeriod}
-          isLoading={analytics.isLoading || analytics.isTrendLoading}
-        />
-        <MoodDistributionChart
-          data={analytics.data?.moodDistribution || []}
-          isLoading={analytics.isLoading}
-        />
+        <div>
+          <MoodTrendChart
+            data={analytics.trendData}
+            period={analytics.trendPeriod}
+            onPeriodChange={analytics.setTrendPeriod}
+            isLoading={analytics.isLoading || analytics.isTrendLoading}
+          />
+          <p className="mt-2 text-xs text-slate-400 dark:text-slate-500 text-center">
+            Mood score (1–5) over time
+          </p>
+        </div>
+        <div>
+          <MoodDistributionChart
+            data={analytics.data?.moodDistribution || []}
+            isLoading={analytics.isLoading}
+          />
+          <p className="mt-2 text-xs text-slate-400 dark:text-slate-500 text-center">
+            Distribution of mood entries by level
+          </p>
+        </div>
       </div>
 
       {/* Row 2: Sentiment + Habits */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        <SentimentOverview
-          sentimentBreakdown={aiMetadata?.sentimentBreakdown || {
-            positive: 0,
-            negative: 0,
-            neutral: 0,
-            mixed: 0,
-          }}
-          isLoading={isMetadataLoading}
-        />
-        <JournalingHabits
-          patterns={aiMetadata?.patterns || {
-            bestDayOfWeek: 'Unknown',
-            worstDayOfWeek: 'Unknown',
-            bestTimeOfDay: 'evening',
-            frequency: 'rare',
-            currentStreak: 0,
-            longestStreak: 0,
-          }}
-          emotionalProfile={aiMetadata?.emotionalProfile || {
-            dominantIndicators: [],
-            recentIndicators: [],
-            gratitudeFrequency: 0,
-            goalsFrequency: 0,
-          }}
-          isLoading={isMetadataLoading}
-        />
+        <div>
+          <SentimentOverview
+            sentimentBreakdown={aiMetadata?.sentimentBreakdown || {
+              positive: 0,
+              negative: 0,
+              neutral: 0,
+              mixed: 0,
+            }}
+            isLoading={isMetadataLoading}
+          />
+          <p className="mt-2 text-xs text-slate-400 dark:text-slate-500 text-center">
+            Emotional tone extracted from your writing
+          </p>
+        </div>
+        <div>
+          <JournalingHabits
+            patterns={aiMetadata?.patterns || {
+              bestDayOfWeek: 'Unknown',
+              worstDayOfWeek: 'Unknown',
+              bestTimeOfDay: 'evening',
+              frequency: 'rare',
+              currentStreak: 0,
+              longestStreak: 0,
+            }}
+            emotionalProfile={aiMetadata?.emotionalProfile || {
+              dominantIndicators: [],
+              recentIndicators: [],
+              gratitudeFrequency: 0,
+              goalsFrequency: 0,
+            }}
+            isLoading={isMetadataLoading}
+          />
+          <p className="mt-2 text-xs text-slate-400 dark:text-slate-500 text-center">
+            When and how often you journal
+          </p>
+        </div>
       </div>
 
       {/* Emotional Themes */}
@@ -287,6 +399,9 @@ export function InsightsView({ onNavigateToSettings }: InsightsViewProps) {
           indicators={allIndicators}
           isLoading={isMetadataLoading}
         />
+        <p className="mt-2 text-xs text-slate-400 dark:text-slate-500 text-center">
+          Recurring themes detected across your entries
+        </p>
       </div>
 
       {/* Day of Week */}
@@ -295,12 +410,19 @@ export function InsightsView({ onNavigateToSettings }: InsightsViewProps) {
           data={analytics.data?.dayOfWeekStats || []}
           isLoading={analytics.isLoading}
         />
+        <p className="mt-2 text-xs text-slate-400 dark:text-slate-500 text-center">
+          Average mood by day of week
+        </p>
       </div>
 
       {/* Empty state */}
       {!analytics.isLoading && analytics.data?.totalEntries === 0 && (
         <div className="text-center py-8">
-          <p className="text-slate-500 dark:text-slate-400">
+          <div className="w-14 h-14 mx-auto mb-3 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-2xl">
+            📈
+          </div>
+          <p className="text-slate-600 dark:text-slate-300 font-medium mb-1">No data yet</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400">
             Start tracking your mood to see analytics here.
           </p>
         </div>

@@ -46,6 +46,19 @@ coverage/
 *.tmp
 *.temp
 
+# MoodBloom runtime data — never commit user data or backups
+*.db
+*.sqlite
+*.sqlite3
+*.moodbloom
+
+# Whisper STT models (large binary files downloaded at runtime)
+src-tauri/binaries/
+binaries/
+models/
+*.bin
+*.ggml
+
 # Lock files (optional, uncomment if not using)
 # package-lock.json
 # yarn.lock

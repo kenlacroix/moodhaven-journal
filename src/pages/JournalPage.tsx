@@ -42,7 +42,6 @@ export function JournalPage() {
 
   const handleEntryClick = useCallback((entry: JournalEntry) => {
     setSelectedEntry(entry);
-    console.log('Selected entry:', entry.id);
   }, []);
 
   const handleDeleteEntry = useCallback(

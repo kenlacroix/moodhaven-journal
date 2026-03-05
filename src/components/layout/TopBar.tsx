@@ -35,24 +35,39 @@ const SENTIMENT_BG: Record<OuraHealthBadge['sentiment'], string> = {
 };
 
 // ── Theme icons ──────────────────────────────────────────────────────────────
+// Each icon shows the NEXT mode you'll switch to when clicking
 
-const THEME_ICONS = {
-  light: (
-    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v1.5M12 19.5V21M4.22 4.22l1.06 1.06M18.72 18.72l1.06 1.06M3 12h1.5M19.5 12H21M4.22 19.78l1.06-1.06M18.72 5.28l1.06-1.06M12 7.5a4.5 4.5 0 100 9 4.5 4.5 0 000-9z" />
-    </svg>
-  ),
-  dark: (
-    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />
-    </svg>
-  ),
-  system: (
-    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25m18 0A2.25 2.25 0 0018.75 3H5.25A2.25 2.25 0 003 5.25m18 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 7.409A2.25 2.25 0 012.25 5.493V5.25" />
-    </svg>
-  ),
-} as const;
+const ICON_SUN = (
+  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v1.5M12 19.5V21M4.22 4.22l1.06 1.06M18.72 18.72l1.06 1.06M3 12h1.5M19.5 12H21M4.22 19.78l1.06-1.06M18.72 5.28l1.06-1.06M12 7.5a4.5 4.5 0 100 9 4.5 4.5 0 000-9z" />
+  </svg>
+);
+const ICON_MOON = (
+  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />
+  </svg>
+);
+const ICON_MONITOR = (
+  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25m18 0A2.25 2.25 0 0018.75 3H5.25A2.25 2.25 0 003 5.25m18 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 7.409A2.25 2.25 0 012.25 5.493V5.25" />
+  </svg>
+);
+
+// When current mode is X, show icon for next destination:
+// light → show moon ("Switch to dark")
+// dark  → show sun  ("Switch to light")
+// system → show monitor ("System preference")
+const THEME_NEXT_ICON: Record<string, React.ReactNode> = {
+  light: ICON_MOON,
+  dark: ICON_SUN,
+  system: ICON_MONITOR,
+};
+
+const THEME_NEXT_LABEL: Record<string, string> = {
+  light: 'Switch to dark mode',
+  dark: 'Switch to light mode',
+  system: 'System preference (click to switch to light)',
+};
 
 // ── Icon button ──────────────────────────────────────────────────────────────
 
@@ -120,8 +135,6 @@ export function TopBar({ currentView, onLock, onSelectEntry, onNewEntry, onOpenB
     else setTheme('light');
   };
 
-  const themeLabel = theme === 'light' ? 'Light mode' : theme === 'dark' ? 'Dark mode' : 'System theme';
-
   return (
     <>
     <div
@@ -168,9 +181,9 @@ export function TopBar({ currentView, onLock, onSelectEntry, onNewEntry, onOpenB
         {/* Divider */}
         <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1" />
 
-        {/* Theme cycle */}
-        <IconBtn onClick={cycleTheme} title={`${themeLabel} — click to cycle`}>
-          {THEME_ICONS[theme]}
+        {/* Theme cycle — icon shows next destination */}
+        <IconBtn onClick={cycleTheme} title={THEME_NEXT_LABEL[theme]}>
+          {THEME_NEXT_ICON[theme]}
         </IconBtn>
 
         {/* Lock */}
@@ -183,8 +196,8 @@ export function TopBar({ currentView, onLock, onSelectEntry, onNewEntry, onOpenB
         {/* Divider */}
         <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1" />
 
-        {/* New Entry */}
-        {onNewEntry && (
+        {/* New Entry — hidden when already in writing view */}
+        {onNewEntry && currentView !== 'writing' && (
           <button
             type="button"
             onClick={onNewEntry}

@@ -304,7 +304,7 @@ export function TimelineView({ onSelectEntry, onNewEntry }: TimelineViewProps) {
         </button>
       </div>
 
-      {/* Inline search (Feature 3) */}
+      {/* Inline search */}
       {entries.length > 0 && (
         <div className="relative mb-4">
           <svg
@@ -321,7 +321,7 @@ export function TimelineView({ onSelectEntry, onNewEntry }: TimelineViewProps) {
             value={searchQuery}
             onChange={(e) => handleSearchChange(e.target.value)}
             placeholder="Filter entries..."
-            className="w-full pl-9 pr-9 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500/40 focus:border-violet-400 transition-colors"
+            className="w-full pl-9 pr-9 h-10 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500/40 focus:border-violet-400 transition-colors"
           />
           {searchQuery && (
             <button
@@ -333,7 +333,8 @@ export function TimelineView({ onSelectEntry, onNewEntry }: TimelineViewProps) {
                   clearTimeout(searchTimeoutRef.current);
                 }
               }}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+              aria-label="Clear search"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -350,13 +351,13 @@ export function TimelineView({ onSelectEntry, onNewEntry }: TimelineViewProps) {
           <button
             type="button"
             onClick={() => setMoodFilter(null)}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all duration-150 ${
               moodFilter === null
-                ? 'bg-violet-500 text-white'
+                ? 'bg-violet-500 text-white ring-2 ring-violet-300 dark:ring-violet-700'
                 : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
             }`}
           >
-            All
+            <span>😊</span> All
             <span
               className={`text-xs ${moodFilter === null ? 'text-violet-200' : 'text-slate-400 dark:text-slate-500'}`}
             >
@@ -373,9 +374,9 @@ export function TimelineView({ onSelectEntry, onNewEntry }: TimelineViewProps) {
                 type="button"
                 onClick={() => setMoodFilter(isActive ? null : option.level)}
                 title={option.label}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all duration-150 ${
                   isActive
-                    ? 'bg-violet-500 text-white'
+                    ? 'bg-violet-500 text-white ring-2 ring-violet-300 dark:ring-violet-700'
                     : count === 0
                       ? 'bg-slate-100 dark:bg-slate-800 text-slate-300 dark:text-slate-600'
                       : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
@@ -393,7 +394,7 @@ export function TimelineView({ onSelectEntry, onNewEntry }: TimelineViewProps) {
         </div>
       )}
 
-      {/* Date range filter chips (Feature 5) */}
+      {/* Date range filter chips */}
       {entries.length > 0 && (
         <div className="flex flex-wrap gap-2 mb-4">
           {([
@@ -410,12 +411,13 @@ export function TimelineView({ onSelectEntry, onNewEntry }: TimelineViewProps) {
                 onClick={() =>
                   setDateRange(isActive && value !== 'all' ? 'all' : value)
                 }
-                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all duration-150 ${
                   isActive
-                    ? 'bg-violet-500 text-white'
+                    ? 'bg-violet-500 text-white ring-2 ring-violet-300 dark:ring-violet-700'
                     : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
                 }`}
               >
+                <span className="text-xs">📅</span>
                 {label}
               </button>
             );
@@ -423,7 +425,7 @@ export function TimelineView({ onSelectEntry, onNewEntry }: TimelineViewProps) {
         </div>
       )}
 
-      {/* Tag filter chips (Feature 7) */}
+      {/* Tag filter chips */}
       {allTags.length > 0 && (
         <div className="flex gap-2 mb-6 overflow-x-auto pb-1">
           {allTags.map(([tag, count]) => {
@@ -433,12 +435,13 @@ export function TimelineView({ onSelectEntry, onNewEntry }: TimelineViewProps) {
                 key={tag}
                 type="button"
                 onClick={() => setTagFilter(isActive ? null : tag)}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+                className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-all duration-150 ${
                   isActive
-                    ? 'bg-violet-500 text-white'
+                    ? 'bg-violet-500 text-white ring-2 ring-violet-300 dark:ring-violet-700'
                     : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
                 }`}
               >
+                <span className={`text-xs ${isActive ? 'text-violet-200' : 'text-slate-400 dark:text-slate-500'}`}>#</span>
                 {tag}
                 <span
                   className={`text-xs ${isActive ? 'text-violet-200' : 'text-slate-400 dark:text-slate-500'}`}
@@ -488,16 +491,19 @@ export function TimelineView({ onSelectEntry, onNewEntry }: TimelineViewProps) {
       <div className="space-y-8">
         {Object.entries(groupedEntries).map(([date, dateEntries]) => (
           <div key={date}>
-            <h2 className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-3">
-              {getDateHeader(date, dateEntries[0])}
-              <span className="normal-case tracking-normal">
-                {' '}
-                &middot; {dateEntries.length} {dateEntries.length === 1 ? 'entry' : 'entries'}
+            {/* Date group header with pill badge */}
+            <div className="flex items-center gap-2 mb-3">
+              <h2 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
+                {getDateHeader(date, dateEntries[0])}
+              </h2>
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
+                {dateEntries.length}
               </span>
-            </h2>
+            </div>
             <div className="space-y-2">
               {dateEntries.map((entry, i) => {
-                const moodColor = getMoodColor(entry.mood ?? 0);
+                const hasMood = entry.mood !== null && entry.mood > 0;
+                const moodColor = hasMood ? getMoodColor(entry.mood!) : null;
                 return (
                   <button
                     key={entry.id}
@@ -505,53 +511,56 @@ export function TimelineView({ onSelectEntry, onNewEntry }: TimelineViewProps) {
                     onClick={() => onSelectEntry(entry.id)}
                     style={{
                       animationDelay: `${i * 50}ms`,
-                      borderLeftColor: moodColor,
+                      ...(moodColor ? { borderLeftColor: moodColor } : {}),
                     }}
-                    className="relative w-full text-left p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 border-l-4 hover:border-slate-200 dark:hover:border-slate-700 shadow-sm hover:shadow-md hover:-translate-y-px transition-all duration-200 group animate-entry-in"
+                    className="relative w-full text-left p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 border-l-4 hover:border-slate-200 dark:hover:border-slate-700 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-150 group animate-entry-in"
                   >
                     {/* Actions dropdown (⋯) */}
                     <EntryActionsMenu entry={entry} onDelete={handleDelete} />
 
                     <div className="flex items-start gap-3">
-                      {/* Mood indicator */}
-                      {entry.mood && (
-                        <div
-                          className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
-                          style={{ backgroundColor: `${moodColor}18` }}
-                          title={`Mood: ${entry.mood}`}
-                        >
-                          <span className="text-lg">
-                            {MOOD_OPTIONS.find((o) => o.level === entry.mood)?.emoji ?? '😐'}
+                      {/* Mood indicator — 32px fixed, explicit null state */}
+                      <div
+                        className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
+                        style={moodColor ? { backgroundColor: `${moodColor}18` } : undefined}
+                        title={hasMood ? `Mood: ${entry.mood}` : 'No mood recorded'}
+                      >
+                        {hasMood ? (
+                          <span className="text-base leading-none">
+                            {MOOD_OPTIONS.find((o) => o.level === entry.mood)?.emoji}
                           </span>
-                        </div>
-                      )}
+                        ) : (
+                          <span className="text-xs text-slate-300 dark:text-slate-600 font-medium">—</span>
+                        )}
+                      </div>
 
                       <div className="flex-1 min-w-0">
                         {/* Title */}
                         {entry.title && (
-                          <h3 className="font-medium text-slate-800 dark:text-slate-100 mb-1 truncate">
+                          <h3 className="font-semibold text-slate-800 dark:text-slate-100 mb-1 truncate">
                             {entry.title}
                           </h3>
                         )}
 
                         {/* Preview */}
-                        <p className="text-sm text-slate-500 dark:text-slate-400 line-clamp-2">
+                        <p className="text-sm font-normal text-slate-500 dark:text-slate-400 line-clamp-2">
                           {entry.content}
                         </p>
 
-                        {/* Tags (Feature 1) */}
+                        {/* Tags */}
                         {entry.tags.length > 0 && (
                           <div className="flex flex-wrap gap-1.5 mt-2">
                             {entry.tags.slice(0, 3).map((tag) => (
                               <span
                                 key={tag}
-                                className="px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400"
+                                className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-xs font-medium bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400"
                               >
+                                <span className="text-[10px] opacity-70">#</span>
                                 {tag}
                               </span>
                             ))}
                             {entry.tags.length > 3 && (
-                              <span className="text-xs text-slate-400">
+                              <span className="text-xs text-slate-400 dark:text-slate-500">
                                 +{entry.tags.length - 3} more
                               </span>
                             )}
@@ -582,14 +591,23 @@ export function TimelineView({ onSelectEntry, onNewEntry }: TimelineViewProps) {
 
                         {/* Footer: time + weather chip */}
                         <div className="flex items-center gap-3 mt-2">
-                          <p className="text-xs text-slate-400 dark:text-slate-500">
+                          <span className="inline-flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500">
+                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
                             {new Date(entry.created_at).toLocaleTimeString([], {
                               hour: '2-digit',
                               minute: '2-digit',
                             })}
-                          </p>
+                          </span>
                           {(entry.locationWeather?.temperature !== undefined || entry.locationWeather?.city) && (
-                            <span className="flex items-center gap-0.5 text-[10px] text-slate-400 dark:text-slate-500">
+                            <span className="inline-flex items-center gap-0.5 text-[10px] text-slate-400 dark:text-slate-500">
+                              {entry.locationWeather!.city && (
+                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
+                                </svg>
+                              )}
                               <span>{getWeatherEmoji(entry.locationWeather!.weatherCode)}</span>
                               {entry.locationWeather!.temperature !== undefined && (
                                 <span>{Math.round(entry.locationWeather!.temperature)}°</span>
@@ -604,7 +622,7 @@ export function TimelineView({ onSelectEntry, onNewEntry }: TimelineViewProps) {
 
                       {/* Arrow */}
                       <svg
-                        className="w-4 h-4 text-slate-300 dark:text-slate-600 group-hover:text-slate-400 dark:group-hover:text-slate-500 group-hover:translate-x-0.5 flex-shrink-0 mt-1 transition-all duration-200"
+                        className="w-4 h-4 text-slate-300 dark:text-slate-600 group-hover:text-slate-400 dark:group-hover:text-slate-500 group-hover:translate-x-0.5 flex-shrink-0 mt-1 transition-all duration-150"
                         fill="none"
                         viewBox="0 0 24 24"
                         stroke="currentColor"

@@ -13,23 +13,24 @@ import { useState, useEffect } from 'react';
 import { SidebarItem } from './SidebarItem';
 import { useBooksStore } from '../../stores/booksStore';
 import { useSettingsStore } from '../../stores/settingsStore';
+import { NewBookModal } from '../books/NewBookModal';
 
-export type ViewType = 'writing' | 'timeline' | 'onthisday' | 'insights' | 'calendar' | 'settings';
+export type ViewType = 'writing' | 'timeline' | 'onthisday' | 'insights' | 'calendar' | 'settings' | 'journalOverview';
 
 interface SidebarProps {
   currentView: ViewType;
   onNavigate: (view: ViewType) => void;
   onLock: () => void;
   onOpenSync: () => void;
+  onNavigateToJournalOverview?: (bookId: string) => void;
 }
 
-export function Sidebar({ currentView, onNavigate, onOpenSync }: SidebarProps) {
+export function Sidebar({ currentView, onNavigate, onOpenSync, onNavigateToJournalOverview }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(() => {
     try { return localStorage.getItem('sidebar-collapsed') === 'true'; }
     catch { return false; }
   });
-  const [newBookName, setNewBookName] = useState('');
-  const [showNewBookForm, setShowNewBookForm] = useState(false);
+  const [showNewBookModal, setShowNewBookModal] = useState(false);
 
   const { books, activeBookId, loadBooks, setActiveBook, addBook } = useBooksStore();
   const savingState = useSettingsStore((s) => s.savingState);
@@ -207,7 +208,7 @@ export function Sidebar({ currentView, onNavigate, onOpenSync }: SidebarProps) {
             </span>
             <button
               type="button"
-              onClick={() => setShowNewBookForm((v) => !v)}
+              onClick={() => setShowNewBookModal(true)}
               title="New book"
               className="p-0.5 rounded text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
             >
@@ -216,38 +217,6 @@ export function Sidebar({ currentView, onNavigate, onOpenSync }: SidebarProps) {
               </svg>
             </button>
           </div>
-        )}
-
-        {/* New book inline form */}
-        {showNewBookForm && !collapsed && (
-          <form
-            onSubmit={async (e) => {
-              e.preventDefault();
-              const name = newBookName.trim();
-              if (!name) return;
-              try {
-                await addBook(name, '📓', 'violet');
-                setNewBookName('');
-                setShowNewBookForm(false);
-              } catch { /* ignore */ }
-            }}
-            className="flex items-center gap-1 mb-1.5"
-          >
-            <input
-              type="text"
-              value={newBookName}
-              onChange={(e) => setNewBookName(e.target.value)}
-              placeholder="Book name"
-              autoFocus
-              className="flex-1 px-2 py-1 text-xs rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-violet-400"
-            />
-            <button type="submit" className="px-2 py-1 text-xs rounded-md bg-violet-500 text-white hover:bg-violet-600 transition-colors">
-              Add
-            </button>
-            <button type="button" onClick={() => { setShowNewBookForm(false); setNewBookName(''); }} className="p-1 text-slate-400 hover:text-slate-600">
-              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-            </button>
-          </form>
         )}
 
         {/* Book list */}
@@ -273,9 +242,16 @@ export function Sidebar({ currentView, onNavigate, onOpenSync }: SidebarProps) {
             <button
               key={book.id}
               type="button"
-              onClick={() => { setActiveBook(book.id); onNavigate('timeline'); }}
+              onClick={() => {
+                if (onNavigateToJournalOverview) {
+                  onNavigateToJournalOverview(book.id);
+                } else {
+                  setActiveBook(book.id);
+                  onNavigate('timeline');
+                }
+              }}
               className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs transition-colors ${
-                activeBookId === book.id && currentView === 'timeline'
+                currentView === 'journalOverview' && activeBookId === book.id
                   ? 'bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400 font-medium'
                   : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
               }`}
@@ -287,6 +263,16 @@ export function Sidebar({ currentView, onNavigate, onOpenSync }: SidebarProps) {
           ))}
         </div>
       </div>
+
+      {/* New Book Modal */}
+      {showNewBookModal && (
+        <NewBookModal
+          onClose={() => setShowNewBookModal(false)}
+          onCreate={async (name, emoji, color, description, settings) => {
+            await addBook(name, emoji, color, description, settings);
+          }}
+        />
+      )}
     </aside>
   );
 }

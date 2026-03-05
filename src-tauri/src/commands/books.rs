@@ -17,15 +17,25 @@ pub fn create_book(
     name: String,
     emoji: String,
     color: String,
+    description: Option<String>,
+    settings: Option<String>,
 ) -> Result<Book, String> {
     if name.trim().is_empty() {
         return Err("Book name cannot be empty".to_string());
     }
     let id = Uuid::new_v4().to_string();
-    db::create_book(&db, &id, name.trim(), &emoji, &color)
+    db::create_book(
+        &db,
+        &id,
+        name.trim(),
+        &emoji,
+        &color,
+        description.as_deref(),
+        settings.as_deref(),
+    )
 }
 
-/// Update an existing book's name, emoji, and color
+/// Update an existing book's name, emoji, color, description, and settings
 #[tauri::command]
 pub fn update_book(
     db: State<Database>,
@@ -33,11 +43,21 @@ pub fn update_book(
     name: String,
     emoji: String,
     color: String,
+    description: Option<String>,
+    settings: Option<String>,
 ) -> Result<(), String> {
     if name.trim().is_empty() {
         return Err("Book name cannot be empty".to_string());
     }
-    db::update_book(&db, &id, name.trim(), &emoji, &color)
+    db::update_book(
+        &db,
+        &id,
+        name.trim(),
+        &emoji,
+        &color,
+        description.as_deref(),
+        settings.as_deref(),
+    )
 }
 
 /// Delete a book (reassigns its entries to 'default')

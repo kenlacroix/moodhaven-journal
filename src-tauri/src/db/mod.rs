@@ -100,6 +100,8 @@ pub struct Book {
     pub emoji: String,
     pub color: String,
     pub sort_order: i32,
+    pub description: Option<String>,
+    pub settings: Option<String>, // JSON-encoded BookSettings
     pub created_at: String,
 }
 
@@ -155,6 +157,10 @@ impl Database {
             "ALTER TABLE journal_entries ADD COLUMN book_id TEXT NOT NULL DEFAULT 'default'",
             [],
         );
+
+        // Runtime migrations for books table (description + settings)
+        let _ = conn.execute("ALTER TABLE books ADD COLUMN description TEXT", []);
+        let _ = conn.execute("ALTER TABLE books ADD COLUMN settings TEXT", []);
 
         // Runtime migration: add pinned column to journal_entries
         let _ = conn.execute(
@@ -755,7 +761,7 @@ pub fn list_books(db: &Database) -> Result<Vec<Book>, String> {
 
     let mut stmt = conn
         .prepare(
-            "SELECT id, name, emoji, color, sort_order, created_at
+            "SELECT id, name, emoji, color, sort_order, description, settings, created_at
              FROM books ORDER BY sort_order ASC, created_at ASC",
         )
         .map_err(|e| format!("Prepare failed: {}", e))?;
@@ -768,7 +774,9 @@ pub fn list_books(db: &Database) -> Result<Vec<Book>, String> {
                 emoji: row.get(2)?,
                 color: row.get(3)?,
                 sort_order: row.get(4)?,
-                created_at: row.get(5)?,
+                description: row.get(5)?,
+                settings: row.get(6)?,
+                created_at: row.get(7)?,
             })
         })
         .map_err(|e| format!("Query failed: {}", e))?
@@ -785,6 +793,8 @@ pub fn create_book(
     name: &str,
     emoji: &str,
     color: &str,
+    description: Option<&str>,
+    settings: Option<&str>,
 ) -> Result<Book, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
@@ -794,14 +804,14 @@ pub fn create_book(
         .unwrap_or(1);
 
     conn.execute(
-        "INSERT INTO books (id, name, emoji, color, sort_order, created_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, datetime('now'))",
-        params![id, name, emoji, color, sort_order],
+        "INSERT INTO books (id, name, emoji, color, sort_order, description, settings, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, datetime('now'))",
+        params![id, name, emoji, color, sort_order, description, settings],
     )
     .map_err(|e| format!("Failed to create book: {}", e))?;
 
     conn.query_row(
-        "SELECT id, name, emoji, color, sort_order, created_at FROM books WHERE id = ?1",
+        "SELECT id, name, emoji, color, sort_order, description, settings, created_at FROM books WHERE id = ?1",
         params![id],
         |row| {
             Ok(Book {
@@ -810,27 +820,31 @@ pub fn create_book(
                 emoji: row.get(2)?,
                 color: row.get(3)?,
                 sort_order: row.get(4)?,
-                created_at: row.get(5)?,
+                description: row.get(5)?,
+                settings: row.get(6)?,
+                created_at: row.get(7)?,
             })
         },
     )
     .map_err(|e| format!("Failed to fetch created book: {}", e))
 }
 
-/// Update a book's name, emoji, and/or color
+/// Update a book's name, emoji, color, description, and/or settings
 pub fn update_book(
     db: &Database,
     id: &str,
     name: &str,
     emoji: &str,
     color: &str,
+    description: Option<&str>,
+    settings: Option<&str>,
 ) -> Result<(), String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
     let rows = conn
         .execute(
-            "UPDATE books SET name = ?1, emoji = ?2, color = ?3 WHERE id = ?4",
-            params![name, emoji, color, id],
+            "UPDATE books SET name = ?1, emoji = ?2, color = ?3, description = ?4, settings = ?5 WHERE id = ?6",
+            params![name, emoji, color, description, settings, id],
         )
         .map_err(|e| format!("Failed to update book: {}", e))?;
 

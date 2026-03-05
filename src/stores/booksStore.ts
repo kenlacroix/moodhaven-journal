@@ -7,7 +7,7 @@
  */
 
 import { create } from 'zustand';
-import type { Book } from '../types/journal';
+import type { Book, BookSettings } from '../types/journal';
 import { listBooks, createBook, updateBook, deleteBook } from '../lib/booksService';
 
 interface BooksState {
@@ -18,9 +18,11 @@ interface BooksState {
   // Actions
   loadBooks: () => Promise<void>;
   setActiveBook: (id: string | null) => void;
-  addBook: (name: string, emoji: string, color: string) => Promise<Book>;
-  editBook: (id: string, name: string, emoji: string, color: string) => Promise<void>;
+  addBook: (name: string, emoji: string, color: string, description?: string, settings?: BookSettings) => Promise<Book>;
+  editBook: (id: string, name: string, emoji: string, color: string, description?: string, settings?: BookSettings) => Promise<void>;
   removeBook: (id: string) => Promise<void>;
+  /** Patch just the settings field of a book (local + remote) */
+  patchBookSettings: (id: string, settings: BookSettings) => Promise<void>;
 }
 
 export const useBooksStore = create<BooksState>((set, get) => ({
@@ -41,18 +43,28 @@ export const useBooksStore = create<BooksState>((set, get) => ({
 
   setActiveBook: (id) => set({ activeBookId: id }),
 
-  addBook: async (name, emoji, color) => {
-    const book = await createBook(name, emoji, color);
+  addBook: async (name, emoji, color, description, settings) => {
+    const book = await createBook(name, emoji, color, description, settings);
     set((s) => ({ books: [...s.books, book] }));
     return book;
   },
 
-  editBook: async (id, name, emoji, color) => {
-    await updateBook(id, name, emoji, color);
+  editBook: async (id, name, emoji, color, description, settings) => {
+    await updateBook(id, name, emoji, color, description, settings);
     set((s) => ({
       books: s.books.map((b) =>
-        b.id === id ? { ...b, name, emoji, color } : b
+        b.id === id ? { ...b, name, emoji, color, description, settings } : b
       ),
+    }));
+  },
+
+  patchBookSettings: async (id, settings) => {
+    const { books } = get();
+    const book = books.find((b) => b.id === id);
+    if (!book) return;
+    await updateBook(id, book.name, book.emoji, book.color, book.description, settings);
+    set((s) => ({
+      books: s.books.map((b) => (b.id === id ? { ...b, settings } : b)),
     }));
   },
 

@@ -42,6 +42,15 @@ export const MOOD_OPTIONS: MoodOption[] = [
   { level: 5, label: 'Great', emoji: '😊', color: 'bg-emerald-500' },
 ];
 
+/** Per-book settings stored as JSON in the books table */
+export interface BookSettings {
+  privacyDefault?: 0 | 1 | 2;       // default privacy for new entries in this book
+  aiOptOut?: boolean;                // exclude from all AI metadata aggregation
+  includeInOnThisDay?: boolean;      // default true
+  autoLocationWeather?: boolean;     // override global setting
+  concealContent?: boolean;          // blur entry previews in timeline
+}
+
 /** A named journal (book) that groups entries */
 export interface Book {
   id: string;
@@ -49,6 +58,8 @@ export interface Book {
   emoji: string;
   color: string;
   sort_order: number;
+  description?: string;
+  settings?: BookSettings;
   created_at: string;
 }
 

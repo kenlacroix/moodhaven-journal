@@ -18,12 +18,13 @@ import type { ViewType } from './Sidebar';
 import type { OuraHealthBadge } from '../../types/oura';
 
 const VIEW_LABELS: Record<ViewType, string> = {
-  writing:    'Write',
-  timeline:   'All Entries',
-  onthisday:  'On This Day',
-  insights:   'Insights',
-  calendar:   'Calendar',
-  settings:   'Settings',
+  writing:         'Write',
+  timeline:        'All Entries',
+  onthisday:       'On This Day',
+  insights:        'Insights',
+  calendar:        'Calendar',
+  settings:        'Settings',
+  journalOverview: 'Journal',
 };
 
 // ── Sentiment helpers (mirrors Sidebar) ─────────────────────────────────────

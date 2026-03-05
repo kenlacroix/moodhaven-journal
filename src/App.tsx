@@ -13,6 +13,8 @@ import { OnThisDayView } from './pages/OnThisDayView';
 import { InsightsView } from './pages/InsightsView';
 import { CalendarPage } from './pages/CalendarPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { JournalOverviewPage } from './pages/JournalOverviewPage';
+import { useBooksStore } from './stores/booksStore';
 import { LockScreen } from './pages/LockScreen';
 import { SetupScreen } from './pages/SetupScreen';
 import { MainLayout, type ViewType } from './components/layout';
@@ -33,6 +35,7 @@ function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [currentView, setCurrentView] = useState<ViewType>('writing');
   const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
+  const [journalOverviewBookId, setJournalOverviewBookId] = useState<string | null>(null);
   const [showTutorial, setShowTutorial] = useState(false);
   const [showSyncModal, setShowSyncModal] = useState(false);
   /**
@@ -90,6 +93,13 @@ function App() {
     setWritingKey((k) => k + 1);
   }, []);
 
+  // Navigate to journal overview
+  const handleNavigateToJournalOverview = useCallback((bookId: string) => {
+    useBooksStore.getState().setActiveBook(bookId);
+    setJournalOverviewBookId(bookId);
+    setCurrentView('journalOverview');
+  }, []);
+
   // Navigate to settings with optional section scroll target
   const handleNavigateToSettings = useCallback((section?: 'speech-to-text' | 'ai') => {
     if (section) {
@@ -132,6 +142,7 @@ function App() {
         onSelectEntry={handleSelectEntry}
         onNewEntry={handleNewEntry}
         onOpenSync={() => setShowSyncModal(true)}
+        onNavigateToJournalOverview={handleNavigateToJournalOverview}
       >
         {/* Keyed wrapper replays fade animation on view change */}
         <div key={currentView} className="h-full animate-view-enter">
@@ -172,6 +183,15 @@ function App() {
           {/* Settings */}
           {currentView === 'settings' && (
             <SettingsPage />
+          )}
+
+          {/* Journal Overview */}
+          {currentView === 'journalOverview' && journalOverviewBookId && (
+            <JournalOverviewPage
+              bookId={journalOverviewBookId}
+              onViewEntries={() => handleNavigate('timeline')}
+              onBack={() => handleNavigate('timeline')}
+            />
           )}
         </div>
       </MainLayout>

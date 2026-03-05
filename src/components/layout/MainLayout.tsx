@@ -21,10 +21,11 @@ interface MainLayoutProps {
   onSelectEntry?: (id: string) => void;
   onNewEntry?: () => void;
   onOpenSync: () => void;
+  onNavigateToJournalOverview?: (bookId: string) => void;
   children: React.ReactNode;
 }
 
-export function MainLayout({ currentView, onNavigate, onLock, onSelectEntry, onNewEntry, onOpenSync, children }: MainLayoutProps) {
+export function MainLayout({ currentView, onNavigate, onLock, onSelectEntry, onNewEntry, onOpenSync, onNavigateToJournalOverview, children }: MainLayoutProps) {
   const distractionFree = useSettingsStore((s) => s.distractionFree);
 
   return (
@@ -40,6 +41,7 @@ export function MainLayout({ currentView, onNavigate, onLock, onSelectEntry, onN
           onNavigate={onNavigate}
           onLock={onLock}
           onOpenSync={onOpenSync}
+          onNavigateToJournalOverview={onNavigateToJournalOverview}
         />
       </div>
 

@@ -46,6 +46,9 @@ coverage/
 *.tmp
 *.temp
 
+# Development tooling — not for public repo
+Prompts.md
+
 # MoodBloom runtime data — never commit user data or backups
 *.db
 *.sqlite

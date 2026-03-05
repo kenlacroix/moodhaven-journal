@@ -11,12 +11,12 @@ import { TimelineView } from './pages/TimelineView';
 import { OnThisDayView } from './pages/OnThisDayView';
 import { InsightsView } from './pages/InsightsView';
 import { CalendarPage } from './pages/CalendarPage';
-import { AnalyticsPage } from './pages/AnalyticsPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { LockScreen } from './pages/LockScreen';
 import { SetupScreen } from './pages/SetupScreen';
 import { MainLayout, type ViewType } from './components/layout';
 import { TutorialWizard } from './components/tutorial';
+import { SyncDetailsModal } from './components/sync/SyncDetailsModal';
 import { useAppStore } from './stores/appStore';
 import { useSettingsStore } from './stores/settingsStore';
 import { useReminderScheduler } from './hooks/useReminderScheduler';
@@ -29,6 +29,7 @@ function App() {
   const [currentView, setCurrentView] = useState<ViewType>('writing');
   const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
   const [showTutorial, setShowTutorial] = useState(false);
+  const [showSyncModal, setShowSyncModal] = useState(false);
   /**
    * Incremented each time the user starts a genuinely new entry while already
    * in write mode. Changing this key remounts WritingView, giving a clean slate
@@ -85,7 +86,7 @@ function App() {
   }, []);
 
   // Navigate to settings with optional section scroll target
-  const handleNavigateToSettings = useCallback((section?: 'speech-to-text') => {
+  const handleNavigateToSettings = useCallback((section?: 'speech-to-text' | 'ai') => {
     if (section) {
       useSettingsStore.getState().setScrollToSection(section);
     }
@@ -124,6 +125,8 @@ function App() {
         onNavigate={handleNavigate}
         onLock={lock}
         onSelectEntry={handleSelectEntry}
+        onNewEntry={handleNewEntry}
+        onOpenSync={() => setShowSyncModal(true)}
       >
         {/* Keyed wrapper replays fade animation on view change */}
         <div key={currentView} className="h-full animate-view-enter">
@@ -151,19 +154,14 @@ function App() {
             <OnThisDayView onSelectEntry={handleSelectEntry} />
           )}
 
-          {/* Insights View - AI content only here */}
+          {/* Insights View - AI insights + local analytics merged */}
           {currentView === 'insights' && (
-            <InsightsView />
+            <InsightsView onNavigateToSettings={handleNavigateToSettings} />
           )}
 
           {/* Calendar View */}
           {currentView === 'calendar' && (
             <CalendarPage onNavigateToJournal={handleNewEntry} />
-          )}
-
-          {/* Analytics View */}
-          {currentView === 'analytics' && (
-            <AnalyticsPage />
           )}
 
           {/* Settings */}
@@ -174,6 +172,7 @@ function App() {
       </MainLayout>
 
       {showTutorial && <TutorialWizard onComplete={handleTutorialComplete} />}
+      {showSyncModal && <SyncDetailsModal onClose={() => setShowSyncModal(false)} onNavigateToSettings={() => handleNavigateToSettings()} />}
     </>
   );
 }

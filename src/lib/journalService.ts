@@ -32,6 +32,7 @@ interface EncryptedJournalEntryRow {
   mood: number;
   privacy_mode: number;
   location_weather?: string; // JSON-encoded LocationWeather, not encrypted
+  book_id: string;
   created_at: string;
   updated_at: string;
 }
@@ -136,7 +137,7 @@ function getPassword(): string {
  * Create a new journal entry (encrypts content automatically)
  */
 export async function createEntry(
-  data: JournalEntryFormData & { locationWeather?: LocationWeather }
+  data: JournalEntryFormData & { locationWeather?: LocationWeather; bookId?: string }
 ): Promise<JournalEntry> {
   const password = getPassword();
 
@@ -157,6 +158,7 @@ export async function createEntry(
     mood: data.mood,
     privacyMode: data.privacyMode,
     locationWeather: data.locationWeather ? JSON.stringify(data.locationWeather) : null,
+    bookId: data.bookId ?? null,
   });
 
   // Return decrypted entry
@@ -167,6 +169,7 @@ export async function createEntry(
     privacyMode: (row.privacy_mode ?? 0) as PrivacyMode,
     tags: data.tags,
     locationWeather: row.location_weather ? (JSON.parse(row.location_weather) as LocationWeather) : undefined,
+    book_id: row.book_id ?? 'default',
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -264,6 +267,7 @@ export async function updateEntry(
     mood: row.mood as MoodLevel,
     privacyMode: (row.privacy_mode ?? 0) as PrivacyMode,
     tags: data.tags,
+    book_id: row.book_id ?? 'default',
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -335,6 +339,7 @@ async function decryptEntry(
     privacyMode: (row.privacy_mode ?? 0) as PrivacyMode,
     tags: [], // TODO: Fetch from entry_tags table
     locationWeather: row.location_weather ? (JSON.parse(row.location_weather) as LocationWeather) : undefined,
+    book_id: row.book_id ?? 'default',
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -361,6 +366,7 @@ export async function getEntryById(id: string): Promise<JournalEntry | null> {
 /**
  * Save entry (create or update).
  * locationWeather is only applied on initial creation — not on subsequent updates.
+ * bookId is only applied on initial creation.
  */
 export async function saveEntry(data: {
   id?: string;
@@ -369,6 +375,7 @@ export async function saveEntry(data: {
   mood?: number;
   privacyMode?: PrivacyMode;
   locationWeather?: LocationWeather;
+  bookId?: string;
 }): Promise<JournalEntry> {
   const formData: JournalEntryFormData = {
     content: data.content,
@@ -380,7 +387,7 @@ export async function saveEntry(data: {
   if (data.id) {
     return updateEntry(data.id, formData);
   } else {
-    return createEntry({ ...formData, locationWeather: data.locationWeather });
+    return createEntry({ ...formData, locationWeather: data.locationWeather, bookId: data.bookId });
   }
 }
 

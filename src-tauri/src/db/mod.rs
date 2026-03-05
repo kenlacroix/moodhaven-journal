@@ -29,6 +29,8 @@ pub struct JournalEntryRow {
     pub privacy_mode: i32,
     /// JSON-encoded LocationWeather captured at write time (not encrypted; city-level only)
     pub location_weather: Option<String>,
+    /// Book this entry belongs to (default = 'default')
+    pub book_id: String,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -88,6 +90,17 @@ pub struct CalendarDayData {
     pub entry_count: i32,
 }
 
+/// A named journal (book) that groups entries
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Book {
+    pub id: String,
+    pub name: String,
+    pub emoji: String,
+    pub color: String,
+    pub sort_order: i32,
+    pub created_at: String,
+}
+
 /// Database state managed by Tauri
 pub struct Database {
     pub conn: Mutex<Connection>,
@@ -117,6 +130,27 @@ impl Database {
         // Runtime migration: add location_weather column (nullable TEXT)
         let _ = conn.execute(
             "ALTER TABLE journal_entries ADD COLUMN location_weather TEXT",
+            [],
+        );
+
+        // Runtime migration: books table
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS books (
+                id         TEXT PRIMARY KEY,
+                name       TEXT NOT NULL,
+                emoji      TEXT NOT NULL DEFAULT '📔',
+                color      TEXT NOT NULL DEFAULT 'violet',
+                sort_order INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL
+            );
+            INSERT OR IGNORE INTO books (id, name, emoji, color, sort_order, created_at)
+                VALUES ('default', 'Journal', '📔', 'violet', 0, datetime('now'));",
+        )
+        .map_err(|e| format!("Failed to create books table: {}", e))?;
+
+        // Runtime migration: add book_id column to journal_entries
+        let _ = conn.execute(
+            "ALTER TABLE journal_entries ADD COLUMN book_id TEXT NOT NULL DEFAULT 'default'",
             [],
         );
 
@@ -202,22 +236,25 @@ pub fn create_entry(
     mood: i32,
     privacy_mode: i32,
     location_weather: Option<&str>,
+    book_id: Option<&str>,
 ) -> Result<JournalEntryRow, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
     let content_json = serde_json::to_string(encrypted_content)
         .map_err(|e| format!("JSON serialization failed: {}", e))?;
 
+    let bid = book_id.unwrap_or("default");
+
     conn.execute(
-        "INSERT INTO journal_entries (id, encrypted_content, mood, privacy_mode, location_weather)
-         VALUES (?1, ?2, ?3, ?4, ?5)",
-        params![id, content_json, mood, privacy_mode, location_weather],
+        "INSERT INTO journal_entries (id, encrypted_content, mood, privacy_mode, location_weather, book_id)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        params![id, content_json, mood, privacy_mode, location_weather, bid],
     )
     .map_err(|e| format!("Failed to create entry: {}", e))?;
 
     // Fetch the created entry using the same connection (avoid deadlock)
     conn.query_row(
-        "SELECT id, encrypted_content, mood, privacy_mode, location_weather, created_at, updated_at
+        "SELECT id, encrypted_content, mood, privacy_mode, location_weather, book_id, created_at, updated_at
          FROM journal_entries WHERE id = ?1",
         params![id],
         |row| {
@@ -231,8 +268,9 @@ pub fn create_entry(
                 mood: row.get(2)?,
                 privacy_mode: row.get(3)?,
                 location_weather: row.get(4)?,
-                created_at: row.get(5)?,
-                updated_at: row.get(6)?,
+                book_id: row.get::<_, Option<String>>(5)?.unwrap_or_else(|| "default".to_string()),
+                created_at: row.get(6)?,
+                updated_at: row.get(7)?,
             })
         },
     )
@@ -262,7 +300,7 @@ pub fn get_entry(db: &Database, id: &str) -> Result<Option<JournalEntryRow>, Str
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
     let result = conn.query_row(
-        "SELECT id, encrypted_content, mood, privacy_mode, location_weather, created_at, updated_at
+        "SELECT id, encrypted_content, mood, privacy_mode, location_weather, book_id, created_at, updated_at
          FROM journal_entries WHERE id = ?1",
         params![id],
         |row| {
@@ -276,8 +314,9 @@ pub fn get_entry(db: &Database, id: &str) -> Result<Option<JournalEntryRow>, Str
                 mood: row.get(2)?,
                 privacy_mode: row.get(3)?,
                 location_weather: row.get(4)?,
-                created_at: row.get(5)?,
-                updated_at: row.get(6)?,
+                book_id: row.get::<_, Option<String>>(5)?.unwrap_or_else(|| "default".to_string()),
+                created_at: row.get(6)?,
+                updated_at: row.get(7)?,
             })
         },
     );
@@ -297,7 +336,7 @@ pub fn get_all_entries(db: &Database, limit: Option<i32>) -> Result<Vec<JournalE
 
     let mut stmt = conn
         .prepare(&format!(
-            "SELECT id, encrypted_content, mood, privacy_mode, location_weather, created_at, updated_at
+            "SELECT id, encrypted_content, mood, privacy_mode, location_weather, book_id, created_at, updated_at
              FROM journal_entries
              ORDER BY created_at DESC{}",
             limit_clause
@@ -316,8 +355,9 @@ pub fn get_all_entries(db: &Database, limit: Option<i32>) -> Result<Vec<JournalE
                 mood: row.get(2)?,
                 privacy_mode: row.get(3)?,
                 location_weather: row.get(4)?,
-                created_at: row.get(5)?,
-                updated_at: row.get(6)?,
+                book_id: row.get::<_, Option<String>>(5)?.unwrap_or_else(|| "default".to_string()),
+                created_at: row.get(6)?,
+                updated_at: row.get(7)?,
             })
         })
         .map_err(|e| format!("Query failed: {}", e))?
@@ -337,7 +377,7 @@ pub fn get_entries_by_date_range(
 
     let mut stmt = conn
         .prepare(
-            "SELECT id, encrypted_content, mood, privacy_mode, location_weather, created_at, updated_at
+            "SELECT id, encrypted_content, mood, privacy_mode, location_weather, book_id, created_at, updated_at
              FROM journal_entries
              WHERE date(created_at) BETWEEN ?1 AND ?2
              ORDER BY created_at DESC",
@@ -356,8 +396,9 @@ pub fn get_entries_by_date_range(
                 mood: row.get(2)?,
                 privacy_mode: row.get(3)?,
                 location_weather: row.get(4)?,
-                created_at: row.get(5)?,
-                updated_at: row.get(6)?,
+                book_id: row.get::<_, Option<String>>(5)?.unwrap_or_else(|| "default".to_string()),
+                created_at: row.get(6)?,
+                updated_at: row.get(7)?,
             })
         })
         .map_err(|e| format!("Query failed: {}", e))?
@@ -395,7 +436,7 @@ pub fn update_entry(
 
     // Fetch the updated entry using the same connection (avoid deadlock/race)
     conn.query_row(
-        "SELECT id, encrypted_content, mood, privacy_mode, location_weather, created_at, updated_at
+        "SELECT id, encrypted_content, mood, privacy_mode, location_weather, book_id, created_at, updated_at
          FROM journal_entries WHERE id = ?1",
         params![id],
         |row| {
@@ -409,8 +450,9 @@ pub fn update_entry(
                 mood: row.get(2)?,
                 privacy_mode: row.get(3)?,
                 location_weather: row.get(4)?,
-                created_at: row.get(5)?,
-                updated_at: row.get(6)?,
+                book_id: row.get::<_, Option<String>>(5)?.unwrap_or_else(|| "default".to_string()),
+                created_at: row.get(6)?,
+                updated_at: row.get(7)?,
             })
         },
     )
@@ -676,4 +718,120 @@ pub fn get_monthly_mood_data(
         .map_err(|e| format!("Row parsing failed: {}", e))?;
 
     Ok(data)
+}
+
+// ============================================================================
+// Books Operations
+// ============================================================================
+
+/// List all books ordered by sort_order
+pub fn list_books(db: &Database) -> Result<Vec<Book>, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, name, emoji, color, sort_order, created_at
+             FROM books ORDER BY sort_order ASC, created_at ASC",
+        )
+        .map_err(|e| format!("Prepare failed: {}", e))?;
+
+    let books = stmt
+        .query_map([], |row| {
+            Ok(Book {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                emoji: row.get(2)?,
+                color: row.get(3)?,
+                sort_order: row.get(4)?,
+                created_at: row.get(5)?,
+            })
+        })
+        .map_err(|e| format!("Query failed: {}", e))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("Row parsing failed: {}", e))?;
+
+    Ok(books)
+}
+
+/// Create a new book
+pub fn create_book(
+    db: &Database,
+    id: &str,
+    name: &str,
+    emoji: &str,
+    color: &str,
+) -> Result<Book, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+
+    // Get next sort_order
+    let sort_order: i32 = conn
+        .query_row("SELECT COALESCE(MAX(sort_order) + 1, 1) FROM books", [], |row| row.get(0))
+        .unwrap_or(1);
+
+    conn.execute(
+        "INSERT INTO books (id, name, emoji, color, sort_order, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, datetime('now'))",
+        params![id, name, emoji, color, sort_order],
+    )
+    .map_err(|e| format!("Failed to create book: {}", e))?;
+
+    conn.query_row(
+        "SELECT id, name, emoji, color, sort_order, created_at FROM books WHERE id = ?1",
+        params![id],
+        |row| {
+            Ok(Book {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                emoji: row.get(2)?,
+                color: row.get(3)?,
+                sort_order: row.get(4)?,
+                created_at: row.get(5)?,
+            })
+        },
+    )
+    .map_err(|e| format!("Failed to fetch created book: {}", e))
+}
+
+/// Update a book's name, emoji, and/or color
+pub fn update_book(
+    db: &Database,
+    id: &str,
+    name: &str,
+    emoji: &str,
+    color: &str,
+) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+
+    let rows = conn
+        .execute(
+            "UPDATE books SET name = ?1, emoji = ?2, color = ?3 WHERE id = ?4",
+            params![name, emoji, color, id],
+        )
+        .map_err(|e| format!("Failed to update book: {}", e))?;
+
+    if rows == 0 {
+        return Err("Book not found".to_string());
+    }
+    Ok(())
+}
+
+/// Delete a book — moves its entries to 'default'; cannot delete 'default'
+pub fn delete_book(db: &Database, id: &str) -> Result<(), String> {
+    if id == "default" {
+        return Err("Cannot delete the default journal".to_string());
+    }
+
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+
+    // Reassign entries
+    conn.execute(
+        "UPDATE journal_entries SET book_id = 'default' WHERE book_id = ?1",
+        params![id],
+    )
+    .map_err(|e| format!("Failed to reassign entries: {}", e))?;
+
+    conn.execute("DELETE FROM books WHERE id = ?1", params![id])
+        .map_err(|e| format!("Failed to delete book: {}", e))?;
+
+    Ok(())
 }

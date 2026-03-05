@@ -19,19 +19,27 @@
 | Mood Entry | P0 | **Complete** | Log daily mood with 5-level scale (emoji, color) |
 | Journal Entry | P0 | **Complete** | Encrypted journaling with mood association |
 | Calendar View | P1 | **Complete** | Visual calendar showing mood trends by day |
-| Analytics Dashboard | P1 | **Complete** | Charts: distribution, trends, streaks, weekly patterns |
+| Analytics Dashboard | P1 | **Complete** | Merged into Insights view — local charts + AI section |
 | Settings Panel | P2 | **Complete** | Tabbed settings with search, data management |
 | AI Insights | P2 | **Complete** | Privacy-focused AI insights (opt-in, OpenAI/local AI) |
 | First-Run Wizard | P2 | **Complete** | Welcome, password setup, storage selection, import |
 | Export/Import | P2 | **Complete** | Encrypted backup and restore functionality |
-| Journal Templates | P2 | **Complete** | 7 templates: Gratitude, Happiness, Rest, etc. |
+| Journal Templates | P2 | **Complete** | 7 templates; prompts render as styled TipTap blockquotes |
 | Factory Reset | P2 | **Complete** | Complete data wipe with confirmation |
 | 2FA Support | P2 | **Complete** | TOTP + native FIDO2 hardware key (not WebAuthn browser APIs) |
 | Recovery Key | P2 | **Complete** | Optional recovery key generation during setup |
 | Reminders | P2 | **Complete** | Configurable notification reminders with Tauri notifications |
 | Cloud Sync (WebDAV) | P2 | **Complete** | Manual encrypted backup/restore to WebDAV servers |
 | Encrypted Export | P2 | **Complete** | AES-256-GCM encrypted export/import with password |
-| Speech-to-Text | P3 | Planned | Local offline STT via whisper.cpp sidecar (optional model download) |
+| Multiple Journals | P2 | **Complete** | Named books with emoji + colour; SQLite `books` table; timeline filter |
+| Location & Weather | P2 | **Complete** | Auto-capture via Open-Meteo + Nominatim; stored unencrypted as metadata |
+| Privacy Modes | P2 | **Complete** | Per-entry Open / Mindful / Private modes |
+| Full-text Search | P2 | **Complete** | Ctrl+K overlay with mood + date filters, keyboard navigation |
+| On This Day | P2 | **Complete** | Resurfaces entries from same date in prior years |
+| Focus Mode | P2 | **Complete** | Distraction-free writing with typewriter scroll |
+| Oura Ring | P2 | **Complete** | PAT-based health context (sleep, readiness, HRV) in writing view |
+| Sync Details Modal | P2 | **Complete** | Storage type, entry count, last sync, upload/download with inline auth |
+| Speech-to-Text | P3 | In Progress | Local offline STT via whisper.cpp sidecar; Tauri commands scaffolded; UI pending |
 
 ### Feature Implementation Guidelines
 
@@ -530,7 +538,7 @@ interface AISettings {
 <!-- Update this section as development progresses -->
 
 ```markdown
-## Sprint: Phase 5 (Polish & Release Prep)
+## Sprint: Phase 6 (v0.4.0 — Feature Complete)
 
 ### Completed
 - [x] Project structure setup
@@ -540,18 +548,18 @@ interface AISettings {
 - [x] Data models definition
 - [x] SQLite database with triggers
 - [x] AES-256-GCM encryption module (PBKDF2, 600k iterations)
-- [x] Mood entry UI (5-level emoji scale)
-- [x] Journal editor with encryption
+- [x] Mood entry UI (5-level emoji scale with content-based auto-detection)
+- [x] Journal editor with encryption (TipTap rich text)
 - [x] Calendar view with mood heatmap
-- [x] Analytics dashboard (charts, streaks, patterns)
-- [x] Settings panel (AI, appearance, privacy)
+- [x] Analytics dashboard (charts, streaks, patterns) — merged into Insights
+- [x] Settings panel (AI, appearance, privacy, health tabs)
 - [x] Privacy-first AI insights (metadata-only)
 - [x] Local sentiment/emotion extraction
 - [x] Bug fix: Journal save freeze (v0.2.1)
 - [x] First-run wizard (welcome, password, storage)
 - [x] Export/import functionality
 - [x] Settings page improvements (tabs, search)
-- [x] Journal templates (7 templates)
+- [x] Journal templates (7 templates; TipTap blockquote format)
 - [x] Factory reset function
 - [x] 2FA support (TOTP + native FIDO2 hardware key)
 - [x] Recovery key generation
@@ -559,18 +567,31 @@ interface AISettings {
 - [x] Reminders/notifications (Tauri notification plugin)
 - [x] Encrypted export/import (AES-256-GCM via TypeScript crypto)
 - [x] WebDAV cloud sync (manual upload/download with tauri-plugin-http)
-- [x] Test suite (300 tests, Vitest + Testing Library)
+- [x] Privacy modes per entry (Open / Mindful / Private)
+- [x] Location & weather auto-capture (Open-Meteo + Nominatim; no API key)
+- [x] Multiple journals (Books) with emoji + colour; SQLite `books` table
+- [x] Full-text search (Ctrl+K overlay, mood + date filters, keyboard nav)
+- [x] On This Day view
+- [x] Focus mode (distraction-free writing, typewriter scroll)
+- [x] Oura Ring integration (PAT-based, Settings → Health tab)
+- [x] Sync Details Modal (storage type, entry count, last sync, upload/download)
+- [x] Merged Insights + Analytics view (AI section + local analytics)
+- [x] Sidebar redesign (Settings + Sync icon header, My Books section)
+- [x] TopBar improvements (larger icons, + New Entry button)
+- [x] Entry actions (copy as Markdown, copy text, delete with confirm)
+- [x] User documentation (README.md)
+- [x] Test suite (371 tests, Vitest + Testing Library)
 
 ### In Progress
+- [ ] Speech-to-Text (whisper.cpp sidecar; commands scaffolded, UI pending)
 - [ ] Cross-platform build testing
 
 ### Blocked
 - None
 
 ### Upcoming
-- [ ] User documentation
-- [ ] CI/CD pipeline
-- [ ] Release preparation
+- [ ] CI/CD pipeline (GitHub Actions — build + test on push)
+- [ ] Release preparation (code signing, notarisation)
 
 ### Future (Post-Release)
 - [ ] Speech-to-Text (local, offline via whisper.cpp)
@@ -955,8 +976,8 @@ When adding a new module or component:
 |-----------|-------|----------------|
 | `lib/dateUtils.test.ts` | 54 | All 18 exported date functions, leap years, timezone safety |
 | `lib/chartUtils.test.ts` | 27 | Mood colors/emojis, SVG path generation, coordinate mapping |
-| `lib/journalTemplates.test.ts` | 10 | Template data integrity, lookup, content formatting |
-| `lib/metadataExtractor.test.ts` | 49 | Sentiment, emotions, streaks, mood stats, aggregation |
+| `lib/journalTemplates.test.ts` | 10 | Template data integrity, lookup, blockquote HTML output |
+| `lib/metadataExtractor.test.ts` | 79 | Sentiment, emotions, streaks, mood stats, aggregation, emoji scoring |
 | `lib/crypto.test.ts` | 20 | AES-256-GCM encrypt/decrypt, password hashing, verification |
 | `lib/recoveryKeyService.test.ts` | 7 | Key format, character exclusions, uniqueness |
 | `lib/aiService.test.ts` | 17 | AI config, pattern detection, fallback prompts |
@@ -964,7 +985,7 @@ When adding a new module or component:
 | `stores/settingsStore.test.ts` | 18 | Settings CRUD, AI/appearance/privacy/journal setters |
 | `components/journal/MoodSelector.test.tsx` | 9 | Rendering, aria attributes, click handling, disabled state |
 | `components/journal/TemplateSelector.test.tsx` | 9 | Grid mode, compact mode, selection highlight |
-| **Total** | **237** | |
+| **Total** | **371** | |
 
 ---
 
@@ -1019,4 +1040,4 @@ npm run lint:fix           # Fix auto-fixable issues
 
 ---
 
-*Last Updated: January 2026*
+*Last Updated: March 2026 — v0.4.0*

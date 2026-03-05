@@ -30,6 +30,7 @@ import { RichTextEditor } from '../components/editor';
 import { PromptDrawer } from '../components/ai/PromptDrawer';
 import { useJournalPrompts } from '../hooks/useJournalPrompts';
 import { useSettingsStore } from '../stores/settingsStore';
+import { useBooksStore } from '../stores/booksStore';
 import { scoreContentMood } from '../lib/metadataExtractor';
 import { getStreakStats, getOverallStats } from '../lib/analyticsService';
 import type { LocationWeather, MoodLevel, PrivacyMode } from '../types/journal';
@@ -185,9 +186,14 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
   const setDistractionFree = useSettingsStore((s) => s.setDistractionFree);
   const autoLocationWeather = useSettingsStore((s) => s.settings.journal.autoLocationWeather);
 
+  const activeBookId = useBooksStore((s) => s.activeBookId);
+  const books = useBooksStore((s) => s.books);
+  const activeBook = books.find((b) => b.id === (activeBookId ?? 'default')) ?? books[0];
+
   // Weather / location context captured in background on mount
   const locationWeatherRef = useRef<LocationWeather | null>(null);
   const [locationWeather, setLocationWeather] = useState<LocationWeather | null>(null);
+  const [locationLoading, setLocationLoading] = useState(false);
 
   const isNewEntry = !entryId;
   const isEditorEmpty = !contentText.trim();
@@ -222,8 +228,11 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
   useEffect(() => {
     if (!autoLocationWeather || !isNewEntry) return;
     let cancelled = false;
+    setLocationLoading(true);
     captureLocationWeather().then((w) => {
-      if (cancelled || !w) return;
+      if (cancelled) return;
+      setLocationLoading(false);
+      if (!w) return;
       locationWeatherRef.current = w;
       setLocationWeather(w);
       // If entry was already saved before weather resolved, patch it now
@@ -270,6 +279,8 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
           setContentText(stripHtml(entry.content));
           setPrivacyMode(entry.privacyMode ?? 0);
           if (entry.mood) { setMood(entry.mood); setMoodIsAuto(false); }
+          // Restore stored weather chip for existing entries
+          if (entry.locationWeather) setLocationWeather(entry.locationWeather);
         }
       });
     }
@@ -361,8 +372,9 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
         content,
         mood: mood ?? undefined,
         privacyMode,
-        // Include location/weather only on the initial create (not updates)
+        // Include location/weather and bookId only on the initial create (not updates)
         locationWeather: !savedEntryIdRef.current ? locationWeatherRef.current ?? undefined : undefined,
+        bookId: !savedEntryIdRef.current ? (activeBookId ?? undefined) : undefined,
       })
         .then((saved) => {
           // Capture the created ID so the next auto-save updates instead of inserts
@@ -432,6 +444,12 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
               </p>
 
               {/* Weather + location chip */}
+              {locationLoading && !locationWeather && (
+                <p className="flex items-center gap-1 mt-0.5 text-xs text-slate-400 dark:text-slate-500 animate-pulse">
+                  <span className="w-2.5 h-2.5 border border-slate-300 dark:border-slate-600 border-t-slate-400 rounded-full animate-spin" />
+                  <span>Getting location…</span>
+                </p>
+              )}
               {locationWeather && (
                 <p className="flex items-center gap-1 mt-0.5 text-xs text-slate-400 dark:text-slate-500">
                   <span>{getWeatherEmoji(locationWeather.weatherCode)}</span>
@@ -535,6 +553,14 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
                   )}
                 </div>
 
+                {/* Book indicator (only shown for new entries when multiple books exist) */}
+                {isNewEntry && activeBook && books.length > 1 && (
+                  <span className="text-xs text-slate-400 dark:text-slate-500 flex items-center gap-1">
+                    <span>{activeBook.emoji}</span>
+                    <span className="hidden sm:inline">{activeBook.name}</span>
+                  </span>
+                )}
+
                 {/* Privacy segmented control */}
                 <div className="flex items-center gap-0.5 bg-slate-100 dark:bg-slate-800 rounded-lg p-0.5">
                   {([0, 1, 2] as PrivacyMode[]).map((mode) => (
@@ -560,7 +586,7 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
             {/* Title input — collapses in distraction-free mode */}
             <div
               className={`transition-all duration-500 overflow-hidden flex-shrink-0 ${
-                distractionFree ? 'max-h-0 opacity-0' : 'max-h-20 opacity-100'
+                distractionFree ? 'max-h-0 opacity-0' : 'max-h-24 opacity-100'
               }`}
             >
               <input
@@ -574,9 +600,28 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
                   focus-visible:ring-0 focus-visible:ring-offset-0
                   text-slate-600 dark:text-slate-300
                   placeholder:text-slate-300 dark:placeholder:text-slate-600
-                  mb-6
+                  mb-1
                 "
               />
+              {/* Weather chip for existing entries — new entries show chip in heading block above */}
+              {entryId && locationWeather ? (
+                <p className="flex items-center gap-1 mb-5 text-xs text-slate-400 dark:text-slate-500">
+                  <span>{getWeatherEmoji(locationWeather.weatherCode)}</span>
+                  {locationWeather.temperature !== undefined && (
+                    <span>{Math.round(locationWeather.temperature)}°</span>
+                  )}
+                  {locationWeather.condition && (
+                    <span className="opacity-75">· {locationWeather.condition}</span>
+                  )}
+                  {locationWeather.city && (
+                    <span className="opacity-75">
+                      · {locationWeather.city}{locationWeather.region ? `, ${locationWeather.region}` : ''}
+                    </span>
+                  )}
+                </p>
+              ) : (
+                <div className="mb-5" />
+              )}
             </div>
 
             {/* Rich text editor */}

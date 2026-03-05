@@ -16,6 +16,7 @@ import { getWeatherEmoji } from '../lib/locationWeatherService';
 import { EntryActionsMenu } from '../components/journal/EntryActionsMenu';
 import type { JournalEntry } from '../types/journal';
 import { MOOD_OPTIONS } from '../types/journal';
+import { useBooksStore } from '../stores/booksStore';
 
 // Get current date string for change detection
 const getCurrentDateStr = () => formatDate(new Date());
@@ -29,6 +30,12 @@ export function TimelineView({ onSelectEntry, onNewEntry }: TimelineViewProps) {
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [moodFilter, setMoodFilter] = useState<number | null>(null);
+
+  const activeBookId = useBooksStore((s) => s.activeBookId);
+  const activeBooksLabel = useBooksStore((s) => {
+    if (!s.activeBookId) return null;
+    return s.books.find((b) => b.id === s.activeBookId)?.name ?? null;
+  });
 
   // Search (Feature 3)
   const [searchQuery, setSearchQuery] = useState('');
@@ -95,9 +102,14 @@ export function TimelineView({ onSelectEntry, onNewEntry }: TimelineViewProps) {
     };
   }, []);
 
-  // 4-stage filter pipeline: date range → mood → tag → search
+  // 5-stage filter pipeline: book → date range → mood → tag → search
   const filteredEntries = useMemo(() => {
     let result = entries;
+
+    // Stage 0: Book filter
+    if (activeBookId) {
+      result = result.filter((e) => e.book_id === activeBookId);
+    }
 
     // Stage 1: Date range
     if (dateRange !== 'all') {
@@ -136,7 +148,7 @@ export function TimelineView({ onSelectEntry, onNewEntry }: TimelineViewProps) {
     }
 
     return result;
-  }, [entries, dateRange, moodFilter, tagFilter, debouncedQuery]);
+  }, [entries, dateRange, moodFilter, tagFilter, debouncedQuery, activeBookId]);
 
   // Group filtered entries by date
   const groupedEntries = useMemo(
@@ -184,7 +196,7 @@ export function TimelineView({ onSelectEntry, onNewEntry }: TimelineViewProps) {
   }, [entries]);
 
   const isAnyFilterActive =
-    moodFilter !== null || dateRange !== 'all' || tagFilter !== null || debouncedQuery !== '';
+    moodFilter !== null || dateRange !== 'all' || tagFilter !== null || debouncedQuery !== '' || activeBookId !== null;
 
   // Handle delete with optimistic removal (called by EntryActionsMenu after confirm)
   const handleDelete = useCallback(async (id: string) => {
@@ -273,7 +285,7 @@ export function TimelineView({ onSelectEntry, onNewEntry }: TimelineViewProps) {
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-2xl font-semibold text-slate-800 dark:text-slate-100">
-            Timeline
+            {activeBooksLabel ?? 'Timeline'}
           </h1>
           {entries.length > 0 && (
             <p className="text-sm text-slate-400 dark:text-slate-500 mt-1">
@@ -576,12 +588,14 @@ export function TimelineView({ onSelectEntry, onNewEntry }: TimelineViewProps) {
                               minute: '2-digit',
                             })}
                           </p>
-                          {entry.locationWeather?.city && (
+                          {(entry.locationWeather?.temperature !== undefined || entry.locationWeather?.city) && (
                             <span className="flex items-center gap-0.5 text-[10px] text-slate-400 dark:text-slate-500">
-                              <span>{getWeatherEmoji(entry.locationWeather.weatherCode)}</span>
-                              <span>{entry.locationWeather.city}</span>
-                              {entry.locationWeather.temperature !== undefined && (
-                                <span>· {Math.round(entry.locationWeather.temperature)}°</span>
+                              <span>{getWeatherEmoji(entry.locationWeather!.weatherCode)}</span>
+                              {entry.locationWeather!.temperature !== undefined && (
+                                <span>{Math.round(entry.locationWeather!.temperature)}°</span>
+                              )}
+                              {entry.locationWeather!.city && (
+                                <span>· {entry.locationWeather!.city}</span>
                               )}
                             </span>
                           )}

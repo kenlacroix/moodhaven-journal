@@ -11,6 +11,7 @@ function createTestEntry(overrides: Partial<JournalEntry> = {}): JournalEntry {
     mood: overrides.mood ?? 3,
     tags: overrides.tags ?? [],
     privacyMode: overrides.privacyMode ?? 0,
+    book_id: overrides.book_id ?? 'default',
     created_at: overrides.created_at ?? '2024-06-15T14:00:00.000Z',
     updated_at: overrides.updated_at ?? '2024-06-15T14:00:00.000Z',
   };

@@ -63,11 +63,12 @@ describe('journalTemplates', () => {
       expect(formatTemplateContent(freewrite)).toBe('');
     });
 
-    it('formats prompts with double newlines', () => {
+    it('formats prompts as HTML blockquotes', () => {
       const gratitude = getTemplate('gratitude')!;
       const content = formatTemplateContent(gratitude);
       expect(content).toContain('Today I am grateful for...');
-      expect(content).toContain('\n\n');
+      expect(content).toContain('<blockquote>');
+      expect(content).toContain('<p></p>');
     });
 
     it('includes all prompts from the template', () => {

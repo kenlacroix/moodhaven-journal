@@ -25,7 +25,7 @@ import {
 } from '../lib/settingsService';
 
 // Section to scroll to when settings page opens
-export type SettingsScrollTarget = 'speech-to-text' | null;
+export type SettingsScrollTarget = 'speech-to-text' | 'ai' | null;
 
 interface SettingsState {
   settings: AppSettings;

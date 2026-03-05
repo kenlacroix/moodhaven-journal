@@ -113,12 +113,19 @@ export function getTemplate(id: string): JournalTemplate | undefined {
 }
 
 /**
- * Format template prompts into initial content
+ * Format template prompts into TipTap-compatible HTML.
+ * Each prompt becomes a styled blockquote with an empty paragraph after it
+ * so the user can type their answer directly below.
  */
 export function formatTemplateContent(template: JournalTemplate): string {
   if (template.prompts.length === 0) {
     return '';
   }
 
-  return template.prompts.map(prompt => `${prompt}\n\n`).join('');
+  const esc = (s: string) =>
+    s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  return template.prompts
+    .map(p => `<blockquote><p>${esc(p)}</p></blockquote><p></p>`)
+    .join('');
 }

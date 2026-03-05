@@ -42,6 +42,22 @@ export const MOOD_OPTIONS: MoodOption[] = [
   { level: 5, label: 'Great', emoji: '😊', color: 'bg-emerald-500' },
 ];
 
+/** A named journal (book) that groups entries */
+export interface Book {
+  id: string;
+  name: string;
+  emoji: string;
+  color: string;
+  sort_order: number;
+  created_at: string;
+}
+
+/** Preset accent colors available for books */
+export const BOOK_COLORS = [
+  'violet', 'rose', 'amber', 'emerald', 'sky', 'indigo', 'teal', 'slate',
+] as const;
+export type BookColor = typeof BOOK_COLORS[number];
+
 /**
  * Weather and location context captured at the time of writing.
  * Only city/region-level data is stored — precise coordinates are never persisted.
@@ -65,6 +81,7 @@ export interface JournalEntry {
   tags: string[];
   privacyMode: PrivacyMode;
   locationWeather?: LocationWeather;
+  book_id: string; // Which book this entry belongs to (default = 'default')
   created_at: string; // ISO string for easy serialization
   updated_at: string;
 }

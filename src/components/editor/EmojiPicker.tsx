@@ -24,7 +24,7 @@ const EMOJI_CATEGORIES = {
   symbols: ['❤️', '💜', '💙', '💚', '💛', '🧡', '✨', '💫', '🌟', '💯', '✅', '❌'],
 };
 
-const STORAGE_KEY = 'moodhaven-recent-emojis';
+const STORAGE_KEY = 'moodbloom-recent-emojis';
 
 export function EmojiPicker({ onSelect, onClose, position }: EmojiPickerProps) {
   const [recentEmojis, setRecentEmojis] = useState<string[]>([]);

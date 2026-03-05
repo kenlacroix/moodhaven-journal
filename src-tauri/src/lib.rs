@@ -97,6 +97,11 @@ pub fn run() {
             commands::stt_download_model,
             commands::stt_delete_model,
             commands::stt_transcribe,
+            // Books (named journals)
+            commands::list_books,
+            commands::create_book,
+            commands::update_book,
+            commands::delete_book,
             // Oura Ring health integration
             commands::oura_save_pat,
             commands::oura_disconnect,

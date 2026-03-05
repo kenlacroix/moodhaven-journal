@@ -16,16 +16,6 @@ interface CalendarDayProps {
   onClick: (dateStr: string) => void;
 }
 
-/**
- * Get mood color class based on average mood value
- */
-function getMoodColorClass(averageMood: number): string {
-  // Round to nearest mood level
-  const level = Math.round(averageMood);
-  const option = MOOD_OPTIONS.find((o) => o.level === level);
-  return option?.color || 'bg-slate-300';
-}
-
 export function CalendarDay({
   date,
   isCurrentMonth,
@@ -64,22 +54,23 @@ export function CalendarDay({
       {/* Date number */}
       <span
         className={`
-          text-sm font-medium
+          text-sm font-medium leading-none mb-0.5
           ${dayIsToday ? 'text-violet-600 dark:text-violet-400' : ''}
         `}
       >
         {date.getDate()}
       </span>
 
-      {/* Mood indicator dot */}
-      {hasEntries && (
+      {/* Mood emoji (small, centered) replaces plain dot */}
+      {hasEntries ? (
         <span
-          className={`
-            absolute bottom-1 w-2 h-2 rounded-full
-            ${getMoodColorClass(moodData.averageMood)}
-          `}
-          title={`Average mood: ${moodData.averageMood.toFixed(1)}`}
-        />
+          className="text-[10px] leading-none"
+          title={`Average mood: ${moodData!.averageMood.toFixed(1)}`}
+        >
+          {MOOD_OPTIONS.find((o) => o.level === Math.round(moodData!.averageMood))?.emoji ?? '•'}
+        </span>
+      ) : (
+        <span className="h-[10px]" />
       )}
 
       {/* Entry count badge (if multiple) */}
@@ -87,8 +78,8 @@ export function CalendarDay({
         <span
           className="
             absolute top-0.5 right-0.5
-            text-[10px] font-medium
-            text-slate-500 dark:text-slate-400
+            text-[9px] font-medium
+            text-slate-400 dark:text-slate-500
           "
         >
           {moodData.entryCount}

@@ -148,6 +148,19 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
   const [privacyMode, setPrivacyMode] = useState<PrivacyMode>(0);
   const [isSaving, setIsSaving] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
+
+  // Mirror local save state into global store so Sidebar can show the indicator
+  useEffect(() => {
+    const { setSavingState, setLastAutoSaved } = useSettingsStore.getState();
+    if (isSaving) {
+      setSavingState('saving');
+    } else if (lastSavedAt) {
+      setSavingState('saved');
+      setLastAutoSaved(lastSavedAt.toISOString());
+      const t = setTimeout(() => useSettingsStore.getState().setSavingState('idle'), 2000);
+      return () => clearTimeout(t);
+    }
+  }, [isSaving, lastSavedAt]);
   const [savedAgoText, setSavedAgoText] = useState('');
   const [showCheckmark, setShowCheckmark] = useState(false);
   const [isEditorFocused, setIsEditorFocused] = useState(false);

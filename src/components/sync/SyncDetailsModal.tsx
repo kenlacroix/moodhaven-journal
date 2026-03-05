@@ -1,20 +1,21 @@
 /**
- * SyncDetailsModal — Centered overlay showing storage type, sync status,
- * entry count, and upload/download actions for WebDAV.
+ * SyncDetailsModal — Centered overlay showing storage type, file path,
+ * last-saved time, sync status, entry count, and upload/download actions.
  *
  * Triggered by the ☁ Sync icon in the Sidebar header.
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { appDataDir } from '@tauri-apps/api/path';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { getAllEntries } from '../../lib/journalService';
 import { uploadBackup, downloadBackup } from '../../lib/cloudSyncService';
 import type { SyncResult } from '../../lib/cloudSyncService';
 
-// ── Relative time helper ──────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
-function relativeTime(isoStr: string | undefined): string {
-  if (!isoStr) return 'Never synced';
+function relativeTime(isoStr: string | null | undefined): string {
+  if (!isoStr) return 'Never';
   const ms = Date.now() - new Date(isoStr).getTime();
   const seconds = Math.floor(ms / 1000);
   if (seconds < 60) return 'Just now';
@@ -26,6 +27,34 @@ function relativeTime(isoStr: string | undefined): string {
   return `${days}d ago`;
 }
 
+function absoluteTime(isoStr: string | null | undefined): string {
+  if (!isoStr) return '';
+  return new Date(isoStr).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+/** Strip username:password from a WebDAV URL for display */
+function maskUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    u.username = '';
+    u.password = '';
+    return u.toString();
+  } catch {
+    return url;
+  }
+}
+
+// ── Row helper ────────────────────────────────────────────────────────────────
+
+function Row({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-start justify-between gap-4">
+      <span className="text-sm text-slate-500 dark:text-slate-400 flex-shrink-0">{label}</span>
+      <span className="text-sm text-slate-700 dark:text-slate-200 text-right min-w-0">{children}</span>
+    </div>
+  );
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 interface SyncDetailsModalProps {
@@ -35,9 +64,11 @@ interface SyncDetailsModalProps {
 
 export function SyncDetailsModal({ onClose, onNavigateToSettings }: SyncDetailsModalProps) {
   const storage = useSettingsStore((s) => s.settings.storage);
+  const lastAutoSaved = useSettingsStore((s) => s.lastAutoSaved);
   const setLastSyncDate = useSettingsStore((s) => s.setLastSyncDate);
 
   const [entryCount, setEntryCount] = useState<number | null>(null);
+  const [dbPath, setDbPath] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState<'upload' | 'download' | null>(null);
   const [syncResult, setSyncResult] = useState<SyncResult | null>(null);
   const [password, setPassword] = useState('');
@@ -46,11 +77,19 @@ export function SyncDetailsModal({ onClose, onNavigateToSettings }: SyncDetailsM
 
   const backdropRef = useRef<HTMLDivElement>(null);
 
-  // Load entry count on mount
+  // Load entry count + DB path on mount
   useEffect(() => {
     getAllEntries()
       .then((entries) => setEntryCount(entries.length))
       .catch(() => setEntryCount(null));
+
+    appDataDir()
+      .then((dir) => {
+        const sep = dir.includes('\\') ? '\\' : '/';
+        const trimmed = dir.endsWith(sep) ? dir.slice(0, -1) : dir;
+        setDbPath(`${trimmed}${sep}moodbloom.db`);
+      })
+      .catch(() => setDbPath(null));
   }, []);
 
   // Close on backdrop click
@@ -110,11 +149,11 @@ export function SyncDetailsModal({ onClose, onNavigateToSettings }: SyncDetailsM
       onClick={handleBackdropClick}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
     >
-      <div className="w-[480px] max-w-[calc(100vw-2rem)] bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+      <div className="w-[500px] max-w-[calc(100vw-2rem)] bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
 
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-800">
-          <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100">Sync Details</h2>
+          <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100">Storage &amp; Sync</h2>
           <button
             type="button"
             onClick={onClose}
@@ -127,11 +166,10 @@ export function SyncDetailsModal({ onClose, onNavigateToSettings }: SyncDetailsM
         </div>
 
         {/* Body */}
-        <div className="px-5 py-4 space-y-4">
+        <div className="px-5 py-4 space-y-3.5">
 
-          {/* Storage type row */}
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-slate-500 dark:text-slate-400">Storage</span>
+          {/* Storage type */}
+          <Row label="Storage">
             <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
               isWebDAV
                 ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
@@ -149,36 +187,84 @@ export function SyncDetailsModal({ onClose, onNavigateToSettings }: SyncDetailsM
                   <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25m18 0A2.25 2.25 0 0018.75 3H5.25A2.25 2.25 0 003 5.25m18 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 7.409A2.25 2.25 0 012.25 5.493V5.25" />
                   </svg>
-                  Local
+                  Local only
                 </>
               )}
             </span>
-          </div>
+          </Row>
 
-          {/* Entry count */}
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-slate-500 dark:text-slate-400">Entries</span>
-            <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
-              {entryCount === null ? (
-                <span className="inline-block w-8 h-3 bg-slate-200 dark:bg-slate-700 rounded animate-pulse" />
+          {/* DB file path (local only) */}
+          {!isWebDAV && (
+            <Row label="Database">
+              {dbPath ? (
+                <span
+                  className="font-mono text-xs text-slate-500 dark:text-slate-400 break-all"
+                  title={dbPath}
+                >
+                  {dbPath}
+                </span>
               ) : (
-                entryCount
+                <span className="inline-block w-48 h-3 bg-slate-200 dark:bg-slate-700 rounded animate-pulse" />
               )}
-            </span>
-          </div>
-
-          {/* Last sync (WebDAV only) */}
-          {isWebDAV && (
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-slate-500 dark:text-slate-400">Last sync</span>
-              <span className="flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-300">
-                {dirIcon && <span className="text-slate-400">{dirIcon}</span>}
-                <span>{relativeTime(storage.lastSyncDate)}</span>
-              </span>
-            </div>
+            </Row>
           )}
 
-          {/* Sync result */}
+          {/* WebDAV server URL */}
+          {isWebDAV && storage.webdav.url && (
+            <Row label="Server">
+              <span
+                className="font-mono text-xs text-slate-500 dark:text-slate-400 break-all"
+                title={maskUrl(storage.webdav.url)}
+              >
+                {maskUrl(storage.webdav.url)}
+              </span>
+            </Row>
+          )}
+
+          {/* Divider */}
+          <div className="h-px bg-slate-100 dark:bg-slate-800" />
+
+          {/* Entry count */}
+          <Row label="Entries">
+            {entryCount === null ? (
+              <span className="inline-block w-8 h-3 bg-slate-200 dark:bg-slate-700 rounded animate-pulse" />
+            ) : (
+              <span className="font-medium">{entryCount}</span>
+            )}
+          </Row>
+
+          {/* Last auto-saved */}
+          <Row label="Last saved">
+            {lastAutoSaved ? (
+              <span title={new Date(lastAutoSaved).toLocaleString()}>
+                {absoluteTime(lastAutoSaved)}{' '}
+                <span className="text-slate-400 dark:text-slate-500">· {relativeTime(lastAutoSaved)}</span>
+              </span>
+            ) : (
+              <span className="text-slate-400 dark:text-slate-500">Not yet saved this session</span>
+            )}
+          </Row>
+
+          {/* Last synced (WebDAV only) */}
+          {isWebDAV && (
+            <Row label="Last synced">
+              <span className="flex items-center gap-1.5 justify-end">
+                {dirIcon && <span className="text-slate-400">{dirIcon}</span>}
+                <span>
+                  {storage.lastSyncDate ? (
+                    <>
+                      {absoluteTime(storage.lastSyncDate)}{' '}
+                      <span className="text-slate-400 dark:text-slate-500">· {relativeTime(storage.lastSyncDate)}</span>
+                    </>
+                  ) : (
+                    <span className="text-slate-400 dark:text-slate-500">Never synced</span>
+                  )}
+                </span>
+              </span>
+            </Row>
+          )}
+
+          {/* Sync result feedback */}
           {syncResult && (
             <div className={`rounded-lg px-3 py-2.5 text-sm ${
               syncResult.success
@@ -236,7 +322,7 @@ export function SyncDetailsModal({ onClose, onNavigateToSettings }: SyncDetailsM
             </form>
           )}
 
-          {/* Actions (WebDAV only, only when configured) */}
+          {/* WebDAV actions */}
           {isConfigured && !showPasswordField && (
             <div className="flex gap-2 pt-1">
               <button
@@ -289,13 +375,13 @@ export function SyncDetailsModal({ onClose, onNavigateToSettings }: SyncDetailsM
           </button>
         </div>
 
-        {/* Footer — encryption notice */}
+        {/* Footer */}
         <div className="px-5 py-3 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-100 dark:border-slate-800 flex items-center gap-1.5">
           <svg className="w-3 h-3 text-slate-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
           </svg>
           <span className="text-[11px] text-slate-400 dark:text-slate-500">
-            Backups are AES-256 encrypted client-side before upload — the server never sees plaintext.
+            Data is encrypted locally (AES-256-GCM). Backups are encrypted before upload — the server never sees plaintext.
           </span>
         </div>
       </div>

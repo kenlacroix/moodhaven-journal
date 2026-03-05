@@ -12,6 +12,7 @@
 import { useState, useEffect } from 'react';
 import { SidebarItem } from './SidebarItem';
 import { useBooksStore } from '../../stores/booksStore';
+import { useSettingsStore } from '../../stores/settingsStore';
 
 export type ViewType = 'writing' | 'timeline' | 'onthisday' | 'insights' | 'calendar' | 'settings';
 
@@ -31,6 +32,8 @@ export function Sidebar({ currentView, onNavigate, onOpenSync }: SidebarProps) {
   const [showNewBookForm, setShowNewBookForm] = useState(false);
 
   const { books, activeBookId, loadBooks, setActiveBook, addBook } = useBooksStore();
+  const savingState = useSettingsStore((s) => s.savingState);
+  const lastAutoSaved = useSettingsStore((s) => s.lastAutoSaved);
 
   // Load books once on mount
   useEffect(() => {
@@ -83,16 +86,39 @@ export function Sidebar({ currentView, onNavigate, onOpenSync }: SidebarProps) {
           </svg>
         </button>
 
-        {/* Sync */}
+        {/* Save / Sync indicator */}
         <button
           type="button"
           onClick={onOpenSync}
-          title="Sync details"
-          className="p-1.5 rounded-lg transition-all duration-200 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+          title={
+            savingState === 'saving' ? 'Saving…' :
+            savingState === 'saved' ? `Saved${lastAutoSaved ? ' · ' + new Date(lastAutoSaved).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}` :
+            lastAutoSaved ? `Last saved ${new Date(lastAutoSaved).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · Click for sync details` :
+            'Sync details'
+          }
+          className={`p-1.5 rounded-lg transition-all duration-200 ${
+            savingState === 'saved'
+              ? 'text-emerald-500 dark:text-emerald-400'
+              : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
         >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15a4.5 4.5 0 004.5 4.5H18a3.75 3.75 0 001.332-7.257 3 3 0 00-3.758-3.848 5.25 5.25 0 00-10.233 2.33A4.502 4.502 0 002.25 15z" />
-          </svg>
+          {savingState === 'saving' ? (
+            /* Spinning ring while saving */
+            <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+          ) : savingState === 'saved' ? (
+            /* Checkmark on completion */
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+            </svg>
+          ) : (
+            /* Cloud icon at rest */
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15a4.5 4.5 0 004.5 4.5H18a3.75 3.75 0 001.332-7.257 3 3 0 00-3.758-3.848 5.25 5.25 0 00-10.233 2.33A4.502 4.502 0 002.25 15z" />
+            </svg>
+          )}
         </button>
       </div>
 

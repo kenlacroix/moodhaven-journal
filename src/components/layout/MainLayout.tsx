@@ -46,7 +46,6 @@ export function MainLayout({ currentView, onNavigate, onLock, onSelectEntry, onN
       <div className="flex-1 flex flex-col min-h-screen overflow-hidden">
         <TopBar
           currentView={currentView}
-          onNavigate={onNavigate}
           onLock={onLock}
           onSelectEntry={onSelectEntry}
           onNewEntry={onNewEntry}

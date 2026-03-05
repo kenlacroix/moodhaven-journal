@@ -95,6 +95,12 @@ interface SettingsState {
   // Session UI (not persisted)
   distractionFree: boolean;
   setDistractionFree: (v: boolean) => void;
+
+  // Auto-save indicator (not persisted — set by WritingView, read by Sidebar)
+  savingState: 'idle' | 'saving' | 'saved';
+  lastAutoSaved: string | null; // ISO date string
+  setSavingState: (state: 'idle' | 'saving' | 'saved') => void;
+  setLastAutoSaved: (iso: string) => void;
 }
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({
@@ -105,6 +111,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   hasUnsavedChanges: false,
   scrollToSection: null,
   distractionFree: false,
+  savingState: 'idle',
+  lastAutoSaved: null,
 
   loadSettings: async () => {
     set({ isLoading: true, error: null });
@@ -506,6 +514,10 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
 
   // Session UI
   setDistractionFree: (distractionFree) => set({ distractionFree }),
+
+  // Auto-save indicator
+  setSavingState: (savingState) => set({ savingState }),
+  setLastAutoSaved: (lastAutoSaved) => set({ lastAutoSaved }),
 }));
 
 // Helper to apply theme to document

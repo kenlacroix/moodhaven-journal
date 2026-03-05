@@ -24,16 +24,17 @@
  */
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { saveEntry, getEntryById, patchEntryLocationWeather } from '../lib/journalService';
+import { saveEntry, getEntryById, patchEntryLocationWeather, deleteEntry } from '../lib/journalService';
 import { captureLocationWeather, getWeatherEmoji } from '../lib/locationWeatherService';
 import { RichTextEditor } from '../components/editor';
 import { PromptDrawer } from '../components/ai/PromptDrawer';
+import { EntryOptionsMenu } from '../components/journal/EntryOptionsMenu';
 import { useJournalPrompts } from '../hooks/useJournalPrompts';
 import { useSettingsStore } from '../stores/settingsStore';
 import { useBooksStore } from '../stores/booksStore';
 import { scoreContentMood } from '../lib/metadataExtractor';
 import { getStreakStats, getOverallStats } from '../lib/analyticsService';
-import type { LocationWeather, MoodLevel, PrivacyMode } from '../types/journal';
+import type { JournalEntry, LocationWeather, MoodLevel, PrivacyMode } from '../types/journal';
 import { MOOD_OPTIONS, PRIVACY_MODE_LABELS, PRIVACY_MODE_DESCRIPTIONS } from '../types/journal';
 import type { JournalTemplate } from '../lib/journalTemplates';
 import { formatTemplateContent } from '../lib/journalTemplates';
@@ -199,6 +200,7 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
   // over the latest state. saveRef.current (stable wrapper) delegates to this.
   const saveNowRef = useRef<(() => Promise<void>) | null>(null);
 
+  const [savedEntry, setSavedEntry] = useState<JournalEntry | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [usedTemplateIds, setUsedTemplateIds] = useState<string[]>(() => getUsedTemplates());
   const setShowPrompts = useSettingsStore((s) => s.setShowPrompts);
@@ -219,6 +221,7 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
   const isNewEntry = !entryId;
   const isEditorEmpty = !contentText.trim();
   const wordCount = contentText.trim() ? contentText.trim().split(/\s+/).length : 0;
+  const charCount = contentText.length;
   /** Heading + subtle UI dims once user is in writing flow */
   const inFlow = wordCount >= 20;
   /** Scanning state: user has started writing but not enough words for mood detection */
@@ -400,6 +403,7 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
         .then((saved) => {
           // Capture the created ID so the next auto-save updates instead of inserts
           savedEntryIdRef.current = saved.id;
+          setSavedEntry(saved);
           setLastSavedAt(new Date());
           setShowCheckmark(true);
           setTimeout(() => setShowCheckmark(false), 1500);
@@ -433,6 +437,8 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
     setPendingInsert(formatTemplateContent(template));
     markTemplateUsed(template.id);
     setUsedTemplateIds(getUsedTemplates());
+    // Close drawer immediately after template insertion
+    setDrawerOpen(false);
   }, []);
 
   // Reset mood to auto mode
@@ -613,24 +619,60 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
                   </span>
                 )}
 
-                {/* Privacy segmented control */}
-                <div className="flex items-center gap-0.5 bg-slate-100 dark:bg-slate-800 rounded-lg p-0.5">
-                  {([0, 1, 2] as PrivacyMode[]).map((mode) => (
-                    <button
-                      key={mode}
-                      type="button"
-                      onClick={() => setPrivacyMode(mode)}
-                      title={PRIVACY_MODE_DESCRIPTIONS[mode]}
-                      className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all duration-200 ${
-                        privacyMode === mode
-                          ? `bg-white dark:bg-slate-700 shadow-sm ${PRIVACY_ACTIVE_COLORS[mode]}`
-                          : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'
-                      }`}
-                    >
-                      {PRIVACY_ICONS[mode]}
-                      <span>{PRIVACY_MODE_LABELS[mode]}</span>
-                    </button>
-                  ))}
+                {/* Right cluster: privacy + save indicator + options menu */}
+                <div className="flex items-center gap-1.5">
+                  {/* Save indicator — inline with header */}
+                  <span className="flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500 min-w-[60px] justify-end">
+                    {isSaving ? (
+                      <>
+                        <span className="w-2.5 h-2.5 border-[1.5px] border-slate-300 dark:border-slate-600 border-t-violet-500 rounded-full animate-spin" />
+                        <span>Saving…</span>
+                      </>
+                    ) : showCheckmark ? (
+                      <span className="flex items-center gap-1 animate-fade-in">
+                        <svg className="w-3 h-3 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                        </svg>
+                        <span>Saved</span>
+                      </span>
+                    ) : savedAgoText ? (
+                      <span className="hidden sm:inline">{savedAgoText}</span>
+                    ) : null}
+                  </span>
+
+                  {/* Privacy segmented control */}
+                  <div className="flex items-center gap-0.5 bg-slate-100 dark:bg-slate-800 rounded-lg p-0.5">
+                    {([0, 1, 2] as PrivacyMode[]).map((mode) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => setPrivacyMode(mode)}
+                        title={PRIVACY_MODE_DESCRIPTIONS[mode]}
+                        className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all duration-200 ${
+                          privacyMode === mode
+                            ? `bg-white dark:bg-slate-700 shadow-sm ${PRIVACY_ACTIVE_COLORS[mode]}`
+                            : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'
+                        }`}
+                      >
+                        {PRIVACY_ICONS[mode]}
+                        <span>{PRIVACY_MODE_LABELS[mode]}</span>
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Three-dot entry options menu */}
+                  <EntryOptionsMenu
+                    entry={savedEntry}
+                    wordCount={wordCount}
+                    charCount={charCount}
+                    onDelete={savedEntry ? async () => {
+                      await deleteEntry(savedEntry.id);
+                      onEntrySaved?.();
+                    } : undefined}
+                    onPinToggle={(pinned) => {
+                      if (savedEntry) setSavedEntry({ ...savedEntry, pinned });
+                    }}
+                  />
                 </div>
               </div>
             </div>
@@ -716,48 +758,16 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
             )}
           </div>
 
-          {/* ── Bottom status bar ── */}
-          <div className="flex items-center mt-3 px-1 text-xs text-slate-400 dark:text-slate-500">
-
-            {/* Left: E2E badge — hidden in distraction-free, fades in flow */}
-            <div
-              className={`flex-1 flex items-center gap-1.5 transition-all duration-700 ${
-                distractionFree ? 'opacity-0 pointer-events-none' : inFlow ? 'opacity-25' : 'opacity-100'
-              }`}
-            >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
-              </svg>
-              <span>End-to-end encrypted</span>
-            </div>
-
-            {/* Center: word count */}
-            <div className="flex-1 text-center">
-              {wordCount > 0 && (
-                <span>{wordCount} {wordCount === 1 ? 'word' : 'words'}</span>
-              )}
-            </div>
-
-            {/* Right: save indicator only */}
-            <div className="flex-1 flex items-center justify-end">
-              <span className="flex items-center gap-1.5">
-                {isSaving ? (
-                  <>
-                    <span className="w-3 h-3 border-[1.5px] border-slate-300 dark:border-slate-600 border-t-violet-500 rounded-full animate-spin" />
-                    Saving…
-                  </>
-                ) : showCheckmark ? (
-                  <span className="flex items-center gap-1.5 animate-fade-in">
-                    <svg className="w-3.5 h-3.5 text-emerald-500 animate-check-bounce" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                    </svg>
-                    {savedAgoText}
-                  </span>
-                ) : (
-                  <span>{savedAgoText}</span>
-                )}
-              </span>
-            </div>
+          {/* ── Bottom status bar — centered E2E badge only ── */}
+          <div
+            className={`flex items-center justify-center mt-3 px-1 text-xs text-slate-400 dark:text-slate-500 transition-all duration-700 ${
+              distractionFree ? 'opacity-0 pointer-events-none' : inFlow ? 'opacity-25' : 'opacity-100'
+            }`}
+          >
+            <svg className="w-3.5 h-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
+            </svg>
+            <span>🔒 End-to-End Encrypted</span>
           </div>
         </div>
       </div>

@@ -31,6 +31,8 @@ pub struct JournalEntryRow {
     pub location_weather: Option<String>,
     /// Book this entry belongs to (default = 'default')
     pub book_id: String,
+    /// Whether this entry is pinned/favourited
+    pub pinned: bool,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -154,6 +156,12 @@ impl Database {
             [],
         );
 
+        // Runtime migration: add pinned column to journal_entries
+        let _ = conn.execute(
+            "ALTER TABLE journal_entries ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0",
+            [],
+        );
+
         Ok(Self {
             conn: Mutex::new(conn),
         })
@@ -254,7 +262,7 @@ pub fn create_entry(
 
     // Fetch the created entry using the same connection (avoid deadlock)
     conn.query_row(
-        "SELECT id, encrypted_content, mood, privacy_mode, location_weather, book_id, created_at, updated_at
+        "SELECT id, encrypted_content, mood, privacy_mode, location_weather, book_id, pinned, created_at, updated_at
          FROM journal_entries WHERE id = ?1",
         params![id],
         |row| {
@@ -269,12 +277,25 @@ pub fn create_entry(
                 privacy_mode: row.get(3)?,
                 location_weather: row.get(4)?,
                 book_id: row.get::<_, Option<String>>(5)?.unwrap_or_else(|| "default".to_string()),
-                created_at: row.get(6)?,
-                updated_at: row.get(7)?,
+                pinned: row.get::<_, i32>(6)? != 0,
+                created_at: row.get(7)?,
+                updated_at: row.get(8)?,
             })
         },
     )
     .map_err(|e| format!("Failed to fetch created entry: {}", e))
+}
+
+/// Toggle the pinned state of an entry.
+pub fn patch_entry_pinned(db: &Database, id: &str, pinned: bool) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let pinned_val: i32 = if pinned { 1 } else { 0 };
+    conn.execute(
+        "UPDATE journal_entries SET pinned = ?1 WHERE id = ?2",
+        params![pinned_val, id],
+    )
+    .map_err(|e| format!("Failed to patch pinned: {}", e))?;
+    Ok(())
 }
 
 /// Attach (or replace) location_weather on an existing entry.
@@ -300,7 +321,7 @@ pub fn get_entry(db: &Database, id: &str) -> Result<Option<JournalEntryRow>, Str
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
     let result = conn.query_row(
-        "SELECT id, encrypted_content, mood, privacy_mode, location_weather, book_id, created_at, updated_at
+        "SELECT id, encrypted_content, mood, privacy_mode, location_weather, book_id, pinned, created_at, updated_at
          FROM journal_entries WHERE id = ?1",
         params![id],
         |row| {
@@ -315,8 +336,9 @@ pub fn get_entry(db: &Database, id: &str) -> Result<Option<JournalEntryRow>, Str
                 privacy_mode: row.get(3)?,
                 location_weather: row.get(4)?,
                 book_id: row.get::<_, Option<String>>(5)?.unwrap_or_else(|| "default".to_string()),
-                created_at: row.get(6)?,
-                updated_at: row.get(7)?,
+                pinned: row.get::<_, i32>(6)? != 0,
+                created_at: row.get(7)?,
+                updated_at: row.get(8)?,
             })
         },
     );
@@ -336,7 +358,7 @@ pub fn get_all_entries(db: &Database, limit: Option<i32>) -> Result<Vec<JournalE
 
     let mut stmt = conn
         .prepare(&format!(
-            "SELECT id, encrypted_content, mood, privacy_mode, location_weather, book_id, created_at, updated_at
+            "SELECT id, encrypted_content, mood, privacy_mode, location_weather, book_id, pinned, created_at, updated_at
              FROM journal_entries
              ORDER BY created_at DESC{}",
             limit_clause
@@ -356,8 +378,9 @@ pub fn get_all_entries(db: &Database, limit: Option<i32>) -> Result<Vec<JournalE
                 privacy_mode: row.get(3)?,
                 location_weather: row.get(4)?,
                 book_id: row.get::<_, Option<String>>(5)?.unwrap_or_else(|| "default".to_string()),
-                created_at: row.get(6)?,
-                updated_at: row.get(7)?,
+                pinned: row.get::<_, i32>(6)? != 0,
+                created_at: row.get(7)?,
+                updated_at: row.get(8)?,
             })
         })
         .map_err(|e| format!("Query failed: {}", e))?
@@ -377,7 +400,7 @@ pub fn get_entries_by_date_range(
 
     let mut stmt = conn
         .prepare(
-            "SELECT id, encrypted_content, mood, privacy_mode, location_weather, book_id, created_at, updated_at
+            "SELECT id, encrypted_content, mood, privacy_mode, location_weather, book_id, pinned, created_at, updated_at
              FROM journal_entries
              WHERE date(created_at) BETWEEN ?1 AND ?2
              ORDER BY created_at DESC",
@@ -397,8 +420,9 @@ pub fn get_entries_by_date_range(
                 privacy_mode: row.get(3)?,
                 location_weather: row.get(4)?,
                 book_id: row.get::<_, Option<String>>(5)?.unwrap_or_else(|| "default".to_string()),
-                created_at: row.get(6)?,
-                updated_at: row.get(7)?,
+                pinned: row.get::<_, i32>(6)? != 0,
+                created_at: row.get(7)?,
+                updated_at: row.get(8)?,
             })
         })
         .map_err(|e| format!("Query failed: {}", e))?
@@ -436,7 +460,7 @@ pub fn update_entry(
 
     // Fetch the updated entry using the same connection (avoid deadlock/race)
     conn.query_row(
-        "SELECT id, encrypted_content, mood, privacy_mode, location_weather, book_id, created_at, updated_at
+        "SELECT id, encrypted_content, mood, privacy_mode, location_weather, book_id, pinned, created_at, updated_at
          FROM journal_entries WHERE id = ?1",
         params![id],
         |row| {
@@ -451,8 +475,9 @@ pub fn update_entry(
                 privacy_mode: row.get(3)?,
                 location_weather: row.get(4)?,
                 book_id: row.get::<_, Option<String>>(5)?.unwrap_or_else(|| "default".to_string()),
-                created_at: row.get(6)?,
-                updated_at: row.get(7)?,
+                pinned: row.get::<_, i32>(6)? != 0,
+                created_at: row.get(7)?,
+                updated_at: row.get(8)?,
             })
         },
     )

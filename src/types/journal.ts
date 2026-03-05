@@ -82,6 +82,7 @@ export interface JournalEntry {
   privacyMode: PrivacyMode;
   locationWeather?: LocationWeather;
   book_id: string; // Which book this entry belongs to (default = 'default')
+  pinned?: boolean; // Whether this entry is pinned/favourited
   created_at: string; // ISO string for easy serialization
   updated_at: string;
 }

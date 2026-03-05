@@ -33,6 +33,7 @@ interface EncryptedJournalEntryRow {
   privacy_mode: number;
   location_weather?: string; // JSON-encoded LocationWeather, not encrypted
   book_id: string;
+  pinned: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -178,6 +179,7 @@ export async function createEntry(
     tags: data.tags,
     locationWeather: row.location_weather ? (JSON.parse(row.location_weather) as LocationWeather) : undefined,
     book_id: row.book_id ?? 'default',
+    pinned: row.pinned ?? false,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -276,6 +278,7 @@ export async function updateEntry(
     privacyMode: (row.privacy_mode ?? 0) as PrivacyMode,
     tags: data.tags,
     book_id: row.book_id ?? 'default',
+    pinned: row.pinned ?? false,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -348,6 +351,7 @@ async function decryptEntry(
     tags: [], // TODO: Fetch from entry_tags table
     locationWeather: row.location_weather ? (JSON.parse(row.location_weather) as LocationWeather) : undefined,
     book_id: row.book_id ?? 'default',
+    pinned: row.pinned ?? false,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -411,6 +415,13 @@ export async function patchEntryLocationWeather(
     id,
     locationWeather: JSON.stringify(weather),
   });
+}
+
+/**
+ * Toggle the pinned/favourite state of an entry.
+ */
+export async function patchEntryPinned(id: string, pinned: boolean): Promise<void> {
+  await invoke('patch_entry_pinned', { id, pinned });
 }
 
 /**

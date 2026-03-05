@@ -115,6 +115,12 @@ pub fn patch_entry_location_weather(
     db::patch_entry_location_weather(&db, &id, &location_weather)
 }
 
+/// Toggle the pinned/favourite state of an entry.
+#[tauri::command]
+pub fn patch_entry_pinned(db: State<Database>, id: String, pinned: bool) -> Result<(), String> {
+    db::patch_entry_pinned(&db, &id, pinned)
+}
+
 /// Get mood statistics for analytics
 #[tauri::command]
 pub fn get_mood_statistics(

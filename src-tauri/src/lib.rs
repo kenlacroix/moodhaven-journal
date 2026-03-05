@@ -53,6 +53,7 @@ pub fn run() {
             commands::update_journal_entry,
             commands::delete_journal_entry,
             commands::patch_entry_location_weather,
+            commands::patch_entry_pinned,
             // Statistics
             commands::get_mood_statistics,
             commands::get_overall_statistics,

@@ -137,6 +137,8 @@ export function SettingsPage() {
     setOuraEnabled,
     setOuraSettings,
     setAutoLocationWeather,
+    setTemperatureUnit,
+    setAutoTitle,
   } = useSettingsStore();
 
   const scrollToSection = useSettingsStore((s) => s.scrollToSection);
@@ -146,8 +148,9 @@ export function SettingsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
 
-  // Ref for scrolling to STT section
+  // Refs for deep-link scroll targets
   const sttSectionRef = useRef<HTMLDivElement>(null);
+  const aiSectionRef = useRef<HTMLDivElement>(null);
 
   // Data management state
   const [showResetConfirm, setShowResetConfirm] = useState(false);
@@ -247,14 +250,26 @@ export function SettingsPage() {
   // Handle scroll-to-section navigation from other pages
   useEffect(() => {
     if (scrollToSection === 'speech-to-text') {
-      // Switch to general tab (where STT settings are)
       setActiveTab('general');
-      // Clear the scroll target
       setScrollToSection(null);
-      // Scroll to the section after a brief delay for the tab to render
       setTimeout(() => {
         sttSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }, 100);
+    } else if (scrollToSection === 'ai') {
+      setActiveTab('ai');
+      setScrollToSection(null);
+      setTimeout(() => {
+        aiSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 100);
+    } else if (scrollToSection === 'privacy') {
+      setActiveTab('privacy');
+      setScrollToSection(null);
+    } else if (scrollToSection === 'health') {
+      setActiveTab('health');
+      setScrollToSection(null);
+    } else if (scrollToSection === 'notifications') {
+      setActiveTab('general');
+      setScrollToSection(null);
     }
   }, [scrollToSection, setScrollToSection]);
 
@@ -683,6 +698,24 @@ export function SettingsPage() {
                 description="Capture your city and weather when starting a new entry. Uses Open-Meteo + OpenStreetMap — no API key required."
                 checked={settings.journal.autoLocationWeather ?? false}
                 onChange={setAutoLocationWeather}
+              />
+
+              <SettingSelect
+                label="Temperature unit"
+                description="Display unit for weather chips"
+                value={settings.journal.temperatureUnit ?? 'C'}
+                options={[
+                  { value: 'C', label: 'Celsius (°C)' },
+                  { value: 'F', label: 'Fahrenheit (°F)' },
+                ]}
+                onChange={(v) => setTemperatureUnit(v as 'C' | 'F')}
+              />
+
+              <SettingToggle
+                label="Auto-title entries"
+                description="Generate an entry title from the first sentence when you don't type one"
+                checked={settings.journal.autoTitle ?? false}
+                onChange={setAutoTitle}
               />
             </SettingSection>
 
@@ -1422,7 +1455,7 @@ export function SettingsPage() {
 
         {/* AI Tab */}
         {activeTab === 'ai' && (
-          <div id="panel-ai" role="tabpanel" className="space-y-6">
+          <div id="panel-ai" role="tabpanel" className="space-y-6" ref={aiSectionRef}>
             <SettingSection
               title="AI Features"
               description="Optional AI-powered insights (your journal content is never sent to external servers)"
@@ -1719,6 +1752,26 @@ export function SettingsPage() {
                       </span>
                     ))}
                   </div>
+                </div>
+
+                {/* Links */}
+                <div className="flex flex-wrap gap-3 pt-2">
+                  <a
+                    href="https://github.com/kenlacroix/moodbloom-tauri#readme"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 px-4 py-2 text-sm text-violet-600 dark:text-violet-400 border border-violet-200 dark:border-violet-800 rounded-xl hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-colors"
+                  >
+                    User Guide ↗
+                  </a>
+                  <a
+                    href="https://github.com/kenlacroix/moodbloom-tauri/issues"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 px-4 py-2 text-sm text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                  >
+                    Share Feedback ↗
+                  </a>
                 </div>
               </div>
             </SettingSection>

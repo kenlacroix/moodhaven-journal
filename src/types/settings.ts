@@ -51,6 +51,10 @@ export interface JournalPreferences {
   autoSaveInterval: number; // seconds
   /** Automatically capture weather + city when creating a new entry (opt-in; contacts Open-Meteo and Nominatim) */
   autoLocationWeather: boolean;
+  /** Temperature display unit for weather chips */
+  temperatureUnit: 'C' | 'F';
+  /** Auto-generate entry title from first sentence when no title is typed */
+  autoTitle: boolean;
 }
 
 // Privacy settings
@@ -192,6 +196,8 @@ export function createDefaultSettings(): AppSettings {
       autoSave: true,
       autoSaveInterval: 30,
       autoLocationWeather: false,
+      temperatureUnit: 'C',
+      autoTitle: false,
     },
     privacy: {
       autoLockTimeout: 5,

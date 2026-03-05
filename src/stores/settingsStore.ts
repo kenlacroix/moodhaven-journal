@@ -25,7 +25,7 @@ import {
 } from '../lib/settingsService';
 
 // Section to scroll to when settings page opens
-export type SettingsScrollTarget = 'speech-to-text' | 'ai' | null;
+export type SettingsScrollTarget = 'speech-to-text' | 'ai' | 'privacy' | 'health' | 'notifications' | 'sync' | null;
 
 interface SettingsState {
   settings: AppSettings;
@@ -62,6 +62,8 @@ interface SettingsState {
   // Journal
   setShowPrompts: (enabled: boolean) => void;
   setAutoLocationWeather: (enabled: boolean) => void;
+  setTemperatureUnit: (unit: 'C' | 'F') => void;
+  setAutoTitle: (enabled: boolean) => void;
 
   // Reminders
   setReminderEnabled: (enabled: boolean) => void;
@@ -330,6 +332,26 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       settings: {
         ...state.settings,
         journal: { ...state.settings.journal, autoLocationWeather },
+      },
+      hasUnsavedChanges: true,
+    }));
+  },
+
+  setTemperatureUnit: (temperatureUnit) => {
+    set((state) => ({
+      settings: {
+        ...state.settings,
+        journal: { ...state.settings.journal, temperatureUnit },
+      },
+      hasUnsavedChanges: true,
+    }));
+  },
+
+  setAutoTitle: (autoTitle) => {
+    set((state) => ({
+      settings: {
+        ...state.settings,
+        journal: { ...state.settings.journal, autoTitle },
       },
       hasUnsavedChanges: true,
     }));

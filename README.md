@@ -6,7 +6,7 @@
 
 **A calm, encrypted desktop journal with mood tracking and AI insights**
 
-[![Version](https://img.shields.io/badge/version-0.4.0-7c3aed?style=flat-square)](https://github.com/yourusername/moodbloom/releases)
+[![Version](https://img.shields.io/badge/version-0.4.0-7c3aed?style=flat-square)](https://github.com/kenlacroix/moodhaven-journal/releases)
 [![License](https://img.shields.io/badge/license-MIT-22c55e?style=flat-square)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-0ea5e9?style=flat-square)](#installation)
 [![Tests](https://img.shields.io/badge/tests-371%20passing-22c55e?style=flat-square)](#tech-stack)
@@ -109,7 +109,7 @@ MoodBloom combines structured mood tracking with free-form encrypted journaling.
 
 ### Download a Release
 
-Grab the latest build from the [Releases](https://github.com/yourusername/moodbloom/releases) page:
+Grab the latest build from the [Releases](https://github.com/kenlacroix/moodhaven-journal/releases) page:
 
 | Platform | Installer | Minimum Version |
 |:---|:---|:---|
@@ -145,8 +145,8 @@ sudo apt install -y libwebkit2gtk-4.1-dev libgtk-3-dev \
 # Optional: native FIDO2 hardware key support
 sudo apt install -y libudev-dev
 
-git clone https://github.com/yourusername/moodbloom.git
-cd moodbloom
+git clone https://github.com/kenlacroix/moodhaven-journal.git
+cd moodhaven-journal
 npm install
 npm run tauri build
 ```
@@ -156,8 +156,8 @@ npm run tauri build
 ```bash
 xcode-select --install
 
-git clone https://github.com/yourusername/moodbloom.git
-cd moodbloom
+git clone https://github.com/kenlacroix/moodhaven-journal.git
+cd moodhaven-journal
 npm install
 npm run tauri build
 ```
@@ -167,8 +167,8 @@ npm run tauri build
 Install [Visual Studio Build Tools 2022](https://visualstudio.microsoft.com/downloads/) with the **Desktop development with C++** workload, then:
 
 ```powershell
-git clone https://github.com/yourusername/moodbloom.git
-cd moodbloom
+git clone https://github.com/kenlacroix/moodhaven-journal.git
+cd moodhaven-journal
 npm install
 npm run tauri build
 ```
@@ -364,8 +364,8 @@ Please open an issue to discuss significant changes before opening a PR. For sec
 ### Development Setup
 
 ```bash
-git clone https://github.com/yourusername/moodbloom.git
-cd moodbloom
+git clone https://github.com/kenlacroix/moodhaven-journal.git
+cd moodhaven-journal
 npm install
 npm run tauri:dev
 ```

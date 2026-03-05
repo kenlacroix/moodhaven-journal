@@ -43,6 +43,17 @@ export function getWeatherEmoji(code: number | undefined): string {
   return '⛈';
 }
 
+/**
+ * Format a temperature in Celsius for display, converting to °F if the user's
+ * temperatureUnit preference is 'F'. Defaults to Celsius if unit is omitted.
+ */
+export function displayTemp(celsius: number, unit: 'C' | 'F' = 'C'): string {
+  if (unit === 'F') {
+    return `${Math.round(celsius * 9 / 5 + 32)}°F`;
+  }
+  return `${Math.round(celsius)}°C`;
+}
+
 interface OpenMeteoResponse {
   current_weather?: {
     temperature: number;

@@ -9,7 +9,7 @@
  */
 
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { getAllEntries, deleteEntry } from '../lib/journalService';
+import { getAllEntries, deleteEntry, patchEntryPinned } from '../lib/journalService';
 import { getMoodColor } from '../lib/chartUtils';
 import { getRelativeDateLabel, formatDate } from '../lib/dateUtils';
 import { getWeatherEmoji } from '../lib/locationWeatherService';
@@ -197,6 +197,18 @@ export function TimelineView({ onSelectEntry, onNewEntry }: TimelineViewProps) {
 
   const isAnyFilterActive =
     moodFilter !== null || dateRange !== 'all' || tagFilter !== null || debouncedQuery !== '' || activeBookId !== null;
+
+  // Pinned entries (always from full filtered list, not date-grouped)
+  const [pinnedCollapsed, setPinnedCollapsed] = useState(false);
+  const pinnedEntries = useMemo(
+    () => filteredEntries.filter((e) => e.pinned),
+    [filteredEntries],
+  );
+
+  // Handle pin toggle from timeline (optimistic update)
+  const handlePinToggle = useCallback((id: string, pinned: boolean) => {
+    setEntries((prev) => prev.map((e) => e.id === id ? { ...e, pinned } : e));
+  }, []);
 
   // Handle delete with optimistic removal (called by EntryActionsMenu after confirm)
   const handleDelete = useCallback(async (id: string) => {
@@ -487,6 +499,81 @@ export function TimelineView({ onSelectEntry, onNewEntry }: TimelineViewProps) {
         </div>
       )}
 
+      {/* Pinned Entries section */}
+      {pinnedEntries.length > 0 && (
+        <div className="mb-8">
+          <button
+            type="button"
+            onClick={() => setPinnedCollapsed((v) => !v)}
+            className="flex items-center gap-2 mb-3 w-full text-left group"
+          >
+            <span className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
+              📌 Pinned
+            </span>
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400">
+              {pinnedEntries.length}
+            </span>
+            <svg
+              className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${pinnedCollapsed ? '-rotate-90' : ''}`}
+              fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {!pinnedCollapsed && (
+            <div className="space-y-2">
+              {pinnedEntries.map((entry, i) => {
+                const hasMood = entry.mood !== null && entry.mood > 0;
+                const moodColor = hasMood ? getMoodColor(entry.mood!) : null;
+                return (
+                  <button
+                    key={entry.id}
+                    type="button"
+                    onClick={() => onSelectEntry(entry.id)}
+                    style={{
+                      animationDelay: `${i * 50}ms`,
+                      ...(moodColor ? { borderLeftColor: moodColor } : {}),
+                    }}
+                    className="relative w-full text-left p-4 rounded-xl bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-900/30 border-l-4 hover:shadow-md hover:-translate-y-0.5 transition-all duration-150 group animate-entry-in"
+                  >
+                    <EntryActionsMenu
+                      entry={entry}
+                      onDelete={handleDelete}
+                      onPinToggle={async (pinned) => {
+                        handlePinToggle(entry.id, pinned);
+                        try { await patchEntryPinned(entry.id, pinned); }
+                        catch { handlePinToggle(entry.id, !pinned); }
+                      }}
+                    />
+                    <div className="flex items-start gap-3">
+                      <div
+                        className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
+                        style={hasMood ? { backgroundColor: `${moodColor}22` } : {}}
+                      >
+                        {hasMood
+                          ? <span className="text-sm">{MOOD_OPTIONS.find((m) => m.level === entry.mood)?.emoji}</span>
+                          : <span className="text-slate-300 dark:text-slate-600 text-sm font-medium">—</span>
+                        }
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        {entry.title && (
+                          <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate mb-0.5">
+                            {entry.title}
+                          </p>
+                        )}
+                        <p className="text-sm text-slate-500 dark:text-slate-400 line-clamp-2">
+                          {entry.content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120)}
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Entry list grouped by date */}
       <div className="space-y-8">
         {Object.entries(groupedEntries).map(([date, dateEntries]) => (
@@ -516,7 +603,15 @@ export function TimelineView({ onSelectEntry, onNewEntry }: TimelineViewProps) {
                     className="relative w-full text-left p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 border-l-4 hover:border-slate-200 dark:hover:border-slate-700 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-150 group animate-entry-in"
                   >
                     {/* Actions dropdown (⋯) */}
-                    <EntryActionsMenu entry={entry} onDelete={handleDelete} />
+                    <EntryActionsMenu
+                      entry={entry}
+                      onDelete={handleDelete}
+                      onPinToggle={async (pinned) => {
+                        handlePinToggle(entry.id, pinned);
+                        try { await patchEntryPinned(entry.id, pinned); }
+                        catch { handlePinToggle(entry.id, !pinned); }
+                      }}
+                    />
 
                     <div className="flex items-start gap-3">
                       {/* Mood indicator — 32px fixed, explicit null state */}

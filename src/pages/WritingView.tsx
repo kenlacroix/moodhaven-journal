@@ -25,7 +25,7 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { saveEntry, getEntryById, patchEntryLocationWeather, deleteEntry } from '../lib/journalService';
-import { captureLocationWeather, getWeatherEmoji } from '../lib/locationWeatherService';
+import { captureLocationWeather, getWeatherEmoji, displayTemp } from '../lib/locationWeatherService';
 import { RichTextEditor } from '../components/editor';
 import { PromptDrawer } from '../components/ai/PromptDrawer';
 import { EntryOptionsMenu } from '../components/journal/EntryOptionsMenu';
@@ -208,6 +208,10 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
   const distractionFree = useSettingsStore((s) => s.distractionFree);
   const setDistractionFree = useSettingsStore((s) => s.setDistractionFree);
   const autoLocationWeather = useSettingsStore((s) => s.settings.journal.autoLocationWeather);
+  const autoTitle = useSettingsStore((s) => s.settings.journal.autoTitle ?? false);
+  const temperatureUnit = useSettingsStore((s) => s.settings.journal.temperatureUnit ?? 'C');
+  /** Whether the user has typed a title themselves (disables auto-title for this entry) */
+  const userTypedTitleRef = useRef(false);
 
   const activeBookId = useBooksStore((s) => s.activeBookId);
   const books = useBooksStore((s) => s.books);
@@ -387,11 +391,18 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
     if (!savedEntryIdRef.current && wordCount < 5) return;
 
     autoSaveTimeoutRef.current = setTimeout(() => {
+      // Auto-title: generate from first sentence when no title has been typed
+      let effectiveTitle = title;
+      if (autoTitle && !userTypedTitleRef.current && !effectiveTitle && contentText.trim()) {
+        const firstSentence = contentText.trim().split(/[.!?]/)[0].slice(0, 60).trim();
+        if (firstSentence) effectiveTitle = firstSentence;
+      }
+
       setIsSaving(true);
       saveEntry({
         // Use the ref so subsequent saves update the same row (no duplicates)
         id: savedEntryIdRef.current || undefined,
-        title: title || undefined,
+        title: effectiveTitle || undefined,
         // Save the rich-text HTML so formatting survives reload
         content,
         mood: mood ?? undefined,
@@ -414,7 +425,7 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
     }, 2000);
   // `mood` and `content` are intentionally included: a mood auto-detection or
   // format change after the last keystroke should still be reflected in the save.
-  }, [content, contentText, wordCount, title, mood, privacyMode, onEntrySaved]);
+  }, [content, contentText, wordCount, title, mood, privacyMode, autoTitle, onEntrySaved]);
 
   useEffect(() => { scheduleAutoSave(); }, [contentText, title, privacyMode, scheduleAutoSave]);
 
@@ -426,6 +437,7 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
   }, []);
 
   const handleTitleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    userTypedTitleRef.current = true;
     setTitle(e.target.value);
   }, []);
 
@@ -512,7 +524,7 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
                 <p className="flex items-center gap-1 mt-0.5 text-xs text-slate-400 dark:text-slate-500">
                   <span>{getWeatherEmoji(locationWeather.weatherCode)}</span>
                   {locationWeather.temperature !== undefined && (
-                    <span>{Math.round(locationWeather.temperature)}°</span>
+                    <span>{displayTemp(locationWeather.temperature, temperatureUnit)}</span>
                   )}
                   {locationWeather.condition && (
                     <span className="opacity-75">· {locationWeather.condition}</span>
@@ -702,7 +714,7 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
                 <p className="flex items-center gap-1 mb-5 text-xs text-slate-400 dark:text-slate-500">
                   <span>{getWeatherEmoji(locationWeather.weatherCode)}</span>
                   {locationWeather.temperature !== undefined && (
-                    <span>{Math.round(locationWeather.temperature)}°</span>
+                    <span>{displayTemp(locationWeather.temperature, temperatureUnit)}</span>
                   )}
                   {locationWeather.condition && (
                     <span className="opacity-75">· {locationWeather.condition}</span>

@@ -13,6 +13,7 @@ import {
   verifyPasswordHash,
   type EncryptedData,
 } from './crypto';
+import { extractHashtags } from './markdownUtils';
 import type {
   JournalEntry,
   JournalEntryFormData,
@@ -392,7 +393,7 @@ export async function saveEntry(data: {
   const formData: JournalEntryFormData = {
     content: data.content,
     mood: (data.mood || 3) as MoodLevel,
-    tags: [],
+    tags: extractHashtags(data.content),
     privacyMode: data.privacyMode ?? 0,
   };
 

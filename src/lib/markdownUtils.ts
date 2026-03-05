@@ -73,3 +73,15 @@ export function htmlToPlainText(html: string): string {
     .replace(/&nbsp;/g, ' ')
     .trim();
 }
+
+
+/**
+ * Extract all unique hashtags (#word) from HTML content.
+ * Returns lowercase tags without the # prefix.
+ */
+export function extractHashtags(html: string): string[] {
+  const plain = htmlToPlainText(html);
+  const matches = plain.match(/#(\w+)/g);
+  if (!matches) return [];
+  return [...new Set(matches.map((m) => m.slice(1).toLowerCase()))];
+}

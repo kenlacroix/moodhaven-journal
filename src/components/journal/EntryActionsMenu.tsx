@@ -16,9 +16,10 @@ import type { JournalEntry } from '../../types/journal';
 interface EntryActionsMenuProps {
   entry: JournalEntry;
   onDelete: (id: string) => void;
+  onPinToggle?: (pinned: boolean) => void;
 }
 
-export function EntryActionsMenu({ entry, onDelete }: EntryActionsMenuProps) {
+export function EntryActionsMenu({ entry, onDelete, onPinToggle }: EntryActionsMenuProps) {
   const [open, setOpen] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState<'markdown' | 'text' | null>(null);
@@ -124,6 +125,22 @@ export function EntryActionsMenu({ entry, onDelete }: EntryActionsMenuProps) {
           style={{ position: 'fixed', top: pos.top, right: pos.right, zIndex: 9999 }}
           className="w-48 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg py-1 text-sm"
         >
+          {/* Pin / Unpin */}
+          {onPinToggle && (
+            <>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={(e) => { e.stopPropagation(); onPinToggle(!entry.pinned); setOpen(false); }}
+                className="w-full flex items-center gap-2.5 px-3 py-2 text-left text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+              >
+                <span className="text-sm flex-shrink-0">{entry.pinned ? '📌' : '☆'}</span>
+                {entry.pinned ? 'Unpin entry' : 'Pin entry'}
+              </button>
+              <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
+            </>
+          )}
+
           {/* Copy as Markdown */}
           <button
             type="button"

@@ -12,7 +12,7 @@
 import { useState, useEffect } from 'react';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useOuraContext } from '../../hooks/useOuraContext';
-import { toggleFullscreen } from '../../lib/windowUtils';
+import { FocusMenu } from './FocusMenu';
 import { SearchModal } from '../search/SearchModal';
 import type { ViewType } from './Sidebar';
 import type { OuraHealthBadge } from '../../types/oura';
@@ -90,12 +90,12 @@ interface TopBarProps {
   onLock: () => void;
   onSelectEntry?: (id: string) => void;
   onNewEntry?: () => void;
+  onOpenBreakout: () => void;
 }
 
-export function TopBar({ currentView, onLock, onSelectEntry, onNewEntry }: TopBarProps) {
+export function TopBar({ currentView, onLock, onSelectEntry, onNewEntry, onOpenBreakout }: TopBarProps) {
   const [showSearch, setShowSearch] = useState(false);
   const distractionFree = useSettingsStore((s) => s.distractionFree);
-  const setDistractionFree = useSettingsStore((s) => s.setDistractionFree);
   const theme = useSettingsStore((s) => s.settings.appearance.theme);
   const setTheme = useSettingsStore((s) => s.setTheme);
 
@@ -160,34 +160,10 @@ export function TopBar({ currentView, onLock, onSelectEntry, onNewEntry }: TopBa
           </svg>
         </IconBtn>
 
-        {/* Focus mode toggle — only when writing */}
+        {/* Focus + fullscreen + breakout menu — only when writing */}
         {currentView === 'writing' && (
-          <IconBtn
-            onClick={() => setDistractionFree(!distractionFree)}
-            title={distractionFree ? 'Exit focus mode (Ctrl+Shift+F)' : 'Focus mode (Ctrl+Shift+F)'}
-            active={distractionFree}
-          >
-            {distractionFree ? (
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5m0-4.5l5.25 5.25" />
-              </svg>
-            ) : (
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
-              </svg>
-            )}
-          </IconBtn>
+          <FocusMenu onOpenBreakout={onOpenBreakout} />
         )}
-
-        {/* Fullscreen toggle */}
-        <IconBtn
-          onClick={() => { toggleFullscreen().catch(() => { /* ignore errors in non-Tauri env */ }); }}
-          title="Toggle fullscreen"
-        >
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
-          </svg>
-        </IconBtn>
 
         {/* Divider */}
         <div className="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1" />

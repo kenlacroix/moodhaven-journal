@@ -11,6 +11,8 @@ pub mod oura;
 pub mod settings;
 pub mod speech_to_text;
 pub mod two_factor;
+pub mod session_bridge;
+pub mod writer_window;
 
 pub use analytics::*;
 pub use books::*;
@@ -18,6 +20,8 @@ pub use data_management::*;
 pub use hardware_key::*;
 pub use journal::*;
 pub use oura::*;
+pub use session_bridge::*;
 pub use settings::*;
 pub use speech_to_text::*;
 pub use two_factor::*;
+pub use writer_window::*;

@@ -6,6 +6,7 @@
  */
 
 import { useEffect, useState, useCallback } from 'react';
+import { BreakoutWriterApp } from './components/breakout/BreakoutWriterApp';
 import { WritingView } from './pages/WritingView';
 import { TimelineView } from './pages/TimelineView';
 import { OnThisDayView } from './pages/OnThisDayView';
@@ -21,7 +22,11 @@ import { useAppStore } from './stores/appStore';
 import { useSettingsStore } from './stores/settingsStore';
 import { useReminderScheduler } from './hooks/useReminderScheduler';
 
+// Detect breakout writer mode outside the component so hooks order is stable.
+const IS_BREAKOUT = new URLSearchParams(window.location.search).get('mode') === 'writer';
+
 function App() {
+  if (IS_BREAKOUT) return <BreakoutWriterApp />;
   const { isUnlocked, isInitialized, checkInitialization, lock } = useAppStore();
   const loadSettings = useSettingsStore((s) => s.loadSettings);
   const hasSeenTutorial = useSettingsStore((s) => s.settings.tutorial?.hasSeenTutorial);

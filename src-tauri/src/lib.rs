@@ -5,6 +5,7 @@
 pub mod commands;
 pub mod db;
 
+use commands::session_bridge::SessionBridge;
 use db::{get_db_path, Database};
 use tauri::Manager;
 
@@ -25,6 +26,9 @@ pub fn run() {
 
             // Manage database state
             app.manage(database);
+
+            // One-shot session bridge for breakout writer password hand-off
+            app.manage(SessionBridge::new());
 
             // Open devtools in debug mode
             #[cfg(debug_assertions)]
@@ -110,6 +114,11 @@ pub fn run() {
             commands::oura_get_context,
             commands::oura_get_history,
             commands::oura_backfill,
+            // Breakout writer window
+            commands::open_writer_window,
+            // Session bridge (password hand-off to breakout window)
+            commands::store_session_password,
+            commands::retrieve_session_password,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

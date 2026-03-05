@@ -51,6 +51,7 @@ export default {
         'check-bounce': 'checkBounce 0.35s cubic-bezier(0.34, 1.56, 0.64, 1)',
         'entry-in': 'entryIn 0.3s ease-out both',
         'mood-pop': 'moodPop 0.9s cubic-bezier(0.34, 1.56, 0.64, 1)',
+        'cloud-saved': 'cloudSaved 0.5s ease-out',
       },
       keyframes: {
         fadeIn: {
@@ -87,6 +88,11 @@ export default {
           '40%': { transform: 'scale(1.45)' },
           '70%': { transform: 'scale(0.92)' },
           '100%': { transform: 'scale(1)' },
+        },
+        cloudSaved: {
+          '0%': { opacity: '0', transform: 'scale(0.8)' },
+          '60%': { transform: 'scale(1.1)' },
+          '100%': { opacity: '1', transform: 'scale(1)' },
         },
       },
     },

@@ -129,6 +129,14 @@ function getPassword(): string {
   return sessionPassword;
 }
 
+/**
+ * Return the current session password without throwing — null if locked.
+ * Used by the breakout writer to hand off the password via the session bridge.
+ */
+export function getSessionPassword(): string | null {
+  return sessionPassword;
+}
+
 // ============================================================================
 // Journal Entry Operations
 // ============================================================================

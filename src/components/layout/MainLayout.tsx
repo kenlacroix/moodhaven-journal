@@ -12,6 +12,7 @@
 import { Sidebar, type ViewType } from './Sidebar';
 import { TopBar } from './TopBar';
 import { useSettingsStore } from '../../stores/settingsStore';
+import { openBreakoutWriter } from '../../lib/windowUtils';
 
 interface MainLayoutProps {
   currentView: ViewType;
@@ -49,6 +50,7 @@ export function MainLayout({ currentView, onNavigate, onLock, onSelectEntry, onN
           onLock={onLock}
           onSelectEntry={onSelectEntry}
           onNewEntry={onNewEntry}
+          onOpenBreakout={() => openBreakoutWriter().catch(() => {})}
         />
         <main className="flex-1 min-h-0 overflow-auto bg-slate-50 dark:bg-slate-950">
           {children}

@@ -102,16 +102,19 @@ export function Sidebar({ currentView, onNavigate, onOpenSync }: SidebarProps) {
               : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
           }`}
         >
-          {savingState === 'saving' ? (
+            {savingState === 'saving' ? (
             /* Spinning ring while saving */
             <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
             </svg>
           ) : savingState === 'saved' ? (
-            /* Checkmark on completion */
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+            /* Cloud + checkmark — pops in when saved */
+            <svg className="w-4 h-4 animate-cloud-saved" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              {/* Cloud body */}
+              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15a4.5 4.5 0 004.5 4.5H18a3.75 3.75 0 001.332-7.257 3 3 0 00-3.758-3.848 5.25 5.25 0 00-10.233 2.33A4.502 4.502 0 002.25 15z" />
+              {/* Checkmark inside cloud */}
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M8 15l2 2 4.5-4.5" />
             </svg>
           ) : (
             /* Cloud icon at rest */

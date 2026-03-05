@@ -43,6 +43,10 @@ interface WritingViewProps {
   onEntrySaved?: () => void;
   onNewEntry?: () => void;
   onNavigateToSTTSettings?: () => void;
+  /** Optional ref populated with a function that immediately flushes any
+   *  pending auto-save. Useful for callers (e.g. breakout window) that need
+   *  to save before closing without waiting for the debounce timer. */
+  saveRef?: React.MutableRefObject<(() => Promise<void>) | null>;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -141,7 +145,7 @@ const PRIVACY_ACTIVE_COLORS: Record<PrivacyMode, string> = {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, onNavigateToSTTSettings }: WritingViewProps) {
+export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, onNavigateToSTTSettings, saveRef }: WritingViewProps) {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [contentText, setContentText] = useState('');
@@ -157,7 +161,7 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
     } else if (lastSavedAt) {
       setSavingState('saved');
       setLastAutoSaved(lastSavedAt.toISOString());
-      const t = setTimeout(() => useSettingsStore.getState().setSavingState('idle'), 2000);
+      const t = setTimeout(() => useSettingsStore.getState().setSavingState('idle'), 3500);
       return () => clearTimeout(t);
     }
   }, [isSaving, lastSavedAt]);
@@ -190,6 +194,10 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
   const autoSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const agoIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const moodScoreTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Imperative save: always-fresh function re-assigned each render so it closes
+  // over the latest state. saveRef.current (stable wrapper) delegates to this.
+  const saveNowRef = useRef<(() => Promise<void>) | null>(null);
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [usedTemplateIds, setUsedTemplateIds] = useState<string[]>(() => getUsedTemplates());
@@ -433,6 +441,37 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
     setMood(null);
     prevAutoMoodRef.current = null;
   }, []);
+
+  // Re-assigned every render so it always has the latest state — no stale closure.
+  // No word-count guard here: this is the explicit "save now" path used by the
+  // breakout writer Return button. Save anything that has content.
+  saveNowRef.current = async () => {
+    if (!contentText.trim()) return;
+    if (autoSaveTimeoutRef.current) clearTimeout(autoSaveTimeoutRef.current);
+    setIsSaving(true);
+    try {
+      const saved = await saveEntry({
+        id: savedEntryIdRef.current || undefined,
+        title: title || undefined,
+        content,
+        mood: mood ?? undefined,
+        privacyMode,
+        locationWeather: !savedEntryIdRef.current ? locationWeatherRef.current ?? undefined : undefined,
+        bookId: !savedEntryIdRef.current ? (activeBookId ?? undefined) : undefined,
+      });
+      savedEntryIdRef.current = saved.id;
+      setLastSavedAt(new Date());
+      onEntrySaved?.();
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Wire the stable external ref to the always-fresh saveNowRef (runs once on mount).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (saveRef) saveRef.current = () => saveNowRef.current!();
+  }, [saveRef]);
 
   return (
     <div className={`h-full flex flex-col transition-all duration-500 ${distractionFree ? 'focus-bg' : 'writing-bg'}`}>

@@ -3,9 +3,13 @@
  *
  * DayOne-inspired: hover to reveal, click to open dropdown (no modal).
  * Delete requires two clicks (first click → confirm state, second → execute).
+ *
+ * Dropdown is portalled to document.body with fixed positioning so it escapes
+ * card overflow/border-radius clipping and isn't overlapped by sibling cards.
  */
 
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { htmlToMarkdown, htmlToPlainText } from '../../lib/markdownUtils';
 import type { JournalEntry } from '../../types/journal';
 
@@ -18,18 +22,29 @@ export function EntryActionsMenu({ entry, onDelete }: EntryActionsMenuProps) {
   const [open, setOpen] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState<'markdown' | 'text' | null>(null);
+  const [pos, setPos] = useState<{ top: number; right: number }>({ top: 0, right: 0 });
 
-  const menuRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Close on outside click
+  const openMenu = useCallback(() => {
+    if (triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      setPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
+    }
+    setOpen(true);
+  }, []);
+
+  // Close on outside click (checks both trigger and portal dropdown)
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setOpen(false);
-        setConfirmingDelete(false);
-      }
+      if (
+        triggerRef.current?.contains(e.target as Node) ||
+        dropdownRef.current?.contains(e.target as Node)
+      ) return;
+      setOpen(false);
+      setConfirmingDelete(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
@@ -42,8 +57,12 @@ export function EntryActionsMenu({ entry, onDelete }: EntryActionsMenuProps) {
 
   const handleToggle = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
-    setOpen((prev) => !prev);
-  }, []);
+    if (open) {
+      setOpen(false);
+    } else {
+      openMenu();
+    }
+  }, [open, openMenu]);
 
   const handleCopyMarkdown = useCallback(async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -77,8 +96,7 @@ export function EntryActionsMenu({ entry, onDelete }: EntryActionsMenuProps) {
 
   return (
     <div
-      ref={menuRef}
-      className="absolute top-3 right-3 z-10"
+      className="absolute top-3 right-3"
       onClick={(e) => e.stopPropagation()}
     >
       {/* Trigger — ⋯ icon, show on group-hover */}
@@ -98,11 +116,13 @@ export function EntryActionsMenu({ entry, onDelete }: EntryActionsMenuProps) {
         ···
       </button>
 
-      {/* Dropdown */}
-      {open && (
+      {/* Dropdown — portalled to body to escape card clipping and sibling z-order */}
+      {open && createPortal(
         <div
+          ref={dropdownRef}
           role="menu"
-          className="absolute right-0 top-8 w-48 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg py-1 text-sm"
+          style={{ position: 'fixed', top: pos.top, right: pos.right, zIndex: 9999 }}
+          className="w-48 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg py-1 text-sm"
         >
           {/* Copy as Markdown */}
           <button
@@ -149,7 +169,8 @@ export function EntryActionsMenu({ entry, onDelete }: EntryActionsMenuProps) {
             </svg>
             {confirmingDelete ? 'Confirm delete?' : 'Delete entry'}
           </button>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

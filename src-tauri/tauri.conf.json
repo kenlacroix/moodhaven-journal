@@ -26,6 +26,12 @@
       "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://api.openai.com http://localhost:*"
     }
   },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDY2RDc3NzUyRTM4QUMwRjUKUldUMXdJcmpVbmZYWnVTL0RkRDRLaXlNVTMxVS95T0loRlVsd2tXQUxiNWNTYzZHcnpoNUNFNTcK",
+      "endpoints": []
+    }
+  },
   "bundle": {
     "active": true,
     "targets": "all",

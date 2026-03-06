@@ -538,7 +538,7 @@ interface AISettings {
 <!-- Update this section as development progresses -->
 
 ```markdown
-## Sprint: Phase 6 (v0.4.0 — Feature Complete)
+## Sprint: Phase 7 (v0.5.0 — Major Polish Sprint)
 
 ### Completed
 - [x] Project structure setup
@@ -581,6 +581,14 @@ interface AISettings {
 - [x] Entry actions (copy as Markdown, copy text, delete with confirm)
 - [x] User documentation (README.md)
 - [x] Test suite (371 tests, Vitest + Testing Library)
+- [x] v0.5.0 Major Polish Sprint (8 stages: timeline, calendar, writing, journal overview, insights, settings, power features, final polish)
+- [x] Timeline entry polish (mood rings, date groups, auto-scroll, search integration)
+- [x] Calendar 24-hour timeline view with mood distribution
+- [x] Writing view polish (ambient gradient, focus fade, streak line, mood auto-detection UX)
+- [x] Journal Overview page (per-book stats, settings, description)
+- [x] Insights page redesign (section headers, AI CTA card, book filter)
+- [x] Settings deep-linking (scroll-to-section, temperature unit, auto-title toggle)
+- [x] Hashtag auto-extraction on save, pinned entries, temperature unit display
 
 ### In Progress
 - [ ] Speech-to-Text (whisper.cpp sidecar; commands scaffolded, UI pending)
@@ -1040,4 +1048,4 @@ npm run lint:fix           # Fix auto-fixable issues
 
 ---
 
-*Last Updated: March 2026 — v0.4.0*
+*Last Updated: March 2026 — v0.5.0*

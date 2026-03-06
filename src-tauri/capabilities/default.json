@@ -7,7 +7,13 @@
     "core:default",
     "shell:allow-open",
     "notification:default",
-    "http:default",
+    {
+      "identifier": "http:allow-fetch",
+      "allow": [{ "url": "https://**" }, { "url": "http://**" }]
+    },
+    "http:allow-fetch-cancel",
+    "http:allow-fetch-read-body",
+    "http:allow-fetch-send",
     "dialog:default",
     "fs:default",
     "core:window:allow-set-fullscreen",

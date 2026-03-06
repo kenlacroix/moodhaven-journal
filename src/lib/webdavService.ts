@@ -75,7 +75,7 @@ export async function testConnection(config: WebDAVConfig): Promise<WebDAVRespon
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Connection failed',
+      error: error instanceof Error ? error.message : String(error) || 'Connection failed',
     };
   }
 }

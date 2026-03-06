@@ -11,7 +11,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { getAllEntries, deleteEntry, patchEntryPinned } from '../lib/journalService';
 import { getMoodColor } from '../lib/chartUtils';
-import { getRelativeDateLabel, formatDate } from '../lib/dateUtils';
+import { getRelativeDateLabel, formatDate, parseEntryTimestamp } from '../lib/dateUtils';
 import { getWeatherEmoji } from '../lib/locationWeatherService';
 import { EntryActionsMenu } from '../components/journal/EntryActionsMenu';
 import type { JournalEntry } from '../types/journal';
@@ -294,26 +294,17 @@ export function TimelineView({ onSelectEntry, onNewEntry }: TimelineViewProps) {
   return (
     <div className="max-w-2xl mx-auto px-6 py-8">
       {/* Header with entry count */}
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-2xl font-semibold text-slate-800 dark:text-slate-100">
-            {activeBooksLabel ?? 'Timeline'}
-          </h1>
-          {entries.length > 0 && (
-            <p className="text-sm text-slate-400 dark:text-slate-500 mt-1">
-              {isAnyFilterActive
-                ? `${filteredEntries.length} of ${entries.length} ${entries.length === 1 ? 'entry' : 'entries'}`
-                : `${entries.length} ${entries.length === 1 ? 'entry' : 'entries'}`}
-            </p>
-          )}
-        </div>
-        <button
-          type="button"
-          onClick={onNewEntry}
-          className="px-4 py-2 text-sm font-medium text-white bg-violet-500 hover:bg-violet-600 rounded-lg transition-colors"
-        >
-          New Entry
-        </button>
+      <div className="mb-8">
+        <h1 className="text-2xl font-semibold text-slate-800 dark:text-slate-100">
+          {activeBooksLabel ?? 'Timeline'}
+        </h1>
+        {entries.length > 0 && (
+          <p className="text-sm text-slate-400 dark:text-slate-500 mt-1">
+            {isAnyFilterActive
+              ? `${filteredEntries.length} of ${entries.length} ${entries.length === 1 ? 'entry' : 'entries'}`
+              : `${entries.length} ${entries.length === 1 ? 'entry' : 'entries'}`}
+          </p>
+        )}
       </div>
 
       {/* Inline search */}
@@ -684,13 +675,30 @@ export function TimelineView({ onSelectEntry, onNewEntry }: TimelineViewProps) {
                           </div>
                         )}
 
+                        {/* Edited badge — shown when last edit is >60s after creation */}
+                        {(() => {
+                          const created = parseEntryTimestamp(entry.created_at).getTime();
+                          const updated = parseEntryTimestamp(entry.updated_at).getTime();
+                          if (updated - created > 60_000) {
+                            return (
+                              <span className="inline-flex items-center gap-1 text-[10px] text-slate-400 dark:text-slate-500 mt-1">
+                                <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125" />
+                                </svg>
+                                Edited {parseEntryTimestamp(entry.updated_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                              </span>
+                            );
+                          }
+                          return null;
+                        })()}
+
                         {/* Footer: time + weather chip */}
                         <div className="flex items-center gap-3 mt-2">
                           <span className="inline-flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500">
                             <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
-                            {new Date(entry.created_at).toLocaleTimeString([], {
+                            {parseEntryTimestamp(entry.created_at).toLocaleTimeString([], {
                               hour: '2-digit',
                               minute: '2-digit',
                             })}

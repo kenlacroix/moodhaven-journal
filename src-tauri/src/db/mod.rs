@@ -35,6 +35,8 @@ pub struct JournalEntryRow {
     pub pinned: bool,
     pub created_at: String,
     pub updated_at: String,
+    /// Tag names for this entry (fetched via GROUP_CONCAT join)
+    pub tags: Vec<String>,
 }
 
 /// Journal entry metadata (without content, for list views)
@@ -105,6 +107,14 @@ pub struct Book {
     pub created_at: String,
 }
 
+/// Parse a GROUP_CONCAT tag string into a Vec of tag names.
+fn parse_tags(tags_str: Option<String>) -> Vec<String> {
+    match tags_str {
+        Some(s) if !s.is_empty() => s.split(',').map(|t| t.to_string()).collect(),
+        _ => vec![],
+    }
+}
+
 /// Database state managed by Tauri
 pub struct Database {
     pub conn: Mutex<Connection>,
@@ -167,6 +177,22 @@ impl Database {
             "ALTER TABLE journal_entries ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0",
             [],
         );
+
+        // Runtime migration: recreate updated_at trigger to use local time
+        // The original schema.sql trigger used datetime('now') (UTC). Drop and recreate
+        // so existing installations also get the fix — IF NOT EXISTS won't update in-place.
+        conn.execute_batch(
+            "DROP TRIGGER IF EXISTS update_entry_timestamp;
+             CREATE TRIGGER update_entry_timestamp
+                 AFTER UPDATE ON journal_entries
+                 FOR EACH ROW
+             BEGIN
+                 UPDATE journal_entries
+                 SET updated_at = strftime('%Y-%m-%dT%H:%M:%S', 'now', 'localtime')
+                 WHERE id = OLD.id;
+             END;",
+        )
+        .map_err(|e| format!("Failed to recreate trigger: {}", e))?;
 
         Ok(Self {
             conn: Mutex::new(conn),
@@ -260,16 +286,21 @@ pub fn create_entry(
     let bid = book_id.unwrap_or("default");
 
     conn.execute(
-        "INSERT INTO journal_entries (id, encrypted_content, mood, privacy_mode, location_weather, book_id)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        "INSERT INTO journal_entries (id, encrypted_content, mood, privacy_mode, location_weather, book_id, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, strftime('%Y-%m-%dT%H:%M:%S', 'now', 'localtime'), strftime('%Y-%m-%dT%H:%M:%S', 'now', 'localtime'))",
         params![id, content_json, mood, privacy_mode, location_weather, bid],
     )
     .map_err(|e| format!("Failed to create entry: {}", e))?;
 
     // Fetch the created entry using the same connection (avoid deadlock)
     conn.query_row(
-        "SELECT id, encrypted_content, mood, privacy_mode, location_weather, book_id, pinned, created_at, updated_at
-         FROM journal_entries WHERE id = ?1",
+        "SELECT je.id, je.encrypted_content, je.mood, je.privacy_mode, je.location_weather, je.book_id, je.pinned, je.created_at, je.updated_at,
+                COALESCE(GROUP_CONCAT(t.name, ','), '') as tags
+         FROM journal_entries je
+         LEFT JOIN entry_tags et ON je.id = et.entry_id
+         LEFT JOIN tags t ON et.tag_id = t.id
+         WHERE je.id = ?1
+         GROUP BY je.id",
         params![id],
         |row| {
             let content_json: String = row.get(1)?;
@@ -286,6 +317,7 @@ pub fn create_entry(
                 pinned: row.get::<_, i32>(6)? != 0,
                 created_at: row.get(7)?,
                 updated_at: row.get(8)?,
+                tags: parse_tags(row.get(9)?),
             })
         },
     )
@@ -302,6 +334,68 @@ pub fn patch_entry_pinned(db: &Database, id: &str, pinned: bool) -> Result<(), S
     )
     .map_err(|e| format!("Failed to patch pinned: {}", e))?;
     Ok(())
+}
+
+/// Sync tags for an entry: replaces all existing tags with the provided list.
+/// Tags are upserted into the `tags` table and linked via `entry_tags`.
+pub fn sync_entry_tags(db: &Database, entry_id: &str, tags: &[String]) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+
+    conn.execute("DELETE FROM entry_tags WHERE entry_id = ?1", params![entry_id])
+        .map_err(|e| format!("Failed to clear entry tags: {}", e))?;
+
+    for tag in tags {
+        let name = tag.trim();
+        if name.is_empty() {
+            continue;
+        }
+
+        conn.execute(
+            "INSERT OR IGNORE INTO tags (name) VALUES (?1)",
+            params![name],
+        )
+        .map_err(|e| format!("Failed to upsert tag: {}", e))?;
+
+        let tag_id: i64 = conn
+            .query_row(
+                "SELECT id FROM tags WHERE name = ?1 COLLATE NOCASE",
+                params![name],
+                |row| row.get(0),
+            )
+            .map_err(|e| format!("Failed to get tag id: {}", e))?;
+
+        conn.execute(
+            "INSERT OR IGNORE INTO entry_tags (entry_id, tag_id) VALUES (?1, ?2)",
+            params![entry_id, tag_id],
+        )
+        .map_err(|e| format!("Failed to link entry tag: {}", e))?;
+    }
+
+    Ok(())
+}
+
+/// Get all unique tag names used in entries for a given book.
+pub fn get_book_tags(db: &Database, book_id: &str) -> Result<Vec<String>, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT DISTINCT t.name
+             FROM tags t
+             JOIN entry_tags et ON t.id = et.tag_id
+             JOIN journal_entries je ON je.id = et.entry_id
+             WHERE je.book_id = ?1
+             ORDER BY t.name COLLATE NOCASE",
+        )
+        .map_err(|e| format!("Prepare failed: {}", e))?;
+
+    let tags = stmt
+        .query_map(params![book_id], |row| row.get::<_, String>(0))
+        .map_err(|e| format!("Query failed: {}", e))?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    Ok(tags)
 }
 
 /// Attach (or replace) location_weather on an existing entry.
@@ -327,8 +421,13 @@ pub fn get_entry(db: &Database, id: &str) -> Result<Option<JournalEntryRow>, Str
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
     let result = conn.query_row(
-        "SELECT id, encrypted_content, mood, privacy_mode, location_weather, book_id, pinned, created_at, updated_at
-         FROM journal_entries WHERE id = ?1",
+        "SELECT je.id, je.encrypted_content, je.mood, je.privacy_mode, je.location_weather, je.book_id, je.pinned, je.created_at, je.updated_at,
+                COALESCE(GROUP_CONCAT(t.name, ','), '') as tags
+         FROM journal_entries je
+         LEFT JOIN entry_tags et ON je.id = et.entry_id
+         LEFT JOIN tags t ON et.tag_id = t.id
+         WHERE je.id = ?1
+         GROUP BY je.id",
         params![id],
         |row| {
             let content_json: String = row.get(1)?;
@@ -345,6 +444,7 @@ pub fn get_entry(db: &Database, id: &str) -> Result<Option<JournalEntryRow>, Str
                 pinned: row.get::<_, i32>(6)? != 0,
                 created_at: row.get(7)?,
                 updated_at: row.get(8)?,
+                tags: parse_tags(row.get(9)?),
             })
         },
     );
@@ -364,9 +464,13 @@ pub fn get_all_entries(db: &Database, limit: Option<i32>) -> Result<Vec<JournalE
 
     let mut stmt = conn
         .prepare(&format!(
-            "SELECT id, encrypted_content, mood, privacy_mode, location_weather, book_id, pinned, created_at, updated_at
-             FROM journal_entries
-             ORDER BY created_at DESC{}",
+            "SELECT je.id, je.encrypted_content, je.mood, je.privacy_mode, je.location_weather, je.book_id, je.pinned, je.created_at, je.updated_at,
+                    COALESCE(GROUP_CONCAT(t.name, ','), '') as tags
+             FROM journal_entries je
+             LEFT JOIN entry_tags et ON je.id = et.entry_id
+             LEFT JOIN tags t ON et.tag_id = t.id
+             GROUP BY je.id
+             ORDER BY je.created_at DESC{}",
             limit_clause
         ))
         .map_err(|e| format!("Prepare failed: {}", e))?;
@@ -387,6 +491,7 @@ pub fn get_all_entries(db: &Database, limit: Option<i32>) -> Result<Vec<JournalE
                 pinned: row.get::<_, i32>(6)? != 0,
                 created_at: row.get(7)?,
                 updated_at: row.get(8)?,
+                tags: parse_tags(row.get(9)?),
             })
         })
         .map_err(|e| format!("Query failed: {}", e))?
@@ -406,10 +511,14 @@ pub fn get_entries_by_date_range(
 
     let mut stmt = conn
         .prepare(
-            "SELECT id, encrypted_content, mood, privacy_mode, location_weather, book_id, pinned, created_at, updated_at
-             FROM journal_entries
-             WHERE date(created_at) BETWEEN ?1 AND ?2
-             ORDER BY created_at DESC",
+            "SELECT je.id, je.encrypted_content, je.mood, je.privacy_mode, je.location_weather, je.book_id, je.pinned, je.created_at, je.updated_at,
+                    COALESCE(GROUP_CONCAT(t.name, ','), '') as tags
+             FROM journal_entries je
+             LEFT JOIN entry_tags et ON je.id = et.entry_id
+             LEFT JOIN tags t ON et.tag_id = t.id
+             WHERE date(je.created_at) BETWEEN ?1 AND ?2
+             GROUP BY je.id
+             ORDER BY je.created_at DESC",
         )
         .map_err(|e| format!("Prepare failed: {}", e))?;
 
@@ -429,6 +538,7 @@ pub fn get_entries_by_date_range(
                 pinned: row.get::<_, i32>(6)? != 0,
                 created_at: row.get(7)?,
                 updated_at: row.get(8)?,
+                tags: parse_tags(row.get(9)?),
             })
         })
         .map_err(|e| format!("Query failed: {}", e))?
@@ -466,8 +576,13 @@ pub fn update_entry(
 
     // Fetch the updated entry using the same connection (avoid deadlock/race)
     conn.query_row(
-        "SELECT id, encrypted_content, mood, privacy_mode, location_weather, book_id, pinned, created_at, updated_at
-         FROM journal_entries WHERE id = ?1",
+        "SELECT je.id, je.encrypted_content, je.mood, je.privacy_mode, je.location_weather, je.book_id, je.pinned, je.created_at, je.updated_at,
+                COALESCE(GROUP_CONCAT(t.name, ','), '') as tags
+         FROM journal_entries je
+         LEFT JOIN entry_tags et ON je.id = et.entry_id
+         LEFT JOIN tags t ON et.tag_id = t.id
+         WHERE je.id = ?1
+         GROUP BY je.id",
         params![id],
         |row| {
             let content_json: String = row.get(1)?;
@@ -484,6 +599,7 @@ pub fn update_entry(
                 pinned: row.get::<_, i32>(6)? != 0,
                 created_at: row.get(7)?,
                 updated_at: row.get(8)?,
+                tags: parse_tags(row.get(9)?),
             })
         },
     )

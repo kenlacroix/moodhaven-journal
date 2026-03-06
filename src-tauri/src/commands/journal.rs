@@ -121,6 +121,18 @@ pub fn patch_entry_pinned(db: State<Database>, id: String, pinned: bool) -> Resu
     db::patch_entry_pinned(&db, &id, pinned)
 }
 
+/// Sync tags for an entry (replaces all existing tags).
+#[tauri::command]
+pub fn sync_entry_tags(db: State<Database>, id: String, tags: Vec<String>) -> Result<(), String> {
+    db::sync_entry_tags(&db, &id, &tags)
+}
+
+/// Get all unique tag names used in a book.
+#[tauri::command]
+pub fn get_book_tags(db: State<Database>, book_id: String) -> Result<Vec<String>, String> {
+    db::get_book_tags(&db, &book_id)
+}
+
 /// Get mood statistics for analytics
 #[tauri::command]
 pub fn get_mood_statistics(

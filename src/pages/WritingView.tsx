@@ -24,7 +24,7 @@
  */
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { saveEntry, getEntryById, patchEntryLocationWeather, deleteEntry } from '../lib/journalService';
+import { saveEntry, getEntryById, patchEntryLocationWeather, deleteEntry, getBookTags } from '../lib/journalService';
 import { captureLocationWeather, getWeatherEmoji, displayTemp } from '../lib/locationWeatherService';
 import { RichTextEditor } from '../components/editor';
 import { PromptDrawer } from '../components/ai/PromptDrawer';
@@ -166,8 +166,6 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
       return () => clearTimeout(t);
     }
   }, [isSaving, lastSavedAt]);
-  const [savedAgoText, setSavedAgoText] = useState('');
-  const [showCheckmark, setShowCheckmark] = useState(false);
   const [isEditorFocused, setIsEditorFocused] = useState(false);
   const [pendingInsert, setPendingInsert] = useState<string | null>(null);
 
@@ -193,7 +191,6 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
   const [totalEntries, setTotalEntries] = useState(0);
 
   const autoSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const agoIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const moodScoreTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Imperative save: always-fresh function re-assigned each render so it closes
@@ -216,6 +213,12 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
   const activeBookId = useBooksStore((s) => s.activeBookId);
   const books = useBooksStore((s) => s.books);
   const activeBook = books.find((b) => b.id === (activeBookId ?? 'default')) ?? books[0];
+
+  // Previously-used tags for this book (for the tag suggestion strip)
+  const [bookTags, setBookTags] = useState<string[]>([]);
+  useEffect(() => {
+    getBookTags(activeBookId ?? 'default').then(setBookTags).catch(() => {});
+  }, [activeBookId]);
 
   // Weather / location context captured in background on mount
   const locationWeatherRef = useRef<LocationWeather | null>(null);
@@ -329,8 +332,6 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
       setMood(null);
       setMoodIsAuto(true);
       setLastSavedAt(null);
-      setSavedAgoText('');
-      setShowCheckmark(false);
       savedEntryIdRef.current = null;
       prevAutoMoodRef.current = null;
     }
@@ -351,7 +352,6 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
   useEffect(() => {
     return () => {
       if (autoSaveTimeoutRef.current) clearTimeout(autoSaveTimeoutRef.current);
-      if (agoIntervalRef.current) clearInterval(agoIntervalRef.current);
       if (moodScoreTimeoutRef.current) clearTimeout(moodScoreTimeoutRef.current);
     };
   }, []);
@@ -366,19 +366,6 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
     }, 1500);
   }, [contentText, moodIsAuto]);
 
-  // Update "saved X ago" text every 10 seconds
-  useEffect(() => {
-    if (!lastSavedAt) return;
-    const updateAgoText = () => {
-      const seconds = Math.floor((Date.now() - lastSavedAt.getTime()) / 1000);
-      if (seconds < 5) setSavedAgoText('Saved just now');
-      else if (seconds < 60) setSavedAgoText(`Saved ${seconds}s ago`);
-      else setSavedAgoText(`Saved ${Math.floor(seconds / 60)}m ago`);
-    };
-    updateAgoText();
-    agoIntervalRef.current = setInterval(updateAgoText, 10000);
-    return () => { if (agoIntervalRef.current) clearInterval(agoIntervalRef.current); };
-  }, [lastSavedAt]);
 
   // Auto-save after 2 seconds of inactivity
   const scheduleAutoSave = useCallback(() => {
@@ -416,8 +403,6 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
           savedEntryIdRef.current = saved.id;
           setSavedEntry(saved);
           setLastSavedAt(new Date());
-          setShowCheckmark(true);
-          setTimeout(() => setShowCheckmark(false), 1500);
           onEntrySaved?.();
         })
         .catch((err) => { console.error('Auto-save failed:', err); })
@@ -631,27 +616,8 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
                   </span>
                 )}
 
-                {/* Right cluster: privacy + save indicator + options menu */}
+                {/* Right cluster: privacy + options menu */}
                 <div className="flex items-center gap-1.5">
-                  {/* Save indicator — inline with header */}
-                  <span className="flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500 min-w-[60px] justify-end">
-                    {isSaving ? (
-                      <>
-                        <span className="w-2.5 h-2.5 border-[1.5px] border-slate-300 dark:border-slate-600 border-t-violet-500 rounded-full animate-spin" />
-                        <span>Saving…</span>
-                      </>
-                    ) : showCheckmark ? (
-                      <span className="flex items-center gap-1 animate-fade-in">
-                        <svg className="w-3 h-3 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                        </svg>
-                        <span>Saved</span>
-                      </span>
-                    ) : savedAgoText ? (
-                      <span className="hidden sm:inline">{savedAgoText}</span>
-                    ) : null}
-                  </span>
-
                   {/* Privacy segmented control */}
                   <div className="flex items-center gap-0.5 bg-slate-100 dark:bg-slate-800 rounded-lg p-0.5">
                     {([0, 1, 2] as PrivacyMode[]).map((mode) => (
@@ -769,6 +735,23 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
               </div>
             )}
           </div>
+
+          {/* ── Previously-used tag suggestions ── */}
+          {bookTags.length > 0 && !distractionFree && (
+            <div className="flex flex-wrap gap-1.5 px-1 mt-2">
+              {bookTags.slice(0, 10).map((tag) => (
+                <button
+                  key={tag}
+                  type="button"
+                  onClick={() => setPendingInsert(` #${tag}`)}
+                  className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-xs bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-violet-50 dark:hover:bg-violet-900/20 hover:text-violet-600 dark:hover:text-violet-400 transition-colors"
+                >
+                  <span className="text-[10px] opacity-60">#</span>
+                  {tag}
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* ── Bottom status bar — centered E2E badge only ── */}
           <div

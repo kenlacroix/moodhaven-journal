@@ -3,10 +3,39 @@
  */
 
 /**
- * Format date as YYYY-MM-DD
+ * Format date as YYYY-MM-DD using LOCAL calendar date (not UTC).
+ * Using toISOString() would return the UTC date, which is wrong for users
+ * in UTC- timezones when their local time is past midnight but UTC hasn't rolled.
  */
 export function formatDate(date: Date): string {
-  return date.toISOString().split('T')[0];
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+/**
+ * Parse a timestamp string returned by the database to a proper Date.
+ *
+ * SQLite datetime('now') returns UTC time WITHOUT a timezone indicator, e.g.
+ * '2026-03-06 14:00:00' (space-separated).  JavaScript's Date constructor
+ * would interpret that string as LOCAL time, shifting the displayed hour
+ * forward or backward by the user's UTC offset.
+ *
+ * New entries (after the fix) are stored as ISO-format local time, e.g.
+ * '2026-03-06T14:00:00' (T-separator, no Z), which JS correctly treats as local.
+ *
+ * Detection rule:
+ *   - Space separator   → old entry, UTC → append 'Z' so JS parses as UTC
+ *   - 'T' separator     → new entry, local → parse as-is
+ */
+export function parseEntryTimestamp(ts: string): Date {
+  if (!ts) return new Date();
+  if (ts.includes(' ') && !ts.includes('Z') && !ts.includes('+')) {
+    // Old format: '2026-03-06 14:00:00' (UTC, space-separated)
+    return new Date(ts.replace(' ', 'T') + 'Z');
+  }
+  return new Date(ts);
 }
 
 /**

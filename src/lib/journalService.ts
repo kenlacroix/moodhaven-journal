@@ -37,6 +37,7 @@ interface EncryptedJournalEntryRow {
   pinned: boolean;
   created_at: string;
   updated_at: string;
+  tags: string[]; // Populated by GROUP_CONCAT join in Rust
 }
 
 interface UserSettings {
@@ -171,6 +172,11 @@ export async function createEntry(
     bookId: data.bookId ?? null,
   });
 
+  // Persist tags to the entry_tags table
+  if (data.tags.length > 0) {
+    await invoke('sync_entry_tags', { id, tags: data.tags });
+  }
+
   // Return decrypted entry
   return {
     id: row.id,
@@ -272,6 +278,9 @@ export async function updateEntry(
     privacyMode: data.privacyMode,
   });
 
+  // Sync tags (always — this replaces the previous set)
+  await invoke('sync_entry_tags', { id, tags: data.tags });
+
   return {
     id: row.id,
     content: data.content,
@@ -349,7 +358,7 @@ async function decryptEntry(
     content: result.data,
     mood: row.mood as MoodLevel,
     privacyMode: (row.privacy_mode ?? 0) as PrivacyMode,
-    tags: [], // TODO: Fetch from entry_tags table
+    tags: row.tags ?? [],
     locationWeather: row.location_weather ? (JSON.parse(row.location_weather) as LocationWeather) : undefined,
     book_id: row.book_id ?? 'default',
     pinned: row.pinned ?? false,
@@ -359,10 +368,13 @@ async function decryptEntry(
 }
 
 /**
- * Format date as YYYY-MM-DD for SQLite
+ * Format date as YYYY-MM-DD for SQLite (using local calendar date, not UTC)
  */
 function formatDate(date: Date): string {
-  return date.toISOString().split('T')[0];
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
 }
 
 // ============================================================================
@@ -423,6 +435,20 @@ export async function patchEntryLocationWeather(
  */
 export async function patchEntryPinned(id: string, pinned: boolean): Promise<void> {
   await invoke('patch_entry_pinned', { id, pinned });
+}
+
+/**
+ * Sync tags for an entry (replaces all existing tags with the provided list).
+ */
+export async function syncEntryTags(id: string, tags: string[]): Promise<void> {
+  await invoke('sync_entry_tags', { id, tags });
+}
+
+/**
+ * Get all unique tag names used across entries in a given book.
+ */
+export async function getBookTags(bookId: string): Promise<string[]> {
+  return invoke('get_book_tags', { bookId });
 }
 
 /**

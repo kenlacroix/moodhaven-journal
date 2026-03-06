@@ -50,6 +50,8 @@ export function useInsights() {
   const [gratitudeLongestStreak, setGratitudeLongestStreak] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [hasData, setHasData] = useState(false);
+  const [entriesThisWeek, setEntriesThisWeek] = useState(0);
+  const [topTags, setTopTags] = useState<string[]>([]);
 
   const load = useCallback(async () => {
     setIsLoading(true);
@@ -62,6 +64,29 @@ export function useInsights() {
       }
 
       setHasData(true);
+
+      // Entries this week
+      const now = new Date();
+      const weekStart = new Date(now);
+      weekStart.setDate(now.getDate() - now.getDay()); // Sunday
+      weekStart.setHours(0, 0, 0, 0);
+      setEntriesThisWeek(
+        entries.filter((e) => new Date(e.created_at) >= weekStart).length
+      );
+
+      // Top tags across all entries
+      const tagCounts = new Map<string, number>();
+      for (const e of entries) {
+        for (const t of e.tags) {
+          tagCounts.set(t, (tagCounts.get(t) ?? 0) + 1);
+        }
+      }
+      setTopTags(
+        Array.from(tagCounts.entries())
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 5)
+          .map(([t]) => t)
+      );
 
       // Local analysis: Open + Mindful entries
       const meta = aggregateMetadata(entries, 30, false);
@@ -125,6 +150,8 @@ export function useInsights() {
     weeklyReflection,
     gratitudeStreak,
     gratitudeLongestStreak,
+    entriesThisWeek,
+    topTags,
     isLoading,
     hasData,
     isAIEnabled: settings.ai.enabled,

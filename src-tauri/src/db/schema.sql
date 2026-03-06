@@ -46,12 +46,12 @@ CREATE INDEX IF NOT EXISTS idx_entries_mood ON journal_entries(mood);
 CREATE INDEX IF NOT EXISTS idx_entries_date ON journal_entries(date(created_at));
 CREATE INDEX IF NOT EXISTS idx_tags_name ON tags(name);
 
--- Trigger to update updated_at timestamp
+-- Trigger to update updated_at timestamp (local time)
 CREATE TRIGGER IF NOT EXISTS update_entry_timestamp
     AFTER UPDATE ON journal_entries
     FOR EACH ROW
 BEGIN
-    UPDATE journal_entries SET updated_at = datetime('now') WHERE id = OLD.id;
+    UPDATE journal_entries SET updated_at = strftime('%Y-%m-%dT%H:%M:%S', 'now', 'localtime') WHERE id = OLD.id;
 END;
 
 -- Trigger to update daily stats on entry insert

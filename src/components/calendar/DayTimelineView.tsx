@@ -2,12 +2,17 @@
  * DayTimelineView - 24-hour entry timeline for a selected calendar day
  *
  * Shows all entries for a given day positioned on an hourly timeline.
- * Click an entry to open it; "+ New entry" button to create a new entry on that date.
+ * Click an entry to open it.
+ *
+ * Changes:
+ * - Hour labels display in 12-hour AM/PM format
+ * - Auto-scrolls to current hour when viewing today; to most recent entry otherwise
+ * - Uses parseEntryTimestamp for correct UTC → local conversion
  */
 
 import { useState, useEffect, useRef } from 'react';
 import { getEntriesByDateRange } from '../../lib/journalService';
-import { parseDate } from '../../lib/dateUtils';
+import { parseDate, formatDate, parseEntryTimestamp } from '../../lib/dateUtils';
 import { getMoodColor } from '../../lib/chartUtils';
 import { MOOD_OPTIONS } from '../../types/journal';
 import type { JournalEntry } from '../../types/journal';
@@ -20,16 +25,25 @@ interface DayTimelineViewProps {
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 
+/** Convert 0–23 to 12-hour AM/PM label */
 function formatHour(h: number): string {
-  return h.toString().padStart(2, '0');
+  if (h === 0) return '12 AM';
+  if (h === 12) return '12 PM';
+  return h < 12 ? `${h} AM` : `${h - 12} PM`;
 }
 
+/** Entry time formatted as 12-hour clock */
 function formatTime(dateStr: string): string {
-  return new Date(dateStr).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return parseEntryTimestamp(dateStr).toLocaleTimeString([], {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
 }
 
+/** Get the local hour (0–23) for an entry */
 function getEntryHour(entry: JournalEntry): number {
-  return new Date(entry.created_at).getHours();
+  return parseEntryTimestamp(entry.created_at).getHours();
 }
 
 export function DayTimelineView({ date, onSelectEntry, onNewEntry }: DayTimelineViewProps) {
@@ -54,18 +68,24 @@ export function DayTimelineView({ date, onSelectEntry, onNewEntry }: DayTimeline
     return () => { cancelled = true; };
   }, [date]);
 
-  // Scroll to first entry hour (or 08:00 default) on load
+  // Scroll to current time for today; most recent entry hour for past days
   useEffect(() => {
     if (isLoading || !containerRef.current) return;
-    const targetHour = entries.length > 0
-      ? getEntryHour(entries[0])
-      : 8;
-    // Each hour row is ~40px
+    const isToday = date === formatDate(new Date());
+    let targetHour: number;
+    if (isToday) {
+      targetHour = new Date().getHours();
+    } else if (entries.length > 0) {
+      // entries[0] is most recent (ORDER BY created_at DESC)
+      targetHour = getEntryHour(entries[0]);
+    } else {
+      targetHour = 8;
+    }
+    // Each hour row is ~40px; scroll so the target is near the top with some context
     const scrollY = Math.max(0, targetHour * 40 - 80);
     containerRef.current.scrollTop = scrollY;
-  }, [isLoading, entries]);
+  }, [isLoading, entries, date]);
 
-  // Format day header
   const dateObj = parseDate(date);
   const dayLabel = dateObj.toLocaleDateString('en-US', {
     weekday: 'short',
@@ -74,7 +94,6 @@ export function DayTimelineView({ date, onSelectEntry, onNewEntry }: DayTimeline
     year: 'numeric',
   });
 
-  // Group entries by hour
   const entriesByHour = new Map<number, JournalEntry[]>();
   for (const entry of entries) {
     const h = getEntryHour(entry);
@@ -82,6 +101,10 @@ export function DayTimelineView({ date, onSelectEntry, onNewEntry }: DayTimeline
     list.push(entry);
     entriesByHour.set(h, list);
   }
+
+  // Current hour marker (only for today)
+  const isToday = date === formatDate(new Date());
+  const currentHour = isToday ? new Date().getHours() : -1;
 
   return (
     <div className="flex flex-col h-full bg-white dark:bg-slate-900 border-l border-slate-100 dark:border-slate-800 transition-all duration-200">
@@ -110,7 +133,7 @@ export function DayTimelineView({ date, onSelectEntry, onNewEntry }: DayTimeline
       ) : entries.length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center px-6">
           <div className="text-3xl">📭</div>
-          <p className="text-sm text-slate-500 dark:text-slate-400">No entries — start writing</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400">No entries for this day</p>
           <button
             type="button"
             onClick={onNewEntry}
@@ -125,6 +148,7 @@ export function DayTimelineView({ date, onSelectEntry, onNewEntry }: DayTimeline
             {HOURS.map((hour) => {
               const hourEntries = entriesByHour.get(hour) ?? [];
               const hasEntries = hourEntries.length > 0;
+              const isCurrent = hour === currentHour;
 
               return (
                 <div
@@ -132,19 +156,23 @@ export function DayTimelineView({ date, onSelectEntry, onNewEntry }: DayTimeline
                   className={`flex items-start min-h-[40px] ${hasEntries ? 'bg-violet-50/30 dark:bg-violet-900/5' : ''}`}
                 >
                   {/* Hour label */}
-                  <div className={`w-10 flex-shrink-0 px-2 pt-2 text-xs text-right font-mono transition-colors ${
-                    hasEntries
+                  <div className={`w-14 flex-shrink-0 px-1.5 pt-2 text-[10px] text-right font-medium transition-colors leading-tight ${
+                    isCurrent
                       ? 'text-violet-500 dark:text-violet-400 font-semibold'
-                      : 'text-slate-300 dark:text-slate-600'
+                      : hasEntries
+                        ? 'text-violet-500 dark:text-violet-400'
+                        : 'text-slate-300 dark:text-slate-600'
                   }`}>
                     {formatHour(hour)}
                   </div>
 
-                  {/* Divider */}
-                  <div className={`w-px self-stretch flex-shrink-0 mt-2 mb-0 ${
-                    hasEntries
-                      ? 'bg-violet-200 dark:bg-violet-700'
-                      : 'bg-slate-100 dark:bg-slate-800'
+                  {/* Divider line — current hour is violet */}
+                  <div className={`w-px self-stretch flex-shrink-0 mt-2 ${
+                    isCurrent
+                      ? 'bg-violet-400 dark:bg-violet-500'
+                      : hasEntries
+                        ? 'bg-violet-200 dark:bg-violet-700'
+                        : 'bg-slate-100 dark:bg-slate-800'
                   }`} />
 
                   {/* Entries at this hour */}
@@ -164,20 +192,16 @@ export function DayTimelineView({ date, onSelectEntry, onNewEntry }: DayTimeline
                               onClick={() => onSelectEntry(entry.id)}
                               className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left hover:bg-white dark:hover:bg-slate-800 transition-colors group"
                             >
-                              {/* Mood dot */}
                               <span
                                 className="w-2 h-2 rounded-full flex-shrink-0"
                                 style={{ backgroundColor: moodColor }}
                               />
-                              {/* Preview */}
                               <span className="flex-1 text-xs text-slate-700 dark:text-slate-200 truncate font-medium group-hover:text-violet-600 dark:group-hover:text-violet-400 transition-colors">
                                 {preview}
                               </span>
-                              {/* Mood emoji */}
                               {moodEmoji && (
                                 <span className="text-xs flex-shrink-0">{moodEmoji}</span>
                               )}
-                              {/* Time */}
                               <span className="text-[10px] text-slate-400 dark:text-slate-500 flex-shrink-0">
                                 {formatTime(entry.created_at)}
                               </span>
@@ -186,7 +210,10 @@ export function DayTimelineView({ date, onSelectEntry, onNewEntry }: DayTimeline
                         })}
                       </div>
                     ) : (
-                      <div className="h-px my-2 bg-slate-50 dark:bg-slate-800/50" />
+                      /* Current hour gets a subtle pulse dot */
+                      isCurrent
+                        ? <div className="h-2 my-2 flex items-center"><span className="w-1.5 h-1.5 rounded-full bg-violet-400 dark:bg-violet-500 animate-pulse" /></div>
+                        : <div className="h-px my-2 bg-slate-50 dark:bg-slate-800/50" />
                     )}
                   </div>
                 </div>

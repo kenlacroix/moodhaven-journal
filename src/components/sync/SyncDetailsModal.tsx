@@ -1,16 +1,14 @@
 /**
- * SyncDetailsModal — Centered overlay showing storage type, file path,
- * last-saved time, sync status, entry count, and upload/download actions.
+ * SyncDetailsModal — Storage status + per-entry WebDAV sync.
  *
- * Triggered by the ☁ Sync icon in the Sidebar header.
+ * "Sync Now" runs the granular per-entry engine (syncEngine.ts).
+ * Point-in-time blob export/import lives in Settings → Data tab.
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { appDataDir } from '@tauri-apps/api/path';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { getAllEntries } from '../../lib/journalService';
-import { uploadBackup, downloadBackup } from '../../lib/cloudSyncService';
-import type { SyncResult } from '../../lib/cloudSyncService';
 import { syncWithWebDAV, type SyncProgress } from '../../lib/syncEngine';
 import { getDeviceName, setDeviceName as persistDeviceName } from '../../lib/deviceIdentity';
 
@@ -25,8 +23,7 @@ function relativeTime(isoStr: string | null | undefined): string {
   if (minutes < 60) return `${minutes}m ago`;
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
+  return `${Math.floor(hours / 24)}d ago`;
 }
 
 function absoluteTime(isoStr: string | null | undefined): string {
@@ -34,7 +31,6 @@ function absoluteTime(isoStr: string | null | undefined): string {
   return new Date(isoStr).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-/** Strip username:password from a WebDAV URL for display */
 function maskUrl(url: string): string {
   try {
     const u = new URL(url);
@@ -66,107 +62,81 @@ interface SyncDetailsModalProps {
 
 export function SyncDetailsModal({ onClose, onNavigateToSettings }: SyncDetailsModalProps) {
   const storage = useSettingsStore((s) => s.settings.storage);
+  const syncSettings = useSettingsStore((s) => s.settings.sync);
   const lastAutoSaved = useSettingsStore((s) => s.lastAutoSaved);
   const setLastSyncDate = useSettingsStore((s) => s.setLastSyncDate);
+  const setSyncResult = useSettingsStore((s) => s.setSyncResult);
 
   const [entryCount, setEntryCount] = useState<number | null>(null);
   const [dbPath, setDbPath] = useState<string | null>(null);
-  const setSyncResult2 = useSettingsStore((s) => s.setSyncResult);
 
-  const [isSyncing, setIsSyncing] = useState<'upload' | 'download' | 'sync' | null>(null);
-  const [syncResult, setSyncResult] = useState<SyncResult | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncProgress, setSyncProgress] = useState<SyncProgress | null>(null);
+  const [syncOutcome, setSyncOutcome] = useState<{ pulled: number; pushed: number; error?: string } | null>(null);
+
   const [password, setPassword] = useState('');
   const [showPasswordField, setShowPasswordField] = useState(false);
-  const [pendingAction, setPendingAction] = useState<'upload' | 'download' | 'sync' | null>(null);
 
-  // Multi-device sync state
-  const [syncProgress, setSyncProgress] = useState<SyncProgress | null>(null);
-  const [multiSyncResult, setMultiSyncResult] = useState<{ pulled: number; pushed: number; error?: string } | null>(null);
   const [deviceName, setDeviceName] = useState('');
   const [deviceNameDirty, setDeviceNameDirty] = useState(false);
 
   const backdropRef = useRef<HTMLDivElement>(null);
 
-  // Load entry count + DB path + device name on mount
   useEffect(() => {
-    getAllEntries()
-      .then((entries) => setEntryCount(entries.length))
-      .catch(() => setEntryCount(null));
-
-    appDataDir()
-      .then((dir) => {
-        const sep = dir.includes('\\') ? '\\' : '/';
-        const trimmed = dir.endsWith(sep) ? dir.slice(0, -1) : dir;
-        setDbPath(`${trimmed}${sep}moodbloom.db`);
-      })
-      .catch(() => setDbPath(null));
-
+    getAllEntries().then((e) => setEntryCount(e.length)).catch(() => setEntryCount(null));
+    appDataDir().then((dir) => {
+      const sep = dir.includes('\\') ? '\\' : '/';
+      const trimmed = dir.endsWith(sep) ? dir.slice(0, -1) : dir;
+      setDbPath(`${trimmed}${sep}moodbloom.db`);
+    }).catch(() => setDbPath(null));
     getDeviceName().then(setDeviceName).catch(() => {});
   }, []);
 
-  // Close on backdrop click
   const handleBackdropClick = useCallback((e: React.MouseEvent) => {
     if (e.target === backdropRef.current) onClose();
   }, [onClose]);
 
-  // Close on Escape
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  const handleSyncAction = useCallback(async (action: 'upload' | 'download' | 'sync') => {
-    if (!password.trim()) {
-      setPendingAction(action);
-      setShowPasswordField(true);
-      return;
-    }
-
-    setIsSyncing(action);
-    setSyncResult(null);
-    setMultiSyncResult(null);
+  const runSync = useCallback(async (pw: string) => {
+    setIsSyncing(true);
+    setSyncOutcome(null);
     setSyncProgress(null);
-
     try {
-      if (action === 'sync') {
-        const result = await syncWithWebDAV(storage.webdav, password, setSyncProgress);
-        setMultiSyncResult({ pulled: result.pulled, pushed: result.pushed, error: result.error });
-        if (result.success) {
-          setSyncResult2({ at: result.syncedAt, success: true, pulled: result.pulled, pushed: result.pushed });
-          setLastSyncDate(result.syncedAt, 'upload');
-          await useSettingsStore.getState().saveSettings();
-        }
-      } else {
-        const result = action === 'upload'
-          ? await uploadBackup(password, storage.webdav)
-          : await downloadBackup(password, storage.webdav);
-
-        setSyncResult(result);
-        if (result.success && result.timestamp) {
-          setLastSyncDate(result.timestamp, action);
-          await useSettingsStore.getState().saveSettings();
-        }
+      const result = await syncWithWebDAV(storage.webdav, pw, setSyncProgress);
+      setSyncOutcome({ pulled: result.pulled, pushed: result.pushed, error: result.error });
+      if (result.success) {
+        setSyncResult({ at: result.syncedAt, success: true, pulled: result.pulled, pushed: result.pushed });
+        setLastSyncDate(result.syncedAt, 'upload');
+        await useSettingsStore.getState().saveSettings();
       }
     } finally {
-      setIsSyncing(null);
+      setIsSyncing(false);
       setSyncProgress(null);
       setPassword('');
       setShowPasswordField(false);
-      setPendingAction(null);
     }
-  }, [password, storage.webdav, setLastSyncDate, setSyncResult2]);
+  }, [storage.webdav, setLastSyncDate, setSyncResult]);
+
+  const handleSyncNow = useCallback(() => {
+    if (!password.trim()) {
+      setShowPasswordField(true);
+    } else {
+      runSync(password);
+    }
+  }, [password, runSync]);
 
   const handlePasswordSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
-    if (pendingAction) await handleSyncAction(pendingAction);
-  }, [pendingAction, handleSyncAction]);
+    if (password.trim()) runSync(password);
+  }, [password, runSync]);
 
   const isWebDAV = storage.type === 'webdav';
   const isConfigured = isWebDAV && storage.webdav.url.trim().length > 0;
-  const dirIcon = storage.lastSyncDirection === 'upload' ? '↑' : storage.lastSyncDirection === 'download' ? '↓' : '';
 
   return (
     <div
@@ -174,7 +144,7 @@ export function SyncDetailsModal({ onClose, onNavigateToSettings }: SyncDetailsM
       onClick={handleBackdropClick}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
     >
-      <div className="w-[500px] max-w-[calc(100vw-2rem)] bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+      <div className="w-[480px] max-w-[calc(100vw-2rem)] bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
 
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-800">
@@ -218,47 +188,34 @@ export function SyncDetailsModal({ onClose, onNavigateToSettings }: SyncDetailsM
             </span>
           </Row>
 
-          {/* DB file path (local only) */}
+          {/* DB path (local) */}
           {!isWebDAV && (
             <Row label="Database">
-              {dbPath ? (
-                <span
-                  className="font-mono text-xs text-slate-500 dark:text-slate-400 break-all"
-                  title={dbPath}
-                >
-                  {dbPath}
-                </span>
-              ) : (
-                <span className="inline-block w-48 h-3 bg-slate-200 dark:bg-slate-700 rounded animate-pulse" />
-              )}
+              {dbPath
+                ? <span className="font-mono text-xs text-slate-500 dark:text-slate-400 break-all">{dbPath}</span>
+                : <span className="inline-block w-48 h-3 bg-slate-200 dark:bg-slate-700 rounded animate-pulse" />}
             </Row>
           )}
 
-          {/* WebDAV server URL */}
+          {/* WebDAV URL */}
           {isWebDAV && storage.webdav.url && (
             <Row label="Server">
-              <span
-                className="font-mono text-xs text-slate-500 dark:text-slate-400 break-all"
-                title={maskUrl(storage.webdav.url)}
-              >
+              <span className="font-mono text-xs text-slate-500 dark:text-slate-400 break-all">
                 {maskUrl(storage.webdav.url)}
               </span>
             </Row>
           )}
 
-          {/* Divider */}
           <div className="h-px bg-slate-100 dark:bg-slate-800" />
 
           {/* Entry count */}
           <Row label="Entries">
-            {entryCount === null ? (
-              <span className="inline-block w-8 h-3 bg-slate-200 dark:bg-slate-700 rounded animate-pulse" />
-            ) : (
-              <span className="font-medium">{entryCount}</span>
-            )}
+            {entryCount === null
+              ? <span className="inline-block w-8 h-3 bg-slate-200 dark:bg-slate-700 rounded animate-pulse" />
+              : <span className="font-medium">{entryCount}</span>}
           </Row>
 
-          {/* Last auto-saved */}
+          {/* Last saved */}
           <Row label="Last saved">
             {lastAutoSaved ? (
               <span title={new Date(lastAutoSaved).toLocaleString()}>
@@ -270,214 +227,138 @@ export function SyncDetailsModal({ onClose, onNavigateToSettings }: SyncDetailsM
             )}
           </Row>
 
-          {/* Last synced (WebDAV only) */}
+          {/* Last synced */}
           {isWebDAV && (
             <Row label="Last synced">
-              <span className="flex items-center gap-1.5 justify-end">
-                {dirIcon && <span className="text-slate-400">{dirIcon}</span>}
+              {syncSettings.lastSyncAt ? (
                 <span>
-                  {storage.lastSyncDate ? (
-                    <>
-                      {absoluteTime(storage.lastSyncDate)}{' '}
-                      <span className="text-slate-400 dark:text-slate-500">· {relativeTime(storage.lastSyncDate)}</span>
-                    </>
-                  ) : (
-                    <span className="text-slate-400 dark:text-slate-500">Never synced</span>
+                  {absoluteTime(syncSettings.lastSyncAt)}{' '}
+                  <span className="text-slate-400 dark:text-slate-500">· {relativeTime(syncSettings.lastSyncAt)}</span>
+                  {syncSettings.lastSyncResult === 'success' && (
+                    <span className="ml-1.5 text-emerald-500">✓</span>
                   )}
                 </span>
-              </span>
+              ) : (
+                <span className="text-slate-400 dark:text-slate-500">Never synced</span>
+              )}
             </Row>
           )}
 
-          {/* Sync result feedback */}
-          {syncResult && (
-            <div className={`rounded-lg px-3 py-2.5 text-sm ${
-              syncResult.success
-                ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300'
-                : 'bg-rose-50 dark:bg-rose-900/20 text-rose-700 dark:text-rose-300'
-            }`}>
-              {syncResult.success ? (
-                <>
-                  <span className="font-medium">Success</span>
-                  {syncResult.entriesCount !== undefined && (
-                    <span> · {syncResult.entriesCount} entries imported</span>
-                  )}
-                  {syncResult.filename && (
-                    <span className="opacity-75"> · {syncResult.filename}</span>
-                  )}
-                </>
-              ) : (
-                <span>{syncResult.error}</span>
-              )}
-            </div>
-          )}
+          {/* WebDAV sync panel */}
+          {isConfigured && (
+            <div className="space-y-2.5 pt-1">
 
-          {/* Password field (shown on demand) */}
-          {showPasswordField && (
-            <form onSubmit={handlePasswordSubmit} className="space-y-2">
-              <label className="block text-xs font-medium text-slate-500 dark:text-slate-400">
-                Enter your journal password to {pendingAction === 'sync' ? 'encrypt sync files' : pendingAction === 'upload' ? 'encrypt the backup' : 'decrypt the backup'}
-              </label>
-              <div className="flex gap-2">
+              {/* Device name */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-500 dark:text-slate-400 flex-shrink-0 w-20">This device</span>
                 <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Journal password"
-                  autoFocus
-                  className="flex-1 px-3 py-1.5 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500/40 focus:border-violet-400"
+                  type="text"
+                  value={deviceName}
+                  onChange={(e) => { setDeviceName(e.target.value); setDeviceNameDirty(true); }}
+                  onBlur={async () => {
+                    if (deviceNameDirty && deviceName.trim()) {
+                      await persistDeviceName(deviceName.trim());
+                      useSettingsStore.getState().setSyncDeviceName(deviceName.trim());
+                      await useSettingsStore.getState().saveSettings();
+                      setDeviceNameDirty(false);
+                    }
+                  }}
+                  placeholder="e.g. Ken's Desktop"
+                  className="flex-1 px-2.5 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500/40"
                 />
+              </div>
+
+              {/* Password field */}
+              {showPasswordField && (
+                <form onSubmit={handlePasswordSubmit} className="space-y-2">
+                  <label className="block text-xs font-medium text-slate-500 dark:text-slate-400">
+                    Enter your journal password to encrypt sync files
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Journal password"
+                      autoFocus
+                      className="flex-1 px-3 py-1.5 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500/40 focus:border-violet-400"
+                    />
+                    <button
+                      type="submit"
+                      disabled={!password.trim() || isSyncing}
+                      className="px-3 py-1.5 text-sm font-medium text-white bg-violet-500 hover:bg-violet-600 disabled:opacity-50 rounded-lg transition-colors"
+                    >
+                      {isSyncing
+                        ? <span className="w-3.5 h-3.5 border border-white/50 border-t-white rounded-full animate-spin inline-block" />
+                        : 'Go'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setShowPasswordField(false); setPassword(''); }}
+                      className="px-3 py-1.5 text-sm text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {/* Progress */}
+              {isSyncing && syncProgress && (
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <span className="w-3 h-3 border border-violet-400 border-t-violet-600 rounded-full animate-spin flex-shrink-0" />
+                    <span className="text-xs text-slate-500 dark:text-slate-400">{syncProgress.message}</span>
+                  </div>
+                  {syncProgress.total > 0 && (
+                    <div className="h-1 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-violet-500 rounded-full transition-all duration-300"
+                        style={{ width: `${Math.round(((syncProgress.pulled + syncProgress.pushed) / syncProgress.total) * 100)}%` }}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Outcome */}
+              {syncOutcome && !isSyncing && (
+                <div className={`text-xs rounded-lg px-3 py-2 ${
+                  syncOutcome.error
+                    ? 'bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400'
+                    : 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300'
+                }`}>
+                  {syncOutcome.error
+                    ? syncOutcome.error
+                    : `Synced — ↓ ${syncOutcome.pulled} pulled · ↑ ${syncOutcome.pushed} pushed`}
+                </div>
+              )}
+
+              {/* Sync Now button */}
+              {!showPasswordField && (
                 <button
-                  type="submit"
-                  disabled={!password.trim() || isSyncing !== null}
-                  className="px-3 py-1.5 text-sm font-medium text-white bg-violet-500 hover:bg-violet-600 disabled:opacity-50 rounded-lg transition-colors"
+                  type="button"
+                  onClick={handleSyncNow}
+                  disabled={isSyncing}
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium bg-violet-500 hover:bg-violet-600 text-white disabled:opacity-50 transition-colors"
                 >
                   {isSyncing ? (
-                    <span className="w-3.5 h-3.5 border border-white/50 border-t-white rounded-full animate-spin inline-block" />
-                  ) : 'Go'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setShowPasswordField(false); setPendingAction(null); setPassword(''); }}
-                  className="px-3 py-1.5 text-sm text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-colors"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          )}
-
-          {/* WebDAV actions */}
-          {isConfigured && !showPasswordField && (
-            <div className="space-y-2 pt-1">
-              {/* ── Multi-Device Sync ── */}
-              <div className="rounded-xl border border-violet-100 dark:border-violet-900/40 bg-violet-50/50 dark:bg-violet-900/10 p-3 space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-violet-700 dark:text-violet-300 uppercase tracking-wide">Multi-Device Sync</span>
-                  {useSettingsStore.getState().settings.sync.lastSyncAt && (
-                    <span className="text-[11px] text-slate-400 dark:text-slate-500">
-                      Last: {relativeTime(useSettingsStore.getState().settings.sync.lastSyncAt)}
-                    </span>
-                  )}
-                </div>
-
-                {/* Device name */}
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-slate-500 dark:text-slate-400 flex-shrink-0 w-24">This device</span>
-                  <input
-                    type="text"
-                    value={deviceName}
-                    onChange={(e) => { setDeviceName(e.target.value); setDeviceNameDirty(true); }}
-                    onBlur={async () => {
-                      if (deviceNameDirty && deviceName.trim()) {
-                        await persistDeviceName(deviceName.trim());
-                        useSettingsStore.getState().setSyncDeviceName(deviceName.trim());
-                        await useSettingsStore.getState().saveSettings();
-                        setDeviceNameDirty(false);
-                      }
-                    }}
-                    placeholder="e.g. Ken's Desktop"
-                    className="flex-1 px-2.5 py-1 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500/40"
-                  />
-                </div>
-
-                {/* Sync progress */}
-                {isSyncing === 'sync' && syncProgress && (
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="w-3 h-3 border border-violet-400 border-t-violet-600 rounded-full animate-spin flex-shrink-0" />
-                      <span className="text-xs text-slate-500 dark:text-slate-400">{syncProgress.message}</span>
-                    </div>
-                    {syncProgress.total > 0 && (
-                      <div className="h-1 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-violet-500 rounded-full transition-all duration-300"
-                          style={{ width: `${Math.round(((syncProgress.pulled + syncProgress.pushed) / syncProgress.total) * 100)}%` }}
-                        />
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Multi-sync result */}
-                {multiSyncResult && isSyncing === null && (
-                  <div className={`text-xs rounded-lg px-2.5 py-1.5 ${
-                    multiSyncResult.error
-                      ? 'bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400'
-                      : 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300'
-                  }`}>
-                    {multiSyncResult.error
-                      ? multiSyncResult.error
-                      : `Synced — pulled ${multiSyncResult.pulled}, pushed ${multiSyncResult.pushed}`}
-                  </div>
-                )}
-
-                {/* Sync Now button */}
-                <button
-                  type="button"
-                  onClick={() => handleSyncAction('sync')}
-                  disabled={isSyncing !== null}
-                  className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium bg-violet-500 hover:bg-violet-600 text-white disabled:opacity-50 transition-colors"
-                >
-                  {isSyncing === 'sync' ? (
-                    <span className="w-3.5 h-3.5 border border-white/50 border-t-white rounded-full animate-spin" />
+                    <span className="w-4 h-4 border border-white/50 border-t-white rounded-full animate-spin" />
                   ) : (
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
                     </svg>
                   )}
-                  {isSyncing === 'sync' ? 'Syncing…' : 'Sync Now'}
+                  {isSyncing ? 'Syncing…' : 'Sync Now'}
                 </button>
-              </div>
-
-              {/* ── Manual Backup ── */}
-              <details className="group">
-                <summary className="text-xs text-slate-400 dark:text-slate-500 cursor-pointer hover:text-slate-500 dark:hover:text-slate-400 transition-colors list-none flex items-center gap-1">
-                  <svg className="w-3 h-3 group-open:rotate-90 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-                  </svg>
-                  Manual backup (full encrypted blob)
-                </summary>
-                <div className="flex gap-2 mt-2">
-                  <button
-                    type="button"
-                    onClick={() => handleSyncAction('upload')}
-                    disabled={isSyncing !== null}
-                    className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 transition-colors"
-                  >
-                    {isSyncing === 'upload' ? (
-                      <span className="w-3.5 h-3.5 border border-slate-400 border-t-violet-500 rounded-full animate-spin" />
-                    ) : (
-                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-                      </svg>
-                    )}
-                    Upload backup
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleSyncAction('download')}
-                    disabled={isSyncing !== null}
-                    className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 transition-colors"
-                  >
-                    {isSyncing === 'download' ? (
-                      <span className="w-3.5 h-3.5 border border-slate-400 border-t-violet-500 rounded-full animate-spin" />
-                    ) : (
-                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
-                      </svg>
-                    )}
-                    Download latest
-                  </button>
-                </div>
-              </details>
+              )}
             </div>
           )}
 
           {/* Not configured hint */}
           {isWebDAV && !isConfigured && (
             <p className="text-xs text-slate-400 dark:text-slate-500 text-center">
-              Configure WebDAV in Settings to enable cloud sync.
+              Configure WebDAV in Settings to enable sync.
             </p>
           )}
 
@@ -497,7 +378,7 @@ export function SyncDetailsModal({ onClose, onNavigateToSettings }: SyncDetailsM
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
           </svg>
           <span className="text-[11px] text-slate-400 dark:text-slate-500">
-            Data is encrypted locally (AES-256-GCM). Backups are encrypted before upload — the server never sees plaintext.
+            Each entry is encrypted individually (AES-256-GCM) — the server never sees plaintext.
           </span>
         </div>
       </div>

@@ -117,6 +117,9 @@ pub fn run() {
             commands::oura_get_context,
             commands::oura_get_history,
             commands::oura_backfill,
+            // Update manager
+            commands::check_for_update,
+            commands::download_and_install_update,
             // Breakout writer window
             commands::open_writer_window,
             // Session bridge (password hand-off to breakout window)

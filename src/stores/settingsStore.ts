@@ -91,6 +91,11 @@ interface SettingsState {
   setOuraEnabled: (enabled: boolean) => void;
   setOuraSettings: (updates: Partial<OuraSettings>) => void;
 
+  // Updates
+  setUpdateAutoCheck: (enabled: boolean) => void;
+  setUpdateLastChecked: (iso: string) => void;
+  setUpdateSkippedVersion: (version: string | null) => void;
+
   // Navigation
   setScrollToSection: (section: SettingsScrollTarget) => void;
 
@@ -524,6 +529,37 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       settings: {
         ...state.settings,
         oura: { ...state.settings.oura, ...updates },
+      },
+      hasUnsavedChanges: true,
+    }));
+  },
+
+  // Updates
+  setUpdateAutoCheck: (autoCheck) => {
+    set((state) => ({
+      settings: {
+        ...state.settings,
+        updates: { ...state.settings.updates, autoCheck },
+      },
+      hasUnsavedChanges: true,
+    }));
+  },
+
+  setUpdateLastChecked: (lastChecked) => {
+    set((state) => ({
+      settings: {
+        ...state.settings,
+        updates: { ...state.settings.updates, lastChecked },
+      },
+      hasUnsavedChanges: true,
+    }));
+  },
+
+  setUpdateSkippedVersion: (skippedVersion) => {
+    set((state) => ({
+      settings: {
+        ...state.settings,
+        updates: { ...state.settings.updates, skippedVersion },
       },
       hasUnsavedChanges: true,
     }));

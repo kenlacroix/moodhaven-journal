@@ -23,6 +23,7 @@ import { SyncDetailsModal } from './components/sync/SyncDetailsModal';
 import { useAppStore } from './stores/appStore';
 import { useSettingsStore } from './stores/settingsStore';
 import { useReminderScheduler } from './hooks/useReminderScheduler';
+import { useUpdateCheck } from './hooks/useUpdateCheck';
 
 // Detect breakout writer mode outside the component so hooks order is stable.
 const IS_BREAKOUT = new URLSearchParams(window.location.search).get('mode') === 'writer';
@@ -47,6 +48,9 @@ function App() {
 
   // Schedule reminder notifications (hook checks enabled state internally)
   useReminderScheduler();
+
+  // Update check — runs once per session after settings are loaded, respects 24h gate
+  const updateHook = useUpdateCheck();
 
   useEffect(() => {
     const init = async () => {
@@ -143,6 +147,7 @@ function App() {
         onNewEntry={handleNewEntry}
         onOpenSync={() => setShowSyncModal(true)}
         onNavigateToJournalOverview={handleNavigateToJournalOverview}
+        updateHook={updateHook}
       >
         {/* Keyed wrapper replays fade animation on view change */}
         <div key={currentView} className="h-full animate-view-enter">
@@ -182,7 +187,7 @@ function App() {
 
           {/* Settings */}
           {currentView === 'settings' && (
-            <SettingsPage />
+            <SettingsPage updateHook={updateHook} />
           )}
 
           {/* Journal Overview */}

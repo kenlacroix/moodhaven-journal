@@ -14,6 +14,8 @@ import { SidebarItem } from './SidebarItem';
 import { useBooksStore } from '../../stores/booksStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { NewBookModal } from '../books/NewBookModal';
+import { UpdateBanner } from '../updater/UpdateBanner';
+import type { UseUpdateCheckReturn } from '../../hooks/useUpdateCheck';
 
 export type ViewType = 'writing' | 'timeline' | 'onthisday' | 'insights' | 'calendar' | 'settings' | 'journalOverview';
 
@@ -23,9 +25,10 @@ interface SidebarProps {
   onLock: () => void;
   onOpenSync: () => void;
   onNavigateToJournalOverview?: (bookId: string) => void;
+  updateHook: UseUpdateCheckReturn;
 }
 
-export function Sidebar({ currentView, onNavigate, onOpenSync, onNavigateToJournalOverview }: SidebarProps) {
+export function Sidebar({ currentView, onNavigate, onOpenSync, onNavigateToJournalOverview, updateHook }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(() => {
     try { return localStorage.getItem('sidebar-collapsed') === 'true'; }
     catch { return false; }
@@ -238,6 +241,15 @@ export function Sidebar({ currentView, onNavigate, onOpenSync, onNavigateToJourn
             </button>
           ))}
         </div>
+      </div>
+
+      {/* Update available banner — shown only when an update exists */}
+      <div className="px-3 pb-1">
+        <UpdateBanner
+          hook={updateHook}
+          collapsed={collapsed}
+          onOpenSettings={() => onNavigate('settings')}
+        />
       </div>
 
       {/* User Guide link */}

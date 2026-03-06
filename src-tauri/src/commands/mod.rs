@@ -12,6 +12,7 @@ pub mod settings;
 pub mod speech_to_text;
 pub mod two_factor;
 pub mod session_bridge;
+pub mod updater;
 pub mod writer_window;
 
 pub use analytics::*;
@@ -22,6 +23,7 @@ pub use journal::*;
 pub use oura::*;
 pub use session_bridge::*;
 pub use settings::*;
+pub use updater::*;
 pub use speech_to_text::*;
 pub use two_factor::*;
 pub use writer_window::*;

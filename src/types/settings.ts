@@ -148,6 +148,16 @@ export interface OuraSettings {
   lastSyncAt: string | null;   // ISO timestamp
 }
 
+// Update manager preferences
+export interface UpdateSettings {
+  /** Auto-check for updates on startup (max once per 24 h). Default: true */
+  autoCheck: boolean;
+  /** ISO timestamp of last successful check */
+  lastChecked: string | null;
+  /** Version string the user chose to skip, e.g. "v1.2.3" */
+  skippedVersion: string | null;
+}
+
 // Complete app settings
 export interface AppSettings {
   version: string; // Settings schema version
@@ -160,6 +170,7 @@ export interface AppSettings {
   tutorial: TutorialSettings;
   speechToText: SpeechToTextSettings;
   oura: OuraSettings;
+  updates: UpdateSettings;
 }
 
 // Default settings factory
@@ -240,6 +251,11 @@ export function createDefaultSettings(): AppSettings {
       enrichPrompts: true,
       connectedAt: null,
       lastSyncAt: null,
+    },
+    updates: {
+      autoCheck: true,
+      lastChecked: null,
+      skippedVersion: null,
     },
   };
 }

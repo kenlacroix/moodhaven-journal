@@ -13,6 +13,7 @@ import { Sidebar, type ViewType } from './Sidebar';
 import { TopBar } from './TopBar';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { openBreakoutWriter } from '../../lib/windowUtils';
+import type { UseUpdateCheckReturn } from '../../hooks/useUpdateCheck';
 
 interface MainLayoutProps {
   currentView: ViewType;
@@ -22,10 +23,11 @@ interface MainLayoutProps {
   onNewEntry?: () => void;
   onOpenSync: () => void;
   onNavigateToJournalOverview?: (bookId: string) => void;
+  updateHook: UseUpdateCheckReturn;
   children: React.ReactNode;
 }
 
-export function MainLayout({ currentView, onNavigate, onLock, onSelectEntry, onNewEntry, onOpenSync, onNavigateToJournalOverview, children }: MainLayoutProps) {
+export function MainLayout({ currentView, onNavigate, onLock, onSelectEntry, onNewEntry, onOpenSync, onNavigateToJournalOverview, updateHook, children }: MainLayoutProps) {
   const distractionFree = useSettingsStore((s) => s.distractionFree);
 
   return (
@@ -42,6 +44,7 @@ export function MainLayout({ currentView, onNavigate, onLock, onSelectEntry, onN
           onLock={onLock}
           onOpenSync={onOpenSync}
           onNavigateToJournalOverview={onNavigateToJournalOverview}
+          updateHook={updateHook}
         />
       </div>
 

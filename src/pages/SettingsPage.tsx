@@ -45,6 +45,8 @@ import {
 } from '../lib/speechToTextService';
 import { verifyUserPassword } from '../lib/journalService';
 import { OuraConnectionCard } from '../components/oura/OuraConnectionCard';
+import { UpdatePanel } from '../components/updater/UpdatePanel';
+import type { UseUpdateCheckReturn } from '../hooks/useUpdateCheck';
 import {
   loadRateLimitState,
   recordFailedAttempt,
@@ -95,11 +97,15 @@ const TABS: TabConfig[] = [
     id: 'about',
     label: 'About',
     icon: 'M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
-    keywords: ['version', 'info', 'app', 'moodbloom'],
+    keywords: ['version', 'info', 'app', 'moodbloom', 'update', 'updates', 'upgrade', 'release'],
   },
 ];
 
-export function SettingsPage() {
+interface SettingsPageProps {
+  updateHook: UseUpdateCheckReturn;
+}
+
+export function SettingsPage({ updateHook }: SettingsPageProps) {
   const {
     settings,
     appVersion,
@@ -1704,6 +1710,15 @@ export function SettingsPage() {
         {/* About Tab */}
         {activeTab === 'about' && (
           <div id="panel-about" role="tabpanel" className="space-y-6">
+
+            {/* Updates section */}
+            <SettingSection
+              title="Updates"
+              description="Keep MoodBloom up to date"
+            >
+              <UpdatePanel hook={updateHook} currentVersion={appVersion} />
+            </SettingSection>
+
             <SettingSection
               title="About MoodBloom"
               description="App information and credits"

@@ -96,6 +96,11 @@ interface SettingsState {
   setUpdateLastChecked: (iso: string) => void;
   setUpdateSkippedVersion: (version: string | null) => void;
 
+  // Multi-device sync
+  setSyncDeviceName: (name: string) => void;
+  setSyncMode: (mode: 'manual' | 'on-open' | 'on-save') => void;
+  setSyncResult: (result: { at: string; success: boolean; pulled: number; pushed: number }) => void;
+
   // Navigation
   setScrollToSection: (section: SettingsScrollTarget) => void;
 
@@ -560,6 +565,37 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       settings: {
         ...state.settings,
         updates: { ...state.settings.updates, skippedVersion },
+      },
+      hasUnsavedChanges: true,
+    }));
+  },
+
+  // Multi-device sync
+  setSyncDeviceName: (deviceName) => {
+    set((state) => ({
+      settings: { ...state.settings, sync: { ...state.settings.sync, deviceName } },
+      hasUnsavedChanges: true,
+    }));
+  },
+
+  setSyncMode: (syncMode) => {
+    set((state) => ({
+      settings: { ...state.settings, sync: { ...state.settings.sync, syncMode } },
+      hasUnsavedChanges: true,
+    }));
+  },
+
+  setSyncResult: ({ at, success, pulled, pushed }) => {
+    set((state) => ({
+      settings: {
+        ...state.settings,
+        sync: {
+          ...state.settings.sync,
+          lastSyncAt: at,
+          lastSyncResult: success ? 'success' : 'error',
+          lastSyncPulled: pulled,
+          lastSyncPushed: pushed,
+        },
       },
       hasUnsavedChanges: true,
     }));

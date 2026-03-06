@@ -148,6 +148,22 @@ export interface OuraSettings {
   lastSyncAt: string | null;   // ISO timestamp
 }
 
+// Multi-device sync preferences
+export interface SyncSettings {
+  /** Human-readable name shown to other devices (e.g. "Ken's Desktop") */
+  deviceName: string;
+  /** When to run the sync engine automatically */
+  syncMode: 'manual' | 'on-open' | 'on-save';
+  /** ISO timestamp of the last completed sync */
+  lastSyncAt: string | null;
+  /** Result of the last sync attempt */
+  lastSyncResult: 'success' | 'error' | null;
+  /** Number of entries pulled on the last sync */
+  lastSyncPulled: number;
+  /** Number of entries pushed on the last sync */
+  lastSyncPushed: number;
+}
+
 // Update manager preferences
 export interface UpdateSettings {
   /** Auto-check for updates on startup (max once per 24 h). Default: true */
@@ -171,6 +187,7 @@ export interface AppSettings {
   speechToText: SpeechToTextSettings;
   oura: OuraSettings;
   updates: UpdateSettings;
+  sync: SyncSettings;
 }
 
 // Default settings factory
@@ -256,6 +273,14 @@ export function createDefaultSettings(): AppSettings {
       autoCheck: true,
       lastChecked: null,
       skippedVersion: null,
+    },
+    sync: {
+      deviceName: '',
+      syncMode: 'manual',
+      lastSyncAt: null,
+      lastSyncResult: null,
+      lastSyncPulled: 0,
+      lastSyncPushed: 0,
     },
   };
 }

@@ -11,6 +11,8 @@ import { useSettingsStore } from '../../stores/settingsStore';
 import { getAllEntries } from '../../lib/journalService';
 import { uploadBackup, downloadBackup } from '../../lib/cloudSyncService';
 import type { SyncResult } from '../../lib/cloudSyncService';
+import { syncWithWebDAV, type SyncProgress } from '../../lib/syncEngine';
+import { getDeviceName, setDeviceName as persistDeviceName } from '../../lib/deviceIdentity';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -69,15 +71,23 @@ export function SyncDetailsModal({ onClose, onNavigateToSettings }: SyncDetailsM
 
   const [entryCount, setEntryCount] = useState<number | null>(null);
   const [dbPath, setDbPath] = useState<string | null>(null);
-  const [isSyncing, setIsSyncing] = useState<'upload' | 'download' | null>(null);
+  const setSyncResult2 = useSettingsStore((s) => s.setSyncResult);
+
+  const [isSyncing, setIsSyncing] = useState<'upload' | 'download' | 'sync' | null>(null);
   const [syncResult, setSyncResult] = useState<SyncResult | null>(null);
   const [password, setPassword] = useState('');
   const [showPasswordField, setShowPasswordField] = useState(false);
-  const [pendingAction, setPendingAction] = useState<'upload' | 'download' | null>(null);
+  const [pendingAction, setPendingAction] = useState<'upload' | 'download' | 'sync' | null>(null);
+
+  // Multi-device sync state
+  const [syncProgress, setSyncProgress] = useState<SyncProgress | null>(null);
+  const [multiSyncResult, setMultiSyncResult] = useState<{ pulled: number; pushed: number; error?: string } | null>(null);
+  const [deviceName, setDeviceName] = useState('');
+  const [deviceNameDirty, setDeviceNameDirty] = useState(false);
 
   const backdropRef = useRef<HTMLDivElement>(null);
 
-  // Load entry count + DB path on mount
+  // Load entry count + DB path + device name on mount
   useEffect(() => {
     getAllEntries()
       .then((entries) => setEntryCount(entries.length))
@@ -90,6 +100,8 @@ export function SyncDetailsModal({ onClose, onNavigateToSettings }: SyncDetailsM
         setDbPath(`${trimmed}${sep}moodbloom.db`);
       })
       .catch(() => setDbPath(null));
+
+    getDeviceName().then(setDeviceName).catch(() => {});
   }, []);
 
   // Close on backdrop click
@@ -106,7 +118,7 @@ export function SyncDetailsModal({ onClose, onNavigateToSettings }: SyncDetailsM
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  const handleSyncAction = useCallback(async (action: 'upload' | 'download') => {
+  const handleSyncAction = useCallback(async (action: 'upload' | 'download' | 'sync') => {
     if (!password.trim()) {
       setPendingAction(action);
       setShowPasswordField(true);
@@ -115,24 +127,37 @@ export function SyncDetailsModal({ onClose, onNavigateToSettings }: SyncDetailsM
 
     setIsSyncing(action);
     setSyncResult(null);
+    setMultiSyncResult(null);
+    setSyncProgress(null);
 
     try {
-      const result = action === 'upload'
-        ? await uploadBackup(password, storage.webdav)
-        : await downloadBackup(password, storage.webdav);
+      if (action === 'sync') {
+        const result = await syncWithWebDAV(storage.webdav, password, setSyncProgress);
+        setMultiSyncResult({ pulled: result.pulled, pushed: result.pushed, error: result.error });
+        if (result.success) {
+          setSyncResult2({ at: result.syncedAt, success: true, pulled: result.pulled, pushed: result.pushed });
+          setLastSyncDate(result.syncedAt, 'upload');
+          await useSettingsStore.getState().saveSettings();
+        }
+      } else {
+        const result = action === 'upload'
+          ? await uploadBackup(password, storage.webdav)
+          : await downloadBackup(password, storage.webdav);
 
-      setSyncResult(result);
-      if (result.success && result.timestamp) {
-        setLastSyncDate(result.timestamp, action);
-        await useSettingsStore.getState().saveSettings();
+        setSyncResult(result);
+        if (result.success && result.timestamp) {
+          setLastSyncDate(result.timestamp, action);
+          await useSettingsStore.getState().saveSettings();
+        }
       }
     } finally {
       setIsSyncing(null);
+      setSyncProgress(null);
       setPassword('');
       setShowPasswordField(false);
       setPendingAction(null);
     }
-  }, [password, storage.webdav, setLastSyncDate]);
+  }, [password, storage.webdav, setLastSyncDate, setSyncResult2]);
 
   const handlePasswordSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
@@ -291,7 +316,7 @@ export function SyncDetailsModal({ onClose, onNavigateToSettings }: SyncDetailsM
           {showPasswordField && (
             <form onSubmit={handlePasswordSubmit} className="space-y-2">
               <label className="block text-xs font-medium text-slate-500 dark:text-slate-400">
-                Enter your journal password to {pendingAction === 'upload' ? 'encrypt the backup' : 'decrypt the backup'}
+                Enter your journal password to {pendingAction === 'sync' ? 'encrypt sync files' : pendingAction === 'upload' ? 'encrypt the backup' : 'decrypt the backup'}
               </label>
               <div className="flex gap-2">
                 <input
@@ -324,37 +349,128 @@ export function SyncDetailsModal({ onClose, onNavigateToSettings }: SyncDetailsM
 
           {/* WebDAV actions */}
           {isConfigured && !showPasswordField && (
-            <div className="flex gap-2 pt-1">
-              <button
-                type="button"
-                onClick={() => handleSyncAction('upload')}
-                disabled={isSyncing !== null}
-                className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 transition-colors"
-              >
-                {isSyncing === 'upload' ? (
-                  <span className="w-3.5 h-3.5 border border-slate-400 border-t-violet-500 rounded-full animate-spin" />
-                ) : (
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-                  </svg>
+            <div className="space-y-2 pt-1">
+              {/* ── Multi-Device Sync ── */}
+              <div className="rounded-xl border border-violet-100 dark:border-violet-900/40 bg-violet-50/50 dark:bg-violet-900/10 p-3 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-violet-700 dark:text-violet-300 uppercase tracking-wide">Multi-Device Sync</span>
+                  {useSettingsStore.getState().settings.sync.lastSyncAt && (
+                    <span className="text-[11px] text-slate-400 dark:text-slate-500">
+                      Last: {relativeTime(useSettingsStore.getState().settings.sync.lastSyncAt)}
+                    </span>
+                  )}
+                </div>
+
+                {/* Device name */}
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-500 dark:text-slate-400 flex-shrink-0 w-24">This device</span>
+                  <input
+                    type="text"
+                    value={deviceName}
+                    onChange={(e) => { setDeviceName(e.target.value); setDeviceNameDirty(true); }}
+                    onBlur={async () => {
+                      if (deviceNameDirty && deviceName.trim()) {
+                        await persistDeviceName(deviceName.trim());
+                        useSettingsStore.getState().setSyncDeviceName(deviceName.trim());
+                        await useSettingsStore.getState().saveSettings();
+                        setDeviceNameDirty(false);
+                      }
+                    }}
+                    placeholder="e.g. Ken's Desktop"
+                    className="flex-1 px-2.5 py-1 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500/40"
+                  />
+                </div>
+
+                {/* Sync progress */}
+                {isSyncing === 'sync' && syncProgress && (
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="w-3 h-3 border border-violet-400 border-t-violet-600 rounded-full animate-spin flex-shrink-0" />
+                      <span className="text-xs text-slate-500 dark:text-slate-400">{syncProgress.message}</span>
+                    </div>
+                    {syncProgress.total > 0 && (
+                      <div className="h-1 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-violet-500 rounded-full transition-all duration-300"
+                          style={{ width: `${Math.round(((syncProgress.pulled + syncProgress.pushed) / syncProgress.total) * 100)}%` }}
+                        />
+                      </div>
+                    )}
+                  </div>
                 )}
-                Upload backup
-              </button>
-              <button
-                type="button"
-                onClick={() => handleSyncAction('download')}
-                disabled={isSyncing !== null}
-                className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 transition-colors"
-              >
-                {isSyncing === 'download' ? (
-                  <span className="w-3.5 h-3.5 border border-slate-400 border-t-violet-500 rounded-full animate-spin" />
-                ) : (
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
-                  </svg>
+
+                {/* Multi-sync result */}
+                {multiSyncResult && isSyncing === null && (
+                  <div className={`text-xs rounded-lg px-2.5 py-1.5 ${
+                    multiSyncResult.error
+                      ? 'bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400'
+                      : 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300'
+                  }`}>
+                    {multiSyncResult.error
+                      ? multiSyncResult.error
+                      : `Synced — pulled ${multiSyncResult.pulled}, pushed ${multiSyncResult.pushed}`}
+                  </div>
                 )}
-                Download latest
-              </button>
+
+                {/* Sync Now button */}
+                <button
+                  type="button"
+                  onClick={() => handleSyncAction('sync')}
+                  disabled={isSyncing !== null}
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium bg-violet-500 hover:bg-violet-600 text-white disabled:opacity-50 transition-colors"
+                >
+                  {isSyncing === 'sync' ? (
+                    <span className="w-3.5 h-3.5 border border-white/50 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+                    </svg>
+                  )}
+                  {isSyncing === 'sync' ? 'Syncing…' : 'Sync Now'}
+                </button>
+              </div>
+
+              {/* ── Manual Backup ── */}
+              <details className="group">
+                <summary className="text-xs text-slate-400 dark:text-slate-500 cursor-pointer hover:text-slate-500 dark:hover:text-slate-400 transition-colors list-none flex items-center gap-1">
+                  <svg className="w-3 h-3 group-open:rotate-90 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                  </svg>
+                  Manual backup (full encrypted blob)
+                </summary>
+                <div className="flex gap-2 mt-2">
+                  <button
+                    type="button"
+                    onClick={() => handleSyncAction('upload')}
+                    disabled={isSyncing !== null}
+                    className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 transition-colors"
+                  >
+                    {isSyncing === 'upload' ? (
+                      <span className="w-3.5 h-3.5 border border-slate-400 border-t-violet-500 rounded-full animate-spin" />
+                    ) : (
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                      </svg>
+                    )}
+                    Upload backup
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSyncAction('download')}
+                    disabled={isSyncing !== null}
+                    className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 transition-colors"
+                  >
+                    {isSyncing === 'download' ? (
+                      <span className="w-3.5 h-3.5 border border-slate-400 border-t-violet-500 rounded-full animate-spin" />
+                    ) : (
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                      </svg>
+                    )}
+                    Download latest
+                  </button>
+                </div>
+              </details>
             </div>
           )}
 

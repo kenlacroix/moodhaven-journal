@@ -117,6 +117,9 @@ pub fn run() {
             commands::oura_get_context,
             commands::oura_get_history,
             commands::oura_backfill,
+            // Multi-device sync
+            commands::get_entry_timestamps,
+            commands::upsert_entry_from_sync,
             // Update manager
             commands::check_for_update,
             commands::download_and_install_update,

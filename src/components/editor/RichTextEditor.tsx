@@ -327,13 +327,13 @@ export function RichTextEditor({
         className="flex-1 overflow-y-auto editor-scroll-container"
       />
 
-      {/* Floating toolbar - appears on selection, hidden when collapsible toolbar is open */}
+      {/* Floating toolbar - appears on text selection */}
       <FloatingToolbar
         editor={editor}
         onFormat={handleFormat}
         getFormatState={getFormatState}
         onOpenContextMenu={onOpenContextMenu}
-        disabled={toolbarExpanded}
+        disabled={false}
         onLinkClick={handleOpenLinkDialog}
         onEmojiClick={() => setEmojiPickerOpen(true)}
       />

@@ -177,7 +177,7 @@ function App() {
 
           {/* Calendar View */}
           {currentView === 'calendar' && (
-            <CalendarPage onNavigateToJournal={handleNewEntry} onSelectEntry={handleSelectEntry} />
+            <CalendarPage onSelectEntry={handleSelectEntry} />
           )}
 
           {/* Settings */}

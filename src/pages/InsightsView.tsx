@@ -19,7 +19,7 @@
  *   Emotional Trends + Day of Week
  */
 
-import { useState } from 'react';
+import { useState, useRef, type ReactNode } from 'react';
 import { useInsights } from '../hooks/useInsights';
 import { useAnalytics } from '../hooks/useAnalytics';
 import { useAIInsights } from '../hooks/useAIInsights';
@@ -45,11 +45,13 @@ function SectionHeader({
   title,
   badge,
   badgeColor = 'slate',
+  action,
 }: {
   icon: string;
   title: string;
   badge: string;
   badgeColor?: 'slate' | 'violet' | 'emerald' | 'amber';
+  action?: ReactNode;
 }) {
   const badgeClasses = {
     slate: 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400',
@@ -67,6 +69,7 @@ function SectionHeader({
         {badge}
       </span>
       <div className="flex-1 h-px bg-slate-100 dark:bg-slate-800" />
+      {action}
     </div>
   );
 }
@@ -142,6 +145,8 @@ export function InsightsView({ onNavigateToSettings }: InsightsViewProps) {
 
   const { books } = useBooksStore();
   const [selectedBookFilter, setSelectedBookFilter] = useState<string | null>(null);
+  const [deepDiveOpen, setDeepDiveOpen] = useState(false);
+  const deepDiveRef = useRef<HTMLDivElement>(null);
 
   const allIndicators = aiMetadata?.emotionalProfile.dominantIndicators || [];
 
@@ -151,7 +156,7 @@ export function InsightsView({ onNavigateToSettings }: InsightsViewProps) {
   // Empty state (no entries at all)
   if (!isLoading && !hasData) {
     return (
-      <div className="max-w-2xl mx-auto px-6 py-8">
+      <div className="max-w-5xl mx-auto px-6 py-8">
         <div className="text-center py-16">
           <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-3xl">
             🌱
@@ -168,7 +173,7 @@ export function InsightsView({ onNavigateToSettings }: InsightsViewProps) {
   }
 
   return (
-    <div className="max-w-2xl mx-auto px-6 py-8">
+    <div className="max-w-5xl mx-auto px-6 py-8">
 
       {/* ── AI Insights section ── */}
       <SectionHeader
@@ -176,82 +181,75 @@ export function InsightsView({ onNavigateToSettings }: InsightsViewProps) {
         title="AI Insights"
         badge={aiStatusBadge}
         badgeColor={aiStatusColor}
+        action={
+          <button
+            type="button"
+            onClick={() => void refresh()}
+            disabled={isLoading}
+            className="p-2 rounded-lg text-slate-400 hover:text-violet-600 dark:hover:text-violet-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors disabled:opacity-50"
+            aria-label="Refresh insights"
+          >
+            <svg className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+              />
+            </svg>
+          </button>
+        }
       />
 
-      {/* Refresh button */}
-      <div className="flex items-center justify-end mb-4">
-        <button
-          type="button"
-          onClick={() => void refresh()}
-          disabled={isLoading}
-          className="p-2 rounded-lg text-slate-400 hover:text-violet-600 dark:hover:text-violet-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors disabled:opacity-50"
-          aria-label="Refresh insights"
-        >
-          <svg
-            className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`}
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-            />
-          </svg>
-        </button>
-      </div>
-
-      {/* Mood Weather — local, always visible */}
-      {localMetadata && !isLoading && (
-        <div className="mb-4">
-          <MoodWeatherCard metadata={localMetadata} />
-        </div>
-      )}
-      {isLoading && !localMetadata && (
-        <div className="rounded-2xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 p-6 animate-pulse h-44 mb-4" />
-      )}
-
-      {/* Gratitude Streak — local, always visible */}
-      {gratitudeStreak > 0 && (
-        <div className="mb-4">
-          <GratitudeStreakCard
-            currentStreak={gratitudeStreak}
-            longestStreak={gratitudeLongestStreak}
-          />
-        </div>
-      )}
-
-      {/* Insights & Patterns panel */}
-      <div className="mb-4">
-        <InsightsPanel
-          insights={insights}
-          patterns={patterns}
-          isLoading={isLoading}
-          isAIEnabled={isAIEnabled}
-          onDismissInsight={dismissInsight}
-          onRefresh={refresh}
-        />
-      </div>
-
-      {/* Weekly Reflection — AI only */}
-      {isAIEnabled && (
-        <div className="mb-4">
-          <WeeklyReflectionCard
-            reflection={weeklyReflection}
-            isLoading={isLoading}
-          />
-        </div>
-      )}
-
-      {/* AI disabled — feature explanation CTA */}
+      {/* AI disabled CTA — shown at the top of the AI section */}
       {!isAIEnabled && (
         <AIDisabledCard onEnable={() => onNavigateToSettings?.('ai')} />
       )}
 
+      {/* AI content — only when enabled */}
+      {isAIEnabled && (
+        <>
+          {/* Mood Weather */}
+          {localMetadata && !isLoading && (
+            <div className="mb-4">
+              <MoodWeatherCard metadata={localMetadata} />
+            </div>
+          )}
+          {isLoading && !localMetadata && (
+            <div className="rounded-2xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 p-6 animate-pulse h-44 mb-4" />
+          )}
+
+          {/* Gratitude Streak */}
+          {gratitudeStreak > 0 && (
+            <div className="mb-4">
+              <GratitudeStreakCard
+                currentStreak={gratitudeStreak}
+                longestStreak={gratitudeLongestStreak}
+              />
+            </div>
+          )}
+
+          {/* Insights & Patterns */}
+          <div className="mb-4">
+            <InsightsPanel
+              insights={insights}
+              patterns={patterns}
+              isLoading={isLoading}
+              isAIEnabled={isAIEnabled}
+              onDismissInsight={dismissInsight}
+              onRefresh={refresh}
+            />
+          </div>
+
+          {/* Weekly Reflection */}
+          <div className="mb-4">
+            <WeeklyReflectionCard
+              reflection={weeklyReflection}
+              isLoading={isLoading}
+            />
+          </div>
+        </>
+      )}
+
       {/* Privacy note */}
-      <div className="flex items-center justify-center gap-1.5 text-xs text-slate-400 dark:text-slate-500 mb-2">
+      <div className="flex items-center justify-center gap-1.5 text-xs text-slate-400 dark:text-slate-500 mb-2 mt-2">
         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
         </svg>
@@ -262,47 +260,13 @@ export function InsightsView({ onNavigateToSettings }: InsightsViewProps) {
         </span>
       </div>
 
-      {/* ── Local Analytics section ── */}
+      {/* ── At a Glance section ── */}
       <SectionHeader
         icon="📊"
-        title="Your Stats"
+        title="At a Glance"
         badge="Computed on-device"
         badgeColor="slate"
       />
-
-      {/* ── Quick stats overview row ── */}
-      {localMetadata && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-          <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm p-4">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-1">This week</p>
-            <p className="text-2xl font-bold text-violet-500">{entriesThisWeek}</p>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">entries</p>
-          </div>
-          <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm p-4">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-1">7-day mood</p>
-            <p className="text-2xl font-bold text-emerald-500">
-              {localMetadata.moodStats.recentAverage > 0
-                ? localMetadata.moodStats.recentAverage.toFixed(1)
-                : '—'}
-            </p>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 capitalize">{localMetadata.moodStats.trend}</p>
-          </div>
-          <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm p-4">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-1">Streak</p>
-            <p className="text-2xl font-bold text-amber-500">{localMetadata.patterns.currentStreak}</p>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">days</p>
-          </div>
-          <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm p-4">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-1">Best time</p>
-            <p className="text-lg font-bold text-blue-500 capitalize">{localMetadata.patterns.bestTimeOfDay || '—'}</p>
-            {topTags.length > 0 && (
-              <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5 truncate">
-                #{topTags[0]}{topTags[1] ? `, #${topTags[1]}` : ''}
-              </p>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* Book filter chips (if multiple books) */}
       {books.length > 1 && (
@@ -340,21 +304,41 @@ export function InsightsView({ onNavigateToSettings }: InsightsViewProps) {
         </div>
       )}
 
-      {/* Error */}
-      {analytics.error && (
-        <div className="p-4 bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 rounded-xl mb-4">
-          <p className="text-sm text-rose-600 dark:text-rose-400">{analytics.error}</p>
-          <button
-            type="button"
-            onClick={analytics.refresh}
-            className="mt-2 text-sm text-rose-600 dark:text-rose-400 underline"
-          >
-            Try again
-          </button>
+      {/* ── Quick stats grid — bottom line up front ── */}
+      {localMetadata && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+          <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm p-4">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-1">This week</p>
+            <p className="text-2xl font-bold text-violet-500">{entriesThisWeek}</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">entries</p>
+          </div>
+          <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm p-4">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-1">7-day mood</p>
+            <p className="text-2xl font-bold text-emerald-500">
+              {localMetadata.moodStats.recentAverage > 0
+                ? localMetadata.moodStats.recentAverage.toFixed(1)
+                : '—'}
+            </p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 capitalize">{localMetadata.moodStats.trend}</p>
+          </div>
+          <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm p-4">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-1">Streak</p>
+            <p className="text-2xl font-bold text-amber-500">{localMetadata.patterns.currentStreak}</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">days</p>
+          </div>
+          <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm p-4">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-1">Best time</p>
+            <p className="text-lg font-bold text-blue-500 capitalize">{localMetadata.patterns.bestTimeOfDay || '—'}</p>
+            {topTags.length > 0 && (
+              <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5 truncate">
+                #{topTags[0]}{topTags[1] ? `, #${topTags[1]}` : ''}
+              </p>
+            )}
+          </div>
         </div>
       )}
 
-      {/* Stats Summary */}
+      {/* Stats summary row */}
       <div className="mb-6">
         <StatsSummary
           averageMood={analytics.data?.averageMood || 0}
@@ -365,90 +349,122 @@ export function InsightsView({ onNavigateToSettings }: InsightsViewProps) {
         />
       </div>
 
-      {/* Row 1: Mood Trend + Distribution */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        <div>
-          <MoodTrendChart
-            data={analytics.trendData}
-            period={analytics.trendPeriod}
-            onPeriodChange={analytics.setTrendPeriod}
-            isLoading={analytics.isLoading || analytics.isTrendLoading}
-          />
-          <p className="mt-2 text-xs text-slate-400 dark:text-slate-500 text-center">
-            Mood score (1–5) over time
-          </p>
+      {/* Error */}
+      {analytics.error && (
+        <div className="p-4 bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 rounded-xl mb-4">
+          <p className="text-sm text-rose-600 dark:text-rose-400">{analytics.error}</p>
+          <button type="button" onClick={analytics.refresh} className="mt-2 text-sm text-rose-600 dark:text-rose-400 underline">
+            Try again
+          </button>
         </div>
-        <div>
-          <MoodDistributionChart
-            data={analytics.data?.moodDistribution || []}
-            isLoading={analytics.isLoading}
-          />
-          <p className="mt-2 text-xs text-slate-400 dark:text-slate-500 text-center">
-            Distribution of mood entries by level
-          </p>
-        </div>
-      </div>
+      )}
 
-      {/* Row 2: Sentiment + Habits */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        <div>
-          <SentimentOverview
-            sentimentBreakdown={aiMetadata?.sentimentBreakdown || {
-              positive: 0,
-              negative: 0,
-              neutral: 0,
-              mixed: 0,
-            }}
-            isLoading={isMetadataLoading}
-          />
-          <p className="mt-2 text-xs text-slate-400 dark:text-slate-500 text-center">
-            Emotional tone extracted from your writing
-          </p>
+      {/* ── Deep Dive toggle ── */}
+      <button
+        type="button"
+        onClick={() => {
+          setDeepDiveOpen((prev) => {
+            if (!prev) {
+              // Scroll to charts after state update
+              setTimeout(() => deepDiveRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+            }
+            return !prev;
+          });
+        }}
+        className="w-full flex items-center justify-between px-4 py-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors mb-2"
+      >
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Deep Dive</span>
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-medium uppercase tracking-wide">
+            Charts
+          </span>
         </div>
-        <div>
-          <JournalingHabits
-            patterns={aiMetadata?.patterns || {
-              bestDayOfWeek: 'Unknown',
-              worstDayOfWeek: 'Unknown',
-              bestTimeOfDay: 'evening',
-              frequency: 'rare',
-              currentStreak: 0,
-              longestStreak: 0,
-            }}
-            emotionalProfile={aiMetadata?.emotionalProfile || {
-              dominantIndicators: [],
-              recentIndicators: [],
-              gratitudeFrequency: 0,
-              goalsFrequency: 0,
-            }}
-            isLoading={isMetadataLoading}
-          />
-          <p className="mt-2 text-xs text-slate-400 dark:text-slate-500 text-center">
-            When and how often you journal
-          </p>
+        <svg
+          className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${deepDiveOpen ? 'rotate-180' : ''}`}
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={2}
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {/* Deep Dive charts — collapsible */}
+      <div
+        ref={deepDiveRef}
+        className={`overflow-hidden transition-all duration-300 ${deepDiveOpen ? 'max-h-[2000px] opacity-100' : 'max-h-0 opacity-0'}`}
+      >
+        <div className="pt-2 space-y-6">
+          {/* Row 1: Mood Trend + Distribution */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div>
+              <MoodTrendChart
+                data={analytics.trendData}
+                period={analytics.trendPeriod}
+                onPeriodChange={analytics.setTrendPeriod}
+                isLoading={analytics.isLoading || analytics.isTrendLoading}
+              />
+              <p className="mt-2 text-xs text-slate-400 dark:text-slate-500 text-center">Mood score (1–5) over time</p>
+            </div>
+            <div>
+              <MoodDistributionChart
+                data={analytics.data?.moodDistribution || []}
+                isLoading={analytics.isLoading}
+              />
+              <p className="mt-2 text-xs text-slate-400 dark:text-slate-500 text-center">Distribution of mood entries by level</p>
+            </div>
+          </div>
+
+          {/* Row 2: Sentiment + Habits */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div>
+              <SentimentOverview
+                sentimentBreakdown={aiMetadata?.sentimentBreakdown || { positive: 0, negative: 0, neutral: 0, mixed: 0 }}
+                isLoading={isMetadataLoading}
+              />
+              <p className="mt-2 text-xs text-slate-400 dark:text-slate-500 text-center">Emotional tone extracted from your writing</p>
+            </div>
+            <div>
+              <JournalingHabits
+                patterns={aiMetadata?.patterns || {
+                  bestDayOfWeek: 'Unknown',
+                  worstDayOfWeek: 'Unknown',
+                  bestTimeOfDay: 'evening',
+                  frequency: 'rare',
+                  currentStreak: 0,
+                  longestStreak: 0,
+                }}
+                emotionalProfile={aiMetadata?.emotionalProfile || {
+                  dominantIndicators: [],
+                  recentIndicators: [],
+                  gratitudeFrequency: 0,
+                  goalsFrequency: 0,
+                }}
+                isLoading={isMetadataLoading}
+              />
+              <p className="mt-2 text-xs text-slate-400 dark:text-slate-500 text-center">When and how often you journal</p>
+            </div>
+          </div>
+
+          {/* Row 3: Emotional Themes + Day of Week */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-6">
+            <div>
+              <EmotionalTrends
+                indicators={allIndicators}
+                isLoading={isMetadataLoading}
+              />
+              <p className="mt-2 text-xs text-slate-400 dark:text-slate-500 text-center">Recurring themes detected across your entries</p>
+            </div>
+            <div>
+              <DayOfWeekPattern
+                data={analytics.data?.dayOfWeekStats || []}
+                isLoading={analytics.isLoading}
+              />
+              <p className="mt-2 text-xs text-slate-400 dark:text-slate-500 text-center">Average mood by day of week</p>
+            </div>
+          </div>
         </div>
-      </div>
-
-      {/* Emotional Themes */}
-      <div className="mb-6">
-        <EmotionalTrends
-          indicators={allIndicators}
-          isLoading={isMetadataLoading}
-        />
-        <p className="mt-2 text-xs text-slate-400 dark:text-slate-500 text-center">
-          Recurring themes detected across your entries
-        </p>
-      </div>
-
-      {/* Day of Week */}
-      <div className="mb-6">
-        <DayOfWeekPattern
-          data={analytics.data?.dayOfWeekStats || []}
-          isLoading={analytics.isLoading}
-        />
-        <p className="mt-2 text-xs text-slate-400 dark:text-slate-500 text-center">
-          Average mood by day of week
-        </p>
       </div>
 
       {/* Empty state */}

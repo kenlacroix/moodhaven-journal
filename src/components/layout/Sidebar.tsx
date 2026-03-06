@@ -126,30 +126,6 @@ export function Sidebar({ currentView, onNavigate, onOpenSync, onNavigateToJourn
         </button>
       </div>
 
-      {/* Write (New Entry) button — primary CTA */}
-      <div className="p-3">
-        <button
-          type="button"
-          onClick={() => onNavigate('writing')}
-          className={`
-            w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg
-            text-sm font-medium transition-all duration-300
-            ${currentView === 'writing'
-              ? 'bg-violet-500 text-white shadow-sm'
-              : 'bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400 hover:bg-violet-100 dark:hover:bg-violet-900/30'
-            }
-          `}
-          title={collapsed ? 'Write' : undefined}
-        >
-          <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-          </svg>
-          <span className={`whitespace-nowrap overflow-hidden transition-all duration-300 ${collapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
-            Write
-          </span>
-        </button>
-      </div>
-
       {/* Main navigation */}
       <nav className="px-3 py-2 space-y-1">
         <SidebarItem

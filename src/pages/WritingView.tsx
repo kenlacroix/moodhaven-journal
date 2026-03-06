@@ -29,6 +29,7 @@ import { captureLocationWeather, getWeatherEmoji, displayTemp } from '../lib/loc
 import { RichTextEditor } from '../components/editor';
 import { PromptDrawer } from '../components/ai/PromptDrawer';
 import { EntryOptionsMenu } from '../components/journal/EntryOptionsMenu';
+import { TagManagerModal } from '../components/journal/TagManagerModal';
 import { useJournalPrompts } from '../hooks/useJournalPrompts';
 import { useSettingsStore } from '../stores/settingsStore';
 import { useBooksStore } from '../stores/booksStore';
@@ -199,6 +200,7 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
 
   const [savedEntry, setSavedEntry] = useState<JournalEntry | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [tagManagerOpen, setTagManagerOpen] = useState(false);
   const [usedTemplateIds, setUsedTemplateIds] = useState<string[]>(() => getUsedTemplates());
   const setShowPrompts = useSettingsStore((s) => s.setShowPrompts);
   const showPrompts = useSettingsStore((s) => s.settings.journal.showPrompts);
@@ -616,8 +618,19 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
                   </span>
                 )}
 
-                {/* Right cluster: privacy + options menu */}
+                {/* Right cluster: tags + privacy + options menu */}
                 <div className="flex items-center gap-1.5">
+                  {/* Tag manager button */}
+                  <button
+                    type="button"
+                    onClick={() => setTagManagerOpen(true)}
+                    title="Manage tags"
+                    className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-slate-400 dark:text-slate-500 hover:text-violet-600 dark:hover:text-violet-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                  >
+                    <span className="text-[11px] font-bold">#</span>
+                    <span className="hidden sm:inline text-[11px]">Tags</span>
+                  </button>
+
                   {/* Privacy segmented control */}
                   <div className="flex items-center gap-0.5 bg-slate-100 dark:bg-slate-800 rounded-lg p-0.5">
                     {([0, 1, 2] as PrivacyMode[]).map((mode) => (
@@ -736,21 +749,14 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
             )}
           </div>
 
-          {/* ── Previously-used tag suggestions ── */}
-          {bookTags.length > 0 && !distractionFree && (
-            <div className="flex flex-wrap gap-1.5 px-1 mt-2">
-              {bookTags.slice(0, 10).map((tag) => (
-                <button
-                  key={tag}
-                  type="button"
-                  onClick={() => setPendingInsert(` #${tag}`)}
-                  className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-xs bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-violet-50 dark:hover:bg-violet-900/20 hover:text-violet-600 dark:hover:text-violet-400 transition-colors"
-                >
-                  <span className="text-[10px] opacity-60">#</span>
-                  {tag}
-                </button>
-              ))}
-            </div>
+          {/* Tag manager modal */}
+          {tagManagerOpen && (
+            <TagManagerModal
+              content={content}
+              bookTags={bookTags}
+              onInsertTag={(tag) => setPendingInsert(` #${tag}`)}
+              onClose={() => setTagManagerOpen(false)}
+            />
           )}
 
           {/* ── Bottom status bar — centered E2E badge only ── */}

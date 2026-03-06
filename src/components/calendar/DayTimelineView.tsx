@@ -20,7 +20,6 @@ import type { JournalEntry } from '../../types/journal';
 interface DayTimelineViewProps {
   date: string; // YYYY-MM-DD
   onSelectEntry: (entryId: string) => void;
-  onNewEntry: () => void;
 }
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
@@ -46,7 +45,7 @@ function getEntryHour(entry: JournalEntry): number {
   return parseEntryTimestamp(entry.created_at).getHours();
 }
 
-export function DayTimelineView({ date, onSelectEntry, onNewEntry }: DayTimelineViewProps) {
+export function DayTimelineView({ date, onSelectEntry }: DayTimelineViewProps) {
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -109,20 +108,10 @@ export function DayTimelineView({ date, onSelectEntry, onNewEntry }: DayTimeline
   return (
     <div className="flex flex-col h-full bg-white dark:bg-slate-900 border-l border-slate-100 dark:border-slate-800 transition-all duration-200">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800 flex-shrink-0">
-        <span className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">
+      <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 flex-shrink-0">
+        <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">
           {dayLabel}
         </span>
-        <button
-          type="button"
-          onClick={onNewEntry}
-          className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-violet-500 hover:bg-violet-600 text-white transition-colors flex-shrink-0 ml-2"
-        >
-          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-          </svg>
-          New entry
-        </button>
       </div>
 
       {/* Timeline body */}
@@ -134,13 +123,6 @@ export function DayTimelineView({ date, onSelectEntry, onNewEntry }: DayTimeline
         <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center px-6">
           <div className="text-3xl">📭</div>
           <p className="text-sm text-slate-500 dark:text-slate-400">No entries for this day</p>
-          <button
-            type="button"
-            onClick={onNewEntry}
-            className="text-sm text-violet-500 hover:text-violet-600 font-medium transition-colors"
-          >
-            Write for this day ↗
-          </button>
         </div>
       ) : (
         <div ref={containerRef} className="flex-1 overflow-y-auto">

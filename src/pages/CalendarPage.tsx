@@ -11,21 +11,16 @@ import { CalendarView } from '../components/calendar';
 import { DayTimelineView } from '../components/calendar/DayTimelineView';
 
 interface CalendarPageProps {
-  onNavigateToJournal?: () => void;
   onSelectEntry?: (entryId: string) => void;
 }
 
-export function CalendarPage({ onNavigateToJournal, onSelectEntry }: CalendarPageProps) {
+export function CalendarPage({ onSelectEntry }: CalendarPageProps) {
   const calendar = useCalendar();
   const [timelineVisible, setTimelineVisible] = useState(false);
 
   const handleSelectDate = (dateStr: string) => {
     calendar.setSelectedDate(dateStr);
     setTimelineVisible(true);
-  };
-
-  const handleNewEntry = () => {
-    onNavigateToJournal?.();
   };
 
   const handleSelectEntry = (entryId: string) => {
@@ -83,7 +78,6 @@ export function CalendarPage({ onNavigateToJournal, onSelectEntry }: CalendarPag
           <DayTimelineView
             date={calendar.selectedDate}
             onSelectEntry={handleSelectEntry}
-            onNewEntry={handleNewEntry}
           />
         )}
       </div>

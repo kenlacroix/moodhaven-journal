@@ -5,7 +5,7 @@ import androidx.activity.enableEdgeToEdge
 
 class MainActivity : TauriActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
-    registerPlugin(BiometricPlugin::class.java)
+    pluginManager.load(null, "biometric", BiometricPlugin(this), "{}")
     enableEdgeToEdge()
     super.onCreate(savedInstanceState)
   }

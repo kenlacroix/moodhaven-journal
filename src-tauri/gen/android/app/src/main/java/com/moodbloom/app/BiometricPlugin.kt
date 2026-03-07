@@ -25,7 +25,7 @@ private const val PREFS_NAME = "moodbloom_biometric"
 private const val PREF_ENCRYPTED_PW = "encrypted_password"
 private const val PREF_IV = "iv"
 
-@TauriPlugin(name = "biometric")
+@TauriPlugin
 class BiometricPlugin(private val activity: Activity) : Plugin(activity) {
 
     // ── Check if strong biometrics are enrolled on the device ────────────────
@@ -51,7 +51,10 @@ class BiometricPlugin(private val activity: Activity) : Plugin(activity) {
     // ── Enroll: authenticate via BiometricPrompt, then encrypt + store password
     @Command
     fun enroll(invoke: Invoke) {
-        val password = invoke.getString("password") ?: run {
+        val password = try {
+            invoke.getArgs().getString("password")
+        } catch (_: Exception) { null }
+        if (password == null) {
             invoke.reject("Missing password")
             return
         }

@@ -178,6 +178,23 @@ impl Database {
             [],
         );
 
+        // Runtime migration: media attachments table
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS entry_media (
+                id          TEXT PRIMARY KEY,
+                entry_id    TEXT NOT NULL,
+                filename    TEXT NOT NULL,
+                mime_type   TEXT NOT NULL,
+                size_bytes  INTEGER NOT NULL,
+                enc_path    TEXT NOT NULL,
+                created_at  TEXT NOT NULL,
+                FOREIGN KEY(entry_id) REFERENCES journal_entries(id) ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS idx_entry_media_entry_id
+                ON entry_media(entry_id);",
+        )
+        .map_err(|e| format!("Failed to create entry_media table: {}", e))?;
+
         // Runtime migration: recreate updated_at trigger to use local time
         // The original schema.sql trigger used datetime('now') (UTC). Drop and recreate
         // so existing installations also get the fix — IF NOT EXISTS won't update in-place.

@@ -83,6 +83,35 @@ export interface LocationWeather {
   capturedAt: string;     // ISO timestamp
 }
 
+// ── Media attachments ──────────────────────────────────────────────────────────
+
+export type MediaCategory = 'image' | 'pdf' | 'audio' | 'video' | 'other';
+
+export interface MediaAttachment {
+  id: string;
+  entryId: string;
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+  encPath: string;
+  createdAt: string;
+}
+
+export function getMediaCategory(mimeType: string): MediaCategory {
+  if (mimeType.startsWith('image/')) return 'image';
+  if (mimeType === 'application/pdf') return 'pdf';
+  if (mimeType.startsWith('audio/')) return 'audio';
+  if (mimeType.startsWith('video/')) return 'video';
+  return 'other';
+}
+
+export function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1_048_576) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1_073_741_824) return `${(bytes / 1_048_576).toFixed(1)} MB`;
+  return `${(bytes / 1_073_741_824).toFixed(1)} GB`;
+}
+
 // Decrypted journal entry (used in memory)
 export interface JournalEntry {
   id: string;

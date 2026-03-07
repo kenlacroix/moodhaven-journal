@@ -20,7 +20,7 @@ default = []
 # - Linux: libudev-dev (sudo apt-get install libudev-dev)
 # - Windows: No additional dependencies
 # - macOS: No additional dependencies
-hardware-key = ["dep:ctap-hid-fido2", "dep:aes-gcm", "dep:argon2"]
+hardware-key = ["dep:ctap-hid-fido2", "dep:argon2"]
 
 [dependencies]
 tauri = { version = "2", features = [] }
@@ -39,10 +39,13 @@ data-encoding = "2"
 sha2 = "0.10"
 rand = "0.8"
 hex = "0.4"
+aes-gcm = "0.10"
+pbkdf2 = { version = "0.12", features = ["simple"] }
+hmac = "0.12"
+image = { version = "0.24", default-features = false, features = ["jpeg", "png", "gif", "webp"] }
 
 # FIDO/Hardware Key support (native, not WebAuthn) - optional
 ctap-hid-fido2 = { version = "3", optional = true }
-aes-gcm = { version = "0.10", optional = true }
 argon2 = { version = "0.5", optional = true }
 tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"

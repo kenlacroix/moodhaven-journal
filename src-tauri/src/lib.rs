@@ -30,6 +30,9 @@ pub fn run() {
             // One-shot session bridge for breakout writer password hand-off
             app.manage(SessionBridge::new());
 
+            // Sweep leftover preview temp files from previous sessions
+            let _ = commands::sweep_preview_temp(app.handle().clone());
+
             // Open devtools in debug mode
             #[cfg(debug_assertions)]
             {
@@ -117,6 +120,13 @@ pub fn run() {
             commands::oura_get_context,
             commands::oura_get_history,
             commands::oura_backfill,
+            // Media attachments
+            commands::save_media_attachment,
+            commands::list_entry_media,
+            commands::open_media_attachment,
+            commands::get_media_thumbnail,
+            commands::delete_media_attachment,
+            commands::sweep_preview_temp,
             // Multi-device sync
             commands::get_entry_timestamps,
             commands::upsert_entry_from_sync,

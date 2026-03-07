@@ -17,6 +17,8 @@ interface AppState {
   // Authentication
   isInitialized: boolean;
   isUnlocked: boolean;
+  /** Session password cached in-memory after unlock for auto-sync. Never persisted. */
+  sessionPassword: string | null;
 
   // Theme
   theme: 'light' | 'dark' | 'system';
@@ -33,6 +35,7 @@ export const useAppStore = create<AppState>((set) => ({
   // Initial state
   isInitialized: false,
   isUnlocked: false,
+  sessionPassword: null,
   theme: 'system',
 
   // Check if user has set up password
@@ -52,7 +55,7 @@ export const useAppStore = create<AppState>((set) => ({
       await setupPassword(password);
       // Auto-unlock after setup
       const unlocked = await unlockJournal(password);
-      set({ isInitialized: true, isUnlocked: unlocked });
+      set({ isInitialized: true, isUnlocked: unlocked, sessionPassword: unlocked ? password : null });
       return true;
     } catch (error) {
       console.error('Failed to initialize:', error);
@@ -65,7 +68,7 @@ export const useAppStore = create<AppState>((set) => ({
     try {
       const success = await unlockJournal(password);
       if (success) {
-        set({ isUnlocked: true });
+        set({ isUnlocked: true, sessionPassword: password });
       }
       return success;
     } catch (error) {
@@ -77,7 +80,7 @@ export const useAppStore = create<AppState>((set) => ({
   // Lock the journal
   lock: () => {
     lockJournal();
-    set({ isUnlocked: false });
+    set({ isUnlocked: false, sessionPassword: null });
   },
 
   // Set theme

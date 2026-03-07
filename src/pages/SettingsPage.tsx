@@ -25,7 +25,6 @@ import {
   encryptedExport,
 } from '../lib/dataManagementService';
 import { testConnection as testWebDAVConnection } from '../lib/webdavService';
-import { uploadBackup, downloadBackup as downloadCloudBackup } from '../lib/cloudSyncService';
 import {
   get2FAStatus,
   regenerateBackupCodes,
@@ -134,7 +133,6 @@ export function SettingsPage({ updateHook }: SettingsPageProps) {
     setReminderSound,
     setStorageType,
     setWebDAVConfig,
-    setLastSyncDate,
     setHasSeenTutorial,
     setSTTEnabled,
     setSTTModel,
@@ -145,6 +143,7 @@ export function SettingsPage({ updateHook }: SettingsPageProps) {
     setAutoLocationWeather,
     setTemperatureUnit,
     setAutoTitle,
+    setSyncMode,
   } = useSettingsStore();
 
   const scrollToSection = useSettingsStore((s) => s.scrollToSection);
@@ -233,12 +232,11 @@ export function SettingsPage({ updateHook }: SettingsPageProps) {
     }
   }, [settings.speechToText.model, setSTTModelDownloaded, saveSettings]);
 
-  // Cloud sync state
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [syncStatus, setSyncStatus] = useState<string | null>(null);
-  const [showPasswordModal, setShowPasswordModal] = useState<'export' | 'upload' | 'download' | null>(null);
+  // Export modal state
+  const [showPasswordModal, setShowPasswordModal] = useState<'export' | null>(null);
   const [syncPassword, setSyncPassword] = useState('');
   const [syncPasswordError, setSyncPasswordError] = useState<string | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   // Rate limiting for password modal (shares persisted state with lock screen)
   const [syncRateLimit, setSyncRateLimit] = useState<RateLimitState>({
@@ -401,7 +399,6 @@ export function SettingsPage({ updateHook }: SettingsPageProps) {
 
     setSyncPasswordError(null);
     setIsSyncing(true);
-    setSyncStatus(null);
 
     try {
       // Verify password before proceeding
@@ -432,40 +429,21 @@ export function SettingsPage({ updateHook }: SettingsPageProps) {
       await resetRateLimit();
       setSyncRateLimit({ failedAttempts: 0, lockoutUntil: null, lastFailedAt: null });
 
-      if (showPasswordModal === 'export') {
-        setIsExporting(true);
-        const data = await encryptedExport(syncPassword);
-        const date = new Date().toISOString().split('T')[0];
-        await downloadBackupFile(data, `moodbloom-backup-${date}.moodbloom`);
-        setIsExporting(false);
-        setSyncStatus('Encrypted backup saved successfully.');
-      } else if (showPasswordModal === 'upload') {
-        const result = await uploadBackup(syncPassword, settings.storage.webdav);
-        if (result.success) {
-          setLastSyncDate(result.timestamp!, 'upload');
-          setSyncStatus(`Uploaded: ${result.filename}`);
-        } else {
-          setSyncStatus(`Error: ${result.error}`);
-        }
-      } else if (showPasswordModal === 'download') {
-        const result = await downloadCloudBackup(syncPassword, settings.storage.webdav);
-        if (result.success) {
-          setLastSyncDate(result.timestamp!, 'download');
-          setSyncStatus(`Downloaded ${result.entriesCount} entries`);
-        } else {
-          setSyncStatus(`Error: ${result.error}`);
-        }
-      }
+      setIsExporting(true);
+      const data = await encryptedExport(syncPassword);
+      const date = new Date().toISOString().split('T')[0];
+      await downloadBackupFile(data, `moodbloom-backup-${date}.moodbloom`);
+      setIsExporting(false);
 
       setShowPasswordModal(null);
       setSyncPassword('');
     } catch (error) {
-      setSyncStatus(`Error: ${error instanceof Error ? error.message : 'Operation failed'}`);
+      console.error('Export failed:', error);
       setIsExporting(false);
     } finally {
       setIsSyncing(false);
     }
-  }, [syncPassword, syncRateLimit, showPasswordModal, settings.storage.webdav, setLastSyncDate]);
+  }, [syncPassword, syncRateLimit, showPasswordModal]);
 
   const handleTestNotification = useCallback(async () => {
     setTestingNotification(true);
@@ -1305,14 +1283,14 @@ export function SettingsPage({ updateHook }: SettingsPageProps) {
               )}
             </SettingSection>
 
-            {/* Cloud Backup Section */}
+            {/* Cloud Sync Section */}
             <SettingSection
-              title="Cloud Backup"
-              description="Sync encrypted backups to a WebDAV server"
+              title="Cloud Sync"
+              description="Sync entries across devices via a WebDAV server. Each entry is encrypted individually before upload."
             >
               <SettingSelect
                 label="Storage backend"
-                description="Where to store cloud backups"
+                description="Where to store synced data"
                 value={settings.storage.type}
                 options={[
                   { value: 'local', label: 'Local only' },
@@ -1353,38 +1331,34 @@ export function SettingsPage({ updateHook }: SettingsPageProps) {
                     type="password"
                   />
 
+                  <SettingSelect
+                    label="Auto-sync"
+                    description="When to automatically sync with the WebDAV server"
+                    value={settings.sync.syncMode}
+                    options={[
+                      { value: 'manual', label: 'Manual only' },
+                      { value: 'on-open', label: 'When app opens' },
+                    ]}
+                    onChange={(v) => setSyncMode(v as 'manual' | 'on-open' | 'on-save')}
+                  />
+
                   <div className="pt-3 border-t border-slate-200 dark:border-slate-700">
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        disabled={isSyncing || !settings.storage.webdav.url}
-                        onClick={() => setShowPasswordModal('upload')}
-                        className="px-4 py-2 text-sm font-medium text-violet-600 dark:text-violet-400 bg-violet-100 dark:bg-violet-900/30 rounded-lg hover:bg-violet-200 dark:hover:bg-violet-900/50 transition-colors disabled:opacity-50"
-                      >
-                        Upload Backup
-                      </button>
-                      <button
-                        type="button"
-                        disabled={isSyncing || !settings.storage.webdav.url}
-                        onClick={() => setShowPasswordModal('download')}
-                        className="px-4 py-2 text-sm font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-900/30 rounded-lg hover:bg-emerald-200 dark:hover:bg-emerald-900/50 transition-colors disabled:opacity-50"
-                      >
-                        Download Backup
-                      </button>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-slate-700 dark:text-slate-200">Last sync</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                          {settings.sync.lastSyncAt
+                            ? new Date(settings.sync.lastSyncAt).toLocaleString()
+                            : 'Never synced'}
+                          {settings.sync.lastSyncResult === 'error' && (
+                            <span className="ml-1 text-rose-500 dark:text-rose-400">· Error</span>
+                          )}
+                        </p>
+                      </div>
+                      <p className="text-xs text-slate-400 dark:text-slate-500">
+                        Use the sync icon in the sidebar to sync now
+                      </p>
                     </div>
-
-                    {settings.storage.lastSyncDate && (
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
-                        Last sync: {new Date(settings.storage.lastSyncDate).toLocaleString()}
-                        {settings.storage.lastSyncDirection && ` (${settings.storage.lastSyncDirection})`}
-                      </p>
-                    )}
-
-                    {syncStatus && (
-                      <p className={`text-sm mt-2 ${syncStatus.startsWith('Error') ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
-                        {syncStatus}
-                      </p>
-                    )}
                   </div>
                 </>
               )}
@@ -1395,12 +1369,10 @@ export function SettingsPage({ updateHook }: SettingsPageProps) {
               <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
                 <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-6 max-w-md mx-4">
                   <h3 className="text-lg font-semibold text-slate-800 dark:text-white mb-2">
-                    {showPasswordModal === 'export' ? 'Export Backup' :
-                     showPasswordModal === 'upload' ? 'Upload to WebDAV' :
-                     'Download from WebDAV'}
+                    Export Backup
                   </h3>
                   <p className="text-sm text-slate-600 dark:text-slate-300 mb-4">
-                    Enter your master password to {showPasswordModal === 'download' ? 'decrypt' : 'encrypt'} the backup.
+                    Enter your master password to encrypt the backup file.
                   </p>
                   <input
                     type="password"

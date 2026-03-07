@@ -123,10 +123,14 @@ pub fn run() {
             // Media attachments
             commands::save_media_attachment,
             commands::list_entry_media,
+            commands::list_all_media,
             commands::open_media_attachment,
             commands::get_media_thumbnail,
             commands::delete_media_attachment,
             commands::sweep_preview_temp,
+            // Media sync helpers
+            commands::read_media_for_sync,
+            commands::write_media_from_sync,
             // Multi-device sync
             commands::get_entry_timestamps,
             commands::upsert_entry_from_sync,

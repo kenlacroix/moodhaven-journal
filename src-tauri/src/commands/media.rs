@@ -481,6 +481,142 @@ pub fn delete_media_attachment(
     Ok(())
 }
 
+/// List every media attachment across all entries (used during WebDAV sync).
+#[tauri::command]
+pub fn list_all_media(db: State<'_, Database>) -> Result<Vec<MediaAttachment>, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, entry_id, filename, mime_type, size_bytes, enc_path, created_at \
+             FROM entry_media ORDER BY created_at ASC",
+        )
+        .map_err(|e| format!("Prepare: {}", e))?;
+
+    let rows: Vec<MediaAttachment> = stmt
+        .query_map([], |row| {
+            Ok(MediaAttachment {
+                id: row.get(0)?,
+                entry_id: row.get(1)?,
+                filename: row.get(2)?,
+                mime_type: row.get(3)?,
+                size_bytes: row.get(4)?,
+                enc_path: row.get(5)?,
+                created_at: row.get(6)?,
+            })
+        })
+        .map_err(|e| format!("Query: {}", e))?
+        .filter_map(|r| r.ok())
+        .collect();
+    Ok(rows)
+}
+
+/// For sync: read the raw encrypted MBMF bytes of a media file and return them
+/// as a base64-encoded JSON payload. The bytes are NOT decrypted — we transfer
+/// the already-encrypted file so the receiving device can store it as-is.
+/// Any device with the same password can decrypt with `decrypt_mbmf`.
+#[tauri::command]
+pub fn read_media_for_sync(
+    app: AppHandle,
+    db: State<'_, Database>,
+    media_id: String,
+) -> Result<serde_json::Value, String> {
+    let (entry_id, filename, mime_type, size_bytes, enc_path, created_at) = {
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        conn.query_row(
+            "SELECT entry_id, filename, mime_type, size_bytes, enc_path, created_at \
+             FROM entry_media WHERE id = ?1",
+            params![media_id],
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, i64>(3)?,
+                    row.get::<_, String>(4)?,
+                    row.get::<_, String>(5)?,
+                ))
+            },
+        )
+        .map_err(|_| format!("Media not found: {}", media_id))?
+    };
+
+    let bytes = std::fs::read(abs_enc_path(&app, &enc_path)?)
+        .map_err(|e| format!("Cannot read media file: {}", e))?;
+
+    Ok(serde_json::json!({
+        "id": media_id,
+        "entryId": entry_id,
+        "filename": filename,
+        "mimeType": mime_type,
+        "sizeBytes": size_bytes,
+        "createdAt": created_at,
+        "dataBase64": STANDARD.encode(&bytes),
+    }))
+}
+
+/// For sync: receive an encrypted media file from another device, write it to
+/// disk under `app_data_dir/media/<entry_id>/`, and insert the DB record.
+/// Uses `INSERT OR IGNORE` so this is idempotent on repeated sync runs.
+#[tauri::command]
+pub fn write_media_from_sync(
+    app: AppHandle,
+    db: State<'_, Database>,
+    entry_id: String,
+    media_id: String,
+    filename: String,
+    mime_type: String,
+    size_bytes: i64,
+    created_at: String,
+    data_base64: String,
+) -> Result<(), String> {
+    // Idempotency: skip if this media ID already exists locally
+    {
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        let exists: bool = conn
+            .query_row(
+                "SELECT COUNT(*) FROM entry_media WHERE id = ?1",
+                params![media_id],
+                |row| row.get::<_, i64>(0),
+            )
+            .unwrap_or(0)
+            > 0;
+        if exists {
+            return Ok(());
+        }
+    }
+
+    let bytes = STANDARD
+        .decode(&data_base64)
+        .map_err(|e| format!("Base64 decode: {}", e))?;
+
+    let ext = std::path::Path::new(&filename)
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("bin")
+        .to_ascii_lowercase();
+    let enc_filename = format!("{}.{}.enc", media_id, ext);
+    let media_dir = get_media_dir(&app, &entry_id)?;
+    let enc_abs = media_dir.join(&enc_filename);
+    let rel_path = format!("media/{}/{}", entry_id, enc_filename);
+
+    std::fs::write(&enc_abs, &bytes).map_err(|e| format!("Write media file: {}", e))?;
+
+    {
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        conn.execute(
+            "INSERT OR IGNORE INTO entry_media \
+             (id, entry_id, filename, mime_type, size_bytes, enc_path, created_at) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![
+                media_id, entry_id, filename, mime_type, size_bytes, rel_path, created_at
+            ],
+        )
+        .map_err(|e| format!("DB insert: {}", e))?;
+    }
+
+    Ok(())
+}
+
 /// Sweep the preview temp directory and delete any leftover files.
 /// Called on app startup to clean up files from previous sessions.
 #[tauri::command]

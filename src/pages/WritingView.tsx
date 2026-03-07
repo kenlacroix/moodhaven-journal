@@ -26,16 +26,19 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { saveEntry, getEntryById, patchEntryLocationWeather, deleteEntry, getBookTags } from '../lib/journalService';
 import { captureLocationWeather, getWeatherEmoji, displayTemp } from '../lib/locationWeatherService';
+import { pickAndAttachMedia, listEntryMedia, openMedia, deleteMedia, getMediaThumbnail } from '../lib/mediaService';
 import { RichTextEditor } from '../components/editor';
 import { PromptDrawer } from '../components/ai/PromptDrawer';
 import { EntryOptionsMenu } from '../components/journal/EntryOptionsMenu';
+import { MediaAttachmentStrip } from '../components/journal/MediaAttachmentStrip';
 import { TagManagerModal } from '../components/journal/TagManagerModal';
 import { useJournalPrompts } from '../hooks/useJournalPrompts';
 import { useSettingsStore } from '../stores/settingsStore';
+import { useAppStore } from '../stores/appStore';
 import { useBooksStore } from '../stores/booksStore';
 import { scoreContentMood } from '../lib/metadataExtractor';
 import { getStreakStats, getOverallStats } from '../lib/analyticsService';
-import type { JournalEntry, LocationWeather, MoodLevel, PrivacyMode } from '../types/journal';
+import type { JournalEntry, LocationWeather, MoodLevel, PrivacyMode, MediaAttachment } from '../types/journal';
 import { MOOD_OPTIONS, PRIVACY_MODE_LABELS, PRIVACY_MODE_DESCRIPTIONS } from '../types/journal';
 import type { JournalTemplate } from '../lib/journalTemplates';
 import { formatTemplateContent } from '../lib/journalTemplates';
@@ -212,6 +215,13 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
   /** Whether the user has typed a title themselves (disables auto-title for this entry) */
   const userTypedTitleRef = useRef(false);
 
+  const sessionPassword = useAppStore((s) => s.sessionPassword);
+
+  // Media attachments
+  const [attachments, setAttachments] = useState<MediaAttachment[]>([]);
+  const [thumbnails, setThumbnails] = useState<Record<string, string>>({});
+  const [isAttaching, setIsAttaching] = useState(false);
+
   const activeBookId = useBooksStore((s) => s.activeBookId);
   const books = useBooksStore((s) => s.books);
   const activeBook = books.find((b) => b.id === (activeBookId ?? 'default')) ?? books[0];
@@ -324,6 +334,27 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
     savedEntryIdRef.current = entryId || null;
   }, [entryId]);
 
+  // Load media attachments for existing entries
+  useEffect(() => {
+    if (entryId) {
+      listEntryMedia(entryId).then(setAttachments).catch(() => {});
+    }
+  }, [entryId]);
+
+  // Fetch image thumbnails whenever attachments list changes
+  useEffect(() => {
+    if (!sessionPassword || attachments.length === 0) return;
+    for (const a of attachments) {
+      if (a.mimeType.startsWith('image/') && !thumbnails[a.id]) {
+        getMediaThumbnail(a.id, sessionPassword).then((url) => {
+          if (url) setThumbnails((prev) => ({ ...prev, [a.id]: url }));
+        }).catch(() => {});
+      }
+    }
+  // thumbnails intentionally excluded — we only want to run when attachments list changes
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [attachments, sessionPassword]);
+
   // Reset all editor state when switching to a fresh new entry
   useEffect(() => {
     if (isNewEntry) {
@@ -334,6 +365,8 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
       setMood(null);
       setMoodIsAuto(true);
       setLastSavedAt(null);
+      setAttachments([]);
+      setThumbnails({});
       savedEntryIdRef.current = null;
       prevAutoMoodRef.current = null;
     }
@@ -445,6 +478,44 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
     setMoodIsAuto(true);
     setMood(null);
     prevAutoMoodRef.current = null;
+  }, []);
+
+  // Media attachment handlers
+  const handleAttach = useCallback(async () => {
+    if (!savedEntryIdRef.current || !sessionPassword) return;
+    setIsAttaching(true);
+    try {
+      const { attached, skipped } = await pickAndAttachMedia(savedEntryIdRef.current, sessionPassword);
+      if (attached.length > 0) setAttachments((prev) => [...prev, ...attached]);
+      if (skipped.length > 0) console.warn('Skipped attachments:', skipped);
+    } catch (err) {
+      console.error('Attach failed:', err);
+    } finally {
+      setIsAttaching(false);
+    }
+  }, [sessionPassword]);
+
+  const handleOpenMedia = useCallback(async (mediaId: string) => {
+    if (!sessionPassword) return;
+    try {
+      await openMedia(mediaId, sessionPassword);
+    } catch (err) {
+      console.error('Open media failed:', err);
+    }
+  }, [sessionPassword]);
+
+  const handleDeleteMedia = useCallback(async (mediaId: string) => {
+    try {
+      await deleteMedia(mediaId);
+      setAttachments((prev) => prev.filter((a) => a.id !== mediaId));
+      setThumbnails((prev) => {
+        const next = { ...prev };
+        delete next[mediaId];
+        return next;
+      });
+    } catch (err) {
+      console.error('Delete media failed:', err);
+    }
   }, []);
 
   // Re-assigned every render so it always has the latest state — no stale closure.
@@ -618,8 +689,22 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
                   </span>
                 )}
 
-                {/* Right cluster: tags + privacy + options menu */}
+                {/* Right cluster: attach + tags + privacy + options menu */}
                 <div className="flex items-center gap-1.5">
+                  {/* Attach media button — disabled until entry is saved */}
+                  <button
+                    type="button"
+                    onClick={handleAttach}
+                    disabled={!savedEntryIdRef.current || !sessionPassword}
+                    title={!savedEntryIdRef.current ? 'Write a few words first to enable attachments' : 'Attach files'}
+                    className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-slate-400 dark:text-slate-500 hover:text-violet-600 dark:hover:text-violet-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-slate-400 dark:disabled:hover:text-slate-500"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94A3 3 0 1119.5 7.372L8.552 18.32m.009-.01l-.01.01m5.699-9.941l-7.81 7.81a1.5 1.5 0 002.112 2.13" />
+                    </svg>
+                    <span className="hidden sm:inline text-[11px]">Attach</span>
+                  </button>
+
                   {/* Tag manager button */}
                   <button
                     type="button"
@@ -720,6 +805,17 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
               onInsertTextConsumed={() => setPendingInsert(null)}
               distractionFree={distractionFree}
             />
+
+            {/* Media attachment strip */}
+            {!distractionFree && (
+              <MediaAttachmentStrip
+                attachments={attachments}
+                thumbnails={thumbnails}
+                onOpen={handleOpenMedia}
+                onDelete={handleDeleteMedia}
+                isAttaching={isAttaching}
+              />
+            )}
 
             {/* ── Blank-page prompts CTA — fades away as user writes ── */}
             {isNewEntry && showPrompts && !distractionFree && (

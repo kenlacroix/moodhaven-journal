@@ -234,6 +234,7 @@ export async function ensureSyncDirectories(config: WebDAVConfig): Promise<void>
   await ensureSubdirectory(config, 'sync');
   await ensureSubdirectory(config, 'sync/entries');
   await ensureSubdirectory(config, 'sync/books');
+  await ensureSubdirectory(config, 'sync/media');
 }
 
 /**

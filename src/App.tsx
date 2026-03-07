@@ -30,9 +30,12 @@ const IS_BREAKOUT = new URLSearchParams(window.location.search).get('mode') === 
 
 function App() {
   if (IS_BREAKOUT) return <BreakoutWriterApp />;
-  const { isUnlocked, isInitialized, checkInitialization, lock } = useAppStore();
+  const { isUnlocked, isInitialized, checkInitialization, lock, sessionPassword } = useAppStore();
   const loadSettings = useSettingsStore((s) => s.loadSettings);
   const hasSeenTutorial = useSettingsStore((s) => s.settings.tutorial?.hasSeenTutorial);
+  const syncMode = useSettingsStore((s) => s.settings.sync?.syncMode);
+  const webdavConfig = useSettingsStore((s) => s.settings.storage?.webdav);
+  const storageType = useSettingsStore((s) => s.settings.storage?.type);
   const [isLoading, setIsLoading] = useState(true);
   const [currentView, setCurrentView] = useState<ViewType>('writing');
   const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
@@ -67,6 +70,25 @@ function App() {
       setShowTutorial(true);
     }
   }, [isUnlocked, hasSeenTutorial]);
+
+  // Auto-sync on app open when configured
+  useEffect(() => {
+    if (
+      isUnlocked &&
+      syncMode === 'on-open' &&
+      storageType === 'webdav' &&
+      webdavConfig?.url &&
+      sessionPassword
+    ) {
+      import('./lib/syncEngine').then(({ syncWithWebDAV }) => {
+        syncWithWebDAV(webdavConfig, sessionPassword).catch((err) =>
+          console.warn('Auto-sync on-open failed:', err)
+        );
+      });
+    }
+    // Only run on unlock transition
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isUnlocked]);
 
   const handleTutorialComplete = useCallback(async () => {
     setShowTutorial(false);

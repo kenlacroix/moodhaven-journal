@@ -27,7 +27,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { encrypt, decrypt } from './crypto';
 import type { EncryptedData } from './crypto';
 import type { WebDAVConfig } from '../types/settings';
-import type { Book } from '../types/journal';
+import type { Book, MediaAttachment } from '../types/journal';
 import {
   testConnection,
   ensureSyncDirectories,
@@ -48,11 +48,23 @@ import {
 const MANIFEST_FILE = 'sync/manifest.enc';
 const entryFile = (id: string) => `sync/entries/${id}.enc`;
 const bookFile  = (id: string) => `sync/books/${id}.enc`;
+const mediaFile = (id: string) => `sync/media/${id}.enc`;
 
 // ── Public types ──────────────────────────────────────────────────────────────
 
+/** Payload exchanged for each media file during WebDAV sync */
+interface MediaSyncPayload {
+  id: string;
+  entryId: string;
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+  createdAt: string;
+  dataBase64: string;
+}
+
 export interface SyncProgress {
-  phase: 'connecting' | 'manifest' | 'pulling' | 'pushing' | 'books' | 'finalizing';
+  phase: 'connecting' | 'manifest' | 'pulling' | 'pushing' | 'media' | 'books' | 'finalizing';
   pulled: number;
   pushed: number;
   total: number;
@@ -121,6 +133,8 @@ export async function syncWithWebDAV(
     const manifestDownload = await downloadFile(config, MANIFEST_FILE);
     if (manifestDownload.success && manifestDownload.data) {
       manifest = await decryptManifest(manifestDownload.data, password);
+      // Back-fill media map for manifests created before media sync was added
+      if (!manifest.media) manifest.media = {};
     } else {
       // No manifest yet — first sync from this WebDAV
       manifest = createEmptyManifest(deviceId);
@@ -211,7 +225,56 @@ export async function syncWithWebDAV(
       }
     }
 
-    // 9. Sync books (presence-based — no updated_at on books)
+    // 9. Sync media files
+    report('media', pulled, pushed, total, 'Syncing media files…');
+
+    // Fetch all local media in a single DB call
+    const allLocalMedia = await invoke<MediaAttachment[]>('list_all_media').catch(() => []);
+    const remoteMediaMap = manifest.media ?? {};
+    const localMediaIds = new Set(allLocalMedia.map((m) => m.id));
+
+    // Push any local media files not yet in the remote manifest
+    for (const media of allLocalMedia) {
+      if (remoteMediaMap[media.id]) continue; // already uploaded
+      try {
+        const payload = await invoke<MediaSyncPayload>('read_media_for_sync', { mediaId: media.id });
+        const ul = await uploadFile(config, mediaFile(media.id), JSON.stringify(payload));
+        if (ul.success) {
+          manifest.media[media.id] = {
+            entryId: media.entryId,
+            createdAt: media.createdAt,
+            deviceId,
+          };
+        }
+      } catch {
+        // Skip individual file errors — non-fatal
+      }
+    }
+
+    // Pull any remote media files we don't have locally
+    for (const [mid, meta] of Object.entries(remoteMediaMap)) {
+      if (localMediaIds.has(mid)) continue; // already have it
+      const dl = await downloadFile(config, mediaFile(mid));
+      if (!dl.success || !dl.data) continue;
+      try {
+        const payload = JSON.parse(dl.data) as MediaSyncPayload;
+        await invoke('write_media_from_sync', {
+          entryId: payload.entryId,
+          mediaId: payload.id,
+          filename: payload.filename,
+          mimeType: payload.mimeType,
+          sizeBytes: payload.sizeBytes,
+          createdAt: payload.createdAt,
+          dataBase64: payload.dataBase64,
+        });
+        localMediaIds.add(mid);
+      } catch {
+        // Skip
+      }
+      void meta;
+    }
+
+    // 11. Sync books (presence-based — no updated_at on books)
     report('books', pulled, pushed, total, 'Syncing journals…');
     const localBooks = await invoke<Book[]>('list_books');
     const localBookIds = new Set(localBooks.map((b) => b.id));
@@ -253,7 +316,7 @@ export async function syncWithWebDAV(
       }
     }
 
-    // 10. Write updated manifest back to WebDAV
+    // 12. Write updated manifest back to WebDAV
     report('finalizing', pulled, pushed, total, 'Saving sync state…');
     manifest.generatedAt = new Date().toISOString();
     manifest.deviceId = deviceId;

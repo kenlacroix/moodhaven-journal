@@ -19,9 +19,18 @@ export interface ManifestEntryMeta {
   deviceId: string;
 }
 
+export interface ManifestMediaMeta {
+  /** The journal entry this media is attached to */
+  entryId: string;
+  /** ISO creation timestamp from the entry_media table */
+  createdAt: string;
+  /** Device UUID that uploaded this file */
+  deviceId: string;
+}
+
 export interface SyncTombstone {
   id: string;
-  type: 'entry' | 'book';
+  type: 'entry' | 'book' | 'media';
   deletedAt: string; // ISO
   deviceId: string;
 }
@@ -34,6 +43,8 @@ export interface SyncManifest {
   deviceId: string;
   entries: Record<string, ManifestEntryMeta>;
   books: Record<string, ManifestEntryMeta>;
+  /** Media file index: mediaId → meta */
+  media: Record<string, ManifestMediaMeta>;
   /** Soft-delete log so deletions propagate to other devices */
   tombstones: SyncTombstone[];
 }
@@ -45,6 +56,7 @@ export function createEmptyManifest(deviceId: string): SyncManifest {
     deviceId,
     entries: {},
     books: {},
+    media: {},
     tombstones: [],
   };
 }

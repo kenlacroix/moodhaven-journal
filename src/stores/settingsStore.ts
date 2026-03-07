@@ -99,6 +99,7 @@ interface SettingsState {
   // Multi-device sync
   setSyncDeviceName: (name: string) => void;
   setSyncMode: (mode: 'manual' | 'on-open' | 'on-save') => void;
+  setSyncIntervalMinutes: (minutes: number) => void;
   setSyncResult: (result: { at: string; success: boolean; pulled: number; pushed: number }) => void;
 
   // Navigation
@@ -581,6 +582,13 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   setSyncMode: (syncMode) => {
     set((state) => ({
       settings: { ...state.settings, sync: { ...state.settings.sync, syncMode } },
+      hasUnsavedChanges: true,
+    }));
+  },
+
+  setSyncIntervalMinutes: (syncIntervalMinutes) => {
+    set((state) => ({
+      settings: { ...state.settings, sync: { ...state.settings.sync, syncIntervalMinutes } },
       hasUnsavedChanges: true,
     }));
   },

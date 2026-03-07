@@ -34,6 +34,7 @@ function App() {
   const loadSettings = useSettingsStore((s) => s.loadSettings);
   const hasSeenTutorial = useSettingsStore((s) => s.settings.tutorial?.hasSeenTutorial);
   const syncMode = useSettingsStore((s) => s.settings.sync?.syncMode);
+  const syncIntervalMinutes = useSettingsStore((s) => s.settings.sync?.syncIntervalMinutes ?? 0);
   const webdavConfig = useSettingsStore((s) => s.settings.storage?.webdav);
   const storageType = useSettingsStore((s) => s.settings.storage?.type);
   const [isLoading, setIsLoading] = useState(true);
@@ -71,24 +72,30 @@ function App() {
     }
   }, [isUnlocked, hasSeenTutorial]);
 
-  // Auto-sync on app open when configured
+  // Helper: run a silent background sync (no UI feedback — fire and forget)
+  const runBackgroundSync = useCallback(() => {
+    if (!isUnlocked || storageType !== 'webdav' || !webdavConfig?.url || !sessionPassword) return;
+    import('./lib/syncEngine').then(({ syncWithWebDAV }) => {
+      syncWithWebDAV(webdavConfig, sessionPassword).catch((err) =>
+        console.warn('Background sync failed:', err)
+      );
+    });
+  }, [isUnlocked, storageType, webdavConfig, sessionPassword]);
+
+  // Auto-sync once on unlock when mode is 'on-open'
   useEffect(() => {
-    if (
-      isUnlocked &&
-      syncMode === 'on-open' &&
-      storageType === 'webdav' &&
-      webdavConfig?.url &&
-      sessionPassword
-    ) {
-      import('./lib/syncEngine').then(({ syncWithWebDAV }) => {
-        syncWithWebDAV(webdavConfig, sessionPassword).catch((err) =>
-          console.warn('Auto-sync on-open failed:', err)
-        );
-      });
-    }
+    if (isUnlocked && syncMode === 'on-open') runBackgroundSync();
     // Only run on unlock transition
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isUnlocked]);
+
+  // Periodic auto-sync timer
+  useEffect(() => {
+    if (!isUnlocked || syncIntervalMinutes <= 0) return;
+    const ms = syncIntervalMinutes * 60 * 1000;
+    const id = setInterval(runBackgroundSync, ms);
+    return () => clearInterval(id);
+  }, [isUnlocked, syncIntervalMinutes, runBackgroundSync]);
 
   const handleTutorialComplete = useCallback(async () => {
     setShowTutorial(false);

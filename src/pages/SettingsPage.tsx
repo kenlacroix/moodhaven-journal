@@ -144,6 +144,7 @@ export function SettingsPage({ updateHook }: SettingsPageProps) {
     setTemperatureUnit,
     setAutoTitle,
     setSyncMode,
+    setSyncIntervalMinutes,
   } = useSettingsStore();
 
   const scrollToSection = useSettingsStore((s) => s.scrollToSection);
@@ -1341,14 +1342,28 @@ export function SettingsPage({ updateHook }: SettingsPageProps) {
                   />
 
                   <SettingSelect
-                    label="Auto-sync"
-                    description="When to automatically sync with the WebDAV server"
+                    label="Sync on open"
+                    description="Automatically sync once each time the app unlocks"
                     value={settings.sync.syncMode}
                     options={[
-                      { value: 'manual', label: 'Manual only' },
-                      { value: 'on-open', label: 'When app opens' },
+                      { value: 'manual', label: 'Off' },
+                      { value: 'on-open', label: 'On' },
                     ]}
                     onChange={(v) => setSyncMode(v as 'manual' | 'on-open' | 'on-save')}
+                  />
+
+                  <SettingSelect
+                    label="Sync every"
+                    description="Background sync runs silently while the app is unlocked — no password prompt needed"
+                    value={String(settings.sync.syncIntervalMinutes ?? 0)}
+                    options={[
+                      { value: '0', label: 'Off' },
+                      { value: '5', label: '5 minutes' },
+                      { value: '15', label: '15 minutes' },
+                      { value: '30', label: '30 minutes' },
+                      { value: '60', label: '1 hour' },
+                    ]}
+                    onChange={(v) => setSyncIntervalMinutes(Number(v))}
                   />
 
                   <div className="pt-3 border-t border-slate-200 dark:border-slate-700">

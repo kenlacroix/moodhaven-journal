@@ -154,6 +154,8 @@ export interface SyncSettings {
   deviceName: string;
   /** When to run the sync engine automatically */
   syncMode: 'manual' | 'on-open' | 'on-save';
+  /** Auto-sync interval in minutes (0 = disabled). Independent of syncMode. */
+  syncIntervalMinutes: number;
   /** ISO timestamp of the last completed sync */
   lastSyncAt: string | null;
   /** Result of the last sync attempt */
@@ -277,6 +279,7 @@ export function createDefaultSettings(): AppSettings {
     sync: {
       deviceName: '',
       syncMode: 'manual',
+      syncIntervalMinutes: 0,
       lastSyncAt: null,
       lastSyncResult: null,
       lastSyncPulled: 0,

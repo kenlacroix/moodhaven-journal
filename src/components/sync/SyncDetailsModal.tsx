@@ -8,6 +8,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { appDataDir } from '@tauri-apps/api/path';
 import { useSettingsStore } from '../../stores/settingsStore';
+import { useAppStore } from '../../stores/appStore';
 import { getAllEntries } from '../../lib/journalService';
 import { syncWithWebDAV, type SyncProgress } from '../../lib/syncEngine';
 import { getDeviceName, setDeviceName as persistDeviceName } from '../../lib/deviceIdentity';
@@ -70,12 +71,11 @@ export function SyncDetailsModal({ onClose, onNavigateToSettings }: SyncDetailsM
   const [entryCount, setEntryCount] = useState<number | null>(null);
   const [dbPath, setDbPath] = useState<string | null>(null);
 
+  const sessionPassword = useAppStore((s) => s.sessionPassword);
+
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncProgress, setSyncProgress] = useState<SyncProgress | null>(null);
   const [syncOutcome, setSyncOutcome] = useState<{ pulled: number; pushed: number; error?: string } | null>(null);
-
-  const [password, setPassword] = useState('');
-  const [showPasswordField, setShowPasswordField] = useState(false);
 
   const [deviceName, setDeviceName] = useState('');
   const [deviceNameDirty, setDeviceNameDirty] = useState(false);
@@ -102,12 +102,13 @@ export function SyncDetailsModal({ onClose, onNavigateToSettings }: SyncDetailsM
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  const runSync = useCallback(async (pw: string) => {
+  const runSync = useCallback(async () => {
+    if (!sessionPassword) return;
     setIsSyncing(true);
     setSyncOutcome(null);
     setSyncProgress(null);
     try {
-      const result = await syncWithWebDAV(storage.webdav, pw, setSyncProgress);
+      const result = await syncWithWebDAV(storage.webdav, sessionPassword, setSyncProgress);
       setSyncOutcome({ pulled: result.pulled, pushed: result.pushed, error: result.error });
       if (result.success) {
         setSyncResult({ at: result.syncedAt, success: true, pulled: result.pulled, pushed: result.pushed });
@@ -117,23 +118,8 @@ export function SyncDetailsModal({ onClose, onNavigateToSettings }: SyncDetailsM
     } finally {
       setIsSyncing(false);
       setSyncProgress(null);
-      setPassword('');
-      setShowPasswordField(false);
     }
-  }, [storage.webdav, setLastSyncDate, setSyncResult]);
-
-  const handleSyncNow = useCallback(() => {
-    if (!password.trim()) {
-      setShowPasswordField(true);
-    } else {
-      runSync(password);
-    }
-  }, [password, runSync]);
-
-  const handlePasswordSubmit = useCallback(async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (password.trim()) runSync(password);
-  }, [password, runSync]);
+  }, [storage.webdav, sessionPassword, setLastSyncDate, setSyncResult]);
 
   const isWebDAV = storage.type === 'webdav';
   const isConfigured = isWebDAV && storage.webdav.url.trim().length > 0;
@@ -268,41 +254,6 @@ export function SyncDetailsModal({ onClose, onNavigateToSettings }: SyncDetailsM
                 />
               </div>
 
-              {/* Password field */}
-              {showPasswordField && (
-                <form onSubmit={handlePasswordSubmit} className="space-y-2">
-                  <label className="block text-xs font-medium text-slate-500 dark:text-slate-400">
-                    Enter your journal password to encrypt sync files
-                  </label>
-                  <div className="flex gap-2">
-                    <input
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="Journal password"
-                      autoFocus
-                      className="flex-1 px-3 py-1.5 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500/40 focus:border-violet-400"
-                    />
-                    <button
-                      type="submit"
-                      disabled={!password.trim() || isSyncing}
-                      className="px-3 py-1.5 text-sm font-medium text-white bg-violet-500 hover:bg-violet-600 disabled:opacity-50 rounded-lg transition-colors"
-                    >
-                      {isSyncing
-                        ? <span className="w-3.5 h-3.5 border border-white/50 border-t-white rounded-full animate-spin inline-block" />
-                        : 'Go'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => { setShowPasswordField(false); setPassword(''); }}
-                      className="px-3 py-1.5 text-sm text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-colors"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </form>
-              )}
-
               {/* Progress */}
               {isSyncing && syncProgress && (
                 <div className="space-y-1.5">
@@ -335,23 +286,21 @@ export function SyncDetailsModal({ onClose, onNavigateToSettings }: SyncDetailsM
               )}
 
               {/* Sync Now button */}
-              {!showPasswordField && (
-                <button
-                  type="button"
-                  onClick={handleSyncNow}
-                  disabled={isSyncing}
-                  className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium bg-violet-500 hover:bg-violet-600 text-white disabled:opacity-50 transition-colors"
-                >
-                  {isSyncing ? (
-                    <span className="w-4 h-4 border border-white/50 border-t-white rounded-full animate-spin" />
-                  ) : (
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
-                    </svg>
-                  )}
-                  {isSyncing ? 'Syncing…' : 'Sync Now'}
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={runSync}
+                disabled={isSyncing || !sessionPassword}
+                className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium bg-violet-500 hover:bg-violet-600 text-white disabled:opacity-50 transition-colors"
+              >
+                {isSyncing ? (
+                  <span className="w-4 h-4 border border-white/50 border-t-white rounded-full animate-spin" />
+                ) : (
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+                  </svg>
+                )}
+                {isSyncing ? 'Syncing…' : 'Sync Now'}
+              </button>
             </div>
           )}
 

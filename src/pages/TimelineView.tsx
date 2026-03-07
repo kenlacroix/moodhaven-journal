@@ -13,6 +13,7 @@ import { getAllEntries, deleteEntry, patchEntryPinned } from '../lib/journalServ
 import { getMoodColor } from '../lib/chartUtils';
 import { getRelativeDateLabel, formatDate, parseEntryTimestamp } from '../lib/dateUtils';
 import { getWeatherEmoji } from '../lib/locationWeatherService';
+import { listAllMedia } from '../lib/mediaService';
 import { EntryActionsMenu } from '../components/journal/EntryActionsMenu';
 import type { JournalEntry } from '../types/journal';
 import { MOOD_OPTIONS } from '../types/journal';
@@ -30,6 +31,8 @@ export function TimelineView({ onSelectEntry, onNewEntry }: TimelineViewProps) {
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [moodFilter, setMoodFilter] = useState<number | null>(null);
+  // mediaByEntry: entryId → { count, hasImages }
+  const [mediaByEntry, setMediaByEntry] = useState<Map<string, { count: number; hasImages: boolean }>>(new Map());
 
   const activeBookId = useBooksStore((s) => s.activeBookId);
   const activeBooksLabel = useBooksStore((s) => {
@@ -54,6 +57,7 @@ export function TimelineView({ onSelectEntry, onNewEntry }: TimelineViewProps) {
 
   useEffect(() => {
     loadEntries();
+    loadMediaCounts();
   }, []);
 
   // Auto-refresh relative dates when calendar date changes
@@ -79,6 +83,23 @@ export function TimelineView({ onSelectEntry, onNewEntry }: TimelineViewProps) {
       console.error('Failed to load entries:', err);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const loadMediaCounts = async () => {
+    try {
+      const allMedia = await listAllMedia();
+      const map = new Map<string, { count: number; hasImages: boolean }>();
+      for (const m of allMedia) {
+        const existing = map.get(m.entryId) ?? { count: 0, hasImages: false };
+        map.set(m.entryId, {
+          count: existing.count + 1,
+          hasImages: existing.hasImages || m.mimeType.startsWith('image/'),
+        });
+      }
+      setMediaByEntry(map);
+    } catch {
+      // non-critical — media counts are cosmetic
     }
   };
 
@@ -555,6 +576,17 @@ export function TimelineView({ onSelectEntry, onNewEntry }: TimelineViewProps) {
                         <p className="text-sm text-slate-500 dark:text-slate-400 line-clamp-2">
                           {entry.content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120)}
                         </p>
+                        {mediaByEntry.has(entry.id) && (() => {
+                          const m = mediaByEntry.get(entry.id)!;
+                          return (
+                            <span className="inline-flex items-center gap-1 mt-1.5 text-[10px] text-slate-400 dark:text-slate-500">
+                              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94A3 3 0 1119.5 7.372L8.552 18.32m.009-.01l-.01.01m5.699-9.941l-7.81 7.81a1.5 1.5 0 002.112 2.13" />
+                              </svg>
+                              {m.hasImages ? '🖼' : '📄'} {m.count}
+                            </span>
+                          );
+                        })()}
                       </div>
                     </div>
                   </button>
@@ -692,7 +724,7 @@ export function TimelineView({ onSelectEntry, onNewEntry }: TimelineViewProps) {
                           return null;
                         })()}
 
-                        {/* Footer: time + weather chip */}
+                        {/* Footer: time + weather chip + attachment count */}
                         <div className="flex items-center gap-3 mt-2">
                           <span className="inline-flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500">
                             <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -720,6 +752,18 @@ export function TimelineView({ onSelectEntry, onNewEntry }: TimelineViewProps) {
                               )}
                             </span>
                           )}
+                          {/* Attachment count chip */}
+                          {mediaByEntry.has(entry.id) && (() => {
+                            const m = mediaByEntry.get(entry.id)!;
+                            return (
+                              <span className="inline-flex items-center gap-1 text-[10px] text-slate-400 dark:text-slate-500">
+                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94A3 3 0 1119.5 7.372L8.552 18.32m.009-.01l-.01.01m5.699-9.941l-7.81 7.81a1.5 1.5 0 002.112 2.13" />
+                                </svg>
+                                {m.hasImages ? '🖼' : '📄'} {m.count}
+                              </span>
+                            );
+                          })()}
                         </div>
                       </div>
 

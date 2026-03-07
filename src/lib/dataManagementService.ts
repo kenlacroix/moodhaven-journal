@@ -9,6 +9,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { save } from '@tauri-apps/plugin-dialog';
 import { encrypt, decrypt } from './crypto';
 import type { EncryptedData } from './crypto';
+import { listAllMedia } from './mediaService';
 
 /**
  * Factory reset - wipe all app data
@@ -108,54 +109,118 @@ export async function readBackupFile(file: File): Promise<string> {
 // --- Encrypted export/import ---
 
 const ENCRYPTED_EXPORT_VERSION = 'moodbloom-encrypted-v1';
+const FULL_EXPORT_VERSION = 'moodbloom-full-v2';
 
 interface EncryptedExportEnvelope {
-  format: typeof ENCRYPTED_EXPORT_VERSION;
+  format: string;
   payload: EncryptedData;
 }
 
+interface MediaSyncPayload {
+  id: string;
+  entryId: string;
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+  createdAt: string;
+  dataBase64: string;
+}
+
+interface FullExportPayload {
+  entriesData: string;        // base64 from export_data Rust command
+  media: MediaSyncPayload[];  // encrypted MBMF bytes, base64-encoded
+}
+
 /**
- * Export data with AES-256-GCM encryption.
- * Calls the Rust export (base64 JSON), then encrypts with the given password.
- * @param password - Master password for encryption
- * @returns JSON string containing encrypted envelope
+ * Export data with AES-256-GCM encryption (entries only, no media).
+ * Used by WebDAV cloud sync which has its own media sync path.
  */
 export async function encryptedExport(password: string): Promise<string> {
   const base64Data = await exportData('');
-
   const result = await encrypt(base64Data, password);
   if (!result.success || !result.data) {
     throw new Error(result.error || 'Encryption failed');
   }
-
-  const envelope: EncryptedExportEnvelope = {
-    format: ENCRYPTED_EXPORT_VERSION,
-    payload: result.data,
-  };
-
-  return JSON.stringify(envelope);
+  return JSON.stringify({ format: ENCRYPTED_EXPORT_VERSION, payload: result.data });
 }
 
 /**
- * Import data from an encrypted or legacy backup.
- * Auto-detects format: encrypted envelope (new) or plain base64 (legacy).
- * @param data - Backup data string (encrypted JSON or legacy base64)
- * @param password - Master password for decryption
+ * Export all data including media attachments, with AES-256-GCM encryption.
+ * This is the full backup format — use this for "Export Data" in Settings.
+ * @param password - Master password for encryption
+ * @param onProgress - Optional callback: (uploaded, total) for progress UI
+ * @returns JSON string containing encrypted full backup
+ */
+export async function exportWithMedia(
+  password: string,
+  onProgress?: (done: number, total: number) => void,
+): Promise<string> {
+  const [entriesBase64, allMedia] = await Promise.all([exportData(''), listAllMedia()]);
+
+  const mediaPayloads: MediaSyncPayload[] = [];
+  for (let i = 0; i < allMedia.length; i++) {
+    try {
+      const payload = await invoke<MediaSyncPayload>('read_media_for_sync', {
+        mediaId: allMedia[i].id,
+      });
+      mediaPayloads.push(payload);
+    } catch {
+      // Skip files that can't be read — non-fatal
+    }
+    onProgress?.(i + 1, allMedia.length);
+  }
+
+  const fullExport: FullExportPayload = { entriesData: entriesBase64, media: mediaPayloads };
+  const result = await encrypt(JSON.stringify(fullExport), password);
+  if (!result.success || !result.data) throw new Error(result.error || 'Encryption failed');
+  return JSON.stringify({ format: FULL_EXPORT_VERSION, payload: result.data });
+}
+
+/**
+ * Import data from an encrypted backup.
+ * Auto-detects format:
+ *   - moodbloom-full-v2  → full backup with media (new)
+ *   - moodbloom-encrypted-v1 → entries only, encrypted (legacy)
+ *   - plain base64           → entries only, unencrypted (oldest legacy)
  * @returns Number of entries imported
  */
 export async function encryptedImport(data: string, password: string): Promise<number> {
   let base64Data: string;
 
   try {
-    const parsed = JSON.parse(data);
-    if (parsed.format === ENCRYPTED_EXPORT_VERSION && parsed.payload) {
-      const result = await decrypt(parsed.payload as EncryptedData, password);
+    const parsed = JSON.parse(data) as EncryptedExportEnvelope;
+
+    if (parsed.format === FULL_EXPORT_VERSION && parsed.payload) {
+      // Full backup (v2) — includes media
+      const result = await decrypt(parsed.payload, password);
       if (!result.success || !result.data) {
-        throw new Error(result.error || 'Decryption failed - wrong password?');
+        throw new Error(result.error || 'Decryption failed — wrong password?');
+      }
+      const fullExport: FullExportPayload = JSON.parse(result.data);
+      const entries = await importData(fullExport.entriesData, '');
+
+      for (const m of fullExport.media ?? []) {
+        await invoke('write_media_from_sync', {
+          entryId: m.entryId,
+          mediaId: m.id,
+          filename: m.filename,
+          mimeType: m.mimeType,
+          sizeBytes: m.sizeBytes,
+          createdAt: m.createdAt,
+          dataBase64: m.dataBase64,
+        }).catch(() => {}); // idempotent — ignore if already exists
+      }
+      return entries;
+
+    } else if (parsed.format === ENCRYPTED_EXPORT_VERSION && parsed.payload) {
+      // Entries-only encrypted backup (v1)
+      const result = await decrypt(parsed.payload, password);
+      if (!result.success || !result.data) {
+        throw new Error(result.error || 'Decryption failed — wrong password?');
       }
       base64Data = result.data;
     } else {
-      // JSON but not encrypted envelope — treat as legacy
+      // JSON but unknown format — treat as legacy base64
       base64Data = data;
     }
   } catch (e) {

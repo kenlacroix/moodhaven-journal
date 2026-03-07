@@ -75,6 +75,11 @@ export async function listEntryMedia(entryId: string): Promise<MediaAttachment[]
   return invoke<MediaAttachment[]>('list_entry_media', { entryId });
 }
 
+/** List all media attachments across all entries (used in timeline + export). */
+export async function listAllMedia(): Promise<MediaAttachment[]> {
+  return invoke<MediaAttachment[]>('list_all_media');
+}
+
 /**
  * Decrypt a media file to a temp location and open it with the system viewer.
  * The temp file is automatically deleted after 60 seconds.

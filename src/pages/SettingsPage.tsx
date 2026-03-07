@@ -22,7 +22,7 @@ import {
   exitApp,
   getDataStats,
   downloadBackup as downloadBackupFile,
-  encryptedExport,
+  exportWithMedia,
 } from '../lib/dataManagementService';
 import { testConnection as testWebDAVConnection } from '../lib/webdavService';
 import {
@@ -162,6 +162,7 @@ export function SettingsPage({ updateHook }: SettingsPageProps) {
   const [resetConfirmText, setResetConfirmText] = useState('');
   const [isResetting, setIsResetting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState<{ done: number; total: number } | null>(null);
   const [dataStats, setDataStats] = useState<{ totalEntries: number; averageMood: number } | null>(null);
 
   // 2FA state
@@ -430,7 +431,11 @@ export function SettingsPage({ updateHook }: SettingsPageProps) {
       setSyncRateLimit({ failedAttempts: 0, lockoutUntil: null, lastFailedAt: null });
 
       setIsExporting(true);
-      const data = await encryptedExport(syncPassword);
+      setExportProgress(null);
+      const data = await exportWithMedia(syncPassword, (done, total) => {
+        setExportProgress({ done, total });
+      });
+      setExportProgress(null);
       const date = new Date().toISOString().split('T')[0];
       await downloadBackupFile(data, `moodbloom-backup-${date}.moodbloom`);
       setIsExporting(false);
@@ -1118,7 +1123,11 @@ export function SettingsPage({ updateHook }: SettingsPageProps) {
                     className="px-3 py-1.5 text-sm font-medium text-violet-600 dark:text-violet-400 bg-violet-100 dark:bg-violet-900/30 rounded-lg hover:bg-violet-200 dark:hover:bg-violet-900/50 transition-colors disabled:opacity-50"
                     onClick={handleExport}
                   >
-                    {isExporting ? 'Exporting...' : 'Export Data'}
+                    {isExporting
+                      ? exportProgress
+                        ? `Packing media ${exportProgress.done}/${exportProgress.total}…`
+                        : 'Exporting…'
+                      : 'Export Data'}
                   </button>
                   <button
                     type="button"

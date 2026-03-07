@@ -11,6 +11,12 @@ import { get2FAStatus } from '../lib/twoFactorService';
 import { verifyUserPassword } from '../lib/journalService';
 import { factoryReset, exitApp } from '../lib/dataManagementService';
 import { recoverPassword, isRecoveryKeyEnabled } from '../lib/recoveryKeyService';
+import {
+  biometricIsAvailable,
+  biometricIsEnrolled,
+  biometricAuthenticate,
+  biometricEnroll,
+} from '../lib/biometricService';
 import { TwoFactorVerify } from '../components/twoFactor';
 import type { TwoFactorStatus } from '../types/twoFactor';
 import {
@@ -25,7 +31,7 @@ import {
   type RateLimitState,
 } from '../lib/rateLimitService';
 
-type LockScreenStep = 'password' | '2fa' | 'erase-confirm' | 'recovery-key';
+type LockScreenStep = 'password' | '2fa' | 'erase-confirm' | 'recovery-key' | 'biometric-enroll-offer';
 
 /** Format remaining ms as mm:ss for the countdown display. */
 function formatCountdown(ms: number): string {
@@ -47,6 +53,14 @@ export function LockScreen() {
   const [recoveryKeyInput, setRecoveryKeyInput] = useState('');
   const [hasRecoveryKey, setHasRecoveryKey] = useState(false);
 
+  // Biometric state
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const [biometricEnrolled, setBiometricEnrolled] = useState(false);
+  const [biometricLoading, setBiometricLoading] = useState(false);
+  const [biometricError, setBiometricError] = useState<string | null>(null);
+  // Holds the verified password while offering biometric enrollment
+  const pendingPasswordRef = useRef<string | null>(null);
+
   // Rate limiting state
   const [rateLimitState, setRateLimitState] = useState<RateLimitState>({
     failedAttempts: 0,
@@ -60,7 +74,7 @@ export function LockScreen() {
 
   const lockedOut = lockoutRemaining > 0;
 
-  // Check 2FA status, recovery key status, and rate limit on mount
+  // Check 2FA status, recovery key status, rate limit, and biometric on mount
   useEffect(() => {
     get2FAStatus().then(setTwoFactorStatus).catch(() => setTwoFactorStatus(null));
     isRecoveryKeyEnabled().then(setHasRecoveryKey).catch(() => setHasRecoveryKey(false));
@@ -68,6 +82,13 @@ export function LockScreen() {
       setRateLimitState(state);
       setLockoutRemaining(getRemainingLockoutMs(state));
     });
+    // Check biometric availability
+    Promise.all([biometricIsAvailable(), biometricIsEnrolled()]).then(
+      ([available, enrolled]) => {
+        setBiometricAvailable(available);
+        setBiometricEnrolled(enrolled);
+      }
+    ).catch(() => {});
   }, []);
 
   // Countdown timer — ticks every second while locked out
@@ -165,8 +186,12 @@ export function LockScreen() {
           // Store password for later use after 2FA verification
           setVerifiedPassword(password);
           setStep('2fa');
+        } else if (biometricAvailable && !biometricEnrolled) {
+          // Offer biometric enrollment before entering the app
+          pendingPasswordRef.current = password;
+          setStep('biometric-enroll-offer');
         } else {
-          // No 2FA, unlock directly
+          // No 2FA, no biometric offer — unlock directly
           const success = await unlock(password);
           if (!success) {
             setError('Failed to unlock. Please try again.');
@@ -306,6 +331,50 @@ export function LockScreen() {
     setError(null);
   }, []);
 
+  // Trigger biometric prompt on the lock screen
+  const handleBiometricUnlock = useCallback(async () => {
+    setBiometricLoading(true);
+    setBiometricError(null);
+    try {
+      const result = await biometricAuthenticate();
+      if (!result.ok) {
+        if (result.reason === 'invalidated') {
+          setBiometricEnrolled(false);
+          setBiometricError('Biometric unlock was reset because new fingerprints were added. Use your password.');
+        }
+        // 'cancelled' — user pressed "Use Password", just do nothing
+        return;
+      }
+      // Biometric succeeded — unlock using the decrypted password
+      const success = await unlock(result.password);
+      if (!success) {
+        setBiometricError('Unlock failed. Please use your password.');
+      }
+    } catch (e) {
+      setBiometricError('Biometric error. Please use your password.');
+    } finally {
+      setBiometricLoading(false);
+    }
+  }, [unlock]);
+
+  // After password unlock: offer to enroll biometrics
+  const handleBiometricEnrollOffer = useCallback(async (accept: boolean) => {
+    const password = pendingPasswordRef.current;
+    if (!password) { await unlock(''); return; } // fallback — should not happen
+
+    if (accept) {
+      try {
+        const enrolled = await biometricEnroll(password);
+        if (enrolled) setBiometricEnrolled(true);
+      } catch {
+        // Enrollment failed — continue to app anyway
+      }
+    }
+    // Proceed to unlock regardless of enrollment outcome
+    await unlock(password);
+    pendingPasswordRef.current = null;
+  }, [unlock]);
+
   // Derived UI helpers
   const freeAttemptsLeft = getRemainingFreeAttempts(rateLimitState);
   const showAttemptsWarning =
@@ -396,6 +465,33 @@ export function LockScreen() {
                   'Continue'
                 )}
               </button>
+
+              {/* Biometric unlock button — shown when enrolled */}
+              {biometricAvailable && biometricEnrolled && (
+                <div className="flex flex-col items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleBiometricUnlock}
+                    disabled={biometricLoading || lockedOut}
+                    className="w-16 h-16 rounded-full bg-violet-50 dark:bg-violet-900/20 border-2 border-violet-200 dark:border-violet-700 flex items-center justify-center hover:bg-violet-100 dark:hover:bg-violet-900/40 active:scale-95 transition-all disabled:opacity-50"
+                    aria-label="Unlock with fingerprint"
+                  >
+                    {biometricLoading ? (
+                      <span className="w-6 h-6 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <svg className="w-8 h-8 text-violet-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M7.864 4.243A7.5 7.5 0 0119.5 10.5c0 2.92-.556 5.709-1.568 8.268M5.742 6.364A7.465 7.465 0 004.5 10.5a7.464 7.464 0 01-1.15 3.993m1.989 3.559A11.209 11.209 0 008.25 10.5a3.75 3.75 0 117.5 0c0 .527-.021 1.049-.064 1.565M12 10.5a14.94 14.94 0 01-3.6 9.75m6.633-4.596a18.666 18.666 0 01-2.485 5.33" />
+                      </svg>
+                    )}
+                  </button>
+                  <p className="text-xs text-slate-400 dark:text-slate-500">
+                    Touch to unlock
+                  </p>
+                  {biometricError && (
+                    <p className="text-xs text-rose-500 dark:text-rose-400 text-center">{biometricError}</p>
+                  )}
+                </div>
+              )}
 
               {/* 2FA indicator */}
               {twoFactorStatus?.enabled && (
@@ -585,6 +681,51 @@ export function LockScreen() {
                   ) : (
                     'Erase & Start Fresh'
                   )}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Biometric Enrollment Offer Step */}
+          {step === 'biometric-enroll-offer' && (
+            <div className="space-y-6">
+              <div className="text-center">
+                <div className="w-16 h-16 rounded-full bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-9 h-9 text-violet-600 dark:text-violet-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M7.864 4.243A7.5 7.5 0 0119.5 10.5c0 2.92-.556 5.709-1.568 8.268M5.742 6.364A7.465 7.465 0 004.5 10.5a7.464 7.464 0 01-1.15 3.993m1.989 3.559A11.209 11.209 0 008.25 10.5a3.75 3.75 0 117.5 0c0 .527-.021 1.049-.064 1.565M12 10.5a14.94 14.94 0 01-3.6 9.75m6.633-4.596a18.666 18.666 0 01-2.485 5.33" />
+                  </svg>
+                </div>
+                <h2 className="text-xl font-bold text-slate-800 dark:text-white mb-2">
+                  Enable Fingerprint Unlock?
+                </h2>
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                  Unlock MoodBloom instantly with your fingerprint — no password needed each time.
+                </p>
+              </div>
+
+              <div className="p-4 bg-violet-50 dark:bg-violet-900/20 rounded-xl space-y-2">
+                <p className="text-xs text-violet-700 dark:text-violet-300 font-medium">How it works</p>
+                <ul className="text-xs text-violet-600 dark:text-violet-400 space-y-1">
+                  <li>• Your password is encrypted with a key only your fingerprint can unlock</li>
+                  <li>• Nothing leaves your device — completely offline and private</li>
+                  <li>• You can disable this any time in Settings</li>
+                </ul>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => handleBiometricEnrollOffer(false)}
+                  className="btn-secondary flex-1 py-3"
+                >
+                  Not Now
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleBiometricEnrollOffer(true)}
+                  className="btn-primary flex-1 py-3"
+                >
+                  Enable
                 </button>
               </div>
             </div>

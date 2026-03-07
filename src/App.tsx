@@ -17,7 +17,8 @@ import { JournalOverviewPage } from './pages/JournalOverviewPage';
 import { useBooksStore } from './stores/booksStore';
 import { LockScreen } from './pages/LockScreen';
 import { SetupScreen } from './pages/SetupScreen';
-import { MainLayout, type ViewType } from './components/layout';
+import { MainLayout, MobileLayout, type ViewType } from './components/layout';
+import { usePlatform } from './hooks/usePlatform';
 import { TutorialWizard } from './components/tutorial';
 import { SyncDetailsModal } from './components/sync/SyncDetailsModal';
 import { useAppStore } from './stores/appStore';
@@ -49,6 +50,8 @@ function App() {
    * without needing to navigate away.
    */
   const [writingKey, setWritingKey] = useState(0);
+
+  const { isAndroid } = usePlatform();
 
   // Schedule reminder notifications (hook checks enabled state internally)
   useReminderScheduler();
@@ -165,10 +168,11 @@ function App() {
     return <LockScreen />;
   }
 
-  // Main app with sidebar layout
+  // Main app — MobileLayout on Android, MainLayout on desktop
+  const Layout = isAndroid ? MobileLayout : MainLayout;
   return (
     <>
-      <MainLayout
+      <Layout
         currentView={currentView}
         onNavigate={handleNavigate}
         onLock={lock}
@@ -228,7 +232,7 @@ function App() {
             />
           )}
         </div>
-      </MainLayout>
+      </Layout>
 
       {showTutorial && <TutorialWizard onComplete={handleTutorialComplete} />}
       {showSyncModal && <SyncDetailsModal onClose={() => setShowSyncModal(false)} onNavigateToSettings={() => handleNavigateToSettings()} />}

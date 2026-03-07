@@ -70,10 +70,20 @@ export const useBooksStore = create<BooksState>((set, get) => ({
 
   removeBook: async (id) => {
     await deleteBook(id);
+
+    // Record a pending tombstone so the next sync removes this book from the
+    // remote manifest instead of re-downloading it.
+    try {
+      const key = 'mb_pending_book_tombstones';
+      const existing: string[] = JSON.parse(localStorage.getItem(key) ?? '[]');
+      if (!existing.includes(id)) {
+        localStorage.setItem(key, JSON.stringify([...existing, id]));
+      }
+    } catch { /* non-critical */ }
+
     const { activeBookId } = get();
     set((s) => ({
       books: s.books.filter((b) => b.id !== id),
-      // If the deleted book was active, reset to "all"
       activeBookId: activeBookId === id ? null : activeBookId,
     }));
   },

@@ -425,7 +425,7 @@ fn install_update(path: &std::path::Path, _asset_name: &str) -> Result<(), Strin
     }
     #[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
     {
-        let _ = (path, asset_name);
+        let _ = (path, _asset_name);
         Err("Self-update is not supported on this platform".to_string())
     }
 }

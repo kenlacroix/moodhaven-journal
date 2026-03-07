@@ -279,8 +279,47 @@ export async function syncWithWebDAV(
     const localBooks = await invoke<Book[]>('list_books');
     const localBookIds = new Set(localBooks.map((b) => b.id));
 
-    // Push local books not in remote manifest
+    // Process pending local book deletions — convert to tombstones so other
+    // devices won't re-create the deleted book on their next sync.
+    const BOOK_TOMBSTONE_KEY = 'mb_pending_book_tombstones';
+    let pendingBookTombstones: string[] = [];
+    try {
+      pendingBookTombstones = JSON.parse(localStorage.getItem(BOOK_TOMBSTONE_KEY) ?? '[]');
+    } catch { /* ignore */ }
+
+    for (const id of pendingBookTombstones) {
+      // Add tombstone to manifest if not already present
+      const alreadyTombstoned = manifest.tombstones.some((t) => t.id === id && t.type === 'book');
+      if (!alreadyTombstoned) {
+        manifest.tombstones.push({ id, type: 'book', deletedAt: new Date().toISOString(), deviceId });
+      }
+      // Remove from manifest books index
+      delete manifest.books[id];
+      // Best-effort delete remote book file
+      await deleteFile(config, bookFile(id)).catch(() => {});
+    }
+
+    // Clear the pending list now that tombstones are recorded
+    if (pendingBookTombstones.length > 0) {
+      try { localStorage.removeItem(BOOK_TOMBSTONE_KEY); } catch { /* ignore */ }
+    }
+
+    // Build a set of all tombstoned book IDs (from any device) for fast lookup
+    const tombstonedBookIds = new Set(
+      manifest.tombstones.filter((t) => t.type === 'book').map((t) => t.id),
+    );
+
+    // Apply remote book tombstones: if another device deleted a book we have locally, remove it
+    for (const id of tombstonedBookIds) {
+      if (localBookIds.has(id) && id !== 'default') {
+        await invoke('delete_book', { id }).catch(() => {});
+        localBookIds.delete(id);
+      }
+    }
+
+    // Push local books not in remote manifest (and not tombstoned)
     for (const book of localBooks) {
+      if (tombstonedBookIds.has(book.id)) continue; // was deleted — don't re-push
       if (!manifest.books[book.id]) {
         try {
           const fileContent = await encryptFile(book, password);
@@ -294,8 +333,9 @@ export async function syncWithWebDAV(
       }
     }
 
-    // Pull remote books not in local DB
+    // Pull remote books not in local DB (and not tombstoned)
     for (const [id] of Object.entries(manifest.books)) {
+      if (tombstonedBookIds.has(id)) continue; // deleted — skip
       if (!localBookIds.has(id)) {
         const dl = await downloadFile(config, bookFile(id));
         if (!dl.success || !dl.data) continue;

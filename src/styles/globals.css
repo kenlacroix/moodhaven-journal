@@ -141,6 +141,12 @@
     background: #0a0a0f;
   }
 
+  /* Minimum 44px touch target for interactive elements on mobile */
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
   /* Hide scrollbar utility */
   .scrollbar-hide {
     -ms-overflow-style: none;
@@ -175,5 +181,53 @@
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+/* ── Android / touch device polish ──────────────────────────────────────────
+ *
+ * Applied via (hover: none) media query so it targets touch screens only,
+ * without affecting desktop at all.
+ */
+@media (hover: none) and (pointer: coarse) {
+  /* Remove the blue/grey tap flash on all interactive elements */
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Eliminate the 300ms tap delay on buttons and links */
+  button,
+  a,
+  [role="button"] {
+    touch-action: manipulation;
+  }
+
+  /* Prevent pull-to-refresh and overscroll bounce */
+  body {
+    overscroll-behavior-y: none;
+  }
+
+  /* Hide desktop scrollbars — mobile uses native momentum scrolling */
+  ::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Ensure inputs don't trigger zoom on focus (min 16px) */
+  input,
+  textarea,
+  select {
+    font-size: max(16px, 1em);
+  }
+
+  /* Remove hover effects that "stick" after a tap on touch screens */
+  .hover\:bg-slate-50:hover,
+  .hover\:bg-slate-100:hover,
+  .hover\:bg-slate-200:hover,
+  .hover\:bg-violet-50:hover,
+  .hover\:shadow-md:hover,
+  .hover\:-translate-y-0\.5:hover {
+    background-color: inherit;
+    box-shadow: inherit;
+    transform: none;
   }
 }

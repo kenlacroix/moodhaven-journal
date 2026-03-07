@@ -1,12 +1,9 @@
-use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
-
 /// Open (or focus) the standalone breakout writer window.
-///
-/// The writer window loads the same `index.html` with `?mode=writer` so the
-/// React app can detect it and render `BreakoutWriterApp` instead of the full
-/// main app.  If a writer window is already open it is simply focused.
+/// Desktop only — no-op on Android.
+#[cfg(not(target_os = "android"))]
 #[tauri::command]
-pub fn open_writer_window(app: AppHandle) -> Result<(), String> {
+pub fn open_writer_window(app: tauri::AppHandle) -> Result<(), String> {
+    use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
     if let Some(win) = app.get_webview_window("writer") {
         win.set_focus().map_err(|e: tauri::Error| e.to_string())?;
         return Ok(());
@@ -22,6 +19,13 @@ pub fn open_writer_window(app: AppHandle) -> Result<(), String> {
     .resizable(true)
     .center()
     .build()
-    .map_err(|e| e.to_string())?;
+    .map_err(|e: tauri::Error| e.to_string())?;
+    Ok(())
+}
+
+/// No-op stub for Android — multi-window not supported on mobile.
+#[cfg(target_os = "android")]
+#[tauri::command]
+pub fn open_writer_window() -> Result<(), String> {
     Ok(())
 }

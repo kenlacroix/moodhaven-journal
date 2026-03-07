@@ -20,6 +20,8 @@ import type { JournalEntry } from '../../types/journal';
 interface DayTimelineViewProps {
   date: string; // YYYY-MM-DD
   onSelectEntry: (entryId: string) => void;
+  /** When provided, shows a back button in the header (used on mobile) */
+  onBack?: () => void;
 }
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
@@ -45,7 +47,7 @@ function getEntryHour(entry: JournalEntry): number {
   return parseEntryTimestamp(entry.created_at).getHours();
 }
 
-export function DayTimelineView({ date, onSelectEntry }: DayTimelineViewProps) {
+export function DayTimelineView({ date, onSelectEntry, onBack }: DayTimelineViewProps) {
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -108,7 +110,18 @@ export function DayTimelineView({ date, onSelectEntry }: DayTimelineViewProps) {
   return (
     <div className="flex flex-col h-full bg-white dark:bg-slate-900 border-l border-slate-100 dark:border-slate-800 transition-all duration-200">
       {/* Header */}
-      <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 flex-shrink-0">
+      <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 flex-shrink-0 flex items-center gap-3">
+        {onBack && (
+          <button
+            onClick={onBack}
+            className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex-shrink-0"
+            aria-label="Back to calendar"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+        )}
         <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">
           {dayLabel}
         </span>

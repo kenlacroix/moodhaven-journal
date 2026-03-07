@@ -42,6 +42,7 @@ import type { JournalEntry, LocationWeather, MoodLevel, PrivacyMode, MediaAttach
 import { MOOD_OPTIONS, PRIVACY_MODE_LABELS, PRIVACY_MODE_DESCRIPTIONS } from '../types/journal';
 import type { JournalTemplate } from '../lib/journalTemplates';
 import { formatTemplateContent } from '../lib/journalTemplates';
+import { usePlatform } from '../hooks/usePlatform';
 
 interface WritingViewProps {
   entryId?: string | null;
@@ -208,6 +209,7 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
   const setShowPrompts = useSettingsStore((s) => s.setShowPrompts);
   const showPrompts = useSettingsStore((s) => s.settings.journal.showPrompts);
   const distractionFree = useSettingsStore((s) => s.distractionFree);
+  const { isAndroid } = usePlatform();
   const setDistractionFree = useSettingsStore((s) => s.setDistractionFree);
   const autoLocationWeather = useSettingsStore((s) => s.settings.journal.autoLocationWeather);
   const autoTitle = useSettingsStore((s) => s.settings.journal.autoTitle ?? false);
@@ -549,6 +551,222 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
     if (saveRef) saveRef.current = () => saveNowRef.current!();
   }, [saveRef]);
 
+  // ── Mobile (Android) layout ──────────────────────────────────────────────────
+  if (isAndroid) {
+    return (
+      <div className="h-full flex flex-col bg-white dark:bg-slate-900">
+
+        {/* ── Date + weather row ── */}
+        <div className="flex-shrink-0 px-4 pt-4 pb-2">
+          <p className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wide">
+            {formattedDate}
+          </p>
+          {locationWeather && (
+            <p className="flex items-center gap-1 mt-0.5 text-xs text-slate-400 dark:text-slate-500">
+              <span>{getWeatherEmoji(locationWeather.weatherCode)}</span>
+              {locationWeather.temperature !== undefined && (
+                <span>{displayTemp(locationWeather.temperature, temperatureUnit)}</span>
+              )}
+              {locationWeather.city && <span className="opacity-75">· {locationWeather.city}</span>}
+            </p>
+          )}
+        </div>
+
+        {/* ── Mood + privacy rows ── */}
+        <div className="flex-shrink-0 border-b border-slate-100 dark:border-slate-800">
+          {/* Mood row */}
+          <div className="flex items-center gap-1 px-4 py-2">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 mr-1">
+              Mood
+            </span>
+            <div className="flex items-center gap-1 flex-1 justify-between">
+              {([1, 2, 3, 4, 5] as MoodLevel[]).map((level) => {
+                const isActive = level === mood;
+                const opt = MOOD_OPTIONS[level - 1];
+                return (
+                  <button
+                    key={level}
+                    onClick={() => { setMood(level); setMoodIsAuto(false); }}
+                    className={`w-12 h-12 rounded-full flex items-center justify-center text-xl transition-all duration-200 flex-shrink-0 active:scale-95 ${
+                      isActive
+                        ? 'ring-2 ring-offset-1 ring-violet-400 scale-110'
+                        : 'opacity-50'
+                    }`}
+                    style={isActive ? { backgroundColor: opt.color + '33' } : {}}
+                    title={`${opt.emoji} ${opt.label}`}
+                  >
+                    {opt.emoji}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Privacy row — own line so it doesn't compete with mood buttons */}
+          <div className="flex items-center gap-2 px-4 pb-2">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+              Privacy
+            </span>
+            <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 rounded-lg p-0.5 flex-1">
+              {([0, 1, 2] as PrivacyMode[]).map((mode) => (
+                <button
+                  key={mode}
+                  onClick={() => setPrivacyMode(mode)}
+                  title={PRIVACY_MODE_DESCRIPTIONS[mode]}
+                  className={`flex-1 py-2 rounded-md text-xs font-medium transition-all duration-200 active:scale-95 ${
+                    privacyMode === mode
+                      ? 'bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 shadow-sm'
+                      : 'text-slate-400 dark:text-slate-500'
+                  }`}
+                >
+                  {PRIVACY_MODE_LABELS[mode]}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* ── Title input ── */}
+        <div className="flex-shrink-0 px-4 pt-3">
+          <input
+            type="text"
+            value={title}
+            onChange={handleTitleChange}
+            placeholder="Title (optional)"
+            className="w-full text-xl font-semibold bg-transparent text-slate-800 dark:text-slate-100 placeholder-slate-300 dark:placeholder-slate-600 outline-none border-none"
+          />
+        </div>
+
+        {/* ── Editor (flex-1 — fills remaining space) ── */}
+        <div className="flex-1 min-h-0 px-4 pb-2 overflow-auto">
+          <RichTextEditor
+            value={content}
+            onChange={handleContentChange}
+            insertText={pendingInsert}
+            onInsertTextConsumed={() => setPendingInsert(null)}
+            placeholder="Start writing…"
+            autoFocus={!entryId}
+            className="min-h-full"
+            onNavigateToSTTSettings={onNavigateToSTTSettings}
+          />
+        </div>
+
+        {/* ── Media strip ── */}
+        {attachments.length > 0 && (
+          <div className="flex-shrink-0 px-4">
+            <MediaAttachmentStrip
+              attachments={attachments}
+              thumbnails={thumbnails}
+              onOpen={handleOpenMedia}
+              onDelete={handleDeleteMedia}
+            />
+          </div>
+        )}
+
+        {/* ── Sticky bottom toolbar ── */}
+        <div
+          className="flex-shrink-0 flex items-center gap-1 px-3 py-2 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900"
+          style={{ paddingBottom: 'max(8px, env(safe-area-inset-bottom))' }}
+        >
+          {/* Attach */}
+          <button
+            onClick={handleAttach}
+            disabled={!savedEntryIdRef.current || !sessionPassword}
+            title={!savedEntryIdRef.current ? 'Write a few words first' : 'Attach files'}
+            className="w-10 h-10 flex items-center justify-center rounded-xl text-slate-400 dark:text-slate-500 disabled:opacity-30 transition-colors"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94A3 3 0 1119.5 7.372L8.552 18.32m.009-.01l-.01.01m5.699-9.941l-7.81 7.81a1.5 1.5 0 002.112 2.13" />
+            </svg>
+          </button>
+
+          {/* Tags */}
+          <button
+            onClick={() => setTagManagerOpen(true)}
+            className="w-10 h-10 flex items-center justify-center rounded-xl text-slate-400 dark:text-slate-500 transition-colors"
+            title="Manage tags"
+          >
+            <span className="text-base font-bold">#</span>
+          </button>
+
+          {/* Prompts */}
+          {isNewEntry && showPrompts && (
+            <button
+              onClick={() => setDrawerOpen(true)}
+              className="w-10 h-10 flex items-center justify-center rounded-xl text-slate-400 dark:text-slate-500 transition-colors"
+              title="Writing prompts"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1M6.343 6.343l-.707-.707M3 12H2m19 0h-1M6.343 17.657l-.707.707M17.657 6.343l.707-.707M16.5 12a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
+              </svg>
+            </button>
+          )}
+
+          {/* Entry options (existing entries) */}
+          {!isNewEntry && savedEntry && (
+            <EntryOptionsMenu
+              entry={savedEntry}
+              wordCount={wordCount}
+              charCount={charCount}
+              onDelete={async () => {
+                await deleteEntry(savedEntry.id);
+                _onNewEntry?.();
+              }}
+            />
+          )}
+
+          {/* Spacer */}
+          <div className="flex-1" />
+
+          {/* Word count */}
+          <span className="text-xs text-slate-300 dark:text-slate-600 mr-1">
+            {wordCount > 0 ? `${wordCount}w` : ''}
+          </span>
+
+          {/* Save status */}
+          <span className={`text-xs transition-all duration-300 ${
+            isSaving
+              ? 'text-violet-400 dark:text-violet-500'
+              : lastSavedAt
+                ? 'text-emerald-500 dark:text-emerald-400'
+                : 'text-slate-300 dark:text-slate-600'
+          }`}>
+            {isSaving ? 'Saving…' : lastSavedAt ? '✓ Saved' : ''}
+          </span>
+        </div>
+
+        {/* Tag manager modal */}
+        {tagManagerOpen && (
+          <TagManagerModal
+            content={content}
+            bookTags={bookTags}
+            onInsertTag={(tag) => setPendingInsert(` #${tag}`)}
+            onClose={() => setTagManagerOpen(false)}
+          />
+        )}
+
+        {/* Prompt drawer */}
+        {isNewEntry && showPrompts && (
+          <PromptDrawer
+            isOpen={drawerOpen}
+            onClose={() => setDrawerOpen(false)}
+            forYouPrompts={forYouPrompts}
+            generalPrompts={generalPrompts}
+            healthPrompts={healthPrompts}
+            isLoading={promptsLoading}
+            isAIEnabled={isAIEnabled}
+            onUsePrompt={handleUsePrompt}
+            onRefresh={refreshPrompts}
+            onDisablePrompts={() => setShowPrompts(false)}
+            onUseTemplate={handleUseTemplate}
+            usedTemplateIds={usedTemplateIds}
+          />
+        )}
+      </div>
+    );
+  }
+
+  // ── Desktop layout ────────────────────────────────────────────────────────────
   return (
     <div className={`h-full flex flex-col transition-all duration-500 ${distractionFree ? 'focus-bg' : 'writing-bg'}`}>
       <div className="flex-1 flex flex-col min-h-0 px-6 sm:px-12 lg:px-20 py-12">

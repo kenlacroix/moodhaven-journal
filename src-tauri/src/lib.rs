@@ -142,6 +142,15 @@ pub fn run() {
             // Session bridge (password hand-off to breakout window)
             commands::store_session_password,
             commands::retrieve_session_password,
+            // Signals (structured data points, Wear OS events, health snapshots)
+            commands::create_signal,
+            commands::list_signals,
+            commands::link_signal_to_entry,
+            commands::list_entry_signals,
+            commands::delete_signal,
+            // Sync log (incremental sync infrastructure)
+            commands::get_unsynced_log,
+            commands::mark_sync_log_synced,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

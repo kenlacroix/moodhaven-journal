@@ -3,99 +3,92 @@ package com.moodbloom.app
 import android.util.Log
 import com.google.android.gms.wearable.MessageEvent
 import com.google.android.gms.wearable.WearableListenerService
-import org.json.JSONObject
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 
 /**
  * WearListenerService — phone-side Wear OS Data Layer receiver
  *
- * This service is started by the Wear OS platform whenever a MessageAPI
- * message arrives from a paired watch, even when the phone app is in the
- * background. It deserialises the signal envelope and hands it off to
- * WearPlugin so it can be emitted as a Tauri event to the WebView.
+ * Started by the Wear OS platform whenever a MessageAPI message arrives from a
+ * paired watch, even when the phone app is in the background. Deserialises the
+ * signal envelope and hands it off to WearPlugin → Tauri event → TypeScript.
  *
  * Signal flow:
- *   Watch → MessageAPI (/signal path) → WearListenerService.onMessageReceived()
- *     → WearPlugin.bridgeFromWatch() → Tauri event "wear://signal"
+ *   Watch → MessageAPI (/signal path) → onMessageReceived()
+ *     → WearPlugin.bridgeFromWatch() → trigger("wear://signal")
  *       → useWearSignals hook → signalService.captureSignal() → SQLite
- *
- * Registered in AndroidManifest.xml with BIND_LISTENER intent filter.
  */
 class WearListenerService : WearableListenerService() {
 
     companion object {
         private const val TAG = "WearListenerService"
 
-        /** MessageAPI path the watch sends signals on */
-        const val PATH_SIGNAL = "/signal"
-
-        /** MessageAPI path for voice memo metadata (large audio transferred via DataAPI) */
+        const val PATH_SIGNAL     = "/signal"
         const val PATH_VOICE_MEMO = "/voice_memo"
 
-        /** MessageAPI path for watch requesting a feedback acknowledgement */
-        const val PATH_ACK = "/ack"
+        private fun nowIso8601(): String {
+            val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US)
+            sdf.timeZone = TimeZone.getTimeZone("UTC")
+            return sdf.format(Date())
+        }
     }
 
     override fun onMessageReceived(event: MessageEvent) {
         Log.d(TAG, "Message received: path=${event.path} from=${event.sourceNodeId}")
 
+        // MessageEvent.data is the byte array (NOT rawData)
         val payload = try {
-            String(event.rawData, Charsets.UTF_8)
+            String(event.data, Charsets.UTF_8)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to decode message bytes: ${e.message}")
             return
         }
 
         when (event.path) {
-            PATH_SIGNAL -> handleSignalMessage(event.sourceNodeId, payload)
+            PATH_SIGNAL     -> handleSignalMessage(event.sourceNodeId, payload)
             PATH_VOICE_MEMO -> handleVoiceMemoMessage(event.sourceNodeId, payload)
-            else -> Log.w(TAG, "Unhandled path: ${event.path}")
+            else            -> Log.w(TAG, "Unhandled path: ${event.path}")
         }
     }
 
-    // ── Signal message ────────────────────────────────────────────────────────
-
     private fun handleSignalMessage(nodeId: String, rawJson: String) {
         val json = try {
-            JSONObject(rawJson)
+            org.json.JSONObject(rawJson)
         } catch (e: Exception) {
             Log.e(TAG, "Malformed signal JSON from $nodeId: ${e.message}")
             return
         }
 
-        val id = json.optString("id").takeIf { it.isNotBlank() }
+        val id        = json.optString("id").takeIf { it.isNotBlank() }
         val timestamp = json.optString("timestamp").takeIf { it.isNotBlank() }
-        val type = json.optString("type").takeIf { it.isNotBlank() }
-        val payloadStr = json.optString("payload").takeIf { it.isNotBlank() }
+        val type      = json.optString("type").takeIf { it.isNotBlank() }
+        val payload   = json.optString("payload").takeIf { it.isNotBlank() }
 
-        if (id == null || type == null || payloadStr == null) {
+        if (id == null || type == null || payload == null) {
             Log.e(TAG, "Signal missing required fields: $rawJson")
             return
         }
 
-        Log.i(TAG, "Watch signal: id=$id type=$type source=watch")
+        Log.i(TAG, "Watch signal received: id=$id type=$type")
 
-        // Hand off to WearPlugin → Tauri event → TypeScript layer
         WearPlugin.getInstance()?.bridgeFromWatch(
-            id = id,
-            timestamp = timestamp ?: java.time.Instant.now().toString(),
-            type = type,
-            source = "watch",
-            payload = payloadStr,
-            nodeId = nodeId,
+            id        = id,
+            timestamp = timestamp ?: nowIso8601(),
+            type      = type,
+            source    = "watch",
+            payload   = payload,
+            nodeId    = nodeId,
         ) ?: run {
-            // Plugin not yet initialised — buffer the event for later flush
             WearSignalBuffer.enqueue(rawJson)
             Log.w(TAG, "WearPlugin not ready; buffered signal $id")
         }
     }
 
-    // ── Voice memo metadata message ───────────────────────────────────────────
-
     private fun handleVoiceMemoMessage(nodeId: String, rawJson: String) {
-        // Phase 3: request audio file from watch via ChannelAPI and forward to
-        // signalService as a voice_memo signal with an attachment id.
-        // For now, log and buffer the metadata.
-        Log.i(TAG, "Voice memo metadata received from $nodeId — buffering for Phase 3")
+        // Phase 3: request audio via ChannelAPI, encrypt, store as attachment.
+        Log.i(TAG, "Voice memo metadata from $nodeId — buffering for Phase 3")
         WearSignalBuffer.enqueue(rawJson)
     }
 }

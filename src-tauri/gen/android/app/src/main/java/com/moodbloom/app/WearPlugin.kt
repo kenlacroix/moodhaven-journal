@@ -1,6 +1,6 @@
 package com.moodbloom.app
 
-import android.content.Context
+import android.app.Activity
 import android.util.Log
 import app.tauri.annotation.Command
 import app.tauri.annotation.TauriPlugin
@@ -10,6 +10,10 @@ import app.tauri.plugin.JSObject
 import app.tauri.plugin.Plugin
 import com.google.android.gms.wearable.Wearable
 import org.json.JSONObject
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 
 /**
  * WearPlugin — Wear OS companion bridge
@@ -25,10 +29,10 @@ import org.json.JSONObject
  *
  * Signal flow (cold start / background):
  *   Watch → MessageAPI → WearListenerService → WearSignalBuffer.enqueue()
- *   App foregrounds → WearPlugin.load() → drainBuffer() → trigger events
+ *   App init → WearPlugin init block → drainBuffer() → trigger events
  */
 @TauriPlugin
-class WearPlugin(private val context: Context) : Plugin(context) {
+class WearPlugin(private val activity: Activity) : Plugin(activity) {
 
     companion object {
         private const val TAG = "WearPlugin"
@@ -42,22 +46,20 @@ class WearPlugin(private val context: Context) : Plugin(context) {
         @Volatile
         private var _instance: WearPlugin? = null
 
-        /** Called by WearListenerService to forward a watch signal */
         fun getInstance(): WearPlugin? = _instance
+
+        private fun nowIso8601(): String {
+            val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US)
+            sdf.timeZone = TimeZone.getTimeZone("UTC")
+            return sdf.format(Date())
+        }
     }
 
-    // ── Plugin lifecycle ──────────────────────────────────────────────────────
-
-    override fun load() {
+    // Set singleton and drain any buffered events on plugin creation
+    init {
         _instance = this
-        Log.i(TAG, "WearPlugin loaded; draining buffer (${WearSignalBuffer.size} events)")
+        Log.i(TAG, "WearPlugin init; draining buffer (${WearSignalBuffer.size} events)")
         drainBuffer()
-    }
-
-    // Called when the plugin is being destroyed (app going away)
-    override fun onDestroy() {
-        if (_instance === this) _instance = null
-        super.onDestroy()
     }
 
     // ── Bridge from WearListenerService ──────────────────────────────────────
@@ -86,7 +88,6 @@ class WearPlugin(private val context: Context) : Plugin(context) {
         Log.d(TAG, "Emitted $EVENT_SIGNAL: id=$id type=$type")
     }
 
-    /** Drain buffered signals that arrived before the plugin was ready */
     private fun drainBuffer() {
         val buffered = WearSignalBuffer.drain()
         for (rawJson in buffered) {
@@ -94,7 +95,7 @@ class WearPlugin(private val context: Context) : Plugin(context) {
                 val json = JSONObject(rawJson)
                 bridgeFromWatch(
                     id = json.optString("id", java.util.UUID.randomUUID().toString()),
-                    timestamp = json.optString("timestamp", java.time.Instant.now().toString()),
+                    timestamp = json.optString("timestamp", nowIso8601()),
                     type = json.optString("type", "unknown"),
                     source = json.optString("source", "watch"),
                     payload = json.optString("payload", "{}"),
@@ -106,51 +107,44 @@ class WearPlugin(private val context: Context) : Plugin(context) {
         }
     }
 
-    // ── Tauri commands (called from TypeScript) ───────────────────────────────
+    // ── Tauri commands ────────────────────────────────────────────────────────
 
     /**
      * Check whether a paired Wear OS device is currently reachable.
-     * Queries Wearable NodeClient for connected nodes.
      */
     @Command
     fun wearCheckConnection(invoke: Invoke) {
-        Wearable.getNodeClient(context).connectedNodes
+        Wearable.getNodeClient(activity).connectedNodes
             .addOnSuccessListener { nodes ->
                 val connected = nodes.isNotEmpty()
                 val firstNode = nodes.firstOrNull()
-
                 val result = JSObject().apply {
                     put("connected", connected)
                     put("nodeId", firstNode?.id ?: "")
                     put("nodeName", firstNode?.displayName ?: "")
                     put("nodeCount", nodes.size)
                 }
-
-                // Emit a connection state event as well so the UI can react
                 trigger(EVENT_CONNECTION, result)
                 invoke.resolve(result)
-
                 Log.i(TAG, "wearCheckConnection: connected=$connected nodes=${nodes.size}")
             }
             .addOnFailureListener { e ->
                 Log.e(TAG, "wearCheckConnection failed: ${e.message}")
-                val result = JSObject().apply {
+                invoke.resolve(JSObject().apply {
                     put("connected", false)
                     put("nodeId", "")
                     put("nodeName", "")
                     put("nodeCount", 0)
                     put("error", e.message ?: "Unknown error")
-                }
-                invoke.resolve(result)
+                })
             }
     }
 
     /**
-     * Bridge a signal envelope received from the watch via the Data Layer.
-     * Also usable for testing: TypeScript can call this directly to simulate
-     * a watch event without a physical device.
+     * Bridge a signal envelope. Also works as a test injection without a watch:
+     * TypeScript can call this directly to simulate a watch event.
      *
-     * Args: id, timestamp, type, payload (all strings)
+     * Args: id, timestamp, type, payload (strings)
      */
     @Command
     fun wearBridgeSignal(invoke: Invoke) {
@@ -168,44 +162,40 @@ class WearPlugin(private val context: Context) : Plugin(context) {
 
         bridgeFromWatch(
             id = id,
-            timestamp = timestamp ?: java.time.Instant.now().toString(),
+            timestamp = timestamp ?: nowIso8601(),
             type = type,
             source = "watch",
             payload = payload,
             nodeId = "simulated",
         )
 
-        val result = JSObject().apply {
+        invoke.resolve(JSObject().apply {
             put("emitted", true)
             put("id", id)
-        }
-        invoke.resolve(result)
+        })
     }
 
     /**
-     * Return and clear all buffered signals that arrived while the plugin
-     * was not yet initialised. TypeScript can call this on app foreground.
+     * Return and clear all buffered signals that arrived before the plugin
+     * was ready. TypeScript can call this on app foreground.
      */
     @Command
     fun wearFlushBuffer(invoke: Invoke) {
         val buffered = WearSignalBuffer.drain()
         val arr = JSArray()
         for (rawJson in buffered) {
-            try {
-                arr.put(JSONObject(rawJson))
-            } catch (_: Exception) { /* skip malformed */ }
+            try { arr.put(JSONObject(rawJson)) } catch (_: Exception) { }
         }
-        val result = JSObject()
-        result.put("events", arr)
-        result.put("count", buffered.size)
-        invoke.resolve(result)
+        invoke.resolve(JSObject().apply {
+            put("events", arr)
+            put("count", buffered.size)
+        })
     }
 
     /**
-     * Send a feedback message to the watch (haptic confirm, badge update, etc.)
-     * Phase 3 will use Wearable.getMessageClient() to send to connected node.
+     * Send a feedback message to the watch (haptic confirm, badge update).
      *
-     * Args: nodeId (String), message (String — one of: "saved", "error", "prompt_ready")
+     * Args: nodeId (String), message (String — "saved" | "error" | "prompt_ready")
      */
     @Command
     fun wearSendFeedback(invoke: Invoke) {
@@ -214,14 +204,12 @@ class WearPlugin(private val context: Context) : Plugin(context) {
         val message = runCatching { args.getString("message") }.getOrNull() ?: "saved"
 
         if (nodeId.isNullOrBlank()) {
-            // No node — resolve silently (watch may be disconnected)
             invoke.resolve(JSObject().apply { put("sent", false); put("reason", "no_node") })
             return
         }
 
-        val data = message.toByteArray(Charsets.UTF_8)
-        Wearable.getMessageClient(context)
-            .sendMessage(nodeId, "/feedback", data)
+        Wearable.getMessageClient(activity)
+            .sendMessage(nodeId, "/feedback", message.toByteArray(Charsets.UTF_8))
             .addOnSuccessListener { msgId ->
                 Log.d(TAG, "Feedback sent to $nodeId: msgId=$msgId")
                 invoke.resolve(JSObject().apply { put("sent", true); put("messageId", msgId) })

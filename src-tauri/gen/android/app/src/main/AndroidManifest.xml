@@ -40,5 +40,27 @@
             android:name="android.support.FILE_PROVIDER_PATHS"
             android:resource="@xml/file_paths" />
         </provider>
+
+        <!--
+          WearListenerService — receives MessageAPI events from paired Wear OS watches.
+          Must be exported and declare the BIND_LISTENER action so the Wearable platform
+          can bind to it. The data-path filter restricts incoming messages to /signal
+          and /voice_memo paths only.
+        -->
+        <service
+            android:name=".WearListenerService"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.google.android.gms.wearable.MESSAGE_RECEIVED" />
+                <data
+                    android:scheme="wear"
+                    android:host="*"
+                    android:path="/signal" />
+                <data
+                    android:scheme="wear"
+                    android:host="*"
+                    android:path="/voice_memo" />
+            </intent-filter>
+        </service>
     </application>
 </manifest>

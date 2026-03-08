@@ -27,8 +27,14 @@ WATCH_AVD="${MOODBLOOM_WATCH_AVD:-Wear_OS_Large_Round_API_33}"
 ANDROID_HOME="${ANDROID_HOME:-$HOME/Android/Sdk}"
 EMULATOR="$ANDROID_HOME/emulator/emulator"
 ADB="$ANDROID_HOME/platform-tools/adb"
-TAURI_DEV="npm run tauri android dev"
 BOOT_TIMEOUT=180        # seconds to wait for emulator boot
+
+# Java 17 JDK required — Java 21 on Ubuntu is JRE-only (no javac for Gradle buildSrc)
+# Override with JAVA_HOME env var if your JDK is elsewhere.
+JAVA_HOME="${JAVA_HOME:-/usr/lib/jvm/java-17-openjdk-amd64}"
+export JAVA_HOME
+
+TAURI_DEV="JAVA_HOME=${JAVA_HOME} npm run tauri android dev"
 
 START_PHONE=true
 START_WATCH=false
@@ -67,6 +73,17 @@ check_tools() {
   [[ -x "$EMULATOR" ]] || { error "emulator not found at $EMULATOR"; ok=false; }
   [[ -x "$ADB" ]]      || { error "adb not found at $ADB"; ok=false; }
   command -v npm &>/dev/null || { error "npm not found"; ok=false; }
+
+  # Gradle buildSrc needs a real JDK (javac), not just a JRE
+  if [[ ! -x "${JAVA_HOME}/bin/javac" ]]; then
+    error "No javac at ${JAVA_HOME}/bin/javac"
+    error "Install Java 17 JDK:  sudo apt install openjdk-17-jdk"
+    error "Or set: export JAVA_HOME=/path/to/jdk17"
+    ok=false
+  else
+    info "Java: ${JAVA_HOME}/bin/java (javac present)"
+  fi
+
   $ok || exit 1
   success "All tools present"
 }

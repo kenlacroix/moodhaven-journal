@@ -28,6 +28,7 @@ import { saveEntry, getEntryById, patchEntryLocationWeather, deleteEntry, getBoo
 import { captureLocationWeather, getWeatherEmoji, displayTemp } from '../lib/locationWeatherService';
 import { pickAndAttachMedia, listEntryMedia, openMedia, deleteMedia, getMediaThumbnail } from '../lib/mediaService';
 import { RichTextEditor } from '../components/editor';
+import type { Editor } from '@tiptap/react';
 import { PromptDrawer } from '../components/ai/PromptDrawer';
 import { EntryOptionsMenu } from '../components/journal/EntryOptionsMenu';
 import { MediaAttachmentStrip } from '../components/journal/MediaAttachmentStrip';
@@ -204,6 +205,15 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
   /** Root div ref for Android — height is driven by visualViewport to stay above keyboard */
   const containerRef = useRef<HTMLDivElement>(null);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
+  /** Ref to TipTap editor instance, populated via onEditorReady — used by Android formatting bar */
+  const editorInstanceRef = useRef<Editor | null>(null);
+  /** Whether the full mood picker is expanded (true) or collapsed to a badge (false) */
+  const [moodPickerOpen, setMoodPickerOpen] = useState(!entryId);
+  /** Streak badge animation flag — fires once on mount when streak >= 3 */
+  const [streakAnimated, setStreakAnimated] = useState(false);
+  /** Word-count milestone flash */
+  const [wcFlash, setWcFlash] = useState(false);
+  const prevWcRef = useRef(0);
 
   const [savedEntry, setSavedEntry] = useState<JournalEntry | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -577,94 +587,221 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
     };
   }, [isAndroid]);
 
+  // ── Android: mood picker auto-collapse ──────────────────────────────────────
+  useEffect(() => {
+    if (mood !== null) setMoodPickerOpen(false);
+  }, [mood]);
+
+  // ── Android: streak badge animation on mount ─────────────────────────────────
+  useEffect(() => {
+    if (!isAndroid || currentStreak < 3) return;
+    const t = setTimeout(() => setStreakAnimated(true), 400);
+    return () => clearTimeout(t);
+  }, [isAndroid, currentStreak]);
+
+  // ── Android: word count milestone flash ─────────────────────────────────────
+  useEffect(() => {
+    if (!isAndroid) return;
+    const milestones = [50, 100, 200];
+    if (milestones.some((m) => prevWcRef.current < m && wordCount >= m)) {
+      setWcFlash(true);
+      const t = setTimeout(() => setWcFlash(false), 600);
+      prevWcRef.current = wordCount;
+      return () => clearTimeout(t);
+    }
+    prevWcRef.current = wordCount;
+  }, [wordCount, isAndroid]);
+
+  // ── Android: haptic feedback helper ─────────────────────────────────────────
+  const haptic = useCallback((ms: number) => {
+    try { if ('vibrate' in navigator) navigator.vibrate(ms); } catch { /* ignore */ }
+  }, []);
+
+  // ── Android: Done — flush pending auto-save then navigate away ───────────────
+  const handleDone = useCallback(async () => {
+    haptic(15);
+    await saveNowRef.current?.();
+    onEntrySaved?.();
+  }, [haptic, onEntrySaved]);
+
+  // ── Android: mood-aware editor placeholder ───────────────────────────────────
+  const MOOD_PLACEHOLDERS: Record<MoodLevel, string> = {
+    1: "How are you really feeling? It's okay to let it out…",
+    2: "What's weighing on you? You don't have to carry it alone…",
+    3: "What's on your mind today?",
+    4: "What are you grateful for today?",
+    5: "What made today special? Capture this moment…",
+  };
+  const editorPlaceholder = mood
+    ? MOOD_PLACEHOLDERS[mood]
+    : "How was your day? What's on your mind?";
+
+  // ── Android: background class changes with selected mood ─────────────────────
+  const moodBgClass = mood ? `android-mood-bg-${mood}` : 'android-mood-bg';
+
   // ── Mobile (Android) layout ──────────────────────────────────────────────────
   // Layout: collapsible metadata (top) → title (pinned) → editor (flex-1) → toolbar (bottom)
   // When the soft keyboard opens, visualViewport shrinks the container height and
   // keyboardVisible=true collapses the metadata section, so the editor stays visible
   // just above the keyboard.
   if (isAndroid) {
+    const promptText = forYouPrompts[0]?.text ?? generalPrompts[0]?.text ?? null;
     return (
-      <div ref={containerRef} className="flex flex-col bg-white dark:bg-slate-900" style={{ height: '100%' }}>
+      <div
+        ref={containerRef}
+        className={`flex flex-col transition-colors duration-500 ${moodBgClass}`}
+        style={{ height: '100%' }}
+      >
 
-        {/* ── Collapsible metadata: date, mood, privacy ──────────────────────────
-             Slides up and hides when the keyboard is open so the editor stays
-             visible. Border-b acts as the separator between metadata and writing
-             area; disappears naturally when the section collapses.              */}
-        <div className={`flex-shrink-0 overflow-hidden transition-all duration-200 ease-in-out border-b border-slate-100 dark:border-slate-800 ${
-          keyboardVisible ? 'max-h-0 border-b-0' : 'max-h-[300px]'
-        }`}>
-          {/* Date + weather */}
-          <div className="px-4 pt-4 pb-2">
-            <p className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wide">
-              {formattedDate}
-            </p>
-            {locationWeather && (
-              <p className="flex items-center gap-1 mt-0.5 text-xs text-slate-400 dark:text-slate-500">
-                <span>{getWeatherEmoji(locationWeather.weatherCode)}</span>
-                {locationWeather.temperature !== undefined && (
-                  <span>{displayTemp(locationWeather.temperature, temperatureUnit)}</span>
-                )}
-                {locationWeather.city && <span className="opacity-75">· {locationWeather.city}</span>}
-              </p>
+        {/* ── Header bar ─────────────────────────────────────────────────────────
+             Back arrow · streak counter · privacy icon · entry options         */}
+        <div className="flex-shrink-0 flex items-center justify-between px-3 pt-3 pb-1">
+          {/* Back / done */}
+          <button
+            onClick={handleDone}
+            className="w-10 h-10 flex items-center justify-center rounded-xl text-slate-600 dark:text-slate-300 active:bg-black/5 dark:active:bg-white/10 active:scale-95 transition-all"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 12H5m7-7l-7 7 7 7" />
+            </svg>
+          </button>
+
+          {/* Right controls */}
+          <div className="flex items-center gap-1.5">
+            {/* Streak badge */}
+            {currentStreak >= 1 && (
+              <div className={`flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-orange-100/80 dark:bg-orange-900/30 ${streakAnimated ? 'streak-glow' : ''}`}>
+                <span className="text-sm">🔥</span>
+                <span className="text-xs font-bold text-orange-600 dark:text-orange-400">{currentStreak}</span>
+              </div>
             )}
-          </div>
 
-          {/* Mood row */}
-          <div className="flex items-center gap-1 px-4 py-2">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 mr-1">
-              Mood
-            </span>
-            <div className="flex items-center gap-1 flex-1 justify-between">
-              {([1, 2, 3, 4, 5] as MoodLevel[]).map((level) => {
-                const isActive = level === mood;
-                const opt = MOOD_OPTIONS[level - 1];
-                return (
-                  <button
-                    key={level}
-                    onClick={() => { setMood(level); setMoodIsAuto(false); }}
-                    className={`w-12 h-12 rounded-full flex items-center justify-center text-xl transition-all duration-200 flex-shrink-0 active:scale-95 ${
-                      isActive
-                        ? 'ring-2 ring-offset-1 ring-violet-400 scale-110'
-                        : 'opacity-50'
-                    }`}
-                    style={isActive ? { backgroundColor: opt.color + '33' } : {}}
-                    title={`${opt.emoji} ${opt.label}`}
-                  >
-                    {opt.emoji}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+            {/* Privacy icon — tapping cycles Open → Mindful → Private */}
+            <button
+              onClick={() => { setPrivacyMode(((privacyMode + 1) % 3) as PrivacyMode); haptic(8); }}
+              title={PRIVACY_MODE_DESCRIPTIONS[privacyMode]}
+              className={`w-9 h-9 flex items-center justify-center rounded-xl active:bg-black/5 dark:active:bg-white/10 active:scale-95 transition-all ${PRIVACY_ACTIVE_COLORS[privacyMode]}`}
+            >
+              {PRIVACY_ICONS[privacyMode]}
+            </button>
 
-          {/* Privacy row */}
-          <div className="flex items-center gap-2 px-4 pb-3">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-              Privacy
-            </span>
-            <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 rounded-lg p-0.5 flex-1">
-              {([0, 1, 2] as PrivacyMode[]).map((mode) => (
-                <button
-                  key={mode}
-                  onClick={() => setPrivacyMode(mode)}
-                  title={PRIVACY_MODE_DESCRIPTIONS[mode]}
-                  className={`flex-1 py-2 rounded-md text-xs font-medium transition-all duration-200 active:scale-95 ${
-                    privacyMode === mode
-                      ? 'bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 shadow-sm'
-                      : 'text-slate-400 dark:text-slate-500'
-                  }`}
-                >
-                  {PRIVACY_MODE_LABELS[mode]}
-                </button>
-              ))}
-            </div>
+            {/* Entry options (existing entries only) */}
+            {!isNewEntry && savedEntry && (
+              <EntryOptionsMenu
+                entry={savedEntry}
+                wordCount={wordCount}
+                charCount={charCount}
+                onDelete={async () => {
+                  await deleteEntry(savedEntry.id);
+                  _onNewEntry?.();
+                }}
+              />
+            )}
           </div>
         </div>
 
-        {/* ── Writing area: title (pinned) + editor (flex-1) ──────────────────── */}
-        <div className="flex-1 flex flex-col min-h-0">
-          {/* Title — always visible, sits just above the editor */}
-          <div className="flex-shrink-0 px-4 pt-3 pb-1">
+        {/* ── Collapsible metadata ────────────────────────────────────────────────
+             Slides up when keyboard opens. Contains greeting/date and mood.    */}
+        <div className={`flex-shrink-0 overflow-hidden transition-all duration-250 ease-in-out ${
+          keyboardVisible ? 'max-h-0' : 'max-h-[340px]'
+        }`}>
+          {/* Greeting + date + weather */}
+          <div className="px-5 pt-2 pb-3">
+            {isNewEntry ? (
+              <>
+                <h1 className="text-2xl font-semibold text-slate-800 dark:text-slate-100 tracking-tight">
+                  {greeting}
+                </h1>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-1.5">
+                  <svg className="w-3.5 h-3.5 opacity-60" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  {formattedDate}
+                </p>
+                {locationWeather && (
+                  <p className="flex items-center gap-1.5 mt-1 text-xs text-slate-400 dark:text-slate-500">
+                    <span>{getWeatherEmoji(locationWeather.weatherCode)}</span>
+                    {locationWeather.temperature !== undefined && (
+                      <span>{displayTemp(locationWeather.temperature, temperatureUnit)}</span>
+                    )}
+                    {locationWeather.city && <span className="opacity-70">· {locationWeather.city}</span>}
+                  </p>
+                )}
+                {books.length > 1 && activeBook && (
+                  <p className="mt-1.5 text-xs text-slate-400 dark:text-slate-500">
+                    {activeBook.emoji} {activeBook.name}
+                  </p>
+                )}
+              </>
+            ) : (
+              <>
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                  Editing entry
+                </p>
+                <p className="text-sm text-slate-600 dark:text-slate-300 mt-0.5">{formattedDate}</p>
+              </>
+            )}
+          </div>
+
+          {/* Mood — full picker or collapsed badge */}
+          <div className="px-5 pb-4">
+            {moodPickerOpen ? (
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-3">
+                  How are you feeling?
+                </p>
+                <div className="flex items-end justify-between">
+                  {([1, 2, 3, 4, 5] as MoodLevel[]).map((level) => {
+                    const opt = MOOD_OPTIONS[level - 1];
+                    return (
+                      <button
+                        key={level}
+                        onClick={() => {
+                          setMood(level);
+                          setMoodIsAuto(false);
+                          setMoodPickerOpen(false);
+                          haptic(10);
+                        }}
+                        className="flex flex-col items-center gap-1.5 active:scale-90 transition-transform duration-150"
+                      >
+                        <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-2xl bg-white/60 dark:bg-white/10 shadow-sm">
+                          {opt.emoji}
+                        </div>
+                        <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400">
+                          {opt.label}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              /* Collapsed mood badge — tap to re-open picker */
+              <button
+                onClick={() => { setMoodPickerOpen(true); haptic(8); }}
+                className="inline-flex items-center gap-2 px-3 py-2 rounded-2xl bg-white/60 dark:bg-white/10 shadow-sm active:scale-95 transition-all duration-150"
+              >
+                <span className="text-xl">{mood !== null ? MOOD_OPTIONS[mood - 1].emoji : '○'}</span>
+                <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                  {mood !== null ? MOOD_OPTIONS[mood - 1].label : 'Set mood'}
+                </span>
+                {moodIsAuto && mood !== null && (
+                  <span className="text-[10px] text-violet-400 dark:text-violet-500">✦</span>
+                )}
+                <svg className="w-3.5 h-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* ── Writing area ────────────────────────────────────────────────────────
+             Title pinned above editor. Editor is flex-1 with a minimum height
+             so it always shows above the keyboard/toolbar.                     */}
+        <div className="flex-1 flex flex-col min-h-0 border-t border-black/5 dark:border-white/5">
+          {/* Title */}
+          <div className="flex-shrink-0 px-5 pt-3 pb-1">
             <input
               type="text"
               value={title}
@@ -674,25 +811,45 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
             />
           </div>
 
-          {/* Editor — grows to fill space; min-height keeps it usable even at
-               the smallest viewport (small phone + large keyboard)             */}
-          <div className="flex-1 min-h-0 px-4 pb-2 overflow-auto" style={{ minHeight: '180px' }}>
+          {/* Recent tag chips — quick insert, hidden while keyboard is open */}
+          {bookTags.length > 0 && !keyboardVisible && (
+            <div className="flex-shrink-0 overflow-x-auto scrollbar-hide px-5 pb-2">
+              <div className="flex items-center gap-1.5 flex-nowrap">
+                {bookTags.slice(0, 10).map((tag) => (
+                  <button
+                    key={tag}
+                    onClick={() => { setPendingInsert(` #${tag}`); haptic(8); }}
+                    className="flex-shrink-0 px-2.5 py-1 rounded-full text-xs font-medium bg-violet-100/70 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 active:scale-95 transition-transform"
+                  >
+                    #{tag}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Editor — serif, mood-aware placeholder */}
+          <div
+            className="flex-1 min-h-0 px-5 pb-2 overflow-auto android-writing"
+            style={{ minHeight: '180px' }}
+          >
             <RichTextEditor
               value={content}
               onChange={handleContentChange}
               insertText={pendingInsert}
               onInsertTextConsumed={() => setPendingInsert(null)}
-              placeholder="Start writing…"
+              placeholder={editorPlaceholder}
               autoFocus={!entryId}
               className="min-h-full"
               onNavigateToSTTSettings={onNavigateToSTTSettings}
+              onEditorReady={(ed) => { editorInstanceRef.current = ed; }}
             />
           </div>
         </div>
 
-        {/* ── Media strip ── */}
+        {/* Media strip */}
         {attachments.length > 0 && (
-          <div className="flex-shrink-0 px-4">
+          <div className="flex-shrink-0 px-5">
             <MediaAttachmentStrip
               attachments={attachments}
               thumbnails={thumbnails}
@@ -702,89 +859,157 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
           </div>
         )}
 
-        {/* ── Sticky bottom toolbar ── */}
+        {/* ── Action bar ──────────────────────────────────────────────────────────
+             Keyboard open  → formatting tools (B / I / list) + Done
+             Keyboard closed → attach + tags + prompts + word count + Done      */}
         <div
-          className="flex-shrink-0 flex items-center gap-1 px-3 py-2 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900"
+          className="flex-shrink-0 border-t border-black/5 dark:border-white/5 bg-white/50 dark:bg-black/20 backdrop-blur-sm"
           style={{ paddingBottom: 'max(8px, env(safe-area-inset-bottom))' }}
         >
-          {/* Attach */}
-          <button
-            onClick={handleAttach}
-            disabled={!savedEntryIdRef.current || !sessionPassword}
-            title={!savedEntryIdRef.current ? 'Write a few words first' : 'Attach files'}
-            className="w-10 h-10 flex items-center justify-center rounded-xl text-slate-400 dark:text-slate-500 disabled:opacity-30 transition-colors"
-          >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94A3 3 0 1119.5 7.372L8.552 18.32m.009-.01l-.01.01m5.699-9.941l-7.81 7.81a1.5 1.5 0 002.112 2.13" />
-            </svg>
-          </button>
+          <div className="flex items-center gap-1 px-3 py-2">
+            {keyboardVisible ? (
+              /* Formatting mini-toolbar when keyboard is open */
+              <>
+                <button
+                  onMouseDown={(e) => { e.preventDefault(); editorInstanceRef.current?.chain().focus().toggleBold().run(); }}
+                  className="w-9 h-9 flex items-center justify-center rounded-lg text-slate-600 dark:text-slate-300 font-bold text-sm active:bg-black/8 active:scale-95 transition-all"
+                  title="Bold"
+                >B</button>
+                <button
+                  onMouseDown={(e) => { e.preventDefault(); editorInstanceRef.current?.chain().focus().toggleItalic().run(); }}
+                  className="w-9 h-9 flex items-center justify-center rounded-lg text-slate-600 dark:text-slate-300 italic text-sm active:bg-black/8 active:scale-95 transition-all"
+                  title="Italic"
+                >I</button>
+                <button
+                  onMouseDown={(e) => { e.preventDefault(); editorInstanceRef.current?.chain().focus().toggleBulletList().run(); }}
+                  className="w-9 h-9 flex items-center justify-center rounded-lg text-slate-600 dark:text-slate-300 active:bg-black/8 active:scale-95 transition-all"
+                  title="Bullet list"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
+                  </svg>
+                </button>
+                <div className="flex-1" />
+                {wordCount > 0 && (
+                  <span className={`text-xs mr-2 transition-colors duration-300 ${
+                    wcFlash ? 'wc-flash text-emerald-500 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500'
+                  }`}>
+                    {wordCount}w
+                  </span>
+                )}
+                <button
+                  onClick={handleDone}
+                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-violet-500 to-pink-500 text-white text-sm font-semibold shadow-sm active:scale-95 active:opacity-90 transition-all duration-150"
+                >
+                  Done
+                </button>
+              </>
+            ) : (
+              /* Default toolbar when keyboard is dismissed */
+              <>
+                <button
+                  onClick={handleAttach}
+                  disabled={!savedEntryIdRef.current || !sessionPassword}
+                  title="Attach"
+                  className="w-10 h-10 flex items-center justify-center rounded-xl text-slate-400 dark:text-slate-500 disabled:opacity-30 active:bg-black/5 active:scale-95 transition-all"
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94A3 3 0 1119.5 7.372L8.552 18.32m.009-.01l-.01.01m5.699-9.941l-7.81 7.81a1.5 1.5 0 002.112 2.13" />
+                  </svg>
+                </button>
 
-          {/* Tags */}
-          <button
-            onClick={() => setTagManagerOpen(true)}
-            className="w-10 h-10 flex items-center justify-center rounded-xl text-slate-400 dark:text-slate-500 transition-colors"
-            title="Manage tags"
-          >
-            <span className="text-base font-bold">#</span>
-          </button>
+                <button
+                  onClick={() => { setTagManagerOpen(true); haptic(8); }}
+                  title="Tags"
+                  className="w-10 h-10 flex items-center justify-center rounded-xl text-slate-400 dark:text-slate-500 active:bg-black/5 active:scale-95 transition-all"
+                >
+                  <span className="text-base font-bold">#</span>
+                </button>
 
-          {/* Prompts */}
-          {isNewEntry && showPrompts && (
-            <button
-              onClick={() => setDrawerOpen(true)}
-              className="w-10 h-10 flex items-center justify-center rounded-xl text-slate-400 dark:text-slate-500 transition-colors"
-              title="Writing prompts"
-            >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1M6.343 6.343l-.707-.707M3 12H2m19 0h-1M6.343 17.657l-.707.707M17.657 6.343l.707-.707M16.5 12a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
-              </svg>
-            </button>
-          )}
+                {isNewEntry && showPrompts && (
+                  <button
+                    onClick={() => { setDrawerOpen(true); haptic(8); }}
+                    title="Writing prompts"
+                    className="w-10 h-10 flex items-center justify-center rounded-xl text-slate-400 dark:text-slate-500 active:bg-black/5 active:scale-95 transition-all"
+                  >
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1M6.343 6.343l-.707-.707M3 12H2m19 0h-1M6.343 17.657l-.707.707M17.657 6.343l.707-.707M16.5 12a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
+                    </svg>
+                  </button>
+                )}
 
-          {/* Entry options (existing entries) */}
-          {!isNewEntry && savedEntry && (
-            <EntryOptionsMenu
-              entry={savedEntry}
-              wordCount={wordCount}
-              charCount={charCount}
-              onDelete={async () => {
-                await deleteEntry(savedEntry.id);
-                _onNewEntry?.();
-              }}
-            />
-          )}
+                <div className="flex-1" />
 
-          {/* Spacer */}
-          <div className="flex-1" />
+                {/* Save status + word count combined */}
+                {wordCount > 0 && (
+                  <span className={`text-xs mr-2 transition-colors duration-300 ${
+                    wcFlash
+                      ? 'text-emerald-500 dark:text-emerald-400'
+                      : isSaving
+                        ? 'text-violet-400 dark:text-violet-500'
+                        : lastSavedAt
+                          ? 'text-emerald-500 dark:text-emerald-400'
+                          : 'text-slate-400 dark:text-slate-500'
+                  }`}>
+                    {wcFlash
+                      ? `${wordCount}w ✦`
+                      : isSaving
+                        ? 'Saving…'
+                        : lastSavedAt
+                          ? `${wordCount}w · ✓`
+                          : `${wordCount}w`}
+                  </span>
+                )}
 
-          {/* Word count */}
-          <span className="text-xs text-slate-300 dark:text-slate-600 mr-1">
-            {wordCount > 0 ? `${wordCount}w` : ''}
-          </span>
-
-          {/* Save status */}
-          <span className={`text-xs transition-all duration-300 ${
-            isSaving
-              ? 'text-violet-400 dark:text-violet-500'
-              : lastSavedAt
-                ? 'text-emerald-500 dark:text-emerald-400'
-                : 'text-slate-300 dark:text-slate-600'
-          }`}>
-            {isSaving ? 'Saving…' : lastSavedAt ? '✓ Saved' : ''}
-          </span>
+                <button
+                  onClick={handleDone}
+                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-violet-500 to-pink-500 text-white text-sm font-semibold shadow-sm active:scale-95 active:opacity-90 transition-all duration-150"
+                >
+                  Done
+                </button>
+              </>
+            )}
+          </div>
         </div>
 
-        {/* Tag manager modal */}
+        {/* ── Prompt card ─────────────────────────────────────────────────────────
+             Shown below the action bar when entry is empty and keyboard is
+             dismissed. Gives new writers a starting nudge.                     */}
+        {isNewEntry && isEditorEmpty && !keyboardVisible && promptText && (
+          <div className="flex-shrink-0 px-4 pb-4">
+            <div className="rounded-2xl bg-white/60 dark:bg-white/5 border border-black/5 dark:border-white/10 shadow-sm p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-violet-500 dark:text-violet-400 mb-1">
+                    ✦ Today's prompt
+                  </p>
+                  <p className="text-sm text-slate-600 dark:text-slate-300 line-clamp-2">
+                    {promptText}
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    const p = forYouPrompts[0] ?? generalPrompts[0];
+                    if (p) { handleUsePrompt(p); haptic(10); }
+                  }}
+                  className="flex-shrink-0 px-3 py-1.5 rounded-lg bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 text-xs font-semibold active:scale-95 transition-transform"
+                >
+                  Use
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modals */}
         {tagManagerOpen && (
           <TagManagerModal
             content={content}
             bookTags={bookTags}
-            onInsertTag={(tag) => setPendingInsert(` #${tag}`)}
+            onInsertTag={(tag) => { setPendingInsert(` #${tag}`); haptic(8); }}
             onClose={() => setTagManagerOpen(false)}
           />
         )}
-
-        {/* Prompt drawer */}
         {isNewEntry && showPrompts && (
           <PromptDrawer
             isOpen={drawerOpen}

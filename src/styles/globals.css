@@ -173,6 +173,54 @@
   }
 }
 
+/* ── Android writing view ─────────────────────────────────────────────────────
+ *
+ * Warm ambient gradient backgrounds — default and mood-reactive tints.
+ * The .dark prefix targets the html.dark class added by Tailwind's dark mode.
+ */
+.android-mood-bg   { background: linear-gradient(160deg, #fffbeb 0%, #fff7ed 45%, #fff1f2 100%); }
+.android-mood-bg-1 { background: linear-gradient(160deg, #fff1f2 0%, #ffe4e6 45%, #fce7f3 100%); }
+.android-mood-bg-2 { background: linear-gradient(160deg, #fff7ed 0%, #ffedd5 45%, #fefce8 100%); }
+.android-mood-bg-3 { background: linear-gradient(160deg, #fffbeb 0%, #fff7ed 45%, #fff1f2 100%); }
+.android-mood-bg-4 { background: linear-gradient(160deg, #f0fdf4 0%, #dcfce7 45%, #ecfdf5 100%); }
+.android-mood-bg-5 { background: linear-gradient(160deg, #ecfdf5 0%, #d1fae5 45%, #f0fdfa 100%); }
+
+.dark .android-mood-bg   { background: linear-gradient(160deg, #1c1009 0%, #1a100a 45%, #1a0a0e 100%); }
+.dark .android-mood-bg-1 { background: linear-gradient(160deg, #1a0508 0%, #180612 45%, #150510 100%); }
+.dark .android-mood-bg-2 { background: linear-gradient(160deg, #1a0e04 0%, #191005 45%, #191304 100%); }
+.dark .android-mood-bg-3 { background: linear-gradient(160deg, #1c1009 0%, #1a100a 45%, #1a0a0e 100%); }
+.dark .android-mood-bg-4 { background: linear-gradient(160deg, #051a0d 0%, #051a0d 45%, #041a0c 100%); }
+.dark .android-mood-bg-5 { background: linear-gradient(160deg, #04180f 0%, #041810 45%, #041812 100%); }
+
+/* Serif typography for the Android writing area */
+.android-writing .ProseMirror {
+  font-family: Georgia, 'Times New Roman', serif;
+  line-height: 1.85;
+  font-size: 1.0625rem;
+}
+.android-writing .ProseMirror p.is-editor-empty:first-child::before {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-style: italic;
+  opacity: 0.45;
+}
+
+/* Streak counter pop on mount (≥3 day streaks) */
+@keyframes streak-pulse {
+  0%   { transform: scale(1); }
+  35%  { transform: scale(1.3); filter: drop-shadow(0 0 8px #f97316); }
+  70%  { transform: scale(0.95); }
+  100% { transform: scale(1); filter: none; }
+}
+.streak-glow { animation: streak-pulse 0.65s ease-out; }
+
+/* Word-count milestone flash */
+@keyframes wc-flash-kf {
+  0%   { color: inherit; transform: scale(1); }
+  30%  { color: #10b981; transform: scale(1.18); }
+  100% { color: inherit; transform: scale(1); }
+}
+.wc-flash { animation: wc-flash-kf 0.55s ease-out; }
+
 /* Animation for reduced motion preference */
 @media (prefers-reduced-motion: reduce) {
   *,

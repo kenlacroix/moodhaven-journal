@@ -41,6 +41,9 @@ interface RichTextEditorProps {
   onInsertTextConsumed?: () => void;
   /** When true, keeps the cursor at ~38% from top of the scroll container (typewriter mode) */
   distractionFree?: boolean;
+  /** Called with the Editor instance once mounted; called with null on unmount.
+   *  Lets parents (e.g. Android action bar) invoke formatting commands directly. */
+  onEditorReady?: (editor: Editor | null) => void;
 }
 
 export function RichTextEditor({
@@ -54,6 +57,7 @@ export function RichTextEditor({
   insertText,
   onInsertTextConsumed,
   distractionFree = false,
+  onEditorReady,
 }: RichTextEditorProps) {
   const distractionFreeRef = useRef(distractionFree);
   useEffect(() => { distractionFreeRef.current = distractionFree; }, [distractionFree]);
@@ -136,6 +140,13 @@ export function RichTextEditor({
       }
     },
   });
+
+  // Expose editor instance to parent via callback (e.g. Android formatting toolbar)
+  useEffect(() => {
+    onEditorReady?.(editor ?? null);
+    return () => onEditorReady?.(null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editor]);
 
   // Insert text at cursor when insertText prop is set (used by prompt suggestions)
   useEffect(() => {

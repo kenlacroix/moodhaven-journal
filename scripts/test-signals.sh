@@ -37,10 +37,18 @@ FAILURES=0
 # ── Find emulator ─────────────────────────────────────────────────────────────
 SERIAL="${1:-}"
 if [[ -z "$SERIAL" ]]; then
-  SERIAL=$("$ADB" devices | awk '/emulator-[0-9]+\s+device/{print $1; exit}')
+  # grep for emulator lines, filter to only "device" state (not offline/unauthorized)
+  SERIAL=$("$ADB" devices | grep '^emulator-' | grep $'\tdevice' | awk '{print $1}' | head -1)
+  # fallback: any emulator line regardless of tab formatting
+  if [[ -z "$SERIAL" ]]; then
+    SERIAL=$("$ADB" devices | grep '^emulator-' | awk '{print $1}' | head -1)
+  fi
   if [[ -z "$SERIAL" ]]; then
     echo -e "${RED}No running emulator found. Start one first:${RESET}"
     echo "  ./scripts/dev.sh phone"
+    echo ""
+    echo "Current adb devices output:"
+    "$ADB" devices
     exit 1
   fi
 fi

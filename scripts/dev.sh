@@ -93,20 +93,18 @@ check_tools() {
 # Return serial of a running emulator whose avd name matches $1, or ""
 find_running_serial() {
   local avd="$1"
-  # adb devices lists "emulator-NNNN  device"
-  # For each emulator, query its avd name property
   while IFS= read -r serial; do
     local name
     name=$("$ADB" -s "$serial" emu avd name 2>/dev/null | head -1 | tr -d '\r' | tr ' ' '_')
     if [[ "$name" == "$avd" ]] || [[ "$name" == "${avd// /_}" ]]; then
       echo "$serial"; return
     fi
-  done < <("$ADB" devices | awk '/emulator-/{print $1}')
+  done < <("$ADB" devices | grep '^emulator-' | awk '{print $1}')
 }
 
 # Return the serial of ANY currently running emulator (first one)
 any_running_serial() {
-  "$ADB" devices | awk '/emulator-[0-9]+\s+device/{print $1; exit}'
+  "$ADB" devices | grep '^emulator-' | grep $'\tdevice' | awk '{print $1}' | head -1
 }
 
 # Wait for an emulator serial to finish booting
@@ -157,7 +155,7 @@ launch_avd() {
   while [[ -z "$new_serial" && $attempts -lt 20 ]]; do
     sleep 2; attempts=$((attempts+1))
     local after
-    after=$("$ADB" devices | awk '/emulator-/{print $1}' | sort)
+    after=$("$ADB" devices | grep '^emulator-' | awk '{print $1}' | sort)
     new_serial=$(comm -13 <(echo "$before") <(echo "$after") | head -1)
   done
 

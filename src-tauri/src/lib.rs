@@ -151,6 +151,8 @@ pub fn run() {
             // Sync log (incremental sync infrastructure)
             commands::get_unsynced_log,
             commands::mark_sync_log_synced,
+            // Signal pipeline self-test (automated testing without a watch)
+            commands::debug_signal_self_test,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

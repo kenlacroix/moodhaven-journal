@@ -3,32 +3,35 @@
 # MoodBloom dev launcher
 #
 # Usage:
-#   ./scripts/dev.sh                  # Phone only (Tauri Android dev)
-#   ./scripts/dev.sh phone            # Same as above
-#   ./scripts/dev.sh phone watch      # Phone + Wear OS emulator (paired)
-#   ./scripts/dev.sh watch            # Wear OS emulator only (no phone)
-#   ./scripts/dev.sh --list-avds      # List all available AVDs
-#   ./scripts/dev.sh --help           # Show this help
+#   ./scripts/dev.sh                                # Phone only (auto-detect running emulator)
+#   ./scripts/dev.sh phone                          # Same
+#   ./scripts/dev.sh phone watch                    # Phone + Wear OS emulator (paired)
+#   ./scripts/dev.sh watch                          # Wear OS emulator only
+#   ./scripts/dev.sh --avd Medium_Phone_API_36.1    # Override phone AVD name
+#   ./scripts/dev.sh --watch-avd Wear_OS_Small      # Override watch AVD name
+#   ./scripts/dev.sh --list-avds                    # List available AVDs
+#   ./scripts/dev.sh --help                         # This message
+#
+# If the target AVD is already running the script skips launch and uses it.
 #
 # Prerequisites:
-#   - Android SDK with `emulator`, `adb` on PATH (or ANDROID_HOME set)
-#   - Tauri CLI v2: npm i -g @tauri-apps/cli   (or use npx)
-#   - AVDs already created in Android Studio:
-#       Phone: "MoodBloom_Phone"   (API 35, Pixel 8)
-#       Watch:  "MoodBloom_Watch"  (API 33, Wear OS Large Round)
+#   - Android SDK: emulator + adb on PATH (or ANDROID_HOME set)
+#   - AVD exists (create in Android Studio: Tools → Device Manager)
+#   - npm / node installed
 # ──────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
-# ── Config (override via env vars) ───────────────────────────────────────────
-PHONE_AVD="${MOODBLOOM_PHONE_AVD:-MoodBloom_Phone}"
-WATCH_AVD="${MOODBLOOM_WATCH_AVD:-MoodBloom_Watch}"
+# ── Defaults (override with --avd / --watch-avd or env vars) ─────────────────
+PHONE_AVD="${MOODBLOOM_PHONE_AVD:-Medium_Phone_API_36.1}"
+WATCH_AVD="${MOODBLOOM_WATCH_AVD:-Wear_OS_Large_Round_API_33}"
 ANDROID_HOME="${ANDROID_HOME:-$HOME/Android/Sdk}"
 EMULATOR="$ANDROID_HOME/emulator/emulator"
 ADB="$ANDROID_HOME/platform-tools/adb"
-PACKAGE="com.moodbloom.app"
-
-# Tauri dev command — adjust if using bun/yarn
 TAURI_DEV="npm run tauri android dev"
+BOOT_TIMEOUT=180        # seconds to wait for emulator boot
+
+START_PHONE=true
+START_WATCH=false
 
 # ── Colours ───────────────────────────────────────────────────────────────────
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
@@ -37,125 +40,140 @@ BLUE='\033[0;34m'; CYAN='\033[0;36m'; BOLD='\033[1m'; RESET='\033[0m'
 info()    { echo -e "${CYAN}[INFO]${RESET} $*"; }
 success() { echo -e "${GREEN}[OK]${RESET}   $*"; }
 warn()    { echo -e "${YELLOW}[WARN]${RESET} $*"; }
-error()   { echo -e "${RED}[ERR]${RESET}  $*"; }
+error()   { echo -e "${RED}[ERR]${RESET}  $*" >&2; }
 step()    { echo -e "\n${BOLD}${BLUE}▶ $*${RESET}"; }
 
 # ── Argument parsing ──────────────────────────────────────────────────────────
-START_PHONE=true
-START_WATCH=false
-
-for arg in "$@"; do
-  case "$arg" in
+while [[ $# -gt 0 ]]; do
+  case "$1" in
     phone)         START_PHONE=true ;;
     watch)         START_WATCH=true ;;
-    phone+watch|watch+phone) START_PHONE=true; START_WATCH=true ;;
+    --avd)         shift; PHONE_AVD="$1" ;;
+    --watch-avd)   shift; WATCH_AVD="$1" ;;
     --list-avds)
-      info "Available AVDs:"
-      "$EMULATOR" -list-avds 2>/dev/null || avdmanager list avd -c 2>/dev/null
-      exit 0 ;;
+      echo "Available AVDs:"; "$EMULATOR" -list-avds 2>/dev/null; exit 0 ;;
     --help|-h)
-      sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'
-      exit 0 ;;
+      sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *)
-      error "Unknown argument: $arg"
-      exit 1 ;;
+      error "Unknown argument: $1 (use --help)"; exit 1 ;;
   esac
+  shift
 done
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
-
+# ── Tool check ────────────────────────────────────────────────────────────────
 check_tools() {
   step "Checking prerequisites"
   local ok=true
+  [[ -x "$EMULATOR" ]] || { error "emulator not found at $EMULATOR"; ok=false; }
+  [[ -x "$ADB" ]]      || { error "adb not found at $ADB"; ok=false; }
+  command -v npm &>/dev/null || { error "npm not found"; ok=false; }
+  $ok || exit 1
+  success "All tools present"
+}
 
-  for tool in "$EMULATOR" "$ADB"; do
-    if [[ ! -x "$tool" ]]; then
-      error "Not found: $tool"
-      ok=false
+# ── Emulator helpers ──────────────────────────────────────────────────────────
+
+# Return serial of a running emulator whose avd name matches $1, or ""
+find_running_serial() {
+  local avd="$1"
+  # adb devices lists "emulator-NNNN  device"
+  # For each emulator, query its avd name property
+  while IFS= read -r serial; do
+    local name
+    name=$("$ADB" -s "$serial" emu avd name 2>/dev/null | head -1 | tr -d '\r' | tr ' ' '_')
+    if [[ "$name" == "$avd" ]] || [[ "$name" == "${avd// /_}" ]]; then
+      echo "$serial"; return
+    fi
+  done < <("$ADB" devices | awk '/emulator-/{print $1}')
+}
+
+# Return the serial of ANY currently running emulator (first one)
+any_running_serial() {
+  "$ADB" devices | awk '/emulator-[0-9]+\s+device/{print $1; exit}'
+}
+
+# Wait for an emulator serial to finish booting
+wait_for_boot() {
+  local serial="$1"
+  local elapsed=0
+  info "Waiting for $serial to boot (up to ${BOOT_TIMEOUT}s)…"
+  until "$ADB" -s "$serial" shell getprop sys.boot_completed 2>/dev/null | grep -q "^1"; do
+    sleep 3; elapsed=$((elapsed+3))
+    printf "."
+    if [[ $elapsed -ge $BOOT_TIMEOUT ]]; then
+      echo ""; error "Timed out waiting for $serial after ${BOOT_TIMEOUT}s"
+      error "Check: $ANDROID_HOME/emulator/emulator -avd $PHONE_AVD"
+      return 1
     fi
   done
-
-  if ! command -v npx &>/dev/null; then
-    error "npx not found — install Node.js"
-    ok=false
-  fi
-
-  $ok || { error "Fix missing tools above, then re-run."; exit 1; }
-  success "All tools found"
+  echo ""; success "$serial booted"
 }
 
-is_avd_running() {
-  local avd="$1"
-  "$ADB" devices | grep -q "emulator-" && \
-    "$ADB" -e shell getprop ro.kernel.qemu.avd_name 2>/dev/null | grep -q "$avd"
-}
-
-start_emulator() {
+# Launch an AVD and return its serial
+launch_avd() {
   local avd="$1"
   local label="$2"
 
   step "Starting $label emulator: $avd"
 
-  if is_avd_running "$avd"; then
-    warn "$avd is already running — skipping launch"
-    return
+  # Already running?
+  local serial
+  serial=$(find_running_serial "$avd")
+  if [[ -n "$serial" ]]; then
+    warn "$avd already running as $serial — skipping launch"
+    echo "$serial"; return 0
   fi
 
-  # Start emulator in background, suppress verbose GPU output
-  "$EMULATOR" -avd "$avd" -no-snapshot-save -gpu swiftshader_indirect \
-    > /tmp/moodbloom_emulator_${avd}.log 2>&1 &
-  local emu_pid=$!
-  echo "$emu_pid" > /tmp/moodbloom_emu_${avd}.pid
-  info "Emulator PID: $emu_pid — log: /tmp/moodbloom_emulator_${avd}.log"
+  # Record serials before launch so we can identify the new one
+  local before
+  before=$("$ADB" devices | awk '/emulator-/{print $1}' | sort)
 
-  # Wait for boot
-  info "Waiting for $label to boot (up to 120 s)…"
-  local timeout=120
-  local elapsed=0
-  until "$ADB" -s "emulator-5554" shell getprop sys.boot_completed 2>/dev/null | grep -q "1"; do
-    sleep 3
-    elapsed=$((elapsed + 3))
-    if [[ $elapsed -ge $timeout ]]; then
-      error "$label did not boot within ${timeout}s"
-      return 1
-    fi
-    echo -n "."
+  "$EMULATOR" -avd "$avd" -no-snapshot-save -gpu swiftshader_indirect \
+    > "/tmp/moodbloom_emu_${avd}.log" 2>&1 &
+  local pid=$!
+  echo "$pid" > "/tmp/moodbloom_emu_${avd}.pid"
+  info "Emulator PID $pid — log: /tmp/moodbloom_emu_${avd}.log"
+
+  # Wait up to 30 s for the new serial to appear in adb devices
+  local new_serial=""
+  local attempts=0
+  while [[ -z "$new_serial" && $attempts -lt 20 ]]; do
+    sleep 2; attempts=$((attempts+1))
+    local after
+    after=$("$ADB" devices | awk '/emulator-/{print $1}' | sort)
+    new_serial=$(comm -13 <(echo "$before") <(echo "$after") | head -1)
   done
-  echo ""
-  success "$label booted"
+
+  if [[ -z "$new_serial" ]]; then
+    error "New emulator did not appear in 'adb devices' — check the log:"
+    error "  cat /tmp/moodbloom_emu_${avd}.log"
+    return 1
+  fi
+
+  info "New emulator detected: $new_serial"
+  wait_for_boot "$new_serial"
+  echo "$new_serial"
 }
 
 pair_watch_to_phone() {
-  step "Pairing watch emulator to phone emulator"
-
-  # The Wear OS emulator on 5556 pairs to phone on 5554 via adb forward
-  local watch_serial="emulator-5556"
-  local phone_serial="emulator-5554"
-
-  # Forward the Wear pairing port
+  local phone_serial="$1"
+  local watch_serial="$2"
+  step "Setting up watch ↔ phone port forwarding"
   "$ADB" -s "$phone_serial" forward tcp:5601 tcp:5601 2>/dev/null || true
-
-  info "Open Wear OS companion app on the phone emulator and follow pairing steps."
-  info "Or use: adb -s $watch_serial forward tcp:5601 tcp:5601"
-  success "Port forwarding set up — manual pairing step required in companion app"
+  info "Port 5601 forwarded from $phone_serial → $watch_serial"
+  info "Open 'Wear OS' companion app on the phone emulator and follow pairing."
 }
 
-wait_for_confirm() {
-  echo ""
-  echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-  echo -e "${BOLD}$1${RESET}"
-  echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-  read -r -p "Press Enter when ready (or Ctrl+C to abort)…"
-}
+# ── Cleanup ───────────────────────────────────────────────────────────────────
+PHONE_SERIAL=""
+WATCH_SERIAL=""
 
-# ── Cleanup on exit ───────────────────────────────────────────────────────────
 cleanup() {
   echo ""
-  info "Shutting down…"
+  info "Cleaning up…"
   for pid_file in /tmp/moodbloom_emu_*.pid; do
     [[ -f "$pid_file" ]] || continue
-    local pid
-    pid=$(cat "$pid_file")
+    local pid; pid=$(cat "$pid_file")
     kill "$pid" 2>/dev/null && info "Stopped emulator PID $pid" || true
     rm -f "$pid_file"
   done
@@ -163,54 +181,35 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 # ── Main ──────────────────────────────────────────────────────────────────────
-
 echo -e "\n${BOLD}${BLUE}MoodBloom Dev Launcher${RESET}"
-echo -e "  Phone: ${START_PHONE} | Watch: ${START_WATCH}\n"
+printf "  Phone AVD : %s  (start=%s)\n" "$PHONE_AVD" "$START_PHONE"
+printf "  Watch AVD : %s  (start=%s)\n\n" "$WATCH_AVD" "$START_WATCH"
 
 check_tools
 
-# ── Start emulators ───────────────────────────────────────────────────────────
-
 if $START_PHONE; then
-  start_emulator "$PHONE_AVD" "Phone"
+  PHONE_SERIAL=$(launch_avd "$PHONE_AVD" "Phone") || exit 1
 fi
 
 if $START_WATCH; then
-  start_emulator "$WATCH_AVD" "Watch"
-  if $START_PHONE; then
-    pair_watch_to_phone
+  WATCH_SERIAL=$(launch_avd "$WATCH_AVD" "Watch") || exit 1
+  if $START_PHONE && [[ -n "$PHONE_SERIAL" ]] && [[ -n "$WATCH_SERIAL" ]]; then
+    pair_watch_to_phone "$PHONE_SERIAL" "$WATCH_SERIAL"
   fi
 fi
 
 # ── Tauri hot-reload ──────────────────────────────────────────────────────────
-
 if $START_PHONE; then
   step "Starting Tauri Android dev server"
-  info "Command: $TAURI_DEV"
-  info "Hot-reload is active — save any .tsx/.ts file to see changes immediately"
+  info "Hot-reload active — save any .tsx/.ts file to see changes instantly"
+  info "Ctrl+C to stop everything"
   echo ""
-
-  # Run in foreground so Ctrl+C kills cleanly
   eval "$TAURI_DEV"
 fi
 
-# ── Watch-only mode ───────────────────────────────────────────────────────────
-
 if $START_WATCH && ! $START_PHONE; then
-  step "Watch emulator running"
-  info "Wear OS emulator is up. Use Android Studio to deploy the wearapp/ module."
-  info "Press Ctrl+C to stop."
+  step "Watch emulator is running (watch-only mode)"
+  info "Deploy the wearapp/ module from Android Studio."
+  info "Ctrl+C to stop."
   wait
-fi
-
-# ── Test checkpoints ──────────────────────────────────────────────────────────
-# (These only print if the Tauri dev server exits cleanly, not on Ctrl+C)
-
-if $START_WATCH; then
-  echo ""
-  echo -e "${BOLD}${GREEN}✓ Test Checkpoint: Watch-Phone Communication${RESET}"
-  echo "  1. In phone app: Settings → About → tap hidden '?' 7× → 'Watch Debug'"
-  echo "     → tap 'Simulate Watch Mood Tap' → verify signal appears in timeline"
-  echo "  2. Check Logcat (tag=WearListenerService) for 'Watch signal received'"
-  echo "  3. Check Logcat (tag=WearPlugin) for 'Emitted wear://signal'"
 fi

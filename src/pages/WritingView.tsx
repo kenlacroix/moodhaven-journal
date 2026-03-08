@@ -201,6 +201,9 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
   // Imperative save: always-fresh function re-assigned each render so it closes
   // over the latest state. saveRef.current (stable wrapper) delegates to this.
   const saveNowRef = useRef<(() => Promise<void>) | null>(null);
+  /** Root div ref for Android — height is driven by visualViewport to stay above keyboard */
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
 
   const [savedEntry, setSavedEntry] = useState<JournalEntry | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -551,29 +554,61 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
     if (saveRef) saveRef.current = () => saveNowRef.current!();
   }, [saveRef]);
 
+  // ── Android: track visualViewport height to keep layout above soft keyboard ──
+  // visualViewport.height excludes the on-screen keyboard; window.innerHeight does not.
+  // We set the container's height explicitly so the flexbox always fills exactly the
+  // visible area, meaning the editor stays just above the toolbar/keyboard.
+  useEffect(() => {
+    if (!isAndroid) return;
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const update = () => {
+      const vh = Math.round(vv.height);
+      if (containerRef.current) containerRef.current.style.height = `${vh}px`;
+      // Keyboard is considered visible when it reduces the viewport by >150px
+      setKeyboardVisible(window.innerHeight - vh > 150);
+    };
+    vv.addEventListener('resize', update);
+    vv.addEventListener('scroll', update);
+    update();
+    return () => {
+      vv.removeEventListener('resize', update);
+      vv.removeEventListener('scroll', update);
+    };
+  }, [isAndroid]);
+
   // ── Mobile (Android) layout ──────────────────────────────────────────────────
+  // Layout: collapsible metadata (top) → title (pinned) → editor (flex-1) → toolbar (bottom)
+  // When the soft keyboard opens, visualViewport shrinks the container height and
+  // keyboardVisible=true collapses the metadata section, so the editor stays visible
+  // just above the keyboard.
   if (isAndroid) {
     return (
-      <div className="h-full flex flex-col bg-white dark:bg-slate-900">
+      <div ref={containerRef} className="flex flex-col bg-white dark:bg-slate-900" style={{ height: '100%' }}>
 
-        {/* ── Date + weather row ── */}
-        <div className="flex-shrink-0 px-4 pt-4 pb-2">
-          <p className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wide">
-            {formattedDate}
-          </p>
-          {locationWeather && (
-            <p className="flex items-center gap-1 mt-0.5 text-xs text-slate-400 dark:text-slate-500">
-              <span>{getWeatherEmoji(locationWeather.weatherCode)}</span>
-              {locationWeather.temperature !== undefined && (
-                <span>{displayTemp(locationWeather.temperature, temperatureUnit)}</span>
-              )}
-              {locationWeather.city && <span className="opacity-75">· {locationWeather.city}</span>}
+        {/* ── Collapsible metadata: date, mood, privacy ──────────────────────────
+             Slides up and hides when the keyboard is open so the editor stays
+             visible. Border-b acts as the separator between metadata and writing
+             area; disappears naturally when the section collapses.              */}
+        <div className={`flex-shrink-0 overflow-hidden transition-all duration-200 ease-in-out border-b border-slate-100 dark:border-slate-800 ${
+          keyboardVisible ? 'max-h-0 border-b-0' : 'max-h-[300px]'
+        }`}>
+          {/* Date + weather */}
+          <div className="px-4 pt-4 pb-2">
+            <p className="text-xs font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wide">
+              {formattedDate}
             </p>
-          )}
-        </div>
+            {locationWeather && (
+              <p className="flex items-center gap-1 mt-0.5 text-xs text-slate-400 dark:text-slate-500">
+                <span>{getWeatherEmoji(locationWeather.weatherCode)}</span>
+                {locationWeather.temperature !== undefined && (
+                  <span>{displayTemp(locationWeather.temperature, temperatureUnit)}</span>
+                )}
+                {locationWeather.city && <span className="opacity-75">· {locationWeather.city}</span>}
+              </p>
+            )}
+          </div>
 
-        {/* ── Mood + privacy rows ── */}
-        <div className="flex-shrink-0 border-b border-slate-100 dark:border-slate-800">
           {/* Mood row */}
           <div className="flex items-center gap-1 px-4 py-2">
             <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 mr-1">
@@ -602,8 +637,8 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
             </div>
           </div>
 
-          {/* Privacy row — own line so it doesn't compete with mood buttons */}
-          <div className="flex items-center gap-2 px-4 pb-2">
+          {/* Privacy row */}
+          <div className="flex items-center gap-2 px-4 pb-3">
             <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
               Privacy
             </span>
@@ -626,29 +661,33 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
           </div>
         </div>
 
-        {/* ── Title input ── */}
-        <div className="flex-shrink-0 px-4 pt-3">
-          <input
-            type="text"
-            value={title}
-            onChange={handleTitleChange}
-            placeholder="Title (optional)"
-            className="w-full text-xl font-semibold bg-transparent text-slate-800 dark:text-slate-100 placeholder-slate-300 dark:placeholder-slate-600 outline-none border-none"
-          />
-        </div>
+        {/* ── Writing area: title (pinned) + editor (flex-1) ──────────────────── */}
+        <div className="flex-1 flex flex-col min-h-0">
+          {/* Title — always visible, sits just above the editor */}
+          <div className="flex-shrink-0 px-4 pt-3 pb-1">
+            <input
+              type="text"
+              value={title}
+              onChange={handleTitleChange}
+              placeholder="Title (optional)"
+              className="w-full text-xl font-semibold bg-transparent text-slate-800 dark:text-slate-100 placeholder-slate-300 dark:placeholder-slate-600 outline-none border-none"
+            />
+          </div>
 
-        {/* ── Editor (flex-1 — fills remaining space) ── */}
-        <div className="flex-1 min-h-0 px-4 pb-2 overflow-auto">
-          <RichTextEditor
-            value={content}
-            onChange={handleContentChange}
-            insertText={pendingInsert}
-            onInsertTextConsumed={() => setPendingInsert(null)}
-            placeholder="Start writing…"
-            autoFocus={!entryId}
-            className="min-h-full"
-            onNavigateToSTTSettings={onNavigateToSTTSettings}
-          />
+          {/* Editor — grows to fill space; min-height keeps it usable even at
+               the smallest viewport (small phone + large keyboard)             */}
+          <div className="flex-1 min-h-0 px-4 pb-2 overflow-auto" style={{ minHeight: '180px' }}>
+            <RichTextEditor
+              value={content}
+              onChange={handleContentChange}
+              insertText={pendingInsert}
+              onInsertTextConsumed={() => setPendingInsert(null)}
+              placeholder="Start writing…"
+              autoFocus={!entryId}
+              className="min-h-full"
+              onNavigateToSTTSettings={onNavigateToSTTSettings}
+            />
+          </div>
         </div>
 
         {/* ── Media strip ── */}

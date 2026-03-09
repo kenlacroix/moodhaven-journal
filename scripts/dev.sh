@@ -171,12 +171,12 @@ launch_avd() {
   if [[ "$kind" == "watch" ]]; then
     gpu_mode="guest"
     extra_flags+=(-no-boot-anim)
-    # Watch state isn't precious — always skip snapshot for fast cold boot
-    snapshot_flags=(-no-snapshot-save)
-  elif $NO_SNAPSHOT; then
+  fi
+  if $NO_SNAPSHOT; then
     snapshot_flags=(-no-snapshot-load -no-snapshot-save)
   fi
-  # Phone default: no snapshot flags → quick-boot is used (state is preserved)
+  # Default (phone & watch): no snapshot flags → quick-boot is used (state is preserved)
+  # The watch app is always reinstalled after boot, so a stale snapshot is fine.
 
   "$EMULATOR" -avd "$avd" -gpu "$gpu_mode" \
     "${snapshot_flags[@]}" \

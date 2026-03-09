@@ -106,9 +106,9 @@ setup_devtools() {
   info "WebView socket: $socket"
   "$ADB" -s "$SERIAL" forward "tcp:${DEVTOOLS_PORT}" "localabstract:${socket}" 2>/dev/null || true
 
-  # Verify the /json endpoint returns real CDP JSON
+  # Verify the /json endpoint returns real CDP JSON (5s timeout — don't hang)
   local response
-  response=$(curl -sf "http://localhost:${DEVTOOLS_PORT}/json" 2>/dev/null || true)
+  response=$(curl -sf --max-time 5 "http://localhost:${DEVTOOLS_PORT}/json" 2>/dev/null || true)
   if echo "$response" | python3 -c "import sys,json; tabs=json.load(sys.stdin); assert len(tabs)>0" 2>/dev/null; then
     DEVTOOLS_READY=true
     info "Chrome DevTools reachable on port $DEVTOOLS_PORT"
@@ -137,7 +137,8 @@ try:
 except ImportError:
     print("no_ws_lib"); sys.exit(0)
 ws_url = sys.argv[1]
-ws = websocket.create_connection(ws_url, timeout=10, suppress_origin=True)
+ws = websocket.create_connection(ws_url, timeout=5, suppress_origin=True)
+ws.settimeout(2)   # per-recv timeout so the loop can actually check the deadline
 # Probe both the type and the window label in one round-trip
 ws.send(json.dumps({"id":99,"method":"Runtime.evaluate",
   "params":{
@@ -149,12 +150,15 @@ ws.send(json.dumps({"id":99,"method":"Runtime.evaluate",
     })()""",
     "returnByValue": True
   }}))
-import time; deadline=time.time()+5
+import time; deadline=time.time()+8
 while time.time()<deadline:
-    raw=ws.recv(); msg=json.loads(raw)
-    if msg.get("id")==99:
-        print(msg.get("result",{}).get("result",{}).get("value","unknown"))
-        break
+    try:
+        raw=ws.recv(); msg=json.loads(raw)
+        if msg.get("id")==99:
+            print(msg.get("result",{}).get("result",{}).get("value","unknown"))
+            break
+    except Exception:
+        pass  # timeout on this recv — keep looping until deadline
 ws.close()
 PYEOF
   )
@@ -213,9 +217,10 @@ ws_url, cmd, args = sys.argv[1], sys.argv[2], sys.argv[3]
 
 ws = websocket.create_connection(
     ws_url,
-    timeout=10,
+    timeout=5,
     suppress_origin=True,   # omit Origin header — Chromium rejects all external origins
 )
+ws.settimeout(2)   # per-recv timeout so the deadline loop can interrupt blocking recvs
 expr = (
     f"window.__TAURI_INTERNALS__.invoke('{cmd}', {args})"
     f".then(r => '__RESULT__:' + JSON.stringify(r))"
@@ -227,7 +232,10 @@ ws.send(json.dumps({"id": 1, "method": "Runtime.evaluate",
 
 deadline = time.time() + 15
 while time.time() < deadline:
-    raw = ws.recv()
+    try:
+        raw = ws.recv()
+    except Exception:
+        continue   # per-recv timeout — check deadline and retry
     msg = json.loads(raw)
     if msg.get("id") == 1:
         msg_result = msg.get("result", {})

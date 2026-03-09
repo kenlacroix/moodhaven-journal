@@ -3,25 +3,33 @@
 # MoodBloom dev launcher
 #
 # Usage:
-#   ./scripts/dev.sh                                # Phone only (auto-detect running emulator)
-#   ./scripts/dev.sh phone                          # Same
-#   ./scripts/dev.sh phone watch                    # Phone + Wear OS emulator (paired)
-#   ./scripts/dev.sh watch                          # Wear OS emulator only
-#   ./scripts/dev.sh --avd Medium_Phone_API_36.1    # Override phone AVD name
-#   ./scripts/dev.sh --watch-avd Wear_OS_Small      # Override watch AVD name
-#   ./scripts/dev.sh --list-avds                    # List available AVDs
-#   ./scripts/dev.sh --help                         # This message
+#   ./scripts/dev.sh                                    # Phone only (default)
+#   ./scripts/dev.sh phone                              # Phone only
+#   ./scripts/dev.sh watch                              # Watch emulator only
+#   ./scripts/dev.sh desktop                            # Desktop app only
+#   ./scripts/dev.sh phone watch                        # Phone + Watch
+#   ./scripts/dev.sh desktop phone                      # Desktop + Phone (sync testing)
+#   ./scripts/dev.sh desktop phone watch                # All three
 #
-# If the target AVD is already running the script skips launch and uses it.
+#   --avd <name>         Override phone AVD name
+#   --watch-avd <name>   Override watch AVD name
+#   --no-snapshot        Launch emulators fresh (ignore/discard quick-boot state)
+#   --install-wear       Install wear APK on phone after it boots
+#   --list-avds          List available AVDs
+#   --help               This message
+#
+# Emulator state (Wear OS app, paired watch, etc.) is preserved between runs
+# via Android quick-boot snapshots. Use --no-snapshot for a clean slate.
 #
 # Prerequisites:
 #   - Android SDK: emulator + adb on PATH (or ANDROID_HOME set)
-#   - AVD exists (create in Android Studio: Tools → Device Manager)
+#   - AVDs exist (create in Android Studio: Tools → Device Manager)
 #   - npm / node installed
+#   - Java 17 JDK (javac required by Gradle buildSrc)
 # ──────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
-# ── Defaults (override with --avd / --watch-avd or env vars) ─────────────────
+# ── Defaults ──────────────────────────────────────────────────────────────────
 PHONE_AVD="${MOODBLOOM_PHONE_AVD:-Medium_Phone_API_36.1}"
 WATCH_AVD="${MOODBLOOM_WATCH_AVD:-Wear_OS_Large_Round}"
 ANDROID_HOME="${ANDROID_HOME:-$HOME/Android/Sdk}"
@@ -29,15 +37,17 @@ EMULATOR="$ANDROID_HOME/emulator/emulator"
 ADB="$ANDROID_HOME/platform-tools/adb"
 BOOT_TIMEOUT=180        # seconds to wait for emulator boot
 
-# Java 17 JDK required — Java 21 on Ubuntu is JRE-only (no javac for Gradle buildSrc)
-# Override with JAVA_HOME env var if your JDK is elsewhere.
 JAVA_HOME="${JAVA_HOME:-/usr/lib/jvm/java-17-openjdk-amd64}"
 export JAVA_HOME
 
-TAURI_DEV="JAVA_HOME=${JAVA_HOME} npm run tauri android dev"
-
-START_PHONE=true
+# Target flags
+START_PHONE=false
 START_WATCH=false
+START_DESKTOP=false
+
+# Emulator options
+NO_SNAPSHOT=false       # if true: -no-snapshot-load -no-snapshot-save
+INSTALL_WEAR=false      # auto-install wear APK on phone after boot
 
 # ── Colours ───────────────────────────────────────────────────────────────────
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
@@ -50,38 +60,54 @@ error()   { echo -e "${RED}[ERR]${RESET}  $*" >&2; }
 step()    { echo -e "\n${BOLD}${BLUE}▶ $*${RESET}"; }
 
 # ── Argument parsing ──────────────────────────────────────────────────────────
+# No positional args → default to phone
+if [[ $# -eq 0 ]]; then
+  START_PHONE=true
+fi
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    phone)         START_PHONE=true ;;
-    watch)         START_WATCH=true ;;
-    --avd)         shift; PHONE_AVD="$1" ;;
-    --watch-avd)   shift; WATCH_AVD="$1" ;;
+    phone)           START_PHONE=true ;;
+    watch)           START_WATCH=true ;;
+    desktop)         START_DESKTOP=true ;;
+    --avd)           shift; PHONE_AVD="$1" ;;
+    --watch-avd)     shift; WATCH_AVD="$1" ;;
+    --no-snapshot)   NO_SNAPSHOT=true ;;
+    --install-wear)  INSTALL_WEAR=true ;;
     --list-avds)
       echo "Available AVDs:"; "$EMULATOR" -list-avds 2>/dev/null; exit 0 ;;
     --help|-h)
-      sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+      sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *)
       error "Unknown argument: $1 (use --help)"; exit 1 ;;
   esac
   shift
 done
 
+# If only watch/desktop requested and phone was not explicitly requested, don't start phone
+# (overrides the old "phone=true by default" behaviour when other targets are given)
+
 # ── Tool check ────────────────────────────────────────────────────────────────
 check_tools() {
   step "Checking prerequisites"
   local ok=true
-  [[ -x "$EMULATOR" ]] || { error "emulator not found at $EMULATOR"; ok=false; }
-  [[ -x "$ADB" ]]      || { error "adb not found at $ADB"; ok=false; }
+
+  if $START_PHONE || $START_WATCH; then
+    [[ -x "$EMULATOR" ]] || { error "emulator not found at $EMULATOR"; ok=false; }
+    [[ -x "$ADB" ]]      || { error "adb not found at $ADB"; ok=false; }
+  fi
+
   command -v npm &>/dev/null || { error "npm not found"; ok=false; }
 
-  # Gradle buildSrc needs a real JDK (javac), not just a JRE
-  if [[ ! -x "${JAVA_HOME}/bin/javac" ]]; then
-    error "No javac at ${JAVA_HOME}/bin/javac"
-    error "Install Java 17 JDK:  sudo apt install openjdk-17-jdk"
-    error "Or set: export JAVA_HOME=/path/to/jdk17"
-    ok=false
-  else
-    info "Java: ${JAVA_HOME}/bin/java (javac present)"
+  if $START_PHONE || $START_WATCH; then
+    if [[ ! -x "${JAVA_HOME}/bin/javac" ]]; then
+      error "No javac at ${JAVA_HOME}/bin/javac"
+      error "Install Java 17 JDK:  sudo apt install openjdk-17-jdk"
+      error "Or set: export JAVA_HOME=/path/to/jdk17"
+      ok=false
+    else
+      info "Java: ${JAVA_HOME}/bin/javac ✓"
+    fi
   fi
 
   $ok || exit 1
@@ -90,7 +116,6 @@ check_tools() {
 
 # ── Emulator helpers ──────────────────────────────────────────────────────────
 
-# Return serial of a running emulator whose avd name matches $1, or ""
 find_running_serial() {
   local avd="$1"
   while IFS= read -r serial; do
@@ -102,12 +127,6 @@ find_running_serial() {
   done < <("$ADB" devices | grep '^emulator-' | awk '{print $1}')
 }
 
-# Return the serial of ANY currently running emulator (first one)
-any_running_serial() {
-  "$ADB" devices | grep '^emulator-' | grep $'\tdevice' | awk '{print $1}' | head -1
-}
-
-# Wait for an emulator serial to finish booting
 wait_for_boot() {
   local serial="$1"
   local elapsed=0
@@ -117,15 +136,14 @@ wait_for_boot() {
     printf "."
     if [[ $elapsed -ge $BOOT_TIMEOUT ]]; then
       echo ""; error "Timed out waiting for $serial after ${BOOT_TIMEOUT}s"
-      error "Check: $ANDROID_HOME/emulator/emulator -avd $PHONE_AVD"
       return 1
     fi
   done
   echo ""; success "$serial booted"
 }
 
-# Launch an AVD and return its serial
-# $1 = avd name, $2 = human label, $3 = "watch" to use watch-friendly flags
+# Launch an AVD, return its serial.
+# $1 = avd name, $2 = human label, $3 = "watch" for watch-tuned flags
 launch_avd() {
   local avd="$1"
   local label="$2"
@@ -133,7 +151,6 @@ launch_avd() {
 
   step "Starting $label emulator: $avd"
 
-  # Already running?
   local serial
   serial=$(find_running_serial "$avd")
   if [[ -n "$serial" ]]; then
@@ -141,29 +158,36 @@ launch_avd() {
     echo "$serial"; return 0
   fi
 
-  # Record serials before launch so we can identify the new one
   local before
   before=$("$ADB" devices | awk '/emulator-/{print $1}' | sort)
 
-  # Wear OS signed images boot slowly and may not support swiftshader well;
-  # use -no-boot-anim to shorten the wait and a compatible GPU mode.
+  # Phone: enable quick-boot snapshots by default so state (installed apps,
+  # Wear OS pairing) persists between sessions. --no-snapshot overrides this.
+  # Watch: signed Wear OS images use -gpu guest; -no-boot-anim speeds things up.
+  local snapshot_flags=()
   local gpu_mode="swiftshader_indirect"
   local extra_flags=()
+
   if [[ "$kind" == "watch" ]]; then
     gpu_mode="guest"
-    extra_flags=(-no-boot-anim)
+    extra_flags+=(-no-boot-anim)
+    # Watch state isn't precious — always skip snapshot for fast cold boot
+    snapshot_flags=(-no-snapshot-save)
+  elif $NO_SNAPSHOT; then
+    snapshot_flags=(-no-snapshot-load -no-snapshot-save)
   fi
+  # Phone default: no snapshot flags → quick-boot is used (state is preserved)
 
-  "$EMULATOR" -avd "$avd" -no-snapshot-save -gpu "$gpu_mode" \
+  "$EMULATOR" -avd "$avd" -gpu "$gpu_mode" \
+    "${snapshot_flags[@]}" \
     "${extra_flags[@]}" \
     > "/tmp/moodbloom_emu_${avd}.log" 2>&1 &
   local pid=$!
   echo "$pid" > "/tmp/moodbloom_emu_${avd}.pid"
   info "Emulator PID $pid — log: /tmp/moodbloom_emu_${avd}.log"
 
-  # Wait up to 90 s for the new serial to appear in adb devices.
-  # Wear OS emulators are slower to register than phone emulators.
-  local max_attempts=45   # 45 × 2 s = 90 s
+  # Wait up to 90 s for the new serial (Wear emulators are slow to register)
+  local max_attempts=45
   local new_serial=""
   local attempts=0
   while [[ -z "$new_serial" && $attempts -lt $max_attempts ]]; do
@@ -176,7 +200,7 @@ launch_avd() {
   echo ""
 
   if [[ -z "$new_serial" ]]; then
-    error "New emulator did not appear in 'adb devices' after $((max_attempts*2))s — check the log:"
+    error "New emulator did not appear in 'adb devices' after $((max_attempts*2))s"
     error "  cat /tmp/moodbloom_emu_${avd}.log"
     return 1
   fi
@@ -188,11 +212,66 @@ launch_avd() {
 
 pair_watch_to_phone() {
   local phone_serial="$1"
-  local watch_serial="$2"
   step "Setting up watch ↔ phone port forwarding"
   "$ADB" -s "$phone_serial" forward tcp:5601 tcp:5601 2>/dev/null || true
-  info "Port 5601 forwarded from $phone_serial → $watch_serial"
+  info "Port 5601 forwarded on $phone_serial"
   info "Open 'Wear OS' companion app on the phone emulator and follow pairing."
+}
+
+install_wear_apk() {
+  local phone_serial="$1"
+  local apk_path
+  apk_path=$(find "$(pwd)/src-tauri/gen/android" -name "*.apk" -path "*/wear/debug/*" 2>/dev/null | head -1)
+  if [[ -z "$apk_path" ]]; then
+    warn "Wear APK not found — build it first:"
+    warn "  cd src-tauri/gen/android && JAVA_HOME=$JAVA_HOME ./gradlew :wear:assembleDebug"
+    return
+  fi
+  step "Installing Wear OS watch app on phone emulator"
+  info "APK: $apk_path"
+  "$ADB" -s "$phone_serial" install -r "$apk_path" && \
+    success "Wear watch app installed on phone emulator" || \
+    warn "APK install failed — try manually: adb -s $phone_serial install $apk_path"
+}
+
+# ── Vite dev server ───────────────────────────────────────────────────────────
+VITE_PID=""
+
+# Start Vite in background and wait until port 1420 is ready.
+# Used when running desktop + android in parallel (both share one Vite instance).
+start_vite() {
+  step "Starting Vite dev server (shared)"
+  npm run dev > /tmp/moodbloom_vite.log 2>&1 &
+  VITE_PID=$!
+  echo "$VITE_PID" > /tmp/moodbloom_vite.pid
+  info "Vite PID $VITE_PID — log: /tmp/moodbloom_vite.log"
+
+  local attempts=0
+  printf "  Waiting for Vite on :1420 "
+  while ! curl -sf http://localhost:1420 > /dev/null 2>&1; do
+    sleep 1; attempts=$((attempts+1))
+    printf "."
+    if [[ $attempts -ge 30 ]]; then
+      echo ""
+      error "Vite did not start within 30s — check /tmp/moodbloom_vite.log"
+      return 1
+    fi
+  done
+  echo ""; success "Vite ready on http://localhost:1420"
+}
+
+# ── Background dev process tracker ───────────────────────────────────────────
+BG_PIDS=()
+
+# Run a command in background, track its PID, tee output to a log file
+run_bg() {
+  local label="$1"; shift
+  local log="/tmp/moodbloom_${label// /_}.log"
+  info "Launching [$label] in background — log: $log"
+  "$@" > "$log" 2>&1 &
+  local pid=$!
+  BG_PIDS+=("$pid")
+  echo "$pid" > "/tmp/moodbloom_bg_${label// /_}.pid"
 }
 
 # ── Cleanup ───────────────────────────────────────────────────────────────────
@@ -202,6 +281,19 @@ WATCH_SERIAL=""
 cleanup() {
   echo ""
   info "Cleaning up…"
+
+  # Stop background dev processes
+  for pid in "${BG_PIDS[@]:-}"; do
+    [[ -n "$pid" ]] && kill "$pid" 2>/dev/null && info "Stopped background process $pid" || true
+  done
+
+  # Stop Vite if we started it
+  if [[ -n "$VITE_PID" ]]; then
+    kill "$VITE_PID" 2>/dev/null && info "Stopped Vite PID $VITE_PID" || true
+    rm -f /tmp/moodbloom_vite.pid
+  fi
+
+  # Stop emulators
   for pid_file in /tmp/moodbloom_emu_*.pid; do
     [[ -f "$pid_file" ]] || continue
     local pid; pid=$(cat "$pid_file")
@@ -213,34 +305,85 @@ trap cleanup EXIT INT TERM
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 echo -e "\n${BOLD}${BLUE}MoodBloom Dev Launcher${RESET}"
-printf "  Phone AVD : %s  (start=%s)\n" "$PHONE_AVD" "$START_PHONE"
-printf "  Watch AVD : %s  (start=%s)\n\n" "$WATCH_AVD" "$START_WATCH"
+printf "  Targets  : %s\n" "$(
+  parts=()
+  $START_DESKTOP && parts+=("desktop")
+  $START_PHONE   && parts+=("phone (AVD: $PHONE_AVD)")
+  $START_WATCH   && parts+=("watch (AVD: $WATCH_AVD)")
+  echo "${parts[*]:-none}"
+)"
+$NO_SNAPSHOT  && printf "  Snapshots: disabled (--no-snapshot)\n"
+$INSTALL_WEAR && printf "  Wear APK : will auto-install on phone\n"
+echo ""
 
 check_tools
 
+# ── Start emulators ───────────────────────────────────────────────────────────
 if $START_PHONE; then
   PHONE_SERIAL=$(launch_avd "$PHONE_AVD" "Phone" "phone") || exit 1
+  if $INSTALL_WEAR; then
+    install_wear_apk "$PHONE_SERIAL"
+  fi
 fi
 
 if $START_WATCH; then
   WATCH_SERIAL=$(launch_avd "$WATCH_AVD" "Watch" "watch") || exit 1
-  if $START_PHONE && [[ -n "$PHONE_SERIAL" ]] && [[ -n "$WATCH_SERIAL" ]]; then
-    pair_watch_to_phone "$PHONE_SERIAL" "$WATCH_SERIAL"
+  if $START_PHONE && [[ -n "$PHONE_SERIAL" ]]; then
+    pair_watch_to_phone "$PHONE_SERIAL"
   fi
 fi
 
-# ── Tauri hot-reload ──────────────────────────────────────────────────────────
-if $START_PHONE; then
-  step "Starting Tauri Android dev server"
-  info "Hot-reload active — save any .tsx/.ts file to see changes instantly"
-  info "Ctrl+C to stop everything"
-  echo ""
-  eval "$TAURI_DEV"
-fi
+# ── Start dev servers ─────────────────────────────────────────────────────────
+#
+# Combinations:
+#   desktop only        → tauri dev (manages its own Vite)
+#   phone/watch only    → tauri android dev (manages its own Vite)
+#   desktop + android   → start shared Vite once, then both tauri processes
+#                         with --no-dev-server (desktop) / --no-dev-server-wait
+#                         + config override (android)
+#
 
-if $START_WATCH && ! $START_PHONE; then
-  step "Watch emulator is running (watch-only mode)"
-  info "Deploy the wearapp/ module from Android Studio."
+NEED_ANDROID=$START_PHONE  # android dev only runs when phone is selected
+
+if $START_DESKTOP && $NEED_ANDROID; then
+  # ── Shared Vite + parallel targets ──────────────────────────────────────────
+  start_vite
+
+  step "Starting Tauri Android dev (background)"
+  info "Hot-reload active for Android — logs: /tmp/moodbloom_android_dev.log"
+  run_bg "android dev" \
+    env JAVA_HOME="$JAVA_HOME" \
+    npm run tauri android dev -- --no-dev-server-wait \
+      --config '{"build":{"beforeDevCommand":""}}'
+
+  step "Starting Tauri Desktop dev (foreground)"
+  info "Hot-reload active for Desktop — Ctrl+C to stop everything"
+  echo ""
+  npm run tauri dev -- --no-dev-server
+
+elif $START_DESKTOP; then
+  # ── Desktop only ────────────────────────────────────────────────────────────
+  step "Starting Tauri Desktop dev"
+  info "Hot-reload active — Ctrl+C to stop"
+  echo ""
+  npm run tauri dev
+
+elif $NEED_ANDROID; then
+  # ── Android only (phone ± watch) ────────────────────────────────────────────
+  step "Starting Tauri Android dev"
+  info "Hot-reload active — Ctrl+C to stop everything"
+  echo ""
+  JAVA_HOME="$JAVA_HOME" npm run tauri android dev
+
+elif $START_WATCH; then
+  # ── Watch emulator only (no phone, no desktop) ───────────────────────────────
+  step "Watch emulator is running"
+  info "Deploy the wear app from Android Studio, or run:"
+  info "  cd src-tauri/gen/android && JAVA_HOME=$JAVA_HOME ./gradlew :wear:installDebug"
   info "Ctrl+C to stop."
   wait
+
+else
+  error "No targets selected. Try: ./scripts/dev.sh phone | watch | desktop | --help"
+  exit 1
 fi

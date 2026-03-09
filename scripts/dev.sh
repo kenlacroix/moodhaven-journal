@@ -125,9 +125,11 @@ wait_for_boot() {
 }
 
 # Launch an AVD and return its serial
+# $1 = avd name, $2 = human label, $3 = "watch" to use watch-friendly flags
 launch_avd() {
   local avd="$1"
   local label="$2"
+  local kind="${3:-phone}"
 
   step "Starting $label emulator: $avd"
 
@@ -143,24 +145,38 @@ launch_avd() {
   local before
   before=$("$ADB" devices | awk '/emulator-/{print $1}' | sort)
 
-  "$EMULATOR" -avd "$avd" -no-snapshot-save -gpu swiftshader_indirect \
+  # Wear OS signed images boot slowly and may not support swiftshader well;
+  # use -no-boot-anim to shorten the wait and a compatible GPU mode.
+  local gpu_mode="swiftshader_indirect"
+  local extra_flags=()
+  if [[ "$kind" == "watch" ]]; then
+    gpu_mode="guest"
+    extra_flags=(-no-boot-anim)
+  fi
+
+  "$EMULATOR" -avd "$avd" -no-snapshot-save -gpu "$gpu_mode" \
+    "${extra_flags[@]}" \
     > "/tmp/moodbloom_emu_${avd}.log" 2>&1 &
   local pid=$!
   echo "$pid" > "/tmp/moodbloom_emu_${avd}.pid"
   info "Emulator PID $pid — log: /tmp/moodbloom_emu_${avd}.log"
 
-  # Wait up to 30 s for the new serial to appear in adb devices
+  # Wait up to 90 s for the new serial to appear in adb devices.
+  # Wear OS emulators are slower to register than phone emulators.
+  local max_attempts=45   # 45 × 2 s = 90 s
   local new_serial=""
   local attempts=0
-  while [[ -z "$new_serial" && $attempts -lt 20 ]]; do
+  while [[ -z "$new_serial" && $attempts -lt $max_attempts ]]; do
     sleep 2; attempts=$((attempts+1))
+    printf "."
     local after
     after=$("$ADB" devices | grep '^emulator-' | awk '{print $1}' | sort)
     new_serial=$(comm -13 <(echo "$before") <(echo "$after") | head -1)
   done
+  echo ""
 
   if [[ -z "$new_serial" ]]; then
-    error "New emulator did not appear in 'adb devices' — check the log:"
+    error "New emulator did not appear in 'adb devices' after $((max_attempts*2))s — check the log:"
     error "  cat /tmp/moodbloom_emu_${avd}.log"
     return 1
   fi
@@ -203,11 +219,11 @@ printf "  Watch AVD : %s  (start=%s)\n\n" "$WATCH_AVD" "$START_WATCH"
 check_tools
 
 if $START_PHONE; then
-  PHONE_SERIAL=$(launch_avd "$PHONE_AVD" "Phone") || exit 1
+  PHONE_SERIAL=$(launch_avd "$PHONE_AVD" "Phone" "phone") || exit 1
 fi
 
 if $START_WATCH; then
-  WATCH_SERIAL=$(launch_avd "$WATCH_AVD" "Watch") || exit 1
+  WATCH_SERIAL=$(launch_avd "$WATCH_AVD" "Watch" "watch") || exit 1
   if $START_PHONE && [[ -n "$PHONE_SERIAL" ]] && [[ -n "$WATCH_SERIAL" ]]; then
     pair_watch_to_phone "$PHONE_SERIAL" "$WATCH_SERIAL"
   fi

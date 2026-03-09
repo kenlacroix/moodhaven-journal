@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Mood Picker page. The WearableRecyclerView fills the entire screen.
+  No header text — on round watches the top is always clipped by the bezel.
+  The wheel curve effect is applied via WearableLinearLayoutManager.LayoutCallback
+  in MoodPickerFragment: items near the edge scale down and fade out.
+
+  Queued badge floats in the bottom-center above the page dots.
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000000">
+
+    <androidx.wear.widget.WearableRecyclerView
+        android:id="@+id/moodList"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <!-- Queue pending badge — above dots, only visible when > 0 queued -->
+    <TextView
+        android:id="@+id/queuedBadge"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginBottom="24dp"
+        android:visibility="gone"
+        android:text="● 0 queued"
+        android:textSize="9sp"
+        android:textColor="#FFF97316"
+        android:paddingStart="6dp"
+        android:paddingEnd="6dp" />
+
+</FrameLayout>

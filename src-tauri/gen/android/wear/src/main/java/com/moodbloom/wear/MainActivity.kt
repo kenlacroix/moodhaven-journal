@@ -1,137 +1,131 @@
 package com.moodbloom.wear
 
-import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
 import android.view.View
 import android.widget.TextView
+import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.lifecycleScope
-import androidx.wear.widget.WearableLinearLayoutManager
-import androidx.wear.widget.WearableRecyclerView
+import androidx.viewpager2.adapter.FragmentStateAdapter
+import androidx.viewpager2.widget.ViewPager2
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
- * MoodBloom Watch — main entry point.
+ * MainActivity — host for the 3-page swipe UI.
  *
- * Features:
- *  - Mood picker (5 moods, WearableRecyclerView)
- *  - Full-colour confirmation screen
- *  - Offline queue: signals saved locally when phone unreachable
- *  - Queued badge: dot shown when unsent signals are pending
- *  - History button → HistoryActivity
- *  - Offline drain: retries queued signals on resume
+ * Page 0 ← History | Page 1 (default) = Mood Picker | Page 2 → Sync Status
+ *
+ * The mood picker calls back into here (via [MoodPickerFragment.Callback]) so
+ * that confirmation overlays float above the ViewPager and are always visible
+ * regardless of which page the user is on during the send animation.
  */
-class MainActivity : FragmentActivity() {
+class MainActivity : FragmentActivity(), MoodPickerFragment.Callback {
 
-    private lateinit var pickerLayer: View
-    private lateinit var moodList: WearableRecyclerView
-    private lateinit var historyBtn: View
-    private lateinit var queuedBadge: TextView
+    companion object {
+        private const val PAGE_HISTORY = 0
+        private const val PAGE_PICKER  = 1
+        private const val PAGE_SYNC    = 2
+    }
+
+    private lateinit var viewPager: ViewPager2
+    private lateinit var dots: List<View>
 
     private lateinit var confirmationOverlay: View
     private lateinit var confirmEmoji: TextView
     private lateinit var confirmMoodName: TextView
-    private lateinit var confirmLabel: TextView
 
     private lateinit var queuedOverlay: View
     private lateinit var queuedEmoji: TextView
-
-    private var isSending = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        pickerLayer         = findViewById(R.id.pickerLayer)
-        moodList            = findViewById(R.id.moodList)
-        historyBtn          = findViewById(R.id.historyBtn)
-        queuedBadge         = findViewById(R.id.queuedBadge)
-
+        viewPager           = findViewById(R.id.viewPager)
         confirmationOverlay = findViewById(R.id.confirmationOverlay)
         confirmEmoji        = findViewById(R.id.confirmEmoji)
         confirmMoodName     = findViewById(R.id.confirmMoodName)
-        confirmLabel        = findViewById(R.id.confirmLabel)
-
         queuedOverlay       = findViewById(R.id.queuedOverlay)
         queuedEmoji         = findViewById(R.id.queuedEmoji)
 
-        moodList.isEdgeItemsCenteringEnabled = true
-        moodList.layoutManager = WearableLinearLayoutManager(this)
-        moodList.adapter = MoodAdapter(MOODS) { mood -> onMoodSelected(mood) }
+        dots = listOf(
+            findViewById(R.id.dot0),
+            findViewById(R.id.dot1),
+            findViewById(R.id.dot2),
+        )
 
-        historyBtn.setOnClickListener {
-            startActivity(Intent(this, HistoryActivity::class.java))
-        }
+        viewPager.adapter = MainPagerAdapter(this)
+        viewPager.setCurrentItem(PAGE_PICKER, false)
 
-        updateQueuedBadge()
+        viewPager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
+            override fun onPageSelected(position: Int) = updateDots(position)
+        })
+
+        updateDots(PAGE_PICKER)
     }
 
     override fun onResume() {
         super.onResume()
-        // Drain any offline-queued signals each time the app comes to the foreground
+        // Drain offline queue silently on every app open
         lifecycleScope.launch {
-            val sent = SignalSender.drainAndSend(this@MainActivity)
-            if (sent > 0) updateQueuedBadge()
+            SignalSender.drainAndSend(this@MainActivity)
         }
     }
 
-    // ── Mood selection ────────────────────────────────────────────────────────
+    // ── MoodPickerFragment.Callback ──────────────────────────────────────────
 
-    private fun onMoodSelected(mood: MoodItem) {
-        if (isSending) return
-        isSending = true
+    override fun onMoodSelected(mood: MoodItem) {
         hapticTap(this)
+        MoodHistory.record(this, mood.level)
 
         lifecycleScope.launch {
-            // Record to local history regardless of send outcome
-            MoodHistory.record(this@MainActivity, mood.level)
-
             val sent = SignalSender.sendMoodTap(this@MainActivity, mood.level)
-            isSending = false
-
-            if (sent) {
-                showConfirmation(mood)
-            } else {
-                showQueued(mood)
-            }
-            updateQueuedBadge()
+            if (sent) showConfirmation(mood) else showQueued(mood)
         }
     }
 
     // ── Overlays ──────────────────────────────────────────────────────────────
 
-    private fun showConfirmation(mood: MoodItem) {
-        val color = try { Color.parseColor(mood.colorHex) } catch (_: IllegalArgumentException) { Color.DKGRAY }
-
+    private suspend fun showConfirmation(mood: MoodItem) {
+        val color = try { Color.parseColor(mood.colorHex) } catch (_: Exception) { Color.DKGRAY }
         confirmEmoji.text    = mood.emoji
         confirmMoodName.text = mood.label
         confirmationOverlay.setBackgroundColor(color)
-        confirmationOverlay.visibility = View.VISIBLE
-        pickerLayer.visibility = View.GONE
 
-        lifecycleScope.launch {
-            delay(1500)
-            finish()
-        }
+        confirmationOverlay.visibility = View.VISIBLE
+        delay(1400)
+        confirmationOverlay.visibility = View.GONE
+        // Return to picker after confirming
+        viewPager.setCurrentItem(PAGE_PICKER, true)
     }
 
-    private fun showQueued(mood: MoodItem) {
+    private suspend fun showQueued(mood: MoodItem) {
         queuedEmoji.text = mood.emoji
         queuedOverlay.visibility = View.VISIBLE
-        pickerLayer.visibility = View.GONE
+        delay(2000)
+        queuedOverlay.visibility = View.GONE
+        viewPager.setCurrentItem(PAGE_PICKER, true)
+    }
 
-        lifecycleScope.launch {
-            delay(2000)
-            queuedOverlay.visibility = View.GONE
-            pickerLayer.visibility = View.VISIBLE
+    // ── Dots ──────────────────────────────────────────────────────────────────
+
+    private fun updateDots(selected: Int) {
+        dots.forEachIndexed { i, dot ->
+            dot.alpha = if (i == selected) 1.0f else 0.3f
         }
     }
 
-    private fun updateQueuedBadge() {
-        val count = OfflineQueue.size(this)
-        queuedBadge.visibility = if (count > 0) View.VISIBLE else View.GONE
-        if (count > 0) queuedBadge.text = "● $count queued"
+    // ── Pager adapter ─────────────────────────────────────────────────────────
+
+    private inner class MainPagerAdapter(fa: FragmentActivity) : FragmentStateAdapter(fa) {
+        override fun getItemCount(): Int = 3
+        override fun createFragment(position: Int): Fragment = when (position) {
+            PAGE_HISTORY -> HistoryFragment()
+            PAGE_PICKER  -> MoodPickerFragment()
+            PAGE_SYNC    -> SyncFragment()
+            else         -> throw IllegalStateException("Unknown page $position")
+        }
     }
 }

@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000000">
+
+    <!-- Small page label — positioned in safe area (below bezel clip zone) -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|center_horizontal"
+        android:layout_marginTop="28dp"
+        android:text="Recent Moods"
+        android:textSize="11sp"
+        android:textColor="#66FFFFFF" />
+
+    <androidx.wear.widget.WearableRecyclerView
+        android:id="@+id/historyList"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:paddingTop="44dp"
+        android:paddingBottom="22dp"
+        android:clipToPadding="false" />
+
+    <TextView
+        android:id="@+id/emptyText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:visibility="gone"
+        android:text="No moods logged yet"
+        android:textSize="13sp"
+        android:textColor="#55FFFFFF"
+        android:gravity="center" />
+
+</FrameLayout>

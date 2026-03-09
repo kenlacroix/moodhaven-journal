@@ -1,6 +1,7 @@
 package com.moodbloom.wear
 
 import android.graphics.Color
+import android.graphics.drawable.GradientDrawable
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -13,7 +14,7 @@ class MoodAdapter(
 ) : RecyclerView.Adapter<MoodAdapter.MoodViewHolder>() {
 
     inner class MoodViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
-        val colorBar: View      = itemView.findViewById(R.id.colorBar)
+        val colorPill: View     = itemView.findViewById(R.id.colorPill)
         val moodEmoji: TextView = itemView.findViewById(R.id.moodEmoji)
         val moodLabel: TextView = itemView.findViewById(R.id.moodLabel)
         val moodLevel: TextView = itemView.findViewById(R.id.moodLevel)
@@ -32,7 +33,18 @@ class MoodAdapter(
         holder.moodLevel.text = "${mood.level}"
 
         val color = try { Color.parseColor(mood.colorHex) } catch (_: IllegalArgumentException) { Color.GRAY }
-        holder.colorBar.setBackgroundColor(color)
+
+        // Pill: mood color at 35% opacity so content stays readable, full radius
+        val density = holder.itemView.context.resources.displayMetrics.density
+        val drawable = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = 36f * density
+            setColor(color)
+            alpha = 90   // ~35% of 255
+        }
+        holder.colorPill.background = drawable
+
+        // Level number tinted to mood color
         holder.moodLevel.setTextColor(color)
 
         holder.itemView.setOnClickListener { onMoodClick(mood) }

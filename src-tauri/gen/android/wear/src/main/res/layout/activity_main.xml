@@ -4,78 +4,161 @@
     android:layout_height="match_parent"
     android:background="#000000">
 
-    <!-- Scrollable mood list -->
-    <androidx.wear.widget.WearableRecyclerView
-        android:id="@+id/moodList"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent" />
+    <!-- ── Picker layer ─────────────────────────────────────────────────── -->
 
-    <!-- Confirmation overlay: shown after a successful mood tap (initially GONE) -->
-    <LinearLayout
+    <FrameLayout
+        android:id="@+id/pickerLayer"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <!-- Header: title + history button -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingStart="16dp"
+            android:paddingEnd="8dp"
+            android:paddingTop="8dp">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="How do you feel?"
+                android:textSize="13sp"
+                android:textColor="#AAFFFFFF" />
+
+            <!-- History icon button -->
+            <TextView
+                android:id="@+id/historyBtn"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:text="📋"
+                android:textSize="18sp"
+                android:gravity="center"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Recent moods" />
+
+        </LinearLayout>
+
+        <!-- Queued signals badge (shown when offline queue > 0) -->
+        <TextView
+            android:id="@+id/queuedBadge"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top|end"
+            android:layout_marginTop="6dp"
+            android:layout_marginEnd="48dp"
+            android:visibility="gone"
+            android:text="● queued"
+            android:textSize="9sp"
+            android:textColor="#FFF97316"
+            android:paddingStart="4dp"
+            android:paddingEnd="4dp" />
+
+        <!-- Scrollable mood list -->
+        <androidx.wear.widget.WearableRecyclerView
+            android:id="@+id/moodList"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:paddingTop="36dp" />
+
+    </FrameLayout>
+
+    <!-- ── Confirmation overlay ─────────────────────────────────────────── -->
+    <!--
+      Full-screen, background tinted to the mood colour (set in code).
+      Shown for 1.5 s then the activity finishes.
+    -->
+    <FrameLayout
         android:id="@+id/confirmationOverlay"
         android:visibility="gone"
-        android:layout_gravity="center"
-        android:orientation="vertical"
-        android:gravity="center"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="#CC000000">
+        android:background="#FF10B981">
 
-        <TextView
-            android:id="@+id/confirmEmoji"
+        <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textSize="44sp"
-            android:gravity="center" />
+            android:layout_gravity="center"
+            android:orientation="vertical"
+            android:gravity="center">
 
-        <TextView
-            android:id="@+id/confirmLabel"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Logged"
-            android:textSize="18sp"
-            android:textColor="#FFFFFF"
-            android:gravity="center"
-            android:layout_marginTop="8dp" />
+            <TextView
+                android:id="@+id/confirmEmoji"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="56sp"
+                android:gravity="center" />
 
-        <TextView
-            android:id="@+id/confirmMoodName"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textSize="14sp"
-            android:textColor="#AAFFFFFF"
-            android:gravity="center"
-            android:layout_marginTop="4dp" />
+            <TextView
+                android:id="@+id/confirmMoodName"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="20sp"
+                android:textColor="#FFFFFF"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:layout_marginTop="4dp" />
 
-    </LinearLayout>
+            <TextView
+                android:id="@+id/confirmLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Mood logged ✓"
+                android:textSize="13sp"
+                android:textColor="#CCFFFFFF"
+                android:gravity="center"
+                android:layout_marginTop="6dp" />
 
-    <!-- Error overlay: shown when the phone is unreachable (initially GONE) -->
-    <LinearLayout
-        android:id="@+id/errorOverlay"
+        </LinearLayout>
+
+    </FrameLayout>
+
+    <!-- ── Queued overlay (phone unreachable) ──────────────────────────── -->
+    <FrameLayout
+        android:id="@+id/queuedOverlay"
         android:visibility="gone"
-        android:layout_gravity="center"
-        android:orientation="vertical"
-        android:gravity="center"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="#CC000000">
+        android:background="#FF1E293B">
 
-        <TextView
+        <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="📵"
-            android:textSize="36sp"
-            android:gravity="center" />
+            android:layout_gravity="center"
+            android:orientation="vertical"
+            android:gravity="center">
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Phone not reachable"
-            android:textSize="14sp"
-            android:textColor="#CCFFFFFF"
-            android:gravity="center"
-            android:layout_marginTop="8dp" />
+            <TextView
+                android:id="@+id/queuedEmoji"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="44sp"
+                android:gravity="center" />
 
-    </LinearLayout>
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Saved for later"
+                android:textSize="15sp"
+                android:textColor="#FFFFFF"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:layout_marginTop="8dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Will sync when phone is near"
+                android:textSize="11sp"
+                android:textColor="#88FFFFFF"
+                android:gravity="center"
+                android:layout_marginTop="4dp" />
+
+        </LinearLayout>
+
+    </FrameLayout>
 
 </FrameLayout>

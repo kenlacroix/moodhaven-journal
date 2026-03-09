@@ -7,21 +7,16 @@ import android.view.ViewGroup
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 
-/**
- * RecyclerView adapter that renders the 5-mood list inside WearableRecyclerView.
- *
- * Each row shows a coloured left-strip indicator, an emoji, and the mood label.
- * Tapping a row invokes [onMoodClick] with the selected [MoodItem].
- */
 class MoodAdapter(
     private val moods: List<MoodItem>,
     private val onMoodClick: (MoodItem) -> Unit,
 ) : RecyclerView.Adapter<MoodAdapter.MoodViewHolder>() {
 
     inner class MoodViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
-        val colorBar: View     = itemView.findViewById(R.id.colorBar)
+        val colorBar: View      = itemView.findViewById(R.id.colorBar)
         val moodEmoji: TextView = itemView.findViewById(R.id.moodEmoji)
         val moodLabel: TextView = itemView.findViewById(R.id.moodLabel)
+        val moodLevel: TextView = itemView.findViewById(R.id.moodLevel)
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): MoodViewHolder {
@@ -32,15 +27,13 @@ class MoodAdapter(
 
     override fun onBindViewHolder(holder: MoodViewHolder, position: Int) {
         val mood = moods[position]
-
         holder.moodEmoji.text = mood.emoji
         holder.moodLabel.text = mood.label
+        holder.moodLevel.text = "${mood.level}"
 
-        try {
-            holder.colorBar.setBackgroundColor(Color.parseColor(mood.colorHex))
-        } catch (_: IllegalArgumentException) {
-            holder.colorBar.setBackgroundColor(Color.GRAY)
-        }
+        val color = try { Color.parseColor(mood.colorHex) } catch (_: IllegalArgumentException) { Color.GRAY }
+        holder.colorBar.setBackgroundColor(color)
+        holder.moodLevel.setTextColor(color)
 
         holder.itemView.setOnClickListener { onMoodClick(mood) }
     }

@@ -51,4 +51,16 @@ dependencies {
 
     // Lifecycle (lifecycleScope on FragmentActivity)
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
+
+    // Guava ListenableFuture bridge for coroutines (used by TileService)
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-guava:1.8.1")
+
+    // Wear OS Tiles (quick-access tile swiped from watch face)
+    implementation("androidx.wear.tiles:tiles:1.4.1")
+    implementation("androidx.wear.protolayout:protolayout:1.2.1")
+    implementation("androidx.wear.protolayout:protolayout-material:1.2.1")
+
+    // Watch face complications (data source provider)
+    implementation("androidx.wear.watchface:watchface-complications-data-source:1.2.1")
+    implementation("androidx.wear.watchface:watchface-complications-data-source-ktx:1.2.1")
 }

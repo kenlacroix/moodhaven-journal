@@ -7,6 +7,9 @@
     <!-- Haptic feedback -->
     <uses-permission android:name="android.permission.VIBRATE" />
 
+    <!-- Tiles need this to be returned to foreground after tile tap -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+
     <application
         android:label="@string/app_name"
         android:theme="@android:style/Theme.DeviceDefault">
@@ -17,14 +20,16 @@
             android:required="true" />
 
         <!--
-          standalone="false": this is a companion app (requires paired phone app).
-          Set to "true" if/when the watch app works without a phone.
+          standalone="false": requires paired phone app.
+          Set to "true" if/when the watch app can work offline fully.
         -->
         <meta-data
             android:name="com.google.android.wearable.standalone"
             android:value="false" />
 
-        <!-- Main launcher activity -->
+        <!-- ── Activities ──────────────────────────────────────────────── -->
+
+        <!-- Main launcher: mood picker -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -36,10 +41,27 @@
             </intent-filter>
         </activity>
 
+        <!-- Recent moods history screen -->
+        <activity
+            android:name=".HistoryActivity"
+            android:exported="false" />
+
+        <!--
+          Tile action trampoline: launched by tile mood-button taps.
+          Theme.Translucent keeps it invisible while showing confirmation.
+        -->
+        <activity
+            android:name=".TileActionActivity"
+            android:exported="true"
+            android:taskAffinity=""
+            android:allowEmbedded="true"
+            android:theme="@android:style/Theme.DeviceDefault" />
+
+        <!-- ── Services ────────────────────────────────────────────────── -->
+
         <!--
           FeedbackService: receives /feedback messages from the phone.
-          The phone calls wearSendFeedback("saved") after persisting a signal;
-          we respond with a haptic pulse to confirm receipt.
+          Vibrates to confirm a signal was saved.
         -->
         <service
             android:name=".FeedbackService"
@@ -51,6 +73,45 @@
                     android:pathPrefix="/feedback"
                     android:scheme="wear" />
             </intent-filter>
+        </service>
+
+        <!--
+          MoodTileService: provides the quick-access mood tile.
+          Users add it via: Settings → Tiles → Add tile → MoodBloom
+        -->
+        <service
+            android:name=".MoodTileService"
+            android:exported="true"
+            android:label="@string/tile_label"
+            android:permission="com.google.android.wearable.permission.BIND_TILE_PROVIDER">
+            <intent-filter>
+                <action android:name="androidx.wear.tiles.action.BIND_TILE_PROVIDER" />
+            </intent-filter>
+            <!-- Shown in tile picker -->
+            <meta-data
+                android:name="androidx.wear.tiles.PREVIEW_ACTIVITY"
+                android:value=".MainActivity" />
+        </service>
+
+        <!--
+          MoodComplicationService: provides mood data to watch faces.
+          Watch face users: long-press face → Complications → MoodBloom
+        -->
+        <service
+            android:name=".MoodComplicationService"
+            android:exported="true"
+            android:label="@string/complication_label"
+            android:permission="com.google.android.wearable.permission.BIND_COMPLICATION_PROVIDER">
+            <intent-filter>
+                <action android:name="android.support.wearable.complications.ACTION_COMPLICATION_UPDATE_REQUEST" />
+            </intent-filter>
+            <meta-data
+                android:name="android.support.wearable.complications.SUPPORTED_TYPES"
+                android:value="SHORT_TEXT,LONG_TEXT" />
+            <!-- Update every 30 minutes (complication data is mood history, not live) -->
+            <meta-data
+                android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS"
+                android:value="1800" />
         </service>
 
     </application>

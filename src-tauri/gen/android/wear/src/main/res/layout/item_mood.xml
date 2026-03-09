@@ -1,37 +1,66 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<!--
+  Mood row: full-width tappable row with a left accent strip,
+  large emoji, label, and a right-side arrow hint.
+  Height 64dp gives enough touch target on round watch faces.
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="56dp"
-    android:orientation="horizontal"
-    android:gravity="center_vertical"
-    android:paddingStart="8dp"
-    android:paddingEnd="8dp"
-    android:background="?android:attr/selectableItemBackground">
+    android:layout_height="64dp"
+    android:foreground="?android:attr/selectableItemBackground">
 
-    <!-- Coloured left-strip indicator (colour set programmatically) -->
+    <!-- Left colour accent (6dp, full height) — colour set in adapter -->
     <View
         android:id="@+id/colorBar"
-        android:layout_width="4dp"
-        android:layout_height="36dp"
-        android:layout_marginEnd="12dp"
+        android:layout_width="6dp"
+        android:layout_height="match_parent"
         android:background="#10B981" />
 
-    <!-- Mood emoji -->
-    <TextView
-        android:id="@+id/moodEmoji"
-        android:layout_width="32dp"
-        android:layout_height="wrap_content"
-        android:textSize="20sp"
-        android:gravity="center" />
+    <!-- Content row -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="16dp"
+        android:paddingEnd="12dp">
 
-    <!-- Mood label -->
-    <TextView
-        android:id="@+id/moodLabel"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:layout_marginStart="8dp"
-        android:textSize="16sp"
-        android:textColor="#FFFFFF" />
+        <!-- Emoji -->
+        <TextView
+            android:id="@+id/moodEmoji"
+            android:layout_width="36dp"
+            android:layout_height="wrap_content"
+            android:textSize="26sp"
+            android:gravity="center" />
 
-</LinearLayout>
+        <!-- Label -->
+        <TextView
+            android:id="@+id/moodLabel"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="10dp"
+            android:textSize="17sp"
+            android:textColor="#FFFFFF"
+            android:textStyle="bold" />
+
+        <!-- Level indicator (1–5) -->
+        <TextView
+            android:id="@+id/moodLevel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="11sp"
+            android:textColor="#66FFFFFF"
+            android:gravity="center" />
+
+    </LinearLayout>
+
+    <!-- Thin bottom separator -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_gravity="bottom"
+        android:background="#22FFFFFF"
+        android:layout_marginStart="16dp" />
+
+</FrameLayout>

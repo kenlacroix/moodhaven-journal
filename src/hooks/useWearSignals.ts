@@ -110,6 +110,14 @@ export function useWearSignals({
             parsedPayload,
           );
           onSignalRef.current?.(signal);
+
+          // Auto-acknowledge: send haptic "saved" pulse back to the watch.
+          // Skip for simulated signals (test injection from TypeScript).
+          const nodeId = event.payload.nodeId;
+          if (nodeId && nodeId !== 'simulated') {
+            invoke('plugin:wear|wearSendFeedback', { nodeId, message: 'saved' })
+              .catch(() => { /* non-critical — watch may have moved away */ });
+          }
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
           onErrorRef.current?.(`Failed to store watch signal: ${msg}`);

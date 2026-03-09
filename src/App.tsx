@@ -25,6 +25,7 @@ import { useAppStore } from './stores/appStore';
 import { useSettingsStore } from './stores/settingsStore';
 import { useReminderScheduler } from './hooks/useReminderScheduler';
 import { useUpdateCheck } from './hooks/useUpdateCheck';
+import { useWearSignals } from './hooks/useWearSignals';
 
 // Detect breakout writer mode outside the component so hooks order is stable.
 const IS_BREAKOUT = new URLSearchParams(window.location.search).get('mode') === 'writer';
@@ -58,6 +59,15 @@ function App() {
 
   // Update check — runs once per session after settings are loaded, respects 24h gate
   const updateHook = useUpdateCheck();
+
+  // Wear OS signal bridge — active whenever the app is unlocked.
+  // Listens for "wear://signal" Tauri events from WearPlugin, encrypts the
+  // plaintext payload the watch sent, and stores it as a Signal in SQLite.
+  // Auto-sends a haptic "saved" pulse back to the watch on success.
+  useWearSignals({
+    password: sessionPassword ?? '',
+    enabled: isUnlocked && !!sessionPassword,
+  });
 
   useEffect(() => {
     const init = async () => {

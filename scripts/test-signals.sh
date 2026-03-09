@@ -92,10 +92,11 @@ setup_devtools() {
   # webview_devtools_remote_<pid>. The socket name changes each launch,
   # so we detect it dynamically from /proc/net/unix.
   local socket
+  # grep exits 1 when no match; || true prevents set -e from killing the script
   socket=$("$ADB" -s "$SERIAL" shell cat /proc/net/unix 2>/dev/null \
     | awk '{print $NF}' \
     | grep 'webview_devtools_remote_' \
-    | head -1 | tr -d '@\r')
+    | head -1 | tr -d '@\r') || true
 
   if [[ -z "$socket" ]]; then
     info "WebView CDP socket not found — is the app running?"
@@ -194,7 +195,7 @@ eval_tauri() {
 
   # Get the websocket URL for the first tab
   local ws_url
-  ws_url=$(curl -sf "http://localhost:${DEVTOOLS_PORT}/json" \
+  ws_url=$(curl -sf --max-time 5 "http://localhost:${DEVTOOLS_PORT}/json" \
     | python3 -c "import sys,json; tabs=json.load(sys.stdin); print(tabs[0]['webSocketDebuggerUrl'])" 2>/dev/null) || true
 
   if [[ -z "$ws_url" ]]; then

@@ -55,11 +55,7 @@
                 <data
                     android:scheme="wear"
                     android:host="*"
-                    android:path="/signal" />
-                <data
-                    android:scheme="wear"
-                    android:host="*"
-                    android:path="/voice_memo" />
+                    android:pathPrefix="/" />
             </intent-filter>
         </service>
     </application>

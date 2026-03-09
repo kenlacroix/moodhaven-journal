@@ -52,9 +52,10 @@ object SignalSender {
                 val bytes = envelope.toString().toByteArray(Charsets.UTF_8)
                 val msgClient = Wearable.getMessageClient(context)
 
+                Log.i(TAG, "Sending mood_tap to ${nodes.size} node(s)")
                 for (node in nodes) {
-                    Tasks.await(msgClient.sendMessage(node.id, SIGNAL_PATH, bytes))
-                    Log.i(TAG, "Sent mood_tap mood=$moodLevel → ${node.displayName}")
+                    val msgId = Tasks.await(msgClient.sendMessage(node.id, SIGNAL_PATH, bytes))
+                    Log.i(TAG, "Sent mood_tap mood=$moodLevel → ${node.displayName} (${node.id}) msgId=$msgId")
                 }
 
                 true

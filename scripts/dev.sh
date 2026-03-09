@@ -23,7 +23,7 @@ set -euo pipefail
 
 # ── Defaults (override with --avd / --watch-avd or env vars) ─────────────────
 PHONE_AVD="${MOODBLOOM_PHONE_AVD:-Medium_Phone_API_36.1}"
-WATCH_AVD="${MOODBLOOM_WATCH_AVD:-Wear_OS_Large_Round_API_33}"
+WATCH_AVD="${MOODBLOOM_WATCH_AVD:-Wear_OS_Large_Round}"
 ANDROID_HOME="${ANDROID_HOME:-$HOME/Android/Sdk}"
 EMULATOR="$ANDROID_HOME/emulator/emulator"
 ADB="$ANDROID_HOME/platform-tools/adb"

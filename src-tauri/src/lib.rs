@@ -18,6 +18,9 @@ pub fn run() {
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        // Registers the Android-native WearPlugin so Tauri's IPC router can route
+        // `invoke('plugin:wear|*')` calls to the Kotlin WearPlugin via pluginManager.
+        .plugin(tauri::plugin::Builder::<_, ()>::new("wear").build())
         .setup(|app| {
             // Initialize database
             let db_path = get_db_path(&app.handle())?;

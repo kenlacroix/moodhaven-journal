@@ -18,6 +18,11 @@
     "fs:default",
     "core:window:allow-set-fullscreen",
     "core:window:allow-is-fullscreen",
-    "core:window:allow-close"
+    "core:window:allow-close",
+    "allow-all-app-commands",
+    "allow-wear-check-connection",
+    "allow-wear-bridge-signal",
+    "allow-wear-flush-buffer",
+    "allow-wear-send-feedback"
   ]
 }

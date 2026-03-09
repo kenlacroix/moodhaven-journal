@@ -57,33 +57,125 @@ info "Using emulator: $SERIAL"
 # ── Check app is installed ────────────────────────────────────────────────────
 if ! "$ADB" -s "$SERIAL" shell pm list packages 2>/dev/null | grep -q "$PACKAGE"; then
   echo -e "${RED}$PACKAGE not installed on $SERIAL${RESET}"
-  echo "Run: npm run tauri android dev   (or build + install the APK)"
+  echo "Run: ./scripts/dev.sh   (starts Vite + installs app)"
   exit 1
 fi
 info "App installed: $PACKAGE"
 
+# ── Ensure Vite dev server is reachable (debug APK uses devUrl=localhost:1420) ──
+# The debug build is compiled with cfg(dev) which makes the WebView navigate to
+# the Vite dev server URL. Without the server, the WebView shows a connection
+# error and Tauri IPC is unavailable. Set up ADB reverse so the emulator can
+# reach the host's port 1420, then verify the server is running.
+"$ADB" -s "$SERIAL" reverse tcp:1420 tcp:1420 2>/dev/null || true
+if ! curl -sf --connect-timeout 2 http://localhost:1420 > /dev/null 2>&1; then
+  echo -e "${YELLOW}WARNING:${RESET} Vite dev server not detected on localhost:1420."
+  echo "The MoodBloom debug APK uses cfg(dev) and navigates to http://localhost:1420."
+  echo "Without the dev server the WebView shows a connection error and IPC fails."
+  echo ""
+  echo "Start the dev environment first:"
+  echo "  ./scripts/dev.sh"
+  echo ""
+  echo "Then re-run this script in a second terminal."
+  exit 1
+fi
+info "Vite dev server reachable; ADB reverse tcp:1420 set up"
+
 # ── Helper: run a JS snippet via Chrome DevTools Protocol ─────────────────────
-# We use adb to forward the devtools port, then curl to evaluate JS.
-# Tauri opens devtools on port 1420 (debug builds).
-DEVTOOLS_PORT=1420
+# Chrome DevTools Protocol (CDP) runs on port 9222 via an ADB Unix socket.
+# Port 1420 is the Vite dev server — different thing.
+DEVTOOLS_PORT=9222
 DEVTOOLS_READY=false
 
 setup_devtools() {
-  # Forward devtools port from emulator to local
-  "$ADB" -s "$SERIAL" forward "tcp:${DEVTOOLS_PORT}" "tcp:${DEVTOOLS_PORT}" 2>/dev/null || true
+  # Tauri's Android WebView exposes CDP on an abstract Unix socket named
+  # webview_devtools_remote_<pid>. The socket name changes each launch,
+  # so we detect it dynamically from /proc/net/unix.
+  local socket
+  socket=$("$ADB" -s "$SERIAL" shell cat /proc/net/unix 2>/dev/null \
+    | awk '{print $NF}' \
+    | grep 'webview_devtools_remote_' \
+    | head -1 | tr -d '@\r')
 
-  # Check if devtools is reachable
-  local attempts=0
-  while [[ $attempts -lt 15 ]]; do
-    if curl -sf "http://localhost:${DEVTOOLS_PORT}/json" &>/dev/null; then
-      DEVTOOLS_READY=true
-      break
-    fi
-    sleep 2; attempts=$((attempts+1)); printf "."
-  done
-  echo ""
-  $DEVTOOLS_READY && info "Chrome DevTools reachable on port $DEVTOOLS_PORT" \
-                  || info "DevTools not reachable — falling back to logcat method"
+  if [[ -z "$socket" ]]; then
+    info "WebView CDP socket not found — is the app running?"
+    info "Start with: ./scripts/dev.sh --avd Medium_Phone_API_36.1"
+    return
+  fi
+
+  info "WebView socket: $socket"
+  "$ADB" -s "$SERIAL" forward "tcp:${DEVTOOLS_PORT}" "localabstract:${socket}" 2>/dev/null || true
+
+  # Verify the /json endpoint returns real CDP JSON
+  local response
+  response=$(curl -sf "http://localhost:${DEVTOOLS_PORT}/json" 2>/dev/null || true)
+  if echo "$response" | python3 -c "import sys,json; tabs=json.load(sys.stdin); assert len(tabs)>0" 2>/dev/null; then
+    DEVTOOLS_READY=true
+    info "Chrome DevTools reachable on port $DEVTOOLS_PORT"
+  else
+    info "CDP endpoint not responding — the app may still be starting"
+    return
+  fi
+
+  # Check websocket-client
+  if ! python3 -c "import websocket" 2>/dev/null; then
+    info "websocket-client not installed — tests will print manual commands"
+    info "Fix: pip3 install websocket-client  (or pip3 install websocket-client --break-system-packages)"
+    DEVTOOLS_READY=false
+    return
+  fi
+
+  # Probe which Tauri global is available and which window label is active.
+  # Tauri v2 ACL is scoped to window labels defined in capabilities ("main", "writer").
+  # If CDP connects to a window with a different label, all commands will be denied.
+  local probe_result
+  probe_result=$(python3 - "$(curl -sf "http://localhost:${DEVTOOLS_PORT}/json" \
+    | python3 -c "import sys,json; tabs=json.load(sys.stdin); print(tabs[0]['webSocketDebuggerUrl'])" 2>/dev/null)" <<'PYEOF'
+import sys, json
+try:
+    import websocket
+except ImportError:
+    print("no_ws_lib"); sys.exit(0)
+ws_url = sys.argv[1]
+ws = websocket.create_connection(ws_url, timeout=10, suppress_origin=True)
+# Probe both the type and the window label in one round-trip
+ws.send(json.dumps({"id":99,"method":"Runtime.evaluate",
+  "params":{
+    "expression": """(function() {
+      var t = typeof window.__TAURI_INTERNALS__;
+      var lbl = '';
+      try { lbl = window.__TAURI_INTERNALS__.metadata.currentWindow.label || ''; } catch(e) {}
+      return t + '|' + lbl;
+    })()""",
+    "returnByValue": True
+  }}))
+import time; deadline=time.time()+5
+while time.time()<deadline:
+    raw=ws.recv(); msg=json.loads(raw)
+    if msg.get("id")==99:
+        print(msg.get("result",{}).get("result",{}).get("value","unknown"))
+        break
+ws.close()
+PYEOF
+  )
+
+  local bridge_type="${probe_result%%|*}"
+  local window_label="${probe_result##*|}"
+  info "window.__TAURI_INTERNALS__ type: ${bridge_type}  window label: '${window_label}'"
+
+  if [[ "$bridge_type" != "object" && "$bridge_type" != "function" ]]; then
+    info "Tauri internals bridge not yet visible — app may still be loading"
+    info "Wait a few seconds for the WebView to fully initialise, then retry"
+    DEVTOOLS_READY=false
+    return
+  fi
+
+  # ACL capabilities are bound to windows ["main", "writer"].
+  # If the label is wrong, ALL commands will fail with "not allowed".
+  if [[ -n "$window_label" && "$window_label" != "main" && "$window_label" != "writer" ]]; then
+    info "WARNING: CDP connected to window '${window_label}', not 'main'."
+    info "Commands may be denied because capabilities only cover 'main' and 'writer'."
+  fi
 }
 
 # Execute a Tauri invoke via DevTools websocket using curl + Python helper
@@ -106,7 +198,9 @@ eval_tauri() {
     return
   fi
 
-  # Use Python websocket to send a Runtime.evaluate call
+  # Use Python websocket to send a Runtime.evaluate call.
+  # Origin must match the app's own origin (http://tauri.localhost) — the
+  # Android WebView CDP blocks connections from other origins (403 Forbidden).
   python3 - "$ws_url" "$cmd" "$args" <<'PYEOF'
 import sys, json, time
 try:
@@ -117,17 +211,34 @@ except ImportError:
 
 ws_url, cmd, args = sys.argv[1], sys.argv[2], sys.argv[3]
 
-ws = websocket.create_connection(ws_url, timeout=10)
-expr = f"window.__TAURI__.core.invoke('{cmd}', {args}).then(r => '__RESULT__:' + JSON.stringify(r)).catch(e => '__ERROR__:' + e.message)"
-ws.send(json.dumps({"id": 1, "method": "Runtime.evaluate", "params": {"expression": expr, "awaitPromise": True}}))
+ws = websocket.create_connection(
+    ws_url,
+    timeout=10,
+    suppress_origin=True,   # omit Origin header — Chromium rejects all external origins
+)
+expr = (
+    f"window.__TAURI_INTERNALS__.invoke('{cmd}', {args})"
+    f".then(r => '__RESULT__:' + JSON.stringify(r))"
+    f".catch(e => '__ERROR__:' + (typeof e === 'string' ? e : (e && e.message) || JSON.stringify(e)))"
+)
+ws.send(json.dumps({"id": 1, "method": "Runtime.evaluate",
+                    "params": {"expression": expr, "awaitPromise": True,
+                               "returnByValue": True}}))
 
 deadline = time.time() + 15
 while time.time() < deadline:
     raw = ws.recv()
     msg = json.loads(raw)
     if msg.get("id") == 1:
-        val = msg.get("result", {}).get("result", {}).get("value", "")
-        print(val)
+        msg_result = msg.get("result", {})
+        # CDP wraps synchronous JS exceptions in exceptionDetails rather than result.value
+        if "exceptionDetails" in msg_result:
+            exc = msg_result["exceptionDetails"]
+            desc = (exc.get("exception") or {}).get("description") or exc.get("text") or "unknown"
+            print(f"__ERROR__:JS exception: {desc}")
+        else:
+            val = msg_result.get("result", {}).get("value", "")
+            print(val)
         break
 
 ws.close()
@@ -177,7 +288,7 @@ case "$RESULT" in
     info "DevTools not available — using logcat fallback"
     info "Manually run in browser console:"
     echo ""
-    echo "    window.__TAURI__.core.invoke('debug_signal_self_test').then(r => console.log(JSON.stringify(r, null, 2)))"
+    echo "    window.__TAURI_INTERNALS__.invoke('debug_signal_self_test').then(r => console.log(JSON.stringify(r, null, 2)))"
     echo ""
     info "Expected output:"
     echo '    { "passed": 7, "failed": 0, "ok": true, "results": [...] }'
@@ -213,8 +324,21 @@ esac
 step "Test 2 — Watch signal simulation (wearBridgeSignal → wear://signal event)"
 
 SIM_ID="test-sim-$(date +%s)"
-SIM_ARGS=$(printf '{"id":"%s","timestamp":"%s","type":"mood_tap","payload":"{\"mood\":4}"}' \
-  "$SIM_ID" "$(date -u +%Y-%m-%dT%H:%M:%SZ)")
+SIM_TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+# Build args JSON with correctly escaped payload.
+# jq is preferred; fall back to Python3 if jq is not installed.
+if command -v jq &>/dev/null; then
+  SIM_ARGS=$(jq -n \
+    --arg id      "$SIM_ID" \
+    --arg ts      "$SIM_TS" \
+    --arg payload '{"mood":4}' \
+    '{id:$id,timestamp:$ts,type:"mood_tap",payload:$payload}')
+else
+  SIM_ARGS=$(python3 -c "
+import json, sys
+print(json.dumps({'id':sys.argv[1],'timestamp':sys.argv[2],'type':'mood_tap','payload':'{\"mood\":4}'}))
+" "$SIM_ID" "$SIM_TS")
+fi
 
 RESULT=$(eval_tauri "plugin:wear|wearBridgeSignal" "$SIM_ARGS")
 
@@ -222,7 +346,7 @@ case "$RESULT" in
   SKIPPED|NO_TAB|NO_WS_LIB|"")
     info "DevTools not available — run manually:"
     echo ""
-    echo "    window.__TAURI__.core.invoke('plugin:wear|wearBridgeSignal', {"
+    echo "    window.__TAURI_INTERNALS__.invoke('plugin:wear|wearBridgeSignal', {"
     echo "      id: crypto.randomUUID(),"
     echo "      timestamp: new Date().toISOString(),"
     echo "      type: 'mood_tap',"
@@ -255,7 +379,7 @@ case "$RESULT" in
   SKIPPED|NO_TAB|NO_WS_LIB|"")
     info "DevTools not available — run manually:"
     echo ""
-    echo "    window.__TAURI__.core.invoke('plugin:wear|wearCheckConnection')"
+    echo "    window.__TAURI_INTERNALS__.invoke('plugin:wear|wearCheckConnection')"
     echo ""
     info "Expected: { connected: false, nodeId: '', nodeCount: 0 }"
     ;;

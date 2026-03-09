@@ -1,0 +1,31 @@
+# Wear OS plugin permissions
+# These allow the TypeScript layer to invoke Android-native WearPlugin commands
+# via window.__TAURI_INTERNALS__.invoke('plugin:wear|commandName', args).
+
+[[permission]]
+identifier = "allow-wear-check-connection"
+description = "Allow checking Wear OS connection state."
+commands.allow = ["wearCheckConnection"]
+
+[[permission]]
+identifier = "allow-wear-bridge-signal"
+description = "Allow bridging a signal envelope (also used for test injection without a watch)."
+commands.allow = ["wearBridgeSignal"]
+
+[[permission]]
+identifier = "allow-wear-flush-buffer"
+description = "Allow flushing buffered signals that arrived before the plugin was ready."
+commands.allow = ["wearFlushBuffer"]
+
+[[permission]]
+identifier = "allow-wear-send-feedback"
+description = "Allow sending haptic feedback to the paired watch."
+commands.allow = ["wearSendFeedback"]
+
+[default]
+permissions = [
+  "allow-wear-check-connection",
+  "allow-wear-bridge-signal",
+  "allow-wear-flush-buffer",
+  "allow-wear-send-feedback",
+]

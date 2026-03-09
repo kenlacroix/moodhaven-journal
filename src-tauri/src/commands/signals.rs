@@ -150,11 +150,18 @@ pub fn debug_signal_self_test(db: State<Database>) -> Result<serde_json::Value, 
         .unwrap_or(false);
     check!("payload round-trip", payload_ok, if payload_ok { "match" } else { "mismatch" });
 
-    // 5. Sync log populated
-    let log = db::get_unsynced_log(&db, Some(1000));
-    let log_has_signal = log.as_ref()
-        .map(|rows| rows.iter().any(|r| r.object_id == test_id && r.object_type == "signal"))
-        .unwrap_or(false);
+    // 5. Sync log populated — query directly for THIS test id to avoid limit/ordering issues
+    let log_count: i64 = {
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        conn.query_row(
+            "SELECT COUNT(*) FROM sync_log \
+             WHERE object_id = ?1 AND object_type = 'signal' AND action = 'insert'",
+            rusqlite::params![test_id],
+            |r| r.get(0),
+        )
+        .unwrap_or(0)
+    };
+    let log_has_signal = log_count > 0;
     check!("sync_log trigger fired", log_has_signal, if log_has_signal { "entry found" } else { "missing" });
 
     // 6. Delete

@@ -2325,40 +2325,16 @@
       "description": "Permission identifier",
       "oneOf": [
         {
-          "description": "Default plugin permissions.\n#### This default permission set includes:\n\n- `allow-wear-check-connection`\n- `allow-wear-bridge-signal`\n- `allow-wear-flush-buffer`\n- `allow-wear-send-feedback`",
+          "description": "Default plugin permissions.\n#### This default permission set includes:\n\n- `allow-all-app-commands`",
           "type": "string",
           "const": "default",
-          "markdownDescription": "Default plugin permissions.\n#### This default permission set includes:\n\n- `allow-wear-check-connection`\n- `allow-wear-bridge-signal`\n- `allow-wear-flush-buffer`\n- `allow-wear-send-feedback`"
+          "markdownDescription": "Default plugin permissions.\n#### This default permission set includes:\n\n- `allow-all-app-commands`"
         },
         {
           "description": "Allow all MoodBloom app-level commands registered in invoke_handler!.",
           "type": "string",
           "const": "allow-all-app-commands",
           "markdownDescription": "Allow all MoodBloom app-level commands registered in invoke_handler!."
-        },
-        {
-          "description": "Allow bridging a signal envelope (also used for test injection without a watch).",
-          "type": "string",
-          "const": "allow-wear-bridge-signal",
-          "markdownDescription": "Allow bridging a signal envelope (also used for test injection without a watch)."
-        },
-        {
-          "description": "Allow checking Wear OS connection state.",
-          "type": "string",
-          "const": "allow-wear-check-connection",
-          "markdownDescription": "Allow checking Wear OS connection state."
-        },
-        {
-          "description": "Allow flushing buffered signals that arrived before the plugin was ready.",
-          "type": "string",
-          "const": "allow-wear-flush-buffer",
-          "markdownDescription": "Allow flushing buffered signals that arrived before the plugin was ready."
-        },
-        {
-          "description": "Allow sending haptic feedback to the paired watch.",
-          "type": "string",
-          "const": "allow-wear-send-feedback",
-          "markdownDescription": "Allow sending haptic feedback to the paired watch."
         },
         {
           "description": "Default core plugins set.\n#### This default permission set includes:\n\n- `core:path:default`\n- `core:event:default`\n- `core:window:default`\n- `core:webview:default`\n- `core:app:default`\n- `core:image:default`\n- `core:resources:default`\n- `core:menu:default`\n- `core:tray:default`",
@@ -6451,6 +6427,36 @@
           "type": "string",
           "const": "shell:deny-stdin-write",
           "markdownDescription": "Denies the stdin_write command without any pre-configured scope."
+        },
+        {
+          "description": "Default plugin permissions.\n#### This default permission set includes:\n\n- `allow-wear-check-connection`\n- `allow-wear-bridge-signal`\n- `allow-wear-flush-buffer`\n- `allow-wear-send-feedback`",
+          "type": "string",
+          "const": "wear:default",
+          "markdownDescription": "Default plugin permissions.\n#### This default permission set includes:\n\n- `allow-wear-check-connection`\n- `allow-wear-bridge-signal`\n- `allow-wear-flush-buffer`\n- `allow-wear-send-feedback`"
+        },
+        {
+          "description": "Allow bridging a signal envelope (also used for test injection without a watch).",
+          "type": "string",
+          "const": "wear:allow-wear-bridge-signal",
+          "markdownDescription": "Allow bridging a signal envelope (also used for test injection without a watch)."
+        },
+        {
+          "description": "Allow checking Wear OS connection state.",
+          "type": "string",
+          "const": "wear:allow-wear-check-connection",
+          "markdownDescription": "Allow checking Wear OS connection state."
+        },
+        {
+          "description": "Allow flushing buffered signals that arrived before the plugin was ready.",
+          "type": "string",
+          "const": "wear:allow-wear-flush-buffer",
+          "markdownDescription": "Allow flushing buffered signals that arrived before the plugin was ready."
+        },
+        {
+          "description": "Allow sending haptic feedback to the paired watch.",
+          "type": "string",
+          "const": "wear:allow-wear-send-feedback",
+          "markdownDescription": "Allow sending haptic feedback to the paired watch."
         }
       ]
     },

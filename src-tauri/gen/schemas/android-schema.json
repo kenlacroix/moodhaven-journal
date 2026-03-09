@@ -2331,6 +2331,12 @@
           "markdownDescription": "Default plugin permissions.\n#### This default permission set includes:\n\n- `allow-wear-check-connection`\n- `allow-wear-bridge-signal`\n- `allow-wear-flush-buffer`\n- `allow-wear-send-feedback`"
         },
         {
+          "description": "Allow all MoodBloom app-level commands registered in invoke_handler!.",
+          "type": "string",
+          "const": "allow-all-app-commands",
+          "markdownDescription": "Allow all MoodBloom app-level commands registered in invoke_handler!."
+        },
+        {
           "description": "Allow bridging a signal envelope (also used for test injection without a watch).",
           "type": "string",
           "const": "allow-wear-bridge-signal",

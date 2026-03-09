@@ -218,20 +218,58 @@ pair_watch_to_phone() {
   info "Open 'Wear OS' companion app on the phone emulator and follow pairing."
 }
 
-install_wear_apk() {
-  local phone_serial="$1"
-  local apk_path
-  apk_path=$(find "$(pwd)/src-tauri/gen/android" -name "*.apk" -path "*/wear/debug/*" 2>/dev/null | head -1)
-  if [[ -z "$apk_path" ]]; then
-    warn "Wear APK not found — build it first:"
-    warn "  cd src-tauri/gen/android && JAVA_HOME=$JAVA_HOME ./gradlew :wear:assembleDebug"
-    return
+# Build the wear APK and install it directly on the watch emulator via Gradle's
+# installDebug task. ANDROID_SERIAL targets the specific watch serial so this
+# works even when both phone and watch emulators are connected simultaneously.
+build_and_install_watch_app() {
+  local watch_serial="$1"
+  local android_dir
+  android_dir="$(cd "$(dirname "$0")/.." && pwd)/src-tauri/gen/android"
+
+  step "Building & installing watch app on $watch_serial"
+
+  # Ensure local.properties exists (Gradle needs sdk.dir)
+  local props="$android_dir/local.properties"
+  if [[ ! -f "$props" ]]; then
+    echo "sdk.dir=$ANDROID_HOME" > "$props"
+    info "Created $props"
   fi
-  step "Installing Wear OS watch app on phone emulator"
+
+  if ANDROID_SERIAL="$watch_serial" JAVA_HOME="$JAVA_HOME" \
+       "$android_dir/gradlew" -p "$android_dir" :wear:installDebug --daemon \
+       > /tmp/moodbloom_wear_install.log 2>&1; then
+    success "Watch app installed on $watch_serial"
+  else
+    warn "Watch app install failed — see log: /tmp/moodbloom_wear_install.log"
+    warn "Retry manually:"
+    warn "  cd src-tauri/gen/android && ANDROID_SERIAL=$watch_serial JAVA_HOME=$JAVA_HOME ./gradlew :wear:installDebug"
+  fi
+}
+
+# Install a pre-built wear APK on the phone emulator (--install-wear flag).
+# The phone emulator needs the MoodBloom watch app sideloaded so it appears
+# in the Wear OS companion app's "apps on your phone" list.
+install_wear_apk_on_phone() {
+  local phone_serial="$1"
+  local android_dir
+  android_dir="$(cd "$(dirname "$0")/.." && pwd)/src-tauri/gen/android"
+  local apk_path
+  apk_path=$(find "$android_dir" -name "*.apk" -path "*/wear/debug/*" 2>/dev/null | head -1)
+
+  if [[ -z "$apk_path" ]]; then
+    warn "--install-wear: wear debug APK not found; building first…"
+    local props="$android_dir/local.properties"
+    [[ -f "$props" ]] || echo "sdk.dir=$ANDROID_HOME" > "$props"
+    JAVA_HOME="$JAVA_HOME" "$android_dir/gradlew" -p "$android_dir" :wear:assembleDebug --daemon \
+      > /tmp/moodbloom_wear_build.log 2>&1 || { warn "Build failed — check /tmp/moodbloom_wear_build.log"; return; }
+    apk_path=$(find "$android_dir" -name "*.apk" -path "*/wear/debug/*" 2>/dev/null | head -1)
+  fi
+
+  step "Installing wear APK on phone emulator ($phone_serial)"
   info "APK: $apk_path"
   "$ADB" -s "$phone_serial" install -r "$apk_path" && \
-    success "Wear watch app installed on phone emulator" || \
-    warn "APK install failed — try manually: adb -s $phone_serial install $apk_path"
+    success "Wear app sideloaded on phone — visible in Wear OS companion" || \
+    warn "Install failed — try: adb -s $phone_serial install $apk_path"
 }
 
 # ── Vite dev server ───────────────────────────────────────────────────────────
@@ -322,12 +360,15 @@ check_tools
 if $START_PHONE; then
   PHONE_SERIAL=$(launch_avd "$PHONE_AVD" "Phone" "phone") || exit 1
   if $INSTALL_WEAR; then
-    install_wear_apk "$PHONE_SERIAL"
+    install_wear_apk_on_phone "$PHONE_SERIAL"
   fi
 fi
 
 if $START_WATCH; then
   WATCH_SERIAL=$(launch_avd "$WATCH_AVD" "Watch" "watch") || exit 1
+  # Always build + install the watch app on the watch emulator automatically.
+  # ANDROID_SERIAL targets only the watch so the phone emulator is not affected.
+  build_and_install_watch_app "$WATCH_SERIAL"
   if $START_PHONE && [[ -n "$PHONE_SERIAL" ]]; then
     pair_watch_to_phone "$PHONE_SERIAL"
   fi
@@ -377,10 +418,8 @@ elif $NEED_ANDROID; then
 
 elif $START_WATCH; then
   # ── Watch emulator only (no phone, no desktop) ───────────────────────────────
-  step "Watch emulator is running"
-  info "Deploy the wear app from Android Studio, or run:"
-  info "  cd src-tauri/gen/android && JAVA_HOME=$JAVA_HOME ./gradlew :wear:installDebug"
-  info "Ctrl+C to stop."
+  step "Watch emulator is running (watch-only mode)"
+  info "Watch app already installed above. Ctrl+C to stop."
   wait
 
 else

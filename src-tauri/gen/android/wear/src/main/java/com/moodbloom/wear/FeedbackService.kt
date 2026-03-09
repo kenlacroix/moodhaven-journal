@@ -24,6 +24,10 @@ class FeedbackService : WearableListenerService() {
 
     companion object {
         private const val TAG = "WearFeedback"
+        // Two short pulses: "saved"
+        private val PATTERN_SUCCESS = longArrayOf(0, 60, 80, 60)
+        // One long buzz: "error"
+        private val PATTERN_ERROR   = longArrayOf(0, 300)
     }
 
     override fun onMessageReceived(event: MessageEvent) {
@@ -55,12 +59,5 @@ class FeedbackService : WearableListenerService() {
         } catch (e: Exception) {
             Log.w(TAG, "Haptic failed: ${e.message}")
         }
-    }
-
-    companion object Patterns {
-        // Two short pulses: "saved"
-        private val PATTERN_SUCCESS = longArrayOf(0, 60, 80, 60)
-        // One long buzz: "error"
-        private val PATTERN_ERROR   = longArrayOf(0, 300)
     }
 }

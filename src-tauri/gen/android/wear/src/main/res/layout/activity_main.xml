@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000000">
+
+    <!-- Scrollable mood list -->
+    <androidx.wear.widget.WearableRecyclerView
+        android:id="@+id/moodList"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <!-- Confirmation overlay: shown after a successful mood tap (initially GONE) -->
+    <LinearLayout
+        android:id="@+id/confirmationOverlay"
+        android:visibility="gone"
+        android:layout_gravity="center"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#CC000000">
+
+        <TextView
+            android:id="@+id/confirmEmoji"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="44sp"
+            android:gravity="center" />
+
+        <TextView
+            android:id="@+id/confirmLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Logged"
+            android:textSize="18sp"
+            android:textColor="#FFFFFF"
+            android:gravity="center"
+            android:layout_marginTop="8dp" />
+
+        <TextView
+            android:id="@+id/confirmMoodName"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="14sp"
+            android:textColor="#AAFFFFFF"
+            android:gravity="center"
+            android:layout_marginTop="4dp" />
+
+    </LinearLayout>
+
+    <!-- Error overlay: shown when the phone is unreachable (initially GONE) -->
+    <LinearLayout
+        android:id="@+id/errorOverlay"
+        android:visibility="gone"
+        android:layout_gravity="center"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#CC000000">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="📵"
+            android:textSize="36sp"
+            android:gravity="center" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Phone not reachable"
+            android:textSize="14sp"
+            android:textColor="#CCFFFFFF"
+            android:gravity="center"
+            android:layout_marginTop="8dp" />
+
+    </LinearLayout>
+
+</FrameLayout>

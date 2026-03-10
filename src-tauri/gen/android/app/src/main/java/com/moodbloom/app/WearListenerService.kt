@@ -133,10 +133,10 @@ class WearListenerService : WearableListenerService() {
                 }
 
                 // Parse 4-byte big-endian metadata length header
-                val metaLen = ((allBytes[0].toInt() and 0xFF) shl 24) or
-                              ((allBytes[1].toInt() and 0xFF) shl 16) or
-                              ((allBytes[2].toInt() and 0xFF) shl  8) or
-                               (allBytes[3].toInt() and 0xFF)
+                // Explicit Int type avoids Kotlin overload-resolution ambiguity on
+                // downstream arithmetic (sliceArray bounds use metaLen as Int).
+                val metaLen: Int = java.nio.ByteBuffer.wrap(allBytes, 0, 4)
+                    .order(java.nio.ByteOrder.BIG_ENDIAN).int
 
                 if (metaLen <= 0 || metaLen > allBytes.size - 4) {
                     Log.e(TAG, "Invalid metadata length: $metaLen (total=${allBytes.size})")

@@ -163,35 +163,35 @@ start_emulator_bg() {
   info "Emulator '$avd' PID $pid — log: /tmp/moodbloom_emu_${avd}.log"
 }
 
-# Poll adb until a NEW emulator serial appears (one not in $before_serials).
-# Prints the serial on stdout when found; all status to stderr.
-# $1 = avd label (for messages), $2 = sorted list of serials before launch
+# Poll adb until the emulator for $avd is visible by name (via find_running_serial).
+# This is reliable even when multiple emulators start simultaneously because it
+# identifies each device by its actual AVD name, not by "what serial appeared new".
+# Prints the serial on stdout; all status to stderr.
+# $1 = avd name, $2 = human label (for messages)
 wait_for_serial() {
-  local label="$1"
-  local before="$2"
+  local avd="$1"
+  local label="$2"
   local max_attempts=45   # 45 × 2 s = 90 s
-  local new_serial=""
+  local serial=""
   local attempts=0
 
-  info "Waiting for $label emulator to appear in adb (up to $((max_attempts*2))s)…"
-  while [[ -z "$new_serial" && $attempts -lt $max_attempts ]]; do
+  info "Waiting for $label emulator ($avd) to appear in adb (up to $((max_attempts*2))s)…"
+  while [[ -z "$serial" && $attempts -lt $max_attempts ]]; do
     sleep 2; attempts=$((attempts+1))
     printf "." >&2
-    local after
-    after=$("$ADB" devices | grep '^emulator-' | awk '{print $1}' | sort)
-    new_serial=$(comm -13 <(echo "$before") <(echo "$after") | head -1)
+    serial=$(find_running_serial "$avd")
   done
   echo "" >&2
 
-  if [[ -z "$new_serial" ]]; then
-    error "$label emulator did not appear after $((max_attempts*2))s"
+  if [[ -z "$serial" ]]; then
+    error "$label emulator ($avd) did not appear after $((max_attempts*2))s"
     return 1
   fi
-  info "$label emulator detected: $new_serial"
-  echo "$new_serial"   # ← only stdout output; captured by caller
+  info "$label emulator detected: $serial (AVD: $avd)"
+  echo "$serial"   # ← only stdout; captured by caller
 }
 
-# Full launch: start in bg, wait for serial, wait for boot. Prints serial.
+# Full launch: start in bg, wait for serial by AVD name, wait for boot. Prints serial.
 launch_avd() {
   local avd="$1"
   local label="$2"
@@ -208,12 +208,10 @@ launch_avd() {
     return 0
   fi
 
-  local before
-  before=$("$ADB" devices | awk '/emulator-/{print $1}' | sort)
   start_emulator_bg "$avd" "$kind"
 
   local new_serial
-  new_serial=$(wait_for_serial "$label" "$before") || return 1
+  new_serial=$(wait_for_serial "$avd" "$label") || return 1
   wait_for_boot "$new_serial" || return 1
   echo "$new_serial"   # ← only stdout output
 }
@@ -353,9 +351,7 @@ echo ""
 check_tools
 
 # ── Start emulators in parallel, then wait for both ──────────────────────────
-# Recording serials-before-launch must happen BEFORE any emulator starts.
-PHONE_BEFORE=""
-WATCH_BEFORE=""
+# Start all emulators before waiting for any — they boot in parallel.
 
 if $START_PHONE; then
   existing=$(find_running_serial "$PHONE_AVD")
@@ -363,7 +359,6 @@ if $START_PHONE; then
     warn "$PHONE_AVD already running as $existing — skipping launch"
     PHONE_SERIAL="$existing"
   else
-    PHONE_BEFORE=$("$ADB" devices | awk '/emulator-/{print $1}' | sort)
     step "Starting Phone emulator: $PHONE_AVD"
     start_emulator_bg "$PHONE_AVD" "phone"
   fi
@@ -375,20 +370,19 @@ if $START_WATCH; then
     warn "$WATCH_AVD already running as $existing — skipping launch"
     WATCH_SERIAL="$existing"
   else
-    WATCH_BEFORE=$("$ADB" devices | awk '/emulator-/{print $1}' | sort)
     step "Starting Watch emulator: $WATCH_AVD"
     start_emulator_bg "$WATCH_AVD" "watch"
   fi
 fi
 
-# Wait for serials + boot (sequential poll is fine — emulators boot in parallel)
+# Wait for serials by AVD name (reliable even when both start simultaneously)
 if $START_PHONE && [[ -z "$PHONE_SERIAL" ]]; then
-  PHONE_SERIAL=$(wait_for_serial "Phone" "$PHONE_BEFORE") || exit 1
+  PHONE_SERIAL=$(wait_for_serial "$PHONE_AVD" "Phone") || exit 1
   wait_for_boot "$PHONE_SERIAL" || exit 1
 fi
 
 if $START_WATCH && [[ -z "$WATCH_SERIAL" ]]; then
-  WATCH_SERIAL=$(wait_for_serial "Watch" "$WATCH_BEFORE") || exit 1
+  WATCH_SERIAL=$(wait_for_serial "$WATCH_AVD" "Watch") || exit 1
   wait_for_boot "$WATCH_SERIAL" || exit 1
 fi
 
@@ -413,7 +407,7 @@ if $START_DESKTOP && $NEED_ANDROID; then
   step "Starting Tauri Android dev (background)"
   info "Logs: /tmp/moodbloom_android_dev.log"
   run_bg "android dev" \
-    env JAVA_HOME="$JAVA_HOME" \
+    env JAVA_HOME="$JAVA_HOME" ANDROID_SERIAL="${PHONE_SERIAL:-}" \
     npm run tauri android dev -- --no-dev-server-wait \
       --config '{"build":{"beforeDevCommand":""}}'
 
@@ -431,8 +425,11 @@ elif $START_DESKTOP; then
 elif $NEED_ANDROID; then
   step "Starting Tauri Android dev"
   info "Ctrl+C to stop everything"
+  # ANDROID_SERIAL scopes adb + Tauri CLI to the phone emulator, avoiding
+  # the interactive device-picker prompt when the watch emulator is also running.
+  [[ -n "$PHONE_SERIAL" ]] && info "Targeting phone: $PHONE_SERIAL"
   echo ""
-  JAVA_HOME="$JAVA_HOME" npm run tauri android dev
+  ANDROID_SERIAL="${PHONE_SERIAL:-}" JAVA_HOME="$JAVA_HOME" npm run tauri android dev
 
 elif $START_WATCH; then
   step "Watch emulator running — watch app installed above"

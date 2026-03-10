@@ -13,29 +13,37 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
- * MainActivity — host for the 3-page swipe UI.
+ * MainActivity — host for the 4-page swipe UI.
  *
- * Page 0 ← History | Page 1 (default) = Mood Picker | Page 2 → Sync Status
+ * Page 0 ← History   | recorded memos + mood taps
+ * Page 1   Record     | (DEFAULT) — voice recording primary action
+ * Page 2 → Mood       | quick emoji mood picker
+ * Page 3 → Sync       | connection status, queue, retry
  *
- * The mood picker calls back into here (via [MoodPickerFragment.Callback]) so
- * that confirmation overlays float above the ViewPager and are always visible
- * regardless of which page the user is on during the send animation.
+ * Mood confirmations and queued overlays float above the ViewPager so they
+ * are visible regardless of which page is showing.
  */
-class MainActivity : FragmentActivity(), MoodPickerFragment.Callback {
+class MainActivity : FragmentActivity(),
+    MoodPickerFragment.Callback,
+    RecordFragment.Callback {
 
     companion object {
-        private const val PAGE_HISTORY = 0
-        private const val PAGE_PICKER  = 1
-        private const val PAGE_SYNC    = 2
+        const val PAGE_HISTORY = 0
+        const val PAGE_RECORD  = 1   // default
+        const val PAGE_MOOD    = 2
+        const val PAGE_SYNC    = 3
     }
 
     private lateinit var viewPager: ViewPager2
     private lateinit var dots: List<View>
 
+    // Mood confirmation overlay
     private lateinit var confirmationOverlay: View
     private lateinit var confirmEmoji: TextView
     private lateinit var confirmMoodName: TextView
+    private lateinit var addNoteBtn: TextView
 
+    // Offline-queued overlay
     private lateinit var queuedOverlay: View
     private lateinit var queuedEmoji: TextView
 
@@ -47,6 +55,7 @@ class MainActivity : FragmentActivity(), MoodPickerFragment.Callback {
         confirmationOverlay = findViewById(R.id.confirmationOverlay)
         confirmEmoji        = findViewById(R.id.confirmEmoji)
         confirmMoodName     = findViewById(R.id.confirmMoodName)
+        addNoteBtn          = findViewById(R.id.addNoteBtn)
         queuedOverlay       = findViewById(R.id.queuedOverlay)
         queuedEmoji         = findViewById(R.id.queuedEmoji)
 
@@ -54,24 +63,23 @@ class MainActivity : FragmentActivity(), MoodPickerFragment.Callback {
             findViewById(R.id.dot0),
             findViewById(R.id.dot1),
             findViewById(R.id.dot2),
+            findViewById(R.id.dot3),
         )
 
         viewPager.adapter = MainPagerAdapter(this)
-        viewPager.setCurrentItem(PAGE_PICKER, false)
-
+        viewPager.setCurrentItem(PAGE_RECORD, false)
         viewPager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
             override fun onPageSelected(position: Int) = updateDots(position)
         })
-
-        updateDots(PAGE_PICKER)
+        updateDots(PAGE_RECORD)
     }
 
     override fun onResume() {
         super.onResume()
-        // Drain offline queue silently on every app open
-        lifecycleScope.launch {
-            SignalSender.drainAndSend(this@MainActivity)
-        }
+        // Drain audio queue silently on every foreground
+        lifecycleScope.launch { AudioTransferService.drainQueue(this@MainActivity) }
+        // Drain mood signal queue
+        lifecycleScope.launch { SignalSender.drainAndSend(this@MainActivity) }
     }
 
     // ── MoodPickerFragment.Callback ──────────────────────────────────────────
@@ -82,48 +90,70 @@ class MainActivity : FragmentActivity(), MoodPickerFragment.Callback {
 
         lifecycleScope.launch {
             val sent = SignalSender.sendMoodTap(this@MainActivity, mood.level)
-            if (sent) showConfirmation(mood) else showQueued(mood)
+            if (sent) showMoodConfirmation(mood) else showMoodQueued(mood)
         }
+    }
+
+    // ── RecordFragment.Callback ──────────────────────────────────────────────
+
+    override fun onNavigateToMoodPicker() {
+        viewPager.setCurrentItem(PAGE_MOOD, true)
+    }
+
+    // ── Navigation helpers ───────────────────────────────────────────────────
+
+    fun navigateToRecord() {
+        viewPager.setCurrentItem(PAGE_RECORD, true)
     }
 
     // ── Overlays ──────────────────────────────────────────────────────────────
 
-    private suspend fun showConfirmation(mood: MoodItem) {
+    private suspend fun showMoodConfirmation(mood: MoodItem) {
         val color = try { Color.parseColor(mood.colorHex) } catch (_: Exception) { Color.DKGRAY }
         confirmEmoji.text    = mood.emoji
         confirmMoodName.text = mood.label
         confirmationOverlay.setBackgroundColor(color)
-
+        addNoteBtn.visibility = View.GONE
         confirmationOverlay.visibility = View.VISIBLE
-        delay(1400)
+
+        // Show "Add a note" button after brief pause
+        delay(400)
+        if (confirmationOverlay.visibility != View.VISIBLE) return
+        addNoteBtn.visibility = View.VISIBLE
+        addNoteBtn.setOnClickListener {
+            confirmationOverlay.visibility = View.GONE
+            navigateToRecord()
+        }
+
+        // Auto-dismiss after 2.4 s total
+        delay(2_000)
         confirmationOverlay.visibility = View.GONE
-        // Return to picker after confirming
-        viewPager.setCurrentItem(PAGE_PICKER, true)
+        addNoteBtn.visibility = View.GONE
     }
 
-    private suspend fun showQueued(mood: MoodItem) {
+    private suspend fun showMoodQueued(mood: MoodItem) {
         queuedEmoji.text = mood.emoji
         queuedOverlay.visibility = View.VISIBLE
-        delay(2000)
+        delay(2_000)
         queuedOverlay.visibility = View.GONE
-        viewPager.setCurrentItem(PAGE_PICKER, true)
     }
 
     // ── Dots ──────────────────────────────────────────────────────────────────
 
     private fun updateDots(selected: Int) {
         dots.forEachIndexed { i, dot ->
-            dot.alpha = if (i == selected) 1.0f else 0.3f
+            dot.alpha = if (i == selected) 1f else 0.28f
         }
     }
 
     // ── Pager adapter ─────────────────────────────────────────────────────────
 
     private inner class MainPagerAdapter(fa: FragmentActivity) : FragmentStateAdapter(fa) {
-        override fun getItemCount(): Int = 3
+        override fun getItemCount() = 4
         override fun createFragment(position: Int): Fragment = when (position) {
             PAGE_HISTORY -> HistoryFragment()
-            PAGE_PICKER  -> MoodPickerFragment()
+            PAGE_RECORD  -> RecordFragment()
+            PAGE_MOOD    -> MoodPickerFragment()
             PAGE_SYNC    -> SyncFragment()
             else         -> throw IllegalStateException("Unknown page $position")
         }

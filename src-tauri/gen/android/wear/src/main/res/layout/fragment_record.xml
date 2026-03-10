@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Record page — primary watch UI.
+
+  Layout safe zones for a round 384×384 watch:
+    • Top label sits 32dp from top (centre-horizontal — safe zone)
+    • Button is dead-centre
+    • Status text just below button
+    • Queue badge + quick-mood at bottom (slight clipping OK for secondary text)
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000000">
+
+    <!-- ── Main centred content ──────────────────────────────────────────── -->
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:paddingBottom="28dp">
+
+        <!-- Large circular record button -->
+        <FrameLayout
+            android:id="@+id/recordBtn"
+            android:layout_width="96dp"
+            android:layout_height="96dp"
+            android:background="@drawable/ic_record_btn"
+            android:foreground="?android:attr/selectableItemBackgroundBorderless"
+            android:clickable="true"
+            android:focusable="true">
+
+            <!-- Icon inside button: mic (idle) or stop square (recording) -->
+            <TextView
+                android:id="@+id/recordIcon"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:text="🎙"
+                android:textSize="36sp"
+                android:gravity="center" />
+
+        </FrameLayout>
+
+        <!-- Duration counter — only visible while recording -->
+        <TextView
+            android:id="@+id/durationText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:text="0:00"
+            android:textSize="22sp"
+            android:textColor="#FFFFFF"
+            android:textStyle="bold"
+            android:visibility="gone" />
+
+        <!-- Status line -->
+        <TextView
+            android:id="@+id/statusText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Tap to record"
+            android:textSize="13sp"
+            android:textColor="#AAFFFFFF"
+            android:gravity="center" />
+
+        <!-- Transfer / queue confirmation (appears briefly after stop) -->
+        <TextView
+            android:id="@+id/transferStatus"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text=""
+            android:textSize="10sp"
+            android:textColor="#66FFFFFF"
+            android:gravity="center"
+            android:visibility="gone" />
+
+    </LinearLayout>
+
+    <!-- ── Bottom overlays ───────────────────────────────────────────────── -->
+
+    <!-- Pending queue badge -->
+    <TextView
+        android:id="@+id/queueBadge"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginBottom="22dp"
+        android:visibility="gone"
+        android:text="● 0 queued"
+        android:textSize="9sp"
+        android:textColor="#FFF97316"
+        android:paddingStart="4dp"
+        android:paddingEnd="4dp" />
+
+    <!-- Quick mood shortcut — small pill at bottom-end -->
+    <TextView
+        android:id="@+id/quickMoodBtn"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:layout_marginBottom="20dp"
+        android:layout_marginEnd="20dp"
+        android:text="😊"
+        android:textSize="22sp"
+        android:background="?android:attr/selectableItemBackgroundBorderless"
+        android:contentDescription="Quick mood" />
+
+    <!-- Long-press hint — appears only while recording, fades after 2s -->
+    <TextView
+        android:id="@+id/longPressHint"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|center_horizontal"
+        android:layout_marginTop="22dp"
+        android:visibility="gone"
+        android:text="Hold to discard"
+        android:textSize="9sp"
+        android:textColor="#44FFFFFF" />
+
+</FrameLayout>

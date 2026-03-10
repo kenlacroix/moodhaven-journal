@@ -156,6 +156,13 @@ pub fn run() {
             commands::mark_sync_log_synced,
             // Signal pipeline self-test (automated testing without a watch)
             commands::debug_signal_self_test,
+            // Voice memos (Wear OS audio recordings)
+            commands::store_voice_memo,
+            commands::list_voice_memos,
+            commands::get_voice_memo,
+            commands::delete_voice_memo,
+            commands::patch_voice_memo_transcription,
+            commands::link_voice_memo_to_entry,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

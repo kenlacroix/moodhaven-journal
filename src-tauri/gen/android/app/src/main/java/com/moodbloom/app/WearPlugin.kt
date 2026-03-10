@@ -40,6 +40,9 @@ class WearPlugin(private val activity: Activity) : Plugin(activity) {
         /** Tauri event name consumed by useWearSignals hook */
         const val EVENT_SIGNAL = "wear://signal"
 
+        /** Tauri event name for voice memos received from the watch */
+        const val EVENT_VOICE_MEMO = "wear://voice_memo"
+
         /** Tauri event name for connection state changes */
         const val EVENT_CONNECTION = "wear://connection"
 
@@ -86,6 +89,33 @@ class WearPlugin(private val activity: Activity) : Plugin(activity) {
         }
         trigger(EVENT_SIGNAL, event)
         Log.d(TAG, "Emitted $EVENT_SIGNAL: id=$id type=$type")
+    }
+
+    // ── Bridge from WearListenerService (voice memo) ─────────────────────────
+
+    /**
+     * Called by WearListenerService when a voice memo arrives via ChannelAPI.
+     * Emits a Tauri event so the TypeScript layer can move the file to permanent
+     * storage and record it in SQLite via store_voice_memo.
+     */
+    fun bridgeVoiceMemo(
+        id: String,
+        timestamp: String,
+        durationMs: Long,
+        healthJson: String?,
+        incomingFile: String,
+        nodeId: String,
+    ) {
+        val event = JSObject().apply {
+            put("id", id)
+            put("timestamp", timestamp)
+            put("duration_ms", durationMs)
+            healthJson?.let { put("health_json", it) }
+            put("incoming_file", incomingFile)
+            put("node_id", nodeId)
+        }
+        trigger(EVENT_VOICE_MEMO, event)
+        Log.d(TAG, "Emitted $EVENT_VOICE_MEMO: id=$id duration=${durationMs}ms")
     }
 
     private fun drainBuffer() {

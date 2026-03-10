@@ -7,7 +7,13 @@
     <!-- Haptic feedback -->
     <uses-permission android:name="android.permission.VIBRATE" />
 
-    <!-- Tiles need this to be returned to foreground after tile tap -->
+    <!-- Voice recording -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <!-- Optional heart rate snapshot at recording time -->
+    <uses-permission android:name="android.permission.BODY_SENSORS" />
+
+    <!-- Foreground service for tile actions -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
 
     <application

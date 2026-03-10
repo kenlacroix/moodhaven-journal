@@ -25,8 +25,9 @@ import type {
   Signal,
   WatchSignalMessage,
 } from '../types/signals';
+import type { VoiceMemo } from '../lib/voiceMemoService';
 
-// ── Event payload shape (matches WearPlugin.bridgeFromWatch) ──────────────────
+// ── Event payload shapes ──────────────────────────────────────────────────────
 
 interface WearSignalEvent {
   id: string;
@@ -36,6 +37,17 @@ interface WearSignalEvent {
   /** Plaintext JSON payload — encrypted here before DB insertion */
   payload: string;
   nodeId: string;
+}
+
+/** Matches WearPlugin.bridgeVoiceMemo payload */
+interface WearVoiceMemoEvent {
+  id: string;
+  timestamp: string;
+  duration_ms: number;
+  health_json?: string;
+  /** Filename only (e.g. "abc123.m4a") in the incoming staging dir */
+  incoming_file: string;
+  node_id: string;
 }
 
 interface WearConnectionState {
@@ -53,6 +65,8 @@ interface UseWearSignalsOptions {
   password: string;
   /** Called after a signal is successfully stored */
   onSignal?: (signal: Signal) => void;
+  /** Called after a voice memo is successfully stored */
+  onVoiceMemo?: (memo: VoiceMemo) => void;
   /** Called on error (validation failure, encryption error, etc.) */
   onError?: (error: string) => void;
   /** If false, the listener is not attached (e.g., while locked) */
@@ -64,13 +78,16 @@ interface UseWearSignalsOptions {
 export function useWearSignals({
   password,
   onSignal,
+  onVoiceMemo,
   onError,
   enabled = true,
 }: UseWearSignalsOptions) {
   const onSignalRef = useRef(onSignal);
+  const onVoiceMemoRef = useRef(onVoiceMemo);
   const onErrorRef = useRef(onError);
 
   useEffect(() => { onSignalRef.current = onSignal; }, [onSignal]);
+  useEffect(() => { onVoiceMemoRef.current = onVoiceMemo; }, [onVoiceMemo]);
   useEffect(() => { onErrorRef.current = onError; }, [onError]);
 
   // ── "wear://signal" event listener ─────────────────────────────────────────
@@ -79,18 +96,18 @@ export function useWearSignals({
     if (!enabled || !password) return;
 
     let unlisten: UnlistenFn | null = null;
+    let unlistenMemo: UnlistenFn | null = null;
 
     (async () => {
+      // Signal listener
       unlisten = await listen<WearSignalEvent>('wear://signal', async (event) => {
         const { id, timestamp, type, source, payload } = event.payload;
 
-        // Validate required fields
         if (!id || !type || !payload) {
           onErrorRef.current?.(`Invalid watch signal envelope: missing id/type/payload`);
           return;
         }
 
-        // Parse plaintext payload (watch sends unencrypted; phone encrypts)
         let parsedPayload: SignalPayload;
         try {
           parsedPayload = JSON.parse(payload) as SignalPayload;
@@ -99,7 +116,6 @@ export function useWearSignals({
           return;
         }
 
-        // Encrypt + store via signal service
         try {
           const signal = await createSignal(
             password,
@@ -111,22 +127,45 @@ export function useWearSignals({
           );
           onSignalRef.current?.(signal);
 
-          // Auto-acknowledge: send haptic "saved" pulse back to the watch.
-          // Skip for simulated signals (test injection from TypeScript).
           const nodeId = event.payload.nodeId;
           if (nodeId && nodeId !== 'simulated') {
             invoke('plugin:wear|wearSendFeedback', { nodeId, message: 'saved' })
-              .catch(() => { /* non-critical — watch may have moved away */ });
+              .catch(() => { /* non-critical */ });
           }
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
           onErrorRef.current?.(`Failed to store watch signal: ${msg}`);
         }
       });
+
+      // Voice memo listener
+      unlistenMemo = await listen<WearVoiceMemoEvent>('wear://voice_memo', async (event) => {
+        const { id, timestamp, duration_ms, health_json, incoming_file } = event.payload;
+
+        if (!id || !incoming_file) {
+          onErrorRef.current?.(`Invalid voice_memo event: missing id or incoming_file`);
+          return;
+        }
+
+        try {
+          const memo = await invoke<VoiceMemo>('store_voice_memo', {
+            id,
+            timestamp: timestamp || new Date().toISOString(),
+            durationMs: duration_ms ?? 0,
+            healthJson: health_json ?? null,
+            incomingFile: incoming_file,
+          });
+          onVoiceMemoRef.current?.(memo);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          onErrorRef.current?.(`Failed to store voice memo: ${msg}`);
+        }
+      });
     })();
 
     return () => {
       unlisten?.();
+      unlistenMemo?.();
     };
   }, [enabled, password]);
 

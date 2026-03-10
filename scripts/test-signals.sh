@@ -7,10 +7,11 @@
 #   ./scripts/test-signals.sh emulator-5554 # Target a specific serial
 #
 # What it tests (no watch hardware required):
-#   Test 1 — DB self-test : create → list → filter → payload round-trip
-#                            → sync_log trigger → delete → confirm gone
+#   Test 1 — DB self-test  : create → list → filter → payload round-trip
+#                             → sync_log trigger → delete → confirm gone
 #   Test 2 — Wear bridge   : simulate a watch mood_tap via wearBridgeSignal
-#   Test 3 — Connection    : wearCheckConnection (expects connected=false in sim)
+#   Test 3 — Voice memo    : push fake .m4a → store_voice_memo → list → delete
+#   Test 4 — Connection    : wearCheckConnection (expects connected=false in sim)
 #
 # Prerequisites:
 #   - Phone emulator running with MoodBloom app installed and the dev server hot
@@ -379,8 +380,109 @@ case "$RESULT" in
     ;;
 esac
 
-# ── Test 3: Connection check ───────────────────────────────────────────────────
-step "Test 3 — wearCheckConnection (expect connected=false in emulator)"
+# ── Test 3: Voice memo end-to-end ─────────────────────────────────────────────
+step "Test 3 — Voice memo pipeline (inject fake .m4a → store_voice_memo → list_voice_memos)"
+
+# Inject a tiny fake .m4a file into the incoming staging dir on the device,
+# then call store_voice_memo directly (bypasses ChannelAPI, tests the full
+# Rust file-move + DB insert path).
+VM_ID="test-vm-$(date +%s)"
+VM_TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+VM_FILE="${VM_ID}.m4a"
+# Create a 16-byte placeholder file locally, push to device
+TMPFILE=$(mktemp /tmp/test_audio_XXXXXX.m4a)
+# Write a minimal 16-byte fake audio file (four bytes of M4A ftyp box header)
+printf '\x00\x00\x00\x10ftypm4a ' > "$TMPFILE"
+
+# Push to filesDir/voice_memos_incoming/ on the device
+INCOMING_PATH="/data/data/${PACKAGE}/files/voice_memos_incoming"
+"$ADB" -s "$SERIAL" shell mkdir -p "$INCOMING_PATH" 2>/dev/null || true
+"$ADB" -s "$SERIAL" push "$TMPFILE" "${INCOMING_PATH}/${VM_FILE}" 2>/dev/null || true
+rm -f "$TMPFILE"
+
+# Build args for store_voice_memo
+if command -v jq &>/dev/null; then
+  VM_ARGS=$(jq -n \
+    --arg id    "$VM_ID" \
+    --arg ts    "$VM_TS" \
+    --arg file  "$VM_FILE" \
+    '{id:$id, timestamp:$ts, durationMs:5000, healthJson:"{\"hr\":72}", incomingFile:$file}')
+else
+  VM_ARGS=$(python3 -c "
+import json, sys
+print(json.dumps({'id':sys.argv[1],'timestamp':sys.argv[2],
+  'durationMs':5000,'healthJson':'{\"hr\":72}','incomingFile':sys.argv[3]}))
+" "$VM_ID" "$VM_TS" "$VM_FILE")
+fi
+
+RESULT=$(eval_tauri "store_voice_memo" "$VM_ARGS")
+
+case "$RESULT" in
+  SKIPPED|NO_TAB|NO_WS_LIB|"")
+    info "DevTools not available — run manually in browser console:"
+    echo ""
+    echo "  // 1. Push a fake audio file to the device staging dir:"
+    echo "  //    adb shell 'mkdir -p /data/data/${PACKAGE}/files/voice_memos_incoming'"
+    echo "  //    adb push /dev/urandom /data/data/${PACKAGE}/files/voice_memos_incoming/test.m4a  (or use 'adb shell dd ...')"
+    echo ""
+    echo "  // 2. Call store_voice_memo:"
+    echo "  window.__TAURI_INTERNALS__.invoke('store_voice_memo', {"
+    echo "    id: crypto.randomUUID(),"
+    echo "    timestamp: new Date().toISOString(),"
+    echo "    durationMs: 5000,"
+    echo "    healthJson: null,"
+    echo "    incomingFile: 'test.m4a',"
+    echo "  }).then(r => console.log('stored:', JSON.stringify(r, null, 2)))"
+    echo ""
+    echo "  // 3. Verify it appears in the list:"
+    echo "  window.__TAURI_INTERNALS__.invoke('list_voice_memos', {limit:5}).then(r => console.log(r))"
+    ;;
+  *__RESULT__:*)
+    JSON="${RESULT#*__RESULT__:}"
+    STORED_ID=$(echo "$JSON" | python3 -c "import sys,json; print(json.load(sys.stdin).get('id','?'))" 2>/dev/null || echo "?")
+    if [[ "$STORED_ID" == "$VM_ID" ]]; then
+      pass "store_voice_memo returned correct id=$STORED_ID"
+
+      # Verify it appears in list_voice_memos
+      LIST_RESULT=$(eval_tauri "list_voice_memos" '{"limit":5}')
+      case "$LIST_RESULT" in
+        *__RESULT__:*)
+          LIST_JSON="${LIST_RESULT#*__RESULT__:}"
+          FOUND=$(echo "$LIST_JSON" | python3 -c "
+import sys,json
+memos=json.load(sys.stdin)
+print(any(m.get('id')=='$VM_ID' for m in memos))
+" 2>/dev/null || echo "False")
+          if [[ "$FOUND" == "True" ]]; then
+            pass "Voice memo visible in list_voice_memos"
+          else
+            fail "Voice memo id=$VM_ID not found in list_voice_memos"
+          fi
+          ;;
+        *)
+          info "list_voice_memos raw: $LIST_RESULT"
+          ;;
+      esac
+
+      # Clean up: delete the test memo
+      if command -v jq &>/dev/null; then
+        DEL_ARGS=$(jq -n --arg id "$VM_ID" '{id:$id}')
+      else
+        DEL_ARGS="{\"id\":\"$VM_ID\"}"
+      fi
+      eval_tauri "delete_voice_memo" "$DEL_ARGS" > /dev/null 2>&1 || true
+      info "Cleaned up test voice memo"
+    else
+      fail "store_voice_memo returned unexpected id: $JSON"
+    fi
+    ;;
+  *__ERROR__:*)
+    fail "store_voice_memo error: ${RESULT#*__ERROR__:}"
+    ;;
+esac
+
+# ── Test 4: Connection check ───────────────────────────────────────────────────
+step "Test 4 — wearCheckConnection (expect connected=false in emulator)"
 
 RESULT=$(eval_tauri "plugin:wear|wearCheckConnection" '{}')
 

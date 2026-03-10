@@ -22,29 +22,18 @@
         android:orientation="horizontal"
         android:gravity="center">
 
-        <View
-            android:id="@+id/dot0"
-            android:layout_width="6dp"
-            android:layout_height="6dp"
-            android:layout_marginEnd="4dp"
-            android:background="@drawable/circle_dot" />
-
-        <View
-            android:id="@+id/dot1"
-            android:layout_width="6dp"
-            android:layout_height="6dp"
-            android:layout_marginEnd="4dp"
-            android:background="@drawable/circle_dot" />
-
-        <View
-            android:id="@+id/dot2"
-            android:layout_width="6dp"
-            android:layout_height="6dp"
+        <View android:id="@+id/dot0" android:layout_width="5dp" android:layout_height="5dp"
+            android:layout_marginEnd="4dp" android:background="@drawable/circle_dot" />
+        <View android:id="@+id/dot1" android:layout_width="5dp" android:layout_height="5dp"
+            android:layout_marginEnd="4dp" android:background="@drawable/circle_dot" />
+        <View android:id="@+id/dot2" android:layout_width="5dp" android:layout_height="5dp"
+            android:layout_marginEnd="4dp" android:background="@drawable/circle_dot" />
+        <View android:id="@+id/dot3" android:layout_width="5dp" android:layout_height="5dp"
             android:background="@drawable/circle_dot" />
 
     </LinearLayout>
 
-    <!-- ── Confirmation overlay ─────────────────────────────────────────── -->
+    <!-- ── Mood confirmation overlay ────────────────────────────────────── -->
 
     <FrameLayout
         android:id="@+id/confirmationOverlay"
@@ -64,7 +53,7 @@
                 android:id="@+id/confirmEmoji"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:textSize="56sp"
+                android:textSize="52sp"
                 android:gravity="center" />
 
             <TextView
@@ -81,16 +70,33 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Mood logged ✓"
-                android:textSize="12sp"
+                android:textSize="11sp"
                 android:textColor="#CCFFFFFF"
                 android:gravity="center"
-                android:layout_marginTop="6dp" />
+                android:layout_marginTop="4dp" />
+
+            <!-- "Add voice note?" button — shown briefly after confirmation -->
+            <TextView
+                android:id="@+id/addNoteBtn"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="🎙 Add a note"
+                android:textSize="12sp"
+                android:textColor="#FFFFFF"
+                android:gravity="center"
+                android:layout_marginTop="14dp"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp"
+                android:paddingTop="6dp"
+                android:paddingBottom="6dp"
+                android:background="@drawable/btn_outline"
+                android:visibility="gone" />
 
         </LinearLayout>
 
     </FrameLayout>
 
-    <!-- ── Queued overlay (phone unreachable) ──────────────────────────── -->
+    <!-- ── Queued overlay (phone unreachable after mood tap) ────────────── -->
 
     <FrameLayout
         android:id="@+id/queuedOverlay"
@@ -110,14 +116,14 @@
                 android:id="@+id/queuedEmoji"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:textSize="44sp"
+                android:textSize="40sp"
                 android:gravity="center" />
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Saved for later"
-                android:textSize="15sp"
+                android:textSize="14sp"
                 android:textColor="#FFFFFF"
                 android:textStyle="bold"
                 android:gravity="center"

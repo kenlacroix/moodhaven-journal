@@ -413,7 +413,7 @@ if $START_DESKTOP && $NEED_ANDROID; then
   if [[ -n "$PHONE_SERIAL" ]]; then
     run_bg "android dev" \
       env JAVA_HOME="$JAVA_HOME" \
-      npm run tauri android dev -- -d "$PHONE_SERIAL" --no-dev-server-wait \
+      npm run tauri android dev -- "$PHONE_SERIAL" --no-dev-server-wait \
         --config '{"build":{"beforeDevCommand":""}}'
   else
     run_bg "android dev" \
@@ -436,13 +436,14 @@ elif $START_DESKTOP; then
 elif $NEED_ANDROID; then
   step "Starting Tauri Android dev"
   info "Ctrl+C to stop everything"
-  # Pass -d <serial> so the Tauri CLI skips the interactive device-picker prompt.
-  # Without this, when the watch emulator is also running, Tauri sees 2 devices
-  # and asks the user to type a number.
+  # Pass the serial as a positional arg so the Tauri CLI skips the interactive
+  # device-picker prompt. Without this, when the watch emulator is also running,
+  # Tauri sees 2 devices and asks the user to type a number.
+  # Usage: tauri android dev [OPTIONS] [DEVICE] [-- <ARGS>...]
   echo ""
   if [[ -n "$PHONE_SERIAL" ]]; then
     info "Targeting phone: $PHONE_SERIAL"
-    JAVA_HOME="$JAVA_HOME" npm run tauri android dev -- -d "$PHONE_SERIAL"
+    JAVA_HOME="$JAVA_HOME" npm run tauri android dev -- "$PHONE_SERIAL"
   else
     JAVA_HOME="$JAVA_HOME" npm run tauri android dev
   fi

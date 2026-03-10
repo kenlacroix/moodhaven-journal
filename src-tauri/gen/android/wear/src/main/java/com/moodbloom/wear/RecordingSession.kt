@@ -47,28 +47,27 @@ class RecordingSession(
             val file = File(context.cacheDir, "voice_memo_${System.currentTimeMillis()}_$id.m4a")
             outputFile = file
 
-            recorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            // Explicit val avoids Kotlin type-inference ambiguity inside apply blocks.
+            val rec: MediaRecorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 MediaRecorder(context)
             } else {
                 @Suppress("DEPRECATION") MediaRecorder()
             }
-
-            recorder!!.apply {
-                setAudioSource(MediaRecorder.AudioSource.MIC)
-                setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-                setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-                setAudioSamplingRate(16_000)   // whisper.cpp optimal
-                setAudioBitRate(32_000)        // ~240 KB/min
-                setMaxDuration(MAX_DURATION_MS)
-                setOutputFile(file.absolutePath)
-                setOnInfoListener { _, what, _ ->
-                    if (what == MediaRecorder.MEDIA_RECORDER_INFO_MAX_DURATION_REACHED) {
-                        Handler(Looper.getMainLooper()).post { onAutoStop?.invoke() }
-                    }
+            rec.setAudioSource(MediaRecorder.AudioSource.MIC)
+            rec.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+            rec.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+            rec.setAudioSamplingRate(16_000)   // whisper.cpp optimal (16 kHz)
+            // setAudioBitRate omitted — not in Wear SDK 34 stubs; AAC default is fine
+            rec.setMaxDuration(MAX_DURATION_MS)
+            rec.setOutputFile(file.absolutePath)
+            rec.setOnInfoListener { _, what, _ ->
+                if (what == MediaRecorder.MEDIA_RECORDER_INFO_MAX_DURATION_REACHED) {
+                    Handler(Looper.getMainLooper()).post { onAutoStop?.invoke() }
                 }
-                prepare()
-                start()
             }
+            rec.prepare()
+            rec.start()
+            recorder = rec
 
             startMs = System.currentTimeMillis()
             Log.i(TAG, "Recording started: ${file.name}")

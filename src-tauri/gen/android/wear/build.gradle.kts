@@ -52,6 +52,11 @@ dependencies {
     // Lifecycle (lifecycleScope on FragmentActivity)
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
 
+    // Activity / Fragment KTX: required for registerForActivityResult() and
+    // ActivityResultContracts in Fragment subclasses.
+    implementation("androidx.activity:activity-ktx:1.9.0")
+    implementation("androidx.fragment:fragment-ktx:1.8.0")
+
     // Guava ListenableFuture bridge for coroutines (used by TileService)
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-guava:1.8.1")
 

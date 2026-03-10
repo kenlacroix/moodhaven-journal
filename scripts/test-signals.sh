@@ -35,25 +35,30 @@ step() { echo -e "\n${BOLD}${YELLOW}▶ $*${RESET}"; }
 
 FAILURES=0
 
-# ── Find emulator ─────────────────────────────────────────────────────────────
+# ── Find phone emulator ────────────────────────────────────────────────────────
+# When both phone and watch emulators are running, `adb devices -l` exposes
+# the model string: sdk_gphone64_x86_64 (phone) vs sdk_gwear_x86_64 (watch).
+# We always target the PHONE because the Tauri app (WebView + IPC) lives there.
 SERIAL="${1:-}"
 if [[ -z "$SERIAL" ]]; then
-  # grep for emulator lines, filter to only "device" state (not offline/unauthorized)
-  SERIAL=$("$ADB" devices | grep '^emulator-' | grep $'\tdevice' | awk '{print $1}' | head -1)
-  # fallback: any emulator line regardless of tab formatting
+  # Prefer the phone emulator identified by the gphone model string
+  SERIAL=$("$ADB" devices -l 2>/dev/null \
+    | grep '^emulator-' | grep 'gphone' | awk '{print $1}' | head -1)
+  # Fallback: any device state emulator (covers single-emulator setup)
   if [[ -z "$SERIAL" ]]; then
-    SERIAL=$("$ADB" devices | grep '^emulator-' | awk '{print $1}' | head -1)
+    SERIAL=$("$ADB" devices | grep '^emulator-' | grep $'\tdevice' | awk '{print $1}' | head -1)
   fi
   if [[ -z "$SERIAL" ]]; then
-    echo -e "${RED}No running emulator found. Start one first:${RESET}"
+    echo -e "${RED}No phone emulator found. Start one first:${RESET}"
     echo "  ./scripts/dev.sh phone"
+    echo "  ./scripts/dev.sh phone watch   (both phone + watch)"
     echo ""
     echo "Current adb devices output:"
-    "$ADB" devices
+    "$ADB" devices -l
     exit 1
   fi
 fi
-info "Using emulator: $SERIAL"
+info "Using phone emulator: $SERIAL"
 
 # ── Check app is installed ────────────────────────────────────────────────────
 if ! "$ADB" -s "$SERIAL" shell pm list packages 2>/dev/null | grep -q "$PACKAGE"; then

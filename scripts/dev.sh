@@ -406,10 +406,17 @@ if $START_DESKTOP && $NEED_ANDROID; then
 
   step "Starting Tauri Android dev (background)"
   info "Logs: /tmp/moodbloom_android_dev.log"
-  run_bg "android dev" \
-    env JAVA_HOME="$JAVA_HOME" ANDROID_SERIAL="${PHONE_SERIAL:-}" \
-    npm run tauri android dev -- --no-dev-server-wait \
-      --config '{"build":{"beforeDevCommand":""}}'
+  if [[ -n "$PHONE_SERIAL" ]]; then
+    run_bg "android dev" \
+      env JAVA_HOME="$JAVA_HOME" \
+      npm run tauri android dev -- -d "$PHONE_SERIAL" --no-dev-server-wait \
+        --config '{"build":{"beforeDevCommand":""}}'
+  else
+    run_bg "android dev" \
+      env JAVA_HOME="$JAVA_HOME" \
+      npm run tauri android dev -- --no-dev-server-wait \
+        --config '{"build":{"beforeDevCommand":""}}'
+  fi
 
   step "Starting Tauri Desktop dev (foreground)"
   info "Ctrl+C to stop everything"
@@ -425,11 +432,16 @@ elif $START_DESKTOP; then
 elif $NEED_ANDROID; then
   step "Starting Tauri Android dev"
   info "Ctrl+C to stop everything"
-  # ANDROID_SERIAL scopes adb + Tauri CLI to the phone emulator, avoiding
-  # the interactive device-picker prompt when the watch emulator is also running.
-  [[ -n "$PHONE_SERIAL" ]] && info "Targeting phone: $PHONE_SERIAL"
+  # Pass -d <serial> so the Tauri CLI skips the interactive device-picker prompt.
+  # Without this, when the watch emulator is also running, Tauri sees 2 devices
+  # and asks the user to type a number.
   echo ""
-  ANDROID_SERIAL="${PHONE_SERIAL:-}" JAVA_HOME="$JAVA_HOME" npm run tauri android dev
+  if [[ -n "$PHONE_SERIAL" ]]; then
+    info "Targeting phone: $PHONE_SERIAL"
+    JAVA_HOME="$JAVA_HOME" npm run tauri android dev -- -d "$PHONE_SERIAL"
+  else
+    JAVA_HOME="$JAVA_HOME" npm run tauri android dev
+  fi
 
 elif $START_WATCH; then
   step "Watch emulator running — watch app installed above"

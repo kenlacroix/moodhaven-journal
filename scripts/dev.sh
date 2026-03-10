@@ -36,7 +36,7 @@ WATCH_AVD="${MOODBLOOM_WATCH_AVD:-Wear_OS_Large_Round}"
 ANDROID_HOME="${ANDROID_HOME:-$HOME/Android/Sdk}"
 EMULATOR="$ANDROID_HOME/emulator/emulator"
 ADB="$ANDROID_HOME/platform-tools/adb"
-BOOT_TIMEOUT=180
+BOOT_TIMEOUT=360   # Play Store images do a long first cold-boot (no snapshot = no quick-boot)
 
 JAVA_HOME="${JAVA_HOME:-/usr/lib/jvm/java-17-openjdk-amd64}"
 export JAVA_HOME

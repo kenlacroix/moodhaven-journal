@@ -121,6 +121,13 @@ commands.allow = [
   "mark_sync_log_synced",
   # Signal pipeline self-test
   "debug_signal_self_test",
+  # Voice memos (Wear OS audio recordings)
+  "store_voice_memo",
+  "list_voice_memos",
+  "get_voice_memo",
+  "delete_voice_memo",
+  "patch_voice_memo_transcription",
+  "link_voice_memo_to_entry",
 ]
 
 [default]

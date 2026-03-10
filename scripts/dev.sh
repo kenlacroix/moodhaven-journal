@@ -436,6 +436,12 @@ elif $START_DESKTOP; then
 elif $NEED_ANDROID; then
   step "Starting Tauri Android dev"
   info "Ctrl+C to stop everything"
+
+  # Start Vite dev server explicitly so the Android WebView can reach it.
+  # We then pass --no-dev-server-wait and clear beforeDevCommand so Tauri
+  # doesn't try to start a second Vite instance (and hang waiting for port 1420).
+  start_vite
+
   # Pass the serial as a positional arg so the Tauri CLI skips the interactive
   # device-picker prompt. Without this, when the watch emulator is also running,
   # Tauri sees 2 devices and asks the user to type a number.
@@ -443,9 +449,13 @@ elif $NEED_ANDROID; then
   echo ""
   if [[ -n "$PHONE_SERIAL" ]]; then
     info "Targeting phone: $PHONE_SERIAL"
-    JAVA_HOME="$JAVA_HOME" npm run tauri android dev -- "$PHONE_SERIAL"
+    JAVA_HOME="$JAVA_HOME" npm run tauri android dev -- "$PHONE_SERIAL" \
+      --no-dev-server-wait \
+      --config '{"build":{"beforeDevCommand":""}}'
   else
-    JAVA_HOME="$JAVA_HOME" npm run tauri android dev
+    JAVA_HOME="$JAVA_HOME" npm run tauri android dev \
+      --no-dev-server-wait \
+      --config '{"build":{"beforeDevCommand":""}}'
   fi
 
 elif $START_WATCH; then

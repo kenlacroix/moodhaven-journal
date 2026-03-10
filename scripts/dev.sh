@@ -143,7 +143,11 @@ start_emulator_bg() {
   local kind="${2:-phone}"
 
   local snapshot_flags=()
-  local gpu_mode="swiftshader_indirect"
+  # Use "auto" for phone so the emulator picks the best available GPU mode
+  # (matches the AVD's configured hw.gpu.mode). swiftshader_indirect can crash
+  # with newer API 36.x images that use virtio-gpu-pipe transport.
+  # Watch uses "guest" (no GL acceleration — simpler and stable).
+  local gpu_mode="auto"
   local extra_flags=()
 
   if [[ "$kind" == "watch" ]]; then

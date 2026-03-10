@@ -447,16 +447,16 @@ elif $NEED_ANDROID; then
   # Tauri sees 2 devices and asks the user to type a number.
   # Usage: tauri android dev [OPTIONS] [DEVICE] [-- <ARGS>...]
   echo ""
+  # NOTE: tauri android dev [DEVICE] expects a Tauri display-name, not an ADB serial.
+  # Passing the serial (emulator-XXXX) causes it to hang searching for a matching device.
+  # Instead, let the Tauri picker appear — if prompted, select the phone
+  # (model: sdk_gphone64_x86_64 / AVD: Medium_Phone_API_35).
   if [[ -n "$PHONE_SERIAL" ]]; then
-    info "Targeting phone: $PHONE_SERIAL"
-    JAVA_HOME="$JAVA_HOME" npm run tauri android dev -- "$PHONE_SERIAL" \
-      --no-dev-server-wait \
-      --config '{"build":{"beforeDevCommand":""}}'
-  else
-    JAVA_HOME="$JAVA_HOME" npm run tauri android dev \
-      --no-dev-server-wait \
-      --config '{"build":{"beforeDevCommand":""}}'
+    info "Phone serial: $PHONE_SERIAL — if Tauri prompts for a device, pick the phone (sdk_gphone64_x86_64)"
   fi
+  JAVA_HOME="$JAVA_HOME" npm run tauri android dev -- \
+    --no-dev-server-wait \
+    --config '{"build":{"beforeDevCommand":""}}'
 
 elif $START_WATCH; then
   step "Watch emulator running — watch app installed above"

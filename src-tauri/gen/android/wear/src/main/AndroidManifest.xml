@@ -54,6 +54,22 @@
             android:name=".HistoryActivity"
             android:exported="false" />
 
+        <!-- Breathing: mode detail (cycle adjuster + Begin) -->
+        <activity
+            android:name=".BreatheModeDetailActivity"
+            android:exported="false" />
+
+        <!-- Breathing: active session (full-screen ring animation) -->
+        <activity
+            android:name=".BreatheSessionActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+
+        <!-- Breathing: post-session summary (HR before/after + actions) -->
+        <activity
+            android:name=".BreatheSummaryActivity"
+            android:exported="false" />
+
         <!--
           Tile action trampoline: launched by tile mood-button taps.
           Theme.Translucent keeps it invisible while showing confirmation.

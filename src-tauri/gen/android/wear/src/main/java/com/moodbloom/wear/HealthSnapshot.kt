@@ -28,6 +28,9 @@ object HealthSnapshot {
     private const val TAG = "HealthSnapshot"
     private const val HR_TIMEOUT_MS = 10_000L
 
+    /** Most recent successfully captured HR, used by BreatheFragment suggestion chip. */
+    @Volatile var lastHr: Int? = null
+
     /**
      * Capture a single heart rate reading. Returns JSON or null.
      * Safe to call from any coroutine context; suspends on Dispatchers.IO.
@@ -41,6 +44,7 @@ object HealthSnapshot {
         val sm = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
         val hr = captureHeartRate(sm) ?: return null
 
+        lastHr = hr
         return JSONObject().apply { put("hr", hr) }.toString()
     }
 

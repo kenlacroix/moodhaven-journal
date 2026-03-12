@@ -30,4 +30,21 @@
         android:textSize="11sp"
         android:textColor="#66FFFFFF" />
 
+    <!-- HR suggestion chip — shown only when a recent reading suggests a mode -->
+    <TextView
+        android:id="@+id/breatheSuggestionChip"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|center_horizontal"
+        android:layout_marginTop="42dp"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp"
+        android:paddingTop="3dp"
+        android:paddingBottom="3dp"
+        android:background="#1A1A2E"
+        android:textSize="10sp"
+        android:textColor="#FCD34D"
+        android:visibility="gone"
+        android:text="💛 HR 94 · Try 😌 Relax" />
+
 </FrameLayout>

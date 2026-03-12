@@ -1,28 +1,43 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   Record page — primary watch UI.
-  Phase 2 changes:
-    • ArcProgressView wraps the record button (10-minute arc indicator)
-    • quickMoodBtn replaced by a [😊 Mood] [🧘 Breathe] shortcuts row
-    • Queue badge moved above the shortcuts row
+  BoxInsetLayout inside ScrollView ensures round-screen insets are respected
+  so content isn't clipped on a circular Wear OS display.
 -->
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#000000">
+    android:background="#000000"
+    android:fillViewport="true">
 
-    <!-- ── Main centred column ───────────────────────────────────────────── -->
+    <androidx.wear.widget.BoxInsetLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
 
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
+        android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:gravity="center"
-        android:paddingBottom="12dp">
+        android:gravity="center_horizontal"
+        android:paddingTop="30dp"
+        android:paddingBottom="24dp"
+        app:layout_boxedEdges="all">
+
+        <!-- Long-press hint — appears briefly while recording -->
+        <TextView
+            android:id="@+id/longPressHint"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="6dp"
+            android:visibility="gone"
+            android:text="Hold to discard"
+            android:textSize="9sp"
+            android:textColor="#44FFFFFF" />
 
         <!--
           116 dp outer frame = 96 dp button + 10 dp gap each side for the arc stroke.
-          ArcProgressView fills the outer frame; record button is centred inside.
         -->
         <FrameLayout
             android:layout_width="116dp"
@@ -90,82 +105,21 @@
             android:gravity="center"
             android:visibility="gone" />
 
-    </LinearLayout>
-
-    <!-- ── Queue badge — above shortcuts row ────────────────────────────── -->
-
-    <TextView
-        android:id="@+id/queueBadge"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="bottom|center_horizontal"
-        android:layout_marginBottom="50dp"
-        android:visibility="gone"
-        android:text="● 0 queued"
-        android:textSize="9sp"
-        android:textColor="#FFF97316"
-        android:paddingStart="4dp"
-        android:paddingEnd="4dp" />
-
-    <!-- ── Bottom shortcuts row: [😊 Mood]  [🧘 Breathe] ────────────────── -->
-
-    <LinearLayout
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="bottom|center_horizontal"
-        android:layout_marginBottom="18dp"
-        android:orientation="horizontal"
-        android:gravity="center_vertical">
-
+        <!-- Queue badge — shown when audio is waiting to sync -->
         <TextView
-            android:id="@+id/moodShortcutBtn"
+            android:id="@+id/queueBadge"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="😊 Mood"
-            android:textSize="11sp"
-            android:textColor="#AAFFFFFF"
-            android:paddingStart="10dp"
-            android:paddingEnd="10dp"
-            android:paddingTop="5dp"
-            android:paddingBottom="5dp"
-            android:background="@drawable/btn_outline"
-            android:foreground="?android:attr/selectableItemBackgroundBorderless"
-            android:clickable="true"
-            android:focusable="true" />
-
-        <View
-            android:layout_width="8dp"
-            android:layout_height="1dp" />
-
-        <TextView
-            android:id="@+id/breatheShortcutBtn"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="🧘 Breathe"
-            android:textSize="11sp"
-            android:textColor="#AAFFFFFF"
-            android:paddingStart="10dp"
-            android:paddingEnd="10dp"
-            android:paddingTop="5dp"
-            android:paddingBottom="5dp"
-            android:background="@drawable/btn_outline"
-            android:foreground="?android:attr/selectableItemBackgroundBorderless"
-            android:clickable="true"
-            android:focusable="true" />
+            android:layout_marginTop="6dp"
+            android:visibility="gone"
+            android:text="● 0 queued"
+            android:textSize="9sp"
+            android:textColor="#FFF97316"
+            android:paddingStart="4dp"
+            android:paddingEnd="4dp" />
 
     </LinearLayout>
 
-    <!-- ── Long-press hint ───────────────────────────────────────────────── -->
+    </androidx.wear.widget.BoxInsetLayout>
 
-    <TextView
-        android:id="@+id/longPressHint"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="top|center_horizontal"
-        android:layout_marginTop="22dp"
-        android:visibility="gone"
-        android:text="Hold to discard"
-        android:textSize="9sp"
-        android:textColor="#44FFFFFF" />
-
-</FrameLayout>
+</ScrollView>

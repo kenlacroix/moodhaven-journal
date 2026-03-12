@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  BreatheSessionActivity layout
+  Full-screen immersive. Black background. Animated ring, phase label,
+  countdown, cycle progress. Pause overlay covers the entire screen.
+-->
+<FrameLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/sessionRoot"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000000"
+    android:focusable="true"
+    android:focusableInTouchMode="true">
+
+    <!-- Animated ring — fills the screen -->
+    <com.moodbloom.wear.BreatheRingView
+        android:id="@+id/breatheRing"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <!-- Content overlay on top of ring -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:padding="16dp">
+
+        <!-- Phase label  e.g. "Inhale…" -->
+        <TextView
+            android:id="@+id/tvPhase"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:textColor="#FFFFFF"
+            android:gravity="center"
+            android:layout_marginBottom="8dp"
+            android:text="Inhale…" />
+
+        <!-- Countdown seconds -->
+        <TextView
+            android:id="@+id/tvCountdown"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="40sp"
+            android:textStyle="bold"
+            android:textColor="#FFFFFF"
+            android:gravity="center"
+            android:text="4" />
+
+        <!-- Cycle progress  e.g. "cycle 2 / 8" -->
+        <TextView
+            android:id="@+id/tvCycle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="11sp"
+            android:textColor="#808080"
+            android:gravity="center"
+            android:layout_marginTop="8dp"
+            android:text="cycle 1 / 8" />
+
+    </LinearLayout>
+
+    <!-- ── Pause overlay ────────────────────────────────────── -->
+    <LinearLayout
+        android:id="@+id/pauseOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:background="#CC000000"
+        android:visibility="gone"
+        android:padding="16dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="16sp"
+            android:textColor="#FFFFFF"
+            android:gravity="center"
+            android:layout_marginBottom="16dp"
+            android:text="Paused" />
+
+        <Button
+            android:id="@+id/btnResume"
+            android:layout_width="120dp"
+            android:layout_height="40dp"
+            android:text="Resume"
+            android:textColor="#FFFFFF"
+            android:background="#3B82F6"
+            android:layout_marginBottom="8dp" />
+
+        <Button
+            android:id="@+id/btnEnd"
+            android:layout_width="120dp"
+            android:layout_height="40dp"
+            android:text="End session"
+            android:textColor="#CCCCCC"
+            android:background="#333333" />
+
+    </LinearLayout>
+
+</FrameLayout>

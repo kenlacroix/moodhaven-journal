@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  BreatheSummaryActivity layout
+  Post-session results: mode + cycles, elapsed time, HR before/after delta,
+  "Record a note" and "Done" actions.
+-->
+<ScrollView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000000"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="center_horizontal"
+        android:paddingTop="20dp"
+        android:paddingBottom="24dp"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp">
+
+        <!-- Check + title -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="✓ Session done"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:textColor="#FFFFFF"
+            android:gravity="center"
+            android:layout_marginBottom="12dp" />
+
+        <!-- Mode + cycles  "⚖️ Balance · 8×" -->
+        <TextView
+            android:id="@+id/summaryModeLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="14sp"
+            android:textColor="#C4B5FD"
+            android:gravity="center"
+            android:layout_marginBottom="2dp"
+            android:text="⚖️ Balance · 8×" />
+
+        <!-- Elapsed time -->
+        <TextView
+            android:id="@+id/summaryElapsed"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="12sp"
+            android:textColor="#A0A0A0"
+            android:gravity="center"
+            android:layout_marginBottom="10dp"
+            android:text="3 min 12 sec" />
+
+        <!-- HR block (shown only when both readings exist) -->
+        <LinearLayout
+            android:id="@+id/hrBlock"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="center_horizontal"
+            android:visibility="gone"
+            android:background="#161616"
+            android:padding="10dp"
+            android:layout_marginBottom="12dp">
+
+            <TextView
+                android:id="@+id/summaryHrBefore"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="12sp"
+                android:textColor="#CCCCCC"
+                android:gravity="center"
+                android:text="HR before:  78" />
+
+            <TextView
+                android:id="@+id/summaryHrAfter"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="12sp"
+                android:textColor="#CCCCCC"
+                android:gravity="center"
+                android:text="HR after:   64" />
+
+            <TextView
+                android:id="@+id/summaryHrDelta"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:textColor="#10B981"
+                android:gravity="center"
+                android:layout_marginTop="2dp"
+                android:text="↓ 14 bpm" />
+
+        </LinearLayout>
+
+        <!-- Record a note button -->
+        <Button
+            android:id="@+id/btnRecordNote"
+            android:layout_width="160dp"
+            android:layout_height="40dp"
+            android:text="🎙 Record a note"
+            android:textSize="12sp"
+            android:textColor="#FFFFFF"
+            android:background="#1F2937"
+            android:layout_marginBottom="8dp" />
+
+        <!-- Done button -->
+        <Button
+            android:id="@+id/btnDone"
+            android:layout_width="120dp"
+            android:layout_height="40dp"
+            android:text="Done"
+            android:textSize="13sp"
+            android:textColor="#FFFFFF"
+            android:background="#374151" />
+
+    </LinearLayout>
+
+</ScrollView>

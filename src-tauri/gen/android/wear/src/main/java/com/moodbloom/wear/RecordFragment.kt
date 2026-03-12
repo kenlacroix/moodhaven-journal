@@ -43,8 +43,6 @@ class RecordFragment : Fragment() {
     private lateinit var transferStatus:   TextView
     private lateinit var queueBadge:       TextView
     private lateinit var longPressHint:    TextView
-    private lateinit var moodShortcutBtn:  View
-    private lateinit var breatheShortcutBtn: View
     private lateinit var arcProgress:      ArcProgressView
 
     // ── State ─────────────────────────────────────────────────────────────────
@@ -89,19 +87,10 @@ class RecordFragment : Fragment() {
         transferStatus     = view.findViewById(R.id.transferStatus)
         queueBadge         = view.findViewById(R.id.queueBadge)
         longPressHint      = view.findViewById(R.id.longPressHint)
-        moodShortcutBtn    = view.findViewById(R.id.moodShortcutBtn)
-        breatheShortcutBtn = view.findViewById(R.id.breatheShortcutBtn)
         arcProgress        = view.findViewById(R.id.arcProgress)
 
         recordBtn.setOnClickListener { onRecordTap() }
         recordBtn.setOnLongClickListener { onRecordLongPress(); true }
-
-        moodShortcutBtn.setOnClickListener {
-            (activity as? Callback)?.onNavigateToMoodPicker()
-        }
-        breatheShortcutBtn.setOnClickListener {
-            (activity as? Callback)?.onNavigateToBreathe()
-        }
 
         setIdleUI()
         refreshQueueBadge()

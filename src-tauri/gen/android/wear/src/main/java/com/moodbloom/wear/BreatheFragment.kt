@@ -1,5 +1,6 @@
 package com.moodbloom.wear
 
+import android.content.Intent
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
@@ -11,39 +12,17 @@ import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.RecyclerView
 import androidx.wear.widget.WearableLinearLayoutManager
 import androidx.wear.widget.WearableRecyclerView
+import java.util.Calendar
 import kotlin.math.abs
 
 /**
  * BreatheFragment — page 4 (rightmost).
  *
  * Displays a scrollable drum-roll wheel of 6 breathing modes.
- * Phase 2: layout + visual polish complete.
- * Phase 3: tapping a mode opens BreatheModeDetailActivity.
+ * Tapping a mode opens BreatheModeDetailActivity (Phase 3).
+ * Shows an HR-based suggestion chip when a recent reading is available (Phase 3).
  */
 class BreatheFragment : Fragment() {
-
-    // ── Breathing mode definitions ────────────────────────────────────────────
-
-    data class BreathingMode(
-        val emoji: String,
-        val name: String,
-        val tagline: String,
-        val colorHex: String,
-        /** seconds: inhale, hold1, exhale, hold2 */
-        val pattern: IntArray,
-        val defaultCycles: Int,
-    )
-
-    companion object {
-        val MODES = listOf(
-            BreathingMode("🌙", "Unwind",   "Prepare for sleep",    "#6366F1", intArrayOf(4, 7, 8, 0), 4),
-            BreathingMode("🌿", "Restore",  "Deep recovery",        "#10B981", intArrayOf(4, 0, 7, 0), 10),
-            BreathingMode("😌", "Relax",    "Ease anxiety",         "#8B5CF6", intArrayOf(4, 1, 6, 0), 12),
-            BreathingMode("⚖️", "Balance",  "Reset & refocus",      "#3B82F6", intArrayOf(4, 4, 4, 4), 8),
-            BreathingMode("🎯", "Focus",    "Mental clarity",       "#F59E0B", intArrayOf(4, 2, 4, 0), 12),
-            BreathingMode("⚡", "Energize", "Beat the slump",       "#EF4444", intArrayOf(3, 0, 2, 0), 18),
-        )
-    }
 
     // ── Fragment lifecycle ────────────────────────────────────────────────────
 
@@ -58,16 +37,19 @@ class BreatheFragment : Fragment() {
 
         val lm = WearableLinearLayoutManager(requireContext(), WheelLayoutCallback())
         modeList.layoutManager = lm
-        modeList.isEdgeItemsCenteringEnabled = true
-        modeList.isCircularScrollingGestureEnabled = true
+        modeList.isEdgeItemsCenteringEnabled      = true
+        modeList.isCircularScrollingGestureEnabled = false
         modeList.requestFocus()
 
-        modeList.adapter = BreatheModeAdapter(MODES) { /* Phase 3: open detail screen */ }
+        modeList.adapter = BreatheModeAdapter(BreathingMode.ALL) { mode ->
+            val intent = Intent(requireContext(), BreatheModeDetailActivity::class.java)
+                .putExtra(BreatheModeDetailActivity.EXTRA_MODE_ID, mode.id)
+            startActivity(intent)
+        }
 
         // Scroll listener: ambient tint + title fade
         modeList.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             private var hasScrolled = false
-
             override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
                 if (dy != 0 && !hasScrolled) {
                     hasScrolled = true
@@ -77,34 +59,62 @@ class BreatheFragment : Fragment() {
             }
         })
 
-        // Set initial ambient tint to the center item (index 3 = Balance)
-        post(ambientTint, MODES[3].colorHex)
+        // Initial ambient tint for center item (Balance = index 3)
+        applyTint(ambientTint, BreathingMode.ALL[3].colorHex)
     }
+
+    override fun onResume() {
+        super.onResume()
+        view?.let { updateSuggestionChip(it) }
+    }
+
+    // ── HR suggestion chip ────────────────────────────────────────────────────
+
+    private fun updateSuggestionChip(root: View) {
+        val chipView = root.findViewById<TextView>(R.id.breatheSuggestionChip) ?: return
+        val lastHr   = HealthSnapshot.lastHr
+        if (lastHr == null) {
+            chipView.visibility = View.GONE
+            return
+        }
+        val hour      = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+        val suggested = BreathingMode.suggest(lastHr, hour)
+        if (suggested == null) {
+            chipView.visibility = View.GONE
+            return
+        }
+        chipView.visibility = View.VISIBLE
+        chipView.text       = "💛 HR $lastHr · Try ${suggested.emoji} ${suggested.name}"
+        chipView.setOnClickListener {
+            val intent = Intent(requireContext(), BreatheModeDetailActivity::class.java)
+                .putExtra(BreatheModeDetailActivity.EXTRA_MODE_ID, suggested.id)
+            startActivity(intent)
+        }
+    }
+
+    // ── Ambient tint ──────────────────────────────────────────────────────────
 
     private fun updateAmbientTint(rv: RecyclerView, tintView: View) {
         val centerY = rv.height / 2f
         var closestPos = -1
         var closestDist = Float.MAX_VALUE
         for (i in 0 until rv.childCount) {
-            val child = rv.getChildAt(i)
+            val child  = rv.getChildAt(i)
             val childCY = (child.top + child.bottom) / 2f
-            val dist = abs(childCY - centerY)
-            if (dist < closestDist) {
-                closestDist = dist
-                closestPos = rv.getChildAdapterPosition(child)
-            }
+            val dist    = abs(childCY - centerY)
+            if (dist < closestDist) { closestDist = dist; closestPos = rv.getChildAdapterPosition(child) }
         }
-        if (closestPos in MODES.indices) post(tintView, MODES[closestPos].colorHex)
+        if (closestPos in BreathingMode.ALL.indices) applyTint(tintView, BreathingMode.ALL[closestPos].colorHex)
     }
 
-    private fun post(tintView: View, colorHex: String) {
+    private fun applyTint(tintView: View, colorHex: String) {
         try {
             val base = Color.parseColor(colorHex)
             val r = (Color.red(base)   * 0.15f).toInt()
             val g = (Color.green(base) * 0.15f).toInt()
             val b = (Color.blue(base)  * 0.15f).toInt()
             tintView.setBackgroundColor(Color.rgb(r, g, b))
-        } catch (_: Exception) { }
+        } catch (_: Exception) {}
     }
 
     // ── Wheel layout callback ─────────────────────────────────────────────────
@@ -113,10 +123,10 @@ class BreatheFragment : Fragment() {
         override fun onLayoutFinished(child: View, parent: RecyclerView) {
             val childCY  = (child.top + child.bottom) / 2f
             val parentCY = parent.height / 2f
-            val frac = (abs(childCY - parentCY) / parentCY).coerceIn(0f, 1f)
+            val frac     = (abs(childCY - parentCY) / parentCY).coerceIn(0f, 1f)
             child.scaleX = 1f - 0.25f * frac
             child.scaleY = child.scaleX
-            child.alpha  = 1f - 0.6f * frac
+            child.alpha  = 1f - 0.6f  * frac
         }
     }
 
@@ -153,7 +163,6 @@ class BreatheFragment : Fragment() {
                 alpha = 80
             }
             holder.pill.background = drawable
-
             holder.itemView.setOnClickListener { onModeClick(mode) }
         }
 

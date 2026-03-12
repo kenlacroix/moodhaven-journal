@@ -31,6 +31,11 @@ class MainActivity : FragmentActivity(),
         const val PAGE_MOOD    = 2
         const val PAGE_BREATHE = 3
         const val PAGE_SYNC    = 4
+
+        /** From BreatheSummaryActivity: which page to land on after a session. */
+        const val EXTRA_START_PAGE    = "start_page"
+        /** Pre-filled context tag passed to RecordFragment e.g. "Post-Balance". */
+        const val EXTRA_RECORD_PREFILL = "record_prefill"
     }
 
     private lateinit var viewPager: ViewPager2
@@ -64,11 +69,14 @@ class MainActivity : FragmentActivity(),
         )
 
         viewPager.adapter = MainPagerAdapter(this)
-        viewPager.setCurrentItem(PAGE_RECORD, false)
+
+        // BreatheSummaryActivity can request a specific start page
+        val startPage = intent.getIntExtra(EXTRA_START_PAGE, PAGE_RECORD)
+        viewPager.setCurrentItem(startPage, false)
         viewPager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
             override fun onPageSelected(position: Int) = updateDots(position)
         })
-        updateDots(PAGE_RECORD)
+        updateDots(startPage)
     }
 
     override fun onResume() {

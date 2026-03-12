@@ -42,9 +42,9 @@ class MoodPickerFragment : Fragment() {
         queuedBadge    = view.findViewById(R.id.queuedBadge)
 
         val lm = WearableLinearLayoutManager(requireContext(), WheelLayoutCallback())
-        moodList.layoutManager                 = lm
-        moodList.isEdgeItemsCenteringEnabled   = true
-        moodList.isCircularScrollingGestureEnabled = true
+        moodList.layoutManager                    = lm
+        moodList.isEdgeItemsCenteringEnabled      = true
+        moodList.isCircularScrollingGestureEnabled = false
         moodList.requestFocus()
 
         val lastSentLevel = MoodHistory.load(requireContext()).firstOrNull()?.mood?.level ?: -1

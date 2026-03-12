@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  BreatheModeDetailActivity layout
+  Scrollable detail screen: mode info, cycle adjuster, Begin button.
+-->
+<ScrollView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000000"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="center_horizontal"
+        android:paddingTop="20dp"
+        android:paddingBottom="24dp"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp">
+
+        <!-- Mode emoji -->
+        <TextView
+            android:id="@+id/detailEmoji"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="36sp"
+            android:gravity="center"
+            android:layout_marginBottom="4dp"
+            android:text="⚖️" />
+
+        <!-- Mode name -->
+        <TextView
+            android:id="@+id/detailName"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:textColor="#FFFFFF"
+            android:gravity="center"
+            android:layout_marginBottom="4dp"
+            android:text="Balance" />
+
+        <!-- Tagline -->
+        <TextView
+            android:id="@+id/detailTagline"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="12sp"
+            android:textColor="#A0A0A0"
+            android:gravity="center"
+            android:layout_marginBottom="8dp"
+            android:text="Reset &amp; refocus" />
+
+        <!-- Divider -->
+        <View
+            android:layout_width="80dp"
+            android:layout_height="1dp"
+            android:background="#333333"
+            android:layout_marginBottom="8dp" />
+
+        <!-- Description -->
+        <TextView
+            android:id="@+id/detailDesc"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="11sp"
+            android:textColor="#CCCCCC"
+            android:gravity="center"
+            android:layout_marginBottom="8dp"
+            android:text="Equal-time box breathing clears mental fog." />
+
+        <!-- Pattern label  e.g. "4 · 4 · 4 · 4" -->
+        <TextView
+            android:id="@+id/detailPattern"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="14sp"
+            android:textColor="#8B9EFF"
+            android:gravity="center"
+            android:layout_marginBottom="8dp"
+            android:text="4 · 4 · 4 · 4" />
+
+        <!-- Divider -->
+        <View
+            android:layout_width="80dp"
+            android:layout_height="1dp"
+            android:background="#333333"
+            android:layout_marginBottom="8dp" />
+
+        <!-- Cycle adjuster row -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="2dp">
+
+            <Button
+                android:id="@+id/btnMinus"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:text="−"
+                android:textSize="20sp"
+                android:textColor="#FFFFFF"
+                android:background="#222222"
+                android:padding="0dp" />
+
+            <TextView
+                android:id="@+id/detailCycles"
+                android:layout_width="100dp"
+                android:layout_height="wrap_content"
+                android:textSize="14sp"
+                android:textColor="#FFFFFF"
+                android:gravity="center"
+                android:text="8 cycles" />
+
+            <Button
+                android:id="@+id/btnPlus"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:text="+"
+                android:textSize="20sp"
+                android:textColor="#FFFFFF"
+                android:background="#222222"
+                android:padding="0dp" />
+
+        </LinearLayout>
+
+        <!-- Approximate time -->
+        <TextView
+            android:id="@+id/detailTime"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="11sp"
+            android:textColor="#808080"
+            android:gravity="center"
+            android:layout_marginBottom="12dp"
+            android:text="~3 min 12 sec" />
+
+        <!-- Begin button -->
+        <Button
+            android:id="@+id/btnBegin"
+            android:layout_width="120dp"
+            android:layout_height="44dp"
+            android:text="▶  Begin"
+            android:textSize="14sp"
+            android:textColor="#FFFFFF"
+            android:background="#3B82F6"
+            android:padding="0dp" />
+
+    </LinearLayout>
+
+</ScrollView>

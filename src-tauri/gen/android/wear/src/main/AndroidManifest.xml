@@ -20,10 +20,12 @@
         android:label="@string/app_name"
         android:theme="@android:style/Theme.DeviceDefault">
 
-        <!-- Required library for Wear OS -->
+        <!-- com.google.android.wearable was removed in Wear OS 3+; mark optional
+             so the APK installs on Pixel Watch 3 (Wear OS 4). All actual APIs
+             come from androidx.wear and play-services-wearable. -->
         <uses-library
             android:name="com.google.android.wearable"
-            android:required="true" />
+            android:required="false" />
 
         <!--
           standalone="false": requires paired phone app.

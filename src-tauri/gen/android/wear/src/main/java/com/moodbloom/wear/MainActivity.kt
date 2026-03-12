@@ -13,15 +13,13 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
- * MainActivity — host for the 4-page swipe UI.
+ * MainActivity — host for the 5-page swipe UI.
  *
  * Page 0 ← History   | recorded memos + mood taps
  * Page 1   Record     | (DEFAULT) — voice recording primary action
  * Page 2 → Mood       | quick emoji mood picker
- * Page 3 → Sync       | connection status, queue, retry
- *
- * Mood confirmations and queued overlays float above the ViewPager so they
- * are visible regardless of which page is showing.
+ * Page 3 → Breathe    | guided breathing modes
+ * Page 4 → Sync       | connection status, queue, retry
  */
 class MainActivity : FragmentActivity(),
     MoodPickerFragment.Callback,
@@ -31,21 +29,19 @@ class MainActivity : FragmentActivity(),
         const val PAGE_HISTORY = 0
         const val PAGE_RECORD  = 1   // default
         const val PAGE_MOOD    = 2
-        const val PAGE_SYNC    = 3
+        const val PAGE_BREATHE = 3
+        const val PAGE_SYNC    = 4
     }
 
     private lateinit var viewPager: ViewPager2
     private lateinit var dots: List<View>
 
-    // Mood confirmation overlay
     private lateinit var confirmationOverlay: View
-    private lateinit var confirmEmoji: TextView
-    private lateinit var confirmMoodName: TextView
-    private lateinit var addNoteBtn: TextView
-
-    // Offline-queued overlay
-    private lateinit var queuedOverlay: View
-    private lateinit var queuedEmoji: TextView
+    private lateinit var confirmEmoji:        TextView
+    private lateinit var confirmMoodName:     TextView
+    private lateinit var addNoteBtn:          TextView
+    private lateinit var queuedOverlay:       View
+    private lateinit var queuedEmoji:         TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -64,6 +60,7 @@ class MainActivity : FragmentActivity(),
             findViewById(R.id.dot1),
             findViewById(R.id.dot2),
             findViewById(R.id.dot3),
+            findViewById(R.id.dot4),
         )
 
         viewPager.adapter = MainPagerAdapter(this)
@@ -76,9 +73,7 @@ class MainActivity : FragmentActivity(),
 
     override fun onResume() {
         super.onResume()
-        // Drain audio queue silently on every foreground
         lifecycleScope.launch { AudioTransferService.drainQueue(this@MainActivity) }
-        // Drain mood signal queue
         lifecycleScope.launch { SignalSender.drainAndSend(this@MainActivity) }
     }
 
@@ -100,6 +95,10 @@ class MainActivity : FragmentActivity(),
         viewPager.setCurrentItem(PAGE_MOOD, true)
     }
 
+    override fun onNavigateToBreathe() {
+        viewPager.setCurrentItem(PAGE_BREATHE, true)
+    }
+
     // ── Navigation helpers ───────────────────────────────────────────────────
 
     fun navigateToRecord() {
@@ -116,7 +115,6 @@ class MainActivity : FragmentActivity(),
         addNoteBtn.visibility = View.GONE
         confirmationOverlay.visibility = View.VISIBLE
 
-        // Show "Add a note" button after brief pause
         delay(400)
         if (confirmationOverlay.visibility != View.VISIBLE) return
         addNoteBtn.visibility = View.VISIBLE
@@ -125,7 +123,6 @@ class MainActivity : FragmentActivity(),
             navigateToRecord()
         }
 
-        // Auto-dismiss after 2.4 s total
         delay(2_000)
         confirmationOverlay.visibility = View.GONE
         addNoteBtn.visibility = View.GONE
@@ -149,11 +146,12 @@ class MainActivity : FragmentActivity(),
     // ── Pager adapter ─────────────────────────────────────────────────────────
 
     private inner class MainPagerAdapter(fa: FragmentActivity) : FragmentStateAdapter(fa) {
-        override fun getItemCount() = 4
+        override fun getItemCount() = 5
         override fun createFragment(position: Int): Fragment = when (position) {
             PAGE_HISTORY -> HistoryFragment()
             PAGE_RECORD  -> RecordFragment()
             PAGE_MOOD    -> MoodPickerFragment()
+            PAGE_BREATHE -> BreatheFragment()
             PAGE_SYNC    -> SyncFragment()
             else         -> throw IllegalStateException("Unknown page $position")
         }

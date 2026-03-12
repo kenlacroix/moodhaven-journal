@@ -10,6 +10,7 @@ import androidx.recyclerview.widget.RecyclerView
 
 class MoodAdapter(
     private val moods: List<MoodItem>,
+    private var lastSentLevel: Int = -1,
     private val onMoodClick: (MoodItem) -> Unit,
 ) : RecyclerView.Adapter<MoodAdapter.MoodViewHolder>() {
 
@@ -18,6 +19,13 @@ class MoodAdapter(
         val moodEmoji: TextView = itemView.findViewById(R.id.moodEmoji)
         val moodLabel: TextView = itemView.findViewById(R.id.moodLabel)
         val moodLevel: TextView = itemView.findViewById(R.id.moodLevel)
+    }
+
+    /** Called from MoodPickerFragment.onResume() after a new mood is sent. */
+    fun updateLastSentLevel(level: Int) {
+        val old = lastSentLevel
+        lastSentLevel = level
+        if (old != level) notifyDataSetChanged()
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): MoodViewHolder {
@@ -30,22 +38,28 @@ class MoodAdapter(
         val mood = moods[position]
         holder.moodEmoji.text = mood.emoji
         holder.moodLabel.text = mood.label
-        holder.moodLevel.text = "${mood.level}"
 
         val color = try { Color.parseColor(mood.colorHex) } catch (_: IllegalArgumentException) { Color.GRAY }
 
-        // Pill: mood color at 35% opacity so content stays readable, full radius
         val density = holder.itemView.context.resources.displayMetrics.density
         val drawable = GradientDrawable().apply {
-            shape = GradientDrawable.RECTANGLE
+            shape        = GradientDrawable.RECTANGLE
             cornerRadius = 36f * density
             setColor(color)
-            alpha = 90   // ~35% of 255
+            alpha = 90
         }
         holder.colorPill.background = drawable
 
-        // Level number tinted to mood color
-        holder.moodLevel.setTextColor(color)
+        // ✓ badge if this is the last sent mood; otherwise level number
+        if (mood.level == lastSentLevel) {
+            holder.moodLevel.text      = "✓"
+            holder.moodLevel.textSize  = 14f
+            holder.moodLevel.setTextColor(color)
+        } else {
+            holder.moodLevel.text      = "${mood.level}"
+            holder.moodLevel.textSize  = 12f
+            holder.moodLevel.setTextColor(color)
+        }
 
         holder.itemView.setOnClickListener { onMoodClick(mood) }
     }

@@ -1,34 +1,52 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Mood Picker page. The WearableRecyclerView fills the entire screen.
-  No header text — on round watches the top is always clipped by the bezel.
-  The wheel curve effect is applied via WearableLinearLayoutManager.LayoutCallback
-  in MoodPickerFragment: items near the edge scale down and fade out.
-
-  Queued badge floats in the bottom-center above the page dots.
+  Mood Picker page.
+  Phase 2 additions:
+    • ambientTint view behind the list — shifts to focused mood colour
+    • "How are you?" label at top — fades on first scroll
+    • queuedBadge moved to top-end corner (avoids overlap on small screens)
 -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="#000000">
 
+    <!-- Ambient tint: mood colour at ~15% opacity, animated on scroll -->
+    <View
+        android:id="@+id/ambientTint"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <!-- Mood wheel -->
     <androidx.wear.widget.WearableRecyclerView
         android:id="@+id/moodList"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
-    <!-- Queue pending badge — above dots, only visible when > 0 queued -->
+    <!-- "How are you?" header — fades after first scroll -->
+    <TextView
+        android:id="@+id/howAreYouLabel"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|center_horizontal"
+        android:layout_marginTop="26dp"
+        android:text="How are you?"
+        android:textSize="10sp"
+        android:textColor="#66FFFFFF" />
+
+    <!-- Queue pending badge — top-end corner -->
     <TextView
         android:id="@+id/queuedBadge"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_gravity="bottom|center_horizontal"
-        android:layout_marginBottom="24dp"
+        android:layout_gravity="top|end"
+        android:layout_marginTop="10dp"
+        android:layout_marginEnd="10dp"
         android:visibility="gone"
-        android:text="● 0 queued"
+        android:text="● 0"
         android:textSize="9sp"
         android:textColor="#FFF97316"
-        android:paddingStart="6dp"
-        android:paddingEnd="6dp" />
+        android:paddingStart="4dp"
+        android:paddingEnd="4dp" />
 
 </FrameLayout>

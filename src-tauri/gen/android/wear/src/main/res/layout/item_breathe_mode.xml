@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Single breathe-mode pill for the BreatheFragment wheel.
+  Same height and padding structure as item_mood.xml.
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="64dp"
+    android:paddingStart="20dp"
+    android:paddingEnd="20dp"
+    android:paddingTop="5dp"
+    android:paddingBottom="5dp">
+
+    <!-- Pill background — colour set programmatically -->
+    <View
+        android:id="@+id/modePill"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@drawable/mood_pill" />
+
+    <!-- Content row -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="14dp"
+        android:paddingEnd="12dp">
+
+        <TextView
+            android:id="@+id/modeEmoji"
+            android:layout_width="36dp"
+            android:layout_height="wrap_content"
+            android:textSize="22sp"
+            android:gravity="center" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/modeName"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="15sp"
+                android:textColor="#FFFFFF"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/modeTagline"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="10sp"
+                android:textColor="#88FFFFFF" />
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+</FrameLayout>

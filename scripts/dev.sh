@@ -270,11 +270,32 @@ try_adb_connect() {
 }
 
 # Returns true if the given ADB serial is a Wear OS watch (checks ro.build.characteristics).
+# stdin is explicitly redirected to /dev/null so this is safe to call inside
+# `while read` loops without consuming the loop's pipe.
 _is_watch_device() {
   local serial="$1"
   local chars
-  chars=$("$ADB" -s "$serial" shell getprop ro.build.characteristics 2>/dev/null | tr -d '\r\n' || true)
+  chars=$("$ADB" -s "$serial" shell getprop ro.build.characteristics </dev/null 2>/dev/null | tr -d '\r\n' || true)
   [[ "$chars" == *watch* ]]
+}
+
+# Return the first USB/hardware watch serial (non-emulator, non-IP:PORT).
+# $1 = phone serial to exclude (optional).
+# Always uses _is_watch_device() to confirm via ro.build.characteristics — never
+# assumes a device is the watch just because nothing else is connected.
+find_real_watch_serial() {
+  local exclude_serial="${1:-}"
+  while IFS= read -r line; do
+    local s state
+    s=$(awk '{print $1}' <<< "$line")
+    state=$(awk '{print $2}' <<< "$line")
+    [[ "$state" != "device" ]]                                        && continue
+    [[ "$s" == emulator-* ]]                                          && continue
+    [[ "$s" == "$exclude_serial" ]]                                   && continue
+    # Skip IP:PORT / localhost:PORT (Wi-Fi ADB / BT bridge) — want raw USB only
+    [[ "$s" =~ ^(localhost|[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+): ]]       && continue
+    _is_watch_device "$s" && { echo "$s"; return; }
+  done < <("$ADB" devices 2>/dev/null | tail -n +2)
 }
 
 # Return the first USB/hardware phone serial (non-emulator, non-IP:PORT, non-watch).
@@ -741,7 +762,18 @@ resolve_real_watch() {
   fi
 
   step "Resolving real watch"
-  info "Trying automatic connection (BT bridge preferred)..."
+
+  # Fast-path: USB-connected watch detected directly (works without a phone).
+  # In watch-only mode (phone_serial="") we accept any USB non-emulator device.
+  # When a phone is also connected we use _is_watch_device() to distinguish them.
+  local usb_watch
+  usb_watch=$(find_real_watch_serial "$phone_serial")
+  if [[ -n "$usb_watch" ]]; then
+    success "USB watch detected: $usb_watch"
+    echo "$usb_watch"; return
+  fi
+
+  info "No USB watch found — trying automatic connection (BT bridge preferred)..."
 
   local serial
   serial=$(auto_connect_watch "$phone_serial")
@@ -942,8 +974,25 @@ build_and_install_watch_app() {
   detail "APK: $apk_path"
 
   info "Installing APK via adb (bypasses Gradle ddmlib)..."
+  local install_ok=false
   if "$ADB" -s "$watch_serial" install -r "$apk_path" > "$install_log" 2>&1; then
+    install_ok=true
+  elif grep -q "INSTALL_FAILED_VERSION_DOWNGRADE" "$install_log" 2>/dev/null; then
+    # A stale higher-versionCode build (e.g. phone app accidentally pushed to watch)
+    # is blocking install.  Uninstall it and retry.
+    warn "Version downgrade detected — uninstalling existing package and retrying..."
+    "$ADB" -s "$watch_serial" uninstall com.moodbloom.app >/dev/null 2>&1 || true
+    if "$ADB" -s "$watch_serial" install -r "$apk_path" >> "$install_log" 2>&1; then
+      install_ok=true
+    fi
+  fi
+
+  if $install_ok; then
     success "Watch app installed on $watch_serial"
+    # Launch the app so it appears immediately (sideloaded apps don't auto-start).
+    "$ADB" -s "$watch_serial" shell am start \
+      -n com.moodbloom.app/com.moodbloom.wear.MainActivity \
+      >/dev/null 2>&1 || true
   else
     warn "Watch app install failed -- see $install_log"
     warn "Retry: $ADB -s $watch_serial install -r $apk_path"

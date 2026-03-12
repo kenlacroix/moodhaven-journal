@@ -15,32 +15,40 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * SyncFragment — rightmost swipe page.
- * Shows phone connection status, pending queue count, last logged mood,
- * and a "Sync now" button that drains the offline queue.
+ * SyncFragment — page 4 (rightmost).
+ *
+ * Phase 2 additions:
+ *  • Recordings today count (from SyncStats)
+ *  • Last sync relative time (from SyncStats)
+ *  • Voice memo queue and mood signal queue shown separately
+ *  • Sync now also drains voice memo queue
  */
 class SyncFragment : Fragment() {
 
-    private lateinit var connectionDot: View
-    private lateinit var connectionStatus: TextView
-    private lateinit var phoneName: TextView
-    private lateinit var queueCount: TextView
-    private lateinit var lastLogged: TextView
-    private lateinit var retryBtn: TextView
+    private lateinit var connectionDot:      View
+    private lateinit var connectionStatus:   TextView
+    private lateinit var phoneName:          TextView
+    private lateinit var recordingsTodayText: TextView
+    private lateinit var lastSyncText:       TextView
+    private lateinit var voiceQueueCount:    TextView
+    private lateinit var moodQueueCount:     TextView
+    private lateinit var retryBtn:           TextView
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?
     ): View = inflater.inflate(R.layout.fragment_sync, container, false)
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        connectionDot    = view.findViewById(R.id.connectionDot)
-        connectionStatus = view.findViewById(R.id.connectionStatus)
-        phoneName        = view.findViewById(R.id.phoneName)
-        queueCount       = view.findViewById(R.id.queueCount)
-        lastLogged       = view.findViewById(R.id.lastLogged)
-        retryBtn         = view.findViewById(R.id.retryBtn)
+        connectionDot      = view.findViewById(R.id.connectionDot)
+        connectionStatus   = view.findViewById(R.id.connectionStatus)
+        phoneName          = view.findViewById(R.id.phoneName)
+        recordingsTodayText = view.findViewById(R.id.recordingsTodayText)
+        lastSyncText       = view.findViewById(R.id.lastSyncText)
+        voiceQueueCount    = view.findViewById(R.id.voiceQueueCount)
+        moodQueueCount     = view.findViewById(R.id.moodQueueCount)
+        retryBtn           = view.findViewById(R.id.retryBtn)
 
-        retryBtn.setOnClickListener { drainQueue() }
+        retryBtn.setOnClickListener { drainQueues() }
         refreshData()
     }
 
@@ -50,22 +58,26 @@ class SyncFragment : Fragment() {
     }
 
     private fun refreshData() {
-        updateQueueUI()
-        updateLastLogged()
+        updateCounters()
         checkConnection()
     }
 
-    private fun updateQueueUI() {
-        val count = OfflineQueue.size(requireContext())
-        queueCount.text = "$count"
-        retryBtn.visibility = if (count > 0) View.VISIBLE else View.GONE
-    }
+    private fun updateCounters() {
+        val ctx         = requireContext()
+        val voiceQ      = AudioQueue.size(ctx)
+        val moodQ       = OfflineQueue.size(ctx)
+        val totalQ      = voiceQ + moodQ
+        val recToday    = SyncStats.recordingsTodayCount(ctx)
+        val lastSync    = SyncStats.lastSyncRelative(ctx)
 
-    private fun updateLastLogged() {
-        val latest = MoodHistory.load(requireContext()).firstOrNull()
-        lastLogged.text = if (latest != null) {
-            "${latest.mood.emoji} ${latest.mood.label} · ${latest.displayTime()}"
-        } else "—"
+        val recLabel = if (recToday == 1) "1 recording" else "$recToday recordings"
+        recordingsTodayText.text = recLabel
+        lastSyncText.text        = lastSync
+        voiceQueueCount.text     = "$voiceQ"
+        moodQueueCount.text      = "$moodQ"
+
+        retryBtn.visibility = if (totalQ > 0) View.VISIBLE else View.GONE
+        retryBtn.text = "↑ Sync now"
     }
 
     private fun checkConnection() {
@@ -79,29 +91,35 @@ class SyncFragment : Fragment() {
                 }
             }.getOrNull()
 
-            if (nodes == null || nodes.isEmpty()) {
+            if (nodes.isNullOrEmpty()) {
                 connectionDot.background?.setTint(Color.parseColor("#EF4444"))
                 connectionStatus.text = "Disconnected"
-                phoneName.text = "Phone not reachable"
+                phoneName.text        = "Phone not reachable"
             } else {
                 connectionDot.background?.setTint(Color.parseColor("#10B981"))
                 connectionStatus.text = "Connected"
-                phoneName.text = nodes.first().displayName
+                phoneName.text        = nodes.first().displayName
             }
         }
     }
 
-    private fun drainQueue() {
-        retryBtn.text = "Syncing…"
+    private fun drainQueues() {
+        retryBtn.text      = "Syncing…"
         retryBtn.isEnabled = false
 
         lifecycleScope.launch {
-            val sent = SignalSender.drainAndSend(requireContext())
-            updateQueueUI()
-            updateLastLogged()
+            // Drain voice memos
+            val voiceSent = AudioTransferService.drainQueue(requireContext())
+            if (voiceSent > 0) {
+                repeat(voiceSent) { SyncStats.recordSynced(requireContext()) }
+            }
+            // Drain mood signals
+            SignalSender.drainAndSend(requireContext())
+
+            updateCounters()
             retryBtn.isEnabled = true
-            if (sent > 0) retryBtn.text = "✓ Sent $sent"
-            else retryBtn.text = "↑ Sync now"
+            val total = voiceSent
+            retryBtn.text = if (total > 0) "✓ Sent $total" else "↑ Sync now"
         }
     }
 }

@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Breathe page — scrollable mode picker (Phase 2 layout; taps wired in Phase 3).
+  Same drum-roll wheel style as the mood picker.
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000000">
+
+    <!-- Ambient tint (colour driven by focused mode) -->
+    <View
+        android:id="@+id/breatheAmbient"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <androidx.wear.widget.WearableRecyclerView
+        android:id="@+id/breatheModeList"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <!-- Page title — fades on scroll -->
+    <TextView
+        android:id="@+id/breatheTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|center_horizontal"
+        android:layout_marginTop="26dp"
+        android:text="Breathe"
+        android:textSize="11sp"
+        android:textColor="#66FFFFFF" />
+
+</FrameLayout>

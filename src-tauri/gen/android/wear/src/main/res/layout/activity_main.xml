@@ -4,15 +4,12 @@
     android:layout_height="match_parent"
     android:background="#000000">
 
-    <!-- ── Swipe pages ─────────────────────────────────────────────────── -->
-
     <androidx.viewpager2.widget.ViewPager2
         android:id="@+id/viewPager"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
-    <!-- ── Page dots ───────────────────────────────────────────────────── -->
-
+    <!-- 5 page dots: History | Record | Mood | Breathe | Sync -->
     <LinearLayout
         android:id="@+id/pageDots"
         android:layout_width="wrap_content"
@@ -29,12 +26,13 @@
         <View android:id="@+id/dot2" android:layout_width="5dp" android:layout_height="5dp"
             android:layout_marginEnd="4dp" android:background="@drawable/circle_dot" />
         <View android:id="@+id/dot3" android:layout_width="5dp" android:layout_height="5dp"
+            android:layout_marginEnd="4dp" android:background="@drawable/circle_dot" />
+        <View android:id="@+id/dot4" android:layout_width="5dp" android:layout_height="5dp"
             android:background="@drawable/circle_dot" />
 
     </LinearLayout>
 
-    <!-- ── Mood confirmation overlay ────────────────────────────────────── -->
-
+    <!-- Mood confirmation overlay -->
     <FrameLayout
         android:id="@+id/confirmationOverlay"
         android:visibility="gone"
@@ -75,7 +73,6 @@
                 android:gravity="center"
                 android:layout_marginTop="4dp" />
 
-            <!-- "Add voice note?" button — shown briefly after confirmation -->
             <TextView
                 android:id="@+id/addNoteBtn"
                 android:layout_width="wrap_content"
@@ -96,8 +93,7 @@
 
     </FrameLayout>
 
-    <!-- ── Queued overlay (phone unreachable after mood tap) ────────────── -->
-
+    <!-- Queued overlay -->
     <FrameLayout
         android:id="@+id/queuedOverlay"
         android:visibility="gone"

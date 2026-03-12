@@ -1,8 +1,7 @@
 package com.moodbloom.wear
 
-import android.Manifest
 import android.animation.ObjectAnimator
-import android.content.pm.PackageManager
+import android.animation.ValueAnimator
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -17,38 +16,42 @@ import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import android.Manifest
+import android.content.pm.PackageManager
 
 /**
- * RecordFragment — the primary watch page (page 1, default).
+ * RecordFragment — primary watch page (page 1, default).
  *
- * Tap the large button to start/stop a voice recording.
- * Long-press while recording to discard.
- * Tapping 😊 navigates to the mood picker page.
- *
- * On resume, the audio queue is drained automatically if there are pending
- * transfers that failed while the phone was out of range.
+ * Phase 2 additions:
+ *  • ArcProgressView fills during recording (10-minute indicator)
+ *  • quickMoodBtn replaced by [😊 Mood] [🧘 Breathe] shortcuts row
+ *  • SyncStats.recordSynced() called on successful transfer
  */
 class RecordFragment : Fragment() {
 
     interface Callback {
         fun onNavigateToMoodPicker()
+        fun onNavigateToBreathe()
     }
 
     // ── Views ─────────────────────────────────────────────────────────────────
 
-    private lateinit var recordBtn: FrameLayout_compat
-    private lateinit var recordIcon: TextView
-    private lateinit var durationText: TextView
-    private lateinit var statusText: TextView
-    private lateinit var transferStatus: TextView
-    private lateinit var queueBadge: TextView
-    private lateinit var quickMoodBtn: View
-    private lateinit var longPressHint: TextView
+    private lateinit var recordBtn:        View
+    private lateinit var recordIcon:       TextView
+    private lateinit var durationText:     TextView
+    private lateinit var statusText:       TextView
+    private lateinit var transferStatus:   TextView
+    private lateinit var queueBadge:       TextView
+    private lateinit var longPressHint:    TextView
+    private lateinit var moodShortcutBtn:  View
+    private lateinit var breatheShortcutBtn: View
+    private lateinit var arcProgress:      ArcProgressView
 
     // ── State ─────────────────────────────────────────────────────────────────
 
     private var session: RecordingSession? = null
     private var pulseAnimator: ObjectAnimator? = null
+    private var arcAnimator: ValueAnimator? = null
     private val timerHandler = Handler(Looper.getMainLooper())
     private var recordStartMs = 0L
 
@@ -79,19 +82,25 @@ class RecordFragment : Fragment() {
     ): View = inflater.inflate(R.layout.fragment_record, container, false)
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        recordBtn      = view.findViewById(R.id.recordBtn)
-        recordIcon     = view.findViewById(R.id.recordIcon)
-        durationText   = view.findViewById(R.id.durationText)
-        statusText     = view.findViewById(R.id.statusText)
-        transferStatus = view.findViewById(R.id.transferStatus)
-        queueBadge     = view.findViewById(R.id.queueBadge)
-        quickMoodBtn   = view.findViewById(R.id.quickMoodBtn)
-        longPressHint  = view.findViewById(R.id.longPressHint)
+        recordBtn          = view.findViewById(R.id.recordBtn)
+        recordIcon         = view.findViewById(R.id.recordIcon)
+        durationText       = view.findViewById(R.id.durationText)
+        statusText         = view.findViewById(R.id.statusText)
+        transferStatus     = view.findViewById(R.id.transferStatus)
+        queueBadge         = view.findViewById(R.id.queueBadge)
+        longPressHint      = view.findViewById(R.id.longPressHint)
+        moodShortcutBtn    = view.findViewById(R.id.moodShortcutBtn)
+        breatheShortcutBtn = view.findViewById(R.id.breatheShortcutBtn)
+        arcProgress        = view.findViewById(R.id.arcProgress)
 
         recordBtn.setOnClickListener { onRecordTap() }
         recordBtn.setOnLongClickListener { onRecordLongPress(); true }
-        quickMoodBtn.setOnClickListener {
+
+        moodShortcutBtn.setOnClickListener {
             (activity as? Callback)?.onNavigateToMoodPicker()
+        }
+        breatheShortcutBtn.setOnClickListener {
+            (activity as? Callback)?.onNavigateToBreathe()
         }
 
         setIdleUI()
@@ -104,7 +113,10 @@ class RecordFragment : Fragment() {
         if (session == null) {
             lifecycleScope.launch {
                 val sent = AudioTransferService.drainQueue(requireContext())
-                if (sent > 0) refreshQueueBadge()
+                if (sent > 0) {
+                    SyncStats.recordSynced(requireContext())
+                    refreshQueueBadge()
+                }
             }
         }
     }
@@ -113,6 +125,7 @@ class RecordFragment : Fragment() {
         super.onDestroyView()
         timerHandler.removeCallbacks(timerRunnable)
         pulseAnimator?.cancel()
+        arcAnimator?.cancel()
     }
 
     // ── Button actions ────────────────────────────────────────────────────────
@@ -128,6 +141,7 @@ class RecordFragment : Fragment() {
         session = null
         stopTimer()
         stopPulse()
+        stopArc()
         setIdleUI()
         statusText.text = "Discarded"
         view?.postDelayed({ if (isAdded) setIdleUI() }, 1_500)
@@ -148,6 +162,7 @@ class RecordFragment : Fragment() {
         recordStartMs = System.currentTimeMillis()
         startTimer()
         startPulse()
+        startArc()
         setRecordingUI()
     }
 
@@ -156,6 +171,7 @@ class RecordFragment : Fragment() {
         session = null
         stopTimer()
         stopPulse()
+        stopArc()
         val result = s.stop()
         hapticTap(requireContext())
 
@@ -164,7 +180,6 @@ class RecordFragment : Fragment() {
         setSendingUI()
 
         lifecycleScope.launch {
-            // Capture health in background (non-blocking — times out after 10s)
             val healthJson = withContext(Dispatchers.IO) {
                 runCatching { HealthSnapshot.capture(requireContext()) }.getOrNull()
             }
@@ -181,6 +196,7 @@ class RecordFragment : Fragment() {
 
             if (sent) {
                 runCatching { result.file.delete() }
+                SyncStats.recordSynced(requireContext())
                 showSentUI(result.durationMs)
             } else {
                 AudioQueue.enqueue(requireContext(), result, healthJson)
@@ -190,11 +206,30 @@ class RecordFragment : Fragment() {
         }
     }
 
+    // ── Arc animation ─────────────────────────────────────────────────────────
+
+    private fun startArc() {
+        arcAnimator?.cancel()
+        arcProgress.progress = 0f
+        arcAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
+            duration    = RecordingSession.MAX_DURATION_MS.toLong()
+            interpolator = android.view.animation.LinearInterpolator()
+            addUpdateListener { arcProgress.progress = it.animatedValue as Float }
+            start()
+        }
+    }
+
+    private fun stopArc() {
+        arcAnimator?.cancel()
+        arcAnimator = null
+        arcProgress.progress = 0f
+    }
+
     // ── UI helpers ────────────────────────────────────────────────────────────
 
     private fun setIdleUI() {
-        recordBtn.isActivated = false
-        recordIcon.text       = "🎙"
+        recordBtn.isActivated     = false
+        recordIcon.text           = "🎙"
         durationText.visibility   = View.GONE
         statusText.text           = "Tap to record"
         transferStatus.visibility = View.GONE
@@ -208,7 +243,6 @@ class RecordFragment : Fragment() {
         durationText.text         = "0:00"
         statusText.text           = "Recording…"
         transferStatus.visibility = View.GONE
-        // Show long-press hint briefly then hide
         longPressHint.visibility  = View.VISIBLE
         view?.postDelayed({ if (isAdded) longPressHint.visibility = View.GONE }, 2_000)
     }
@@ -281,8 +315,3 @@ class RecordFragment : Fragment() {
     private fun hasPerm(p: String) =
         ContextCompat.checkSelfPermission(requireContext(), p) == PackageManager.PERMISSION_GRANTED
 }
-
-// Type alias so the compiler resolves R.id.recordBtn as a FrameLayout.
-// WearableRecyclerView is a View; FrameLayout is also a View. We just need the
-// isActivated setter, which lives on View — so any View subtype works.
-private typealias FrameLayout_compat = android.view.View

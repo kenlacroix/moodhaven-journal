@@ -1,45 +1,57 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   Record page — primary watch UI.
-
-  Layout safe zones for a round 384×384 watch:
-    • Top label sits 32dp from top (centre-horizontal — safe zone)
-    • Button is dead-centre
-    • Status text just below button
-    • Queue badge + quick-mood at bottom (slight clipping OK for secondary text)
+  Phase 2 changes:
+    • ArcProgressView wraps the record button (10-minute arc indicator)
+    • quickMoodBtn replaced by a [😊 Mood] [🧘 Breathe] shortcuts row
+    • Queue badge moved above the shortcuts row
 -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="#000000">
 
-    <!-- ── Main centred content ──────────────────────────────────────────── -->
+    <!-- ── Main centred column ───────────────────────────────────────────── -->
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:orientation="vertical"
         android:gravity="center"
-        android:paddingBottom="28dp">
+        android:paddingBottom="12dp">
 
-        <!-- Large circular record button -->
+        <!--
+          116 dp outer frame = 96 dp button + 10 dp gap each side for the arc stroke.
+          ArcProgressView fills the outer frame; record button is centred inside.
+        -->
         <FrameLayout
-            android:id="@+id/recordBtn"
-            android:layout_width="96dp"
-            android:layout_height="96dp"
-            android:background="@drawable/ic_record_btn"
-            android:foreground="?android:attr/selectableItemBackgroundBorderless"
-            android:clickable="true"
-            android:focusable="true">
+            android:layout_width="116dp"
+            android:layout_height="116dp">
 
-            <!-- Icon inside button: mic (idle) or stop square (recording) -->
-            <TextView
-                android:id="@+id/recordIcon"
+            <com.moodbloom.wear.ArcProgressView
+                android:id="@+id/arcProgress"
                 android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:text="🎙"
-                android:textSize="36sp"
-                android:gravity="center" />
+                android:layout_height="match_parent" />
+
+            <FrameLayout
+                android:id="@+id/recordBtn"
+                android:layout_width="96dp"
+                android:layout_height="96dp"
+                android:layout_gravity="center"
+                android:background="@drawable/ic_record_btn"
+                android:foreground="?android:attr/selectableItemBackgroundBorderless"
+                android:clickable="true"
+                android:focusable="true">
+
+                <TextView
+                    android:id="@+id/recordIcon"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:text="🎙"
+                    android:textSize="36sp"
+                    android:gravity="center" />
+
+            </FrameLayout>
 
         </FrameLayout>
 
@@ -48,7 +60,7 @@
             android:id="@+id/durationText"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
+            android:layout_marginTop="8dp"
             android:text="0:00"
             android:textSize="22sp"
             android:textColor="#FFFFFF"
@@ -60,9 +72,9 @@
             android:id="@+id/statusText"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
+            android:layout_marginTop="6dp"
             android:text="Tap to record"
-            android:textSize="13sp"
+            android:textSize="12sp"
             android:textColor="#AAFFFFFF"
             android:gravity="center" />
 
@@ -80,15 +92,14 @@
 
     </LinearLayout>
 
-    <!-- ── Bottom overlays ───────────────────────────────────────────────── -->
+    <!-- ── Queue badge — above shortcuts row ────────────────────────────── -->
 
-    <!-- Pending queue badge -->
     <TextView
         android:id="@+id/queueBadge"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|center_horizontal"
-        android:layout_marginBottom="22dp"
+        android:layout_marginBottom="50dp"
         android:visibility="gone"
         android:text="● 0 queued"
         android:textSize="9sp"
@@ -96,20 +107,56 @@
         android:paddingStart="4dp"
         android:paddingEnd="4dp" />
 
-    <!-- Quick mood shortcut — small pill at bottom-end -->
-    <TextView
-        android:id="@+id/quickMoodBtn"
+    <!-- ── Bottom shortcuts row: [😊 Mood]  [🧘 Breathe] ────────────────── -->
+
+    <LinearLayout
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_gravity="bottom|end"
-        android:layout_marginBottom="20dp"
-        android:layout_marginEnd="20dp"
-        android:text="😊"
-        android:textSize="22sp"
-        android:background="?android:attr/selectableItemBackgroundBorderless"
-        android:contentDescription="Quick mood" />
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginBottom="18dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
 
-    <!-- Long-press hint — appears only while recording, fades after 2s -->
+        <TextView
+            android:id="@+id/moodShortcutBtn"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="😊 Mood"
+            android:textSize="11sp"
+            android:textColor="#AAFFFFFF"
+            android:paddingStart="10dp"
+            android:paddingEnd="10dp"
+            android:paddingTop="5dp"
+            android:paddingBottom="5dp"
+            android:background="@drawable/btn_outline"
+            android:foreground="?android:attr/selectableItemBackgroundBorderless"
+            android:clickable="true"
+            android:focusable="true" />
+
+        <View
+            android:layout_width="8dp"
+            android:layout_height="1dp" />
+
+        <TextView
+            android:id="@+id/breatheShortcutBtn"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="🧘 Breathe"
+            android:textSize="11sp"
+            android:textColor="#AAFFFFFF"
+            android:paddingStart="10dp"
+            android:paddingEnd="10dp"
+            android:paddingTop="5dp"
+            android:paddingBottom="5dp"
+            android:background="@drawable/btn_outline"
+            android:foreground="?android:attr/selectableItemBackgroundBorderless"
+            android:clickable="true"
+            android:focusable="true" />
+
+    </LinearLayout>
+
+    <!-- ── Long-press hint ───────────────────────────────────────────────── -->
+
     <TextView
         android:id="@+id/longPressHint"
         android:layout_width="wrap_content"

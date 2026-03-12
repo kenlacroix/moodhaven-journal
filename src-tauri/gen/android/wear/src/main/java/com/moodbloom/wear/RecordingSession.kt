@@ -13,8 +13,8 @@ import java.util.UUID
 /**
  * RecordingSession — wraps a single MediaRecorder capture.
  *
- * Configured for optimal whisper.cpp input: 16 kHz mono AAC-LC at 32 kbps
- * (~240 KB/min). Output lands in the app's cacheDir and is deleted after
+ * Configured for optimal whisper.cpp input: 16 kHz mono AAC-LC at ~32 kbps
+ * (~2.4 MB/10 min). Output lands in the app's cacheDir and is deleted after
  * successful transfer via [AudioTransferService].
  *
  * @param onAutoStop  Called on the main thread when MAX_DURATION_REACHED fires.
@@ -26,7 +26,7 @@ class RecordingSession(
 ) {
     companion object {
         private const val TAG = "RecordingSession"
-        const val MAX_DURATION_MS = 3 * 60 * 1000   // 3 minutes
+        const val MAX_DURATION_MS = 10 * 60 * 1000  // 10 minutes (~2.4 MB at 32 kbps)
     }
 
     data class Result(

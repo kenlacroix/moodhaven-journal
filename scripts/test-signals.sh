@@ -3,21 +3,25 @@
 # MoodBloom — automated signal pipeline test runner
 #
 # Usage:
-#   ./scripts/test-signals.sh               # Auto-detect running emulator
-#   ./scripts/test-signals.sh emulator-5554 # Target a specific serial
+#   ./scripts/test-signals.sh                  # Auto-detect phone (real or emulator)
+#   ./scripts/test-signals.sh 48101FDAQ004ZE   # Target a specific serial
+#   ./scripts/test-signals.sh --live-audio     # Run Test 5 (watch→phone transfer)
 #
-# What it tests (no watch hardware required):
-#   Test 1 — DB self-test  : create → list → filter → payload round-trip
-#                             → sync_log trigger → delete → confirm gone
-#   Test 2 — Wear bridge   : simulate a watch mood_tap via wearBridgeSignal
-#   Test 3 — Voice memo    : push fake .m4a → store_voice_memo → list → delete
-#   Test 4 — Connection    : wearCheckConnection (expects connected=false in sim)
+# What it tests:
+#   Test 1 — DB self-test   : create → list → filter → payload round-trip
+#                              → sync_log trigger → delete → confirm gone
+#   Test 2 — Wear bridge    : simulate a watch mood_tap via wearBridgeSignal
+#   Test 3 — Voice memo     : inject fake .m4a → store_voice_memo → list → delete
+#                              (uses run-as on real hardware, direct push on emulator)
+#   Test 4 — Connection     : wearCheckConnection (false on emulator, true on real)
+#   Test 5 — Live audio     : wait for a real watch recording to arrive on phone
+#                              (only runs with --live-audio; prompts you to record)
 #
 # Prerequisites:
-#   - Phone emulator running with MoodBloom app installed and the dev server hot
+#   - MoodBloom app installed and dev server running (./scripts/dev.sh phone --real)
 #   - adb on PATH  (or ANDROID_HOME set)
-#   - jq installed  (brew install jq  /  apt install jq)
-#   - Logcat is used to capture Tauri IPC responses via am broadcast
+#   - jq installed  (apt install jq)
+#   - pip3 install websocket-client  (for CDP/DevTools auto-testing)
 # ──────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
@@ -34,31 +38,70 @@ info() { echo -e "${CYAN}  ·${RESET} $*"; }
 step() { echo -e "\n${BOLD}${YELLOW}▶ $*${RESET}"; }
 
 FAILURES=0
+LIVE_AUDIO=false
 
-# ── Find phone emulator ────────────────────────────────────────────────────────
-# When both phone and watch emulators are running, `adb devices -l` exposes
-# the model string: sdk_gphone64_x86_64 (phone) vs sdk_gwear_x86_64 (watch).
+# ── Parse args ────────────────────────────────────────────────────────────────
+SERIAL=""
+for arg in "$@"; do
+  case "$arg" in
+    --live-audio) LIVE_AUDIO=true ;;
+    --*)          echo -e "${RED}Unknown flag: $arg${RESET}"; exit 1 ;;
+    *)            SERIAL="$arg" ;;
+  esac
+done
+
+# ── Find phone device (emulator or real hardware) ─────────────────────────────
+# Priority: emulator gphone → any emulator → real USB phone (not a watch)
 # We always target the PHONE because the Tauri app (WebView + IPC) lives there.
-SERIAL="${1:-}"
+_is_watch() {
+  local s="$1"
+  local chars
+  chars=$("$ADB" -s "$s" shell getprop ro.build.characteristics 2>/dev/null | tr -d '\r\n' || true)
+  [[ "$chars" == *watch* ]]
+}
+
 if [[ -z "$SERIAL" ]]; then
-  # Prefer the phone emulator identified by the gphone model string
+  # 1. Phone emulator identified by gphone model string
+  # || true: grep exits 1 on no match; with pipefail that would kill the script
   SERIAL=$("$ADB" devices -l 2>/dev/null \
-    | grep '^emulator-' | grep 'gphone' | awk '{print $1}' | head -1)
-  # Fallback: any device state emulator (covers single-emulator setup)
+    | grep '^emulator-' | grep 'gphone' | awk '{print $1}' | head -1 || true)
+
+  # 2. Any online emulator
   if [[ -z "$SERIAL" ]]; then
-    SERIAL=$("$ADB" devices | grep '^emulator-' | grep $'\tdevice' | awk '{print $1}' | head -1)
+    SERIAL=$("$ADB" devices 2>/dev/null \
+      | grep '^emulator-' | grep $'\tdevice' | awk '{print $1}' | head -1 || true)
   fi
+
+  # 3. Real USB hardware — first non-emulator, non-IP, non-watch device
   if [[ -z "$SERIAL" ]]; then
-    echo -e "${RED}No phone emulator found. Start one first:${RESET}"
-    echo "  ./scripts/dev.sh phone"
-    echo "  ./scripts/dev.sh phone watch   (both phone + watch)"
+    while IFS= read -r line; do
+      local_s=$(awk '{print $1}' <<< "$line")
+      local_st=$(awk '{print $2}' <<< "$line")
+      [[ "$local_st" != "device" ]]                                           && continue
+      [[ "$local_s" == emulator-* ]]                                          && continue
+      [[ "$local_s" =~ ^(localhost|[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+): ]]       && continue
+      _is_watch "$local_s"                                                     && continue
+      SERIAL="$local_s"; break
+    done < <("$ADB" devices 2>/dev/null | tail -n +2)
+  fi
+
+  if [[ -z "$SERIAL" ]]; then
+    echo -e "${RED}No phone found (emulator or real hardware).${RESET}"
+    echo "Start the dev environment first:"
+    echo "  ./scripts/dev.sh phone --real   (real Pixel 9)"
+    echo "  ./scripts/dev.sh phone          (emulator)"
     echo ""
-    echo "Current adb devices output:"
+    echo "Current adb devices:"
     "$ADB" devices -l
     exit 1
   fi
 fi
-info "Using phone emulator: $SERIAL"
+
+REAL_HW=false
+# || true: [[ ]] exits 1 when condition is false; with set -e that would exit
+[[ "$SERIAL" != emulator-* ]] && REAL_HW=true || true
+
+info "Using device: $SERIAL  (real hardware: $REAL_HW)"
 
 # ── Check app is installed ────────────────────────────────────────────────────
 if ! "$ADB" -s "$SERIAL" shell pm list packages 2>/dev/null | grep -q "$PACKAGE"; then
@@ -399,10 +442,23 @@ TMPFILE=$(mktemp /tmp/test_audio_XXXXXX.m4a)
 # Write a minimal 16-byte fake audio file (four bytes of M4A ftyp box header)
 printf '\x00\x00\x00\x10ftypm4a ' > "$TMPFILE"
 
-# Push to filesDir/voice_memos_incoming/ on the device
+# Push to filesDir/voice_memos_incoming/ on the device.
+# Emulator: direct push works (no security sandbox enforcement).
+# Real hardware (non-rooted): /data/data/ is inaccessible via adb push.
+#   Workaround: push to world-accessible /sdcard/, then run-as copies it into
+#   the app's private storage (requires debuggable build, which dev APKs are).
 INCOMING_PATH="/data/data/${PACKAGE}/files/voice_memos_incoming"
-"$ADB" -s "$SERIAL" shell mkdir -p "$INCOMING_PATH" 2>/dev/null || true
-"$ADB" -s "$SERIAL" push "$TMPFILE" "${INCOMING_PATH}/${VM_FILE}" 2>/dev/null || true
+if $REAL_HW; then
+  SDCARD_TMP="/sdcard/Download/mb_test_${VM_FILE}"
+  "$ADB" -s "$SERIAL" push "$TMPFILE" "$SDCARD_TMP" 2>/dev/null || true
+  "$ADB" -s "$SERIAL" shell \
+    "run-as ${PACKAGE} sh -c 'mkdir -p /data/data/${PACKAGE}/files/voice_memos_incoming && cp ${SDCARD_TMP} /data/data/${PACKAGE}/files/voice_memos_incoming/${VM_FILE}'" \
+    2>/dev/null || true
+  "$ADB" -s "$SERIAL" shell rm -f "$SDCARD_TMP" 2>/dev/null || true
+else
+  "$ADB" -s "$SERIAL" shell mkdir -p "$INCOMING_PATH" 2>/dev/null || true
+  "$ADB" -s "$SERIAL" push "$TMPFILE" "${INCOMING_PATH}/${VM_FILE}" 2>/dev/null || true
+fi
 rm -f "$TMPFILE"
 
 # Build args for store_voice_memo
@@ -514,6 +570,68 @@ case "$RESULT" in
     fail "wearCheckConnection error: ${RESULT#*__ERROR__:}"
     ;;
 esac
+
+# ── Test 5: Live watch → phone audio transfer ─────────────────────────────────
+# Only runs with --live-audio flag. Captures the memo count before, prompts you
+# to record on the watch, then polls list_voice_memos until a new entry appears.
+step "Test 5 — Live watch→phone audio transfer"
+
+if ! $LIVE_AUDIO; then
+  info "Skipped (add --live-audio to run this test)"
+  info "Usage: ./scripts/test-signals.sh --live-audio"
+elif ! $DEVTOOLS_READY; then
+  info "DevTools not available — cannot poll list_voice_memos automatically"
+  info "Manual check:"
+  echo "    window.__TAURI_INTERNALS__.invoke('list_voice_memos', {limit:10})"
+  echo "    // Record on watch → send → rerun the above → new entry should appear"
+else
+  # Snapshot memo count before the test
+  BEFORE_RAW=$(eval_tauri "list_voice_memos" '{"limit":100}')
+  BEFORE_COUNT=0
+  if [[ "$BEFORE_RAW" == *__RESULT__:* ]]; then
+    BEFORE_COUNT=$(echo "${BEFORE_RAW#*__RESULT__:}" \
+      | python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "0")
+  fi
+  info "Current voice memo count: $BEFORE_COUNT"
+
+  echo "" >&2
+  echo -e "  ${BOLD}ACTION:${RESET} On your Pixel Watch 3, record a voice memo and send it." >&2
+  echo -e "  Polling for up to 60 seconds..." >&2
+  echo "" >&2
+
+  FOUND_NEW=false
+  NEW_ENTRY=""
+  for i in $(seq 1 60); do
+    sleep 1
+    printf "." >&2
+    AFTER_RAW=$(eval_tauri "list_voice_memos" '{"limit":100}')
+    if [[ "$AFTER_RAW" != *__RESULT__:* ]]; then continue; fi
+    AFTER_JSON="${AFTER_RAW#*__RESULT__:}"
+    AFTER_COUNT=$(echo "$AFTER_JSON" \
+      | python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "0")
+    if [[ "$AFTER_COUNT" -gt "$BEFORE_COUNT" ]] 2>/dev/null; then
+      FOUND_NEW=true
+      NEW_ENTRY=$(echo "$AFTER_JSON" | python3 -c "
+import sys, json
+memos = json.load(sys.stdin)
+# Most recent first
+m = memos[0]
+print(f\"id={m.get('id','?')}  duration={m.get('duration_ms','?')}ms  ts={m.get('timestamp','?')}\")
+" 2>/dev/null || echo "(parse error)")
+      break
+    fi
+  done
+
+  echo "" >&2
+  if $FOUND_NEW; then
+    pass "New voice memo received on phone after watch send"
+    info "$NEW_ENTRY"
+    info "Count: $BEFORE_COUNT → $AFTER_COUNT"
+  else
+    fail "No new voice memo appeared after 60s (count stayed at $BEFORE_COUNT)"
+    info "Check logcat: adb -s $SERIAL logcat -s WearPlugin MoodBloom"
+  fi
+fi
 
 # ── Summary ───────────────────────────────────────────────────────────────────
 echo ""

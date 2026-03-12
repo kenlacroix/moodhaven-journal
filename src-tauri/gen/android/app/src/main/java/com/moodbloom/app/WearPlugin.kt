@@ -8,8 +8,17 @@ import app.tauri.plugin.Invoke
 import app.tauri.plugin.JSArray
 import app.tauri.plugin.JSObject
 import app.tauri.plugin.Plugin
+import com.google.android.gms.wearable.ChannelClient
 import com.google.android.gms.wearable.Wearable
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import org.json.JSONObject
+import java.io.File
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -58,11 +67,29 @@ class WearPlugin(private val activity: Activity) : Plugin(activity) {
         }
     }
 
-    // Set singleton and drain any buffered events on plugin creation
+    private val ioScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
+    // Set singleton, drain any buffered events, and register foreground channel callback
     init {
         _instance = this
         Log.i(TAG, "WearPlugin init; draining buffer (${WearSignalBuffer.size} events)")
         drainBuffer()
+
+        // When the app is in the foreground GMS routes ChannelAPI events to a registered
+        // ChannelCallback rather than WearableListenerService.onChannelOpened().
+        // Registering here ensures audio arrives regardless of app state.
+        val cb = object : ChannelClient.ChannelCallback() {
+            override fun onChannelOpened(channel: ChannelClient.Channel) {
+                if (channel.path != WearListenerService.CHANNEL_AUDIO) {
+                    Log.w(TAG, "Plugin: unexpected channel path: ${channel.path}")
+                    return
+                }
+                Log.i(TAG, "Plugin: audio channel opened from ${channel.nodeId}")
+                ioScope.launch { processAudioChannel(channel) }
+            }
+        }
+        Wearable.getChannelClient(activity).registerChannelCallback(cb)
+        Log.i(TAG, "ChannelClient foreground callback registered")
     }
 
     // ── Bridge from WearListenerService ──────────────────────────────────────
@@ -116,6 +143,78 @@ class WearPlugin(private val activity: Activity) : Plugin(activity) {
         }
         trigger(EVENT_VOICE_MEMO, event)
         Log.d(TAG, "Emitted $EVENT_VOICE_MEMO: id=$id duration=${durationMs}ms")
+    }
+
+    // ── Foreground ChannelAPI audio processing ────────────────────────────────
+
+    /**
+     * Reads and processes an incoming audio channel when the app is in the foreground.
+     * Mirrors the logic in WearListenerService.onChannelOpened() for background/cold-start.
+     * Files are de-duplicated by ID so double-processing never occurs.
+     */
+    private suspend fun processAudioChannel(channel: ChannelClient.Channel) {
+        val channelClient = Wearable.getChannelClient(activity)
+        try {
+            val inputStream = channelClient.getInputStream(channel).await()
+            val allBytes = inputStream.readBytes()
+            inputStream.close()
+
+            if (allBytes.size < 5) {
+                Log.e(TAG, "Plugin: channel data too short: ${allBytes.size} bytes")
+                return
+            }
+
+            val metaLen: Int = ByteBuffer.wrap(allBytes, 0, 4).order(ByteOrder.BIG_ENDIAN).int
+            if (metaLen <= 0 || metaLen > allBytes.size - 4) {
+                Log.e(TAG, "Plugin: invalid metadata length: $metaLen (total=${allBytes.size})")
+                return
+            }
+
+            val metaBytes  = allBytes.sliceArray(4 until 4 + metaLen)
+            val audioBytes = allBytes.sliceArray(4 + metaLen until allBytes.size)
+            val meta       = JSONObject(String(metaBytes, Charsets.UTF_8))
+
+            val id         = meta.optString("id").takeIf { it.isNotBlank() }
+                ?: run { Log.e(TAG, "Plugin: missing id in audio metadata"); return }
+            val timestamp  = meta.optString("timestamp").takeIf { it.isNotBlank() } ?: nowIso8601()
+            val durationMs = meta.optLong("duration_ms", 0L)
+            val healthJson = meta.optString("health").takeIf { it.isNotBlank() }
+
+            Log.i(TAG, "Plugin: audio received id=$id duration=${durationMs}ms size=${audioBytes.size}")
+
+            val incomingDir = File(activity.filesDir, WearListenerService.INCOMING_DIR).also { it.mkdirs() }
+            val outFile     = File(incomingDir, "$id.m4a")
+
+            if (outFile.exists()) {
+                Log.i(TAG, "Plugin: $id already saved — skipping duplicate")
+            } else {
+                outFile.writeBytes(audioBytes)
+                Log.i(TAG, "Plugin: audio saved ${outFile.absolutePath}")
+            }
+
+            // Acknowledge to the watch
+            try {
+                Wearable.getMessageClient(activity)
+                    .sendMessage(channel.nodeId, "/feedback", "received".toByteArray())
+                    .await()
+            } catch (e: Exception) {
+                Log.w(TAG, "Plugin: feedback send failed: ${e.message}")
+            }
+
+            bridgeVoiceMemo(
+                id           = id,
+                timestamp    = timestamp,
+                durationMs   = durationMs,
+                healthJson   = healthJson,
+                incomingFile = outFile.name,
+                nodeId       = channel.nodeId,
+            )
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Plugin: audio channel error: ${e.message}", e)
+        } finally {
+            try { channelClient.close(channel).await() } catch (_: Exception) {}
+        }
     }
 
     private fun drainBuffer() {

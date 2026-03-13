@@ -25,11 +25,17 @@ export async function generatePairingToken(): Promise<PairingTokenInfo> {
  * Posts this device's identity + the `pin` to the peer's pairing server.
  * On success, both devices are saved as trusted.
  */
+/**
+ * Accept a pairing invitation.
+ * `peerDeviceId` is used by the Rust side to derive the initiator's pairing port
+ * (43000 + first-4-hex-of-deviceId % 1000) — no hardcoded port needed.
+ */
 export async function acceptPairing(
   targetHost: string,
+  peerDeviceId: string,
   pin: string
 ): Promise<TrustedDevice> {
-  return invoke<TrustedDevice>('peer_accept_pairing', { targetHost, pin });
+  return invoke<TrustedDevice>('peer_accept_pairing', { targetHost, peerDeviceId, pin });
 }
 
 /** Get all paired (trusted) devices. */

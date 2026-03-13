@@ -330,14 +330,14 @@ function EnterCodeTab({
     setLoading(true);
     setError('');
     try {
-      const device = await acceptPairing(peer.host, pin);
+      const device = await acceptPairing(peer.host, peer.deviceId, pin);
       onSuccess(device);
     } catch (e) {
       setError(String(e));
     } finally {
       setLoading(false);
     }
-  }, [pin, peer.host, onSuccess]);
+  }, [pin, peer.host, peer.deviceId, onSuccess]);
 
   // Auto-submit when 6 digits are entered
   useEffect(() => {
@@ -375,7 +375,7 @@ function EnterCodeTab({
       </button>
 
       <p className="text-xs text-slate-400 dark:text-slate-500 text-center">
-        Connecting to {peer.host}:{42425}
+        Connecting to {peer.host} (pairing server)
       </p>
     </div>
   );

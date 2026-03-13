@@ -1,10 +1,16 @@
 //! Secure device pairing via 6-digit PIN (+ optional QR code)
 //!
 //! ## Flow
-//! 1. **Initiator** calls `peer_generate_pairing_token` → starts HTTP listener on port
-//!    42425, returns a 6-digit PIN and a QR payload string for the frontend to render.
-//! 2. **Acceptor** calls `peer_accept_pairing(target_host, pin)` → POSTs its own identity
-//!    + the PIN to the initiator's server. Both sides save each other as trusted.
+//! 1. **Initiator** calls `peer_generate_pairing_token` → starts HTTP listener on its
+//!    device-derived port, returns a 6-digit PIN and a QR payload string for the frontend.
+//! 2. **Acceptor** calls `peer_accept_pairing(target_host, peer_device_id, pin)` → derives
+//!    the initiator's pairing port from `peer_device_id`, POSTs its own identity + the PIN.
+//!    Both sides save each other as trusted.
+//!
+//! ## Port assignment
+//! Each device gets a deterministic pairing port: `43000 + (first 4 hex chars of device_id
+//! as u16) % 1000` → range 43000–43999. This avoids conflicts when two instances share the
+//! same host (e.g. during local dev testing with two app instances).
 //! 3. On success the initiator's server emits `peer:paired`; the acceptor command also
 //!    emits `peer:paired` so both frontends react.
 //!
@@ -24,8 +30,16 @@ use std::sync::{
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, State};
 
-const PAIRING_PORT: u16 = 42425;
 const TOKEN_TTL_SECS: i64 = 300; // 5 minutes
+
+/// Derive a stable pairing port from a device_id.
+/// Port = 43000 + (first 4 hex chars as u16) % 1000  →  range 43000–43999.
+/// Different devices get different ports, eliminating conflicts on the same host.
+pub fn pairing_port_for_device(device_id: &str) -> u16 {
+    let hex = &device_id[..device_id.len().min(4)];
+    let offset = u16::from_str_radix(hex, 16).unwrap_or(0) % 1000;
+    43000 + offset
+}
 
 // ── Public types ──────────────────────────────────────────────────────────────
 
@@ -217,7 +231,7 @@ fn run_pairing_server(
 ) {
     listener.set_nonblocking(true).ok();
     let deadline = std::time::Instant::now() + Duration::from_secs(TOKEN_TTL_SECS as u64 + 10);
-    eprintln!("[pairing] Server listening on port {PAIRING_PORT}");
+    eprintln!("[pairing] Server started");
 
     loop {
         // Check stop signal or 5-min expiry
@@ -391,6 +405,10 @@ pub fn peer_generate_pairing_token(
     // Get our identity so the QR payload contains enough info
     let identity = get_or_create_device_identity(&app)?;
 
+    // Derive this device's pairing port from its device_id (stable, unique per device).
+    // Different device IDs → different ports, so two instances on the same host never conflict.
+    let pairing_port = pairing_port_for_device(&identity.device_id);
+
     // Build compact QR payload
     let qr_payload = serde_json::json!({
         "v": 1,
@@ -400,7 +418,7 @@ pub fn peer_generate_pairing_token(
         "pk": identity.public_key,
         "pin": pin,
         "host": local_host,
-        "port": PAIRING_PORT,
+        "port": pairing_port,
         "exp": expires_at,
     })
     .to_string();
@@ -412,8 +430,9 @@ pub fn peer_generate_pairing_token(
     }
 
     // Bind TCP listener before spawning thread (fail fast on port conflict)
-    let listener = TcpListener::bind(format!("0.0.0.0:{PAIRING_PORT}"))
-        .map_err(|e| format!("Failed to bind pairing port {PAIRING_PORT}: {e}"))?;
+    let listener = TcpListener::bind(format!("0.0.0.0:{pairing_port}"))
+        .map_err(|e| format!("Failed to bind pairing port {pairing_port}: {e}"))?;
+    eprintln!("[pairing] Listening on port {pairing_port}");
 
     let (stop_tx, stop_rx) = std::sync::mpsc::sync_channel::<()>(1);
     {
@@ -432,7 +451,7 @@ pub fn peer_generate_pairing_token(
         qr_payload,
         expires_at,
         local_host,
-        pairing_port: PAIRING_PORT,
+        pairing_port,
     })
 }
 
@@ -442,10 +461,14 @@ pub fn peer_generate_pairing_token(
 pub async fn peer_accept_pairing(
     app: AppHandle,
     target_host: String,
+    peer_device_id: String,
     pin: String,
 ) -> Result<TrustedDevice, String> {
     let identity = get_or_create_device_identity(&app)?;
-    let url = format!("http://{}:{}/pair", target_host, PAIRING_PORT);
+    // Derive the initiator's pairing port from their device_id (same formula as the server side)
+    let pairing_port = pairing_port_for_device(&peer_device_id);
+    let url = format!("http://{}:{}/pair", target_host, pairing_port);
+    eprintln!("[pairing] Connecting to {url}");
 
     let body = serde_json::json!({
         "device_id": identity.device_id,

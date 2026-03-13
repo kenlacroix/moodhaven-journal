@@ -83,6 +83,9 @@ pub struct PairingServerState {
     pub is_serving: AtomicBool,
     active_token: Mutex<Option<ActiveToken>>,
     stop_tx: Mutex<Option<std::sync::mpsc::SyncSender<()>>>,
+    /// Join handle for the server thread — joining guarantees the TcpListener
+    /// has been dropped (port released) before we attempt to rebind.
+    server_handle: Mutex<Option<std::thread::JoinHandle<()>>>,
 }
 
 impl PairingServerState {
@@ -91,6 +94,7 @@ impl PairingServerState {
             is_serving: AtomicBool::new(false),
             active_token: Mutex::new(None),
             stop_tx: Mutex::new(None),
+            server_handle: Mutex::new(None),
         }
     }
 }
@@ -383,13 +387,18 @@ pub fn peer_generate_pairing_token(
     state: State<'_, PairingServerState>,
 ) -> Result<PairingTokenInfo, String> {
     // Stop any previous server gracefully
-    if state.is_serving.load(Ordering::SeqCst) {
-        if let Ok(mut g) = state.stop_tx.lock() {
-            if let Some(tx) = g.take() {
-                let _ = tx.send(());
-            }
+    // Signal any running server to stop, then join its thread.
+    // Joining (not just sleeping) guarantees the TcpListener has been dropped
+    // and the OS port is free before we try to rebind below.
+    if let Ok(mut g) = state.stop_tx.lock() {
+        if let Some(tx) = g.take() {
+            let _ = tx.send(());
         }
-        std::thread::sleep(Duration::from_millis(300));
+    }
+    if let Ok(mut h) = state.server_handle.lock() {
+        if let Some(handle) = h.take() {
+            let _ = handle.join();
+        }
     }
 
     // Generate a random 6-digit PIN
@@ -442,9 +451,13 @@ pub fn peer_generate_pairing_token(
     state.is_serving.store(true, Ordering::SeqCst);
 
     let app_clone = app.clone();
-    std::thread::spawn(move || {
+    let handle = std::thread::spawn(move || {
         run_pairing_server(app_clone, listener, stop_rx);
     });
+    {
+        let mut h = state.server_handle.lock().map_err(|e| e.to_string())?;
+        *h = Some(handle);
+    }
 
     Ok(PairingTokenInfo {
         pin,
@@ -548,6 +561,8 @@ pub fn peer_revoke_device(app: AppHandle, device_id: String) -> Result<(), Strin
 }
 
 /// Cancel an in-progress pairing session (stop the HTTP server).
+/// Does NOT join the thread — the cancel is fire-and-forget from the frontend's perspective.
+/// The next call to `peer_generate_pairing_token` will join before rebinding.
 #[tauri::command]
 pub fn peer_cancel_pairing(state: State<'_, PairingServerState>) -> Result<(), String> {
     if let Ok(mut g) = state.stop_tx.lock() {
@@ -558,7 +573,8 @@ pub fn peer_cancel_pairing(state: State<'_, PairingServerState>) -> Result<(), S
     if let Ok(mut g) = state.active_token.lock() {
         *g = None;
     }
-    state.is_serving.store(false, Ordering::SeqCst);
+    // is_serving will be set false by the thread itself; don't force it here
+    // so that peer_generate_pairing_token can still detect and join the dying thread.
     Ok(())
 }
 

@@ -66,3 +66,4 @@ models/
 # package-lock.json
 # yarn.lock
 docs/local-peer-sync-plan.md
+/docs

@@ -1411,7 +1411,8 @@ if $START_DESKTOP && $NEED_ANDROID; then
      npm run tauri android dev -- --no-dev-server-wait \
      --config '{\"build\":{\"beforeDevCommand\":\"\"}}'"
   step "Starting Tauri Desktop dev (foreground -- Ctrl+C stops all)"
-  npm run tauri dev -- --no-dev-server
+  npm run tauri dev -- --no-dev-server-wait \
+    --config '{"build":{"beforeDevCommand":""}}'
 
 elif $START_DESKTOP; then
   step "Starting Tauri Desktop dev (foreground -- Ctrl+C to stop)"

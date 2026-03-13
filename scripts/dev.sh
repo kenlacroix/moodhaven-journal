@@ -1223,9 +1223,17 @@ run_tauri_android_dev() {
       || true
   fi
 
+  # Pass --device directly to the Tauri CLI so it never shows the interactive
+  # device picker (ANDROID_SERIAL only controls raw adb; Tauri has its own
+  # device enumeration that ignores it when multiple devices are connected).
+  local device_flag=""
+  [[ -n "$phone_serial" ]] && device_flag="--device $phone_serial"
+
+  # shellcheck disable=SC2086  # intentional word-splitting of device_flag
   JAVA_HOME="$JAVA_HOME" npm run tauri android dev -- \
     --no-dev-server-wait \
-    --config '{"build":{"beforeDevCommand":""}}'
+    --config '{"build":{"beforeDevCommand":""}}' \
+    $device_flag
 }
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -1409,6 +1417,7 @@ if $START_DESKTOP && $NEED_ANDROID; then
   run_bg "android dev" bash -c \
     "ANDROID_SERIAL='$PHONE_SERIAL' JAVA_HOME='$JAVA_HOME' \
      npm run tauri android dev -- --no-dev-server-wait \
+     --device '$PHONE_SERIAL' \
      --config '{\"build\":{\"beforeDevCommand\":\"\"}}'"
   step "Starting Tauri Desktop dev (foreground -- Ctrl+C stops all)"
   npm run tauri dev -- --no-dev-server-wait \

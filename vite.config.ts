@@ -15,7 +15,7 @@ export default defineConfig({
   // (e.g. a phone/Apple hotspot or home router) — the phone cannot reach the
   // laptop when the phone itself is the hotspot gateway.
   server: {
-    port: 1420,
+    port: parseInt(process.env.VITE_PORT ?? '1420'),
     strictPort: true,
     host: true,
     watch: {

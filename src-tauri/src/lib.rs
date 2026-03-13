@@ -5,6 +5,7 @@
 pub mod commands;
 pub mod db;
 
+use commands::peer_discovery::PeerDiscoveryState;
 use commands::session_bridge::SessionBridge;
 use db::{get_db_path, Database};
 use tauri::Manager;
@@ -32,6 +33,9 @@ pub fn run() {
 
             // One-shot session bridge for breakout writer password hand-off
             app.manage(SessionBridge::new());
+
+            // Peer-to-peer discovery state
+            app.manage(PeerDiscoveryState::new());
 
             // Sweep leftover preview temp files from previous sessions
             let _ = commands::sweep_preview_temp(app.handle().clone());
@@ -163,6 +167,13 @@ pub fn run() {
             commands::delete_voice_memo,
             commands::patch_voice_memo_transcription,
             commands::link_voice_memo_to_entry,
+            // Peer-to-peer sync (Phase 1: identity + discovery)
+            commands::peer_get_identity,
+            commands::peer_rename_device,
+            commands::peer_discovery_start,
+            commands::peer_discovery_stop,
+            commands::peer_get_nearby,
+            commands::peer_discovery_is_active,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

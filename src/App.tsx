@@ -26,12 +26,16 @@ import { useSettingsStore } from './stores/settingsStore';
 import { useReminderScheduler } from './hooks/useReminderScheduler';
 import { useUpdateCheck } from './hooks/useUpdateCheck';
 import { useWearSignals } from './hooks/useWearSignals';
+import { usePeerSync } from './hooks/usePeerSync';
+import { PeerSyncWireframes } from './pages/PeerSyncWireframes';
 
-// Detect breakout writer mode outside the component so hooks order is stable.
+// Detect special dev modes outside the component so hooks order is stable.
 const IS_BREAKOUT = new URLSearchParams(window.location.search).get('mode') === 'writer';
+const IS_PEERSYNC_WIREFRAMES = new URLSearchParams(window.location.search).get('mode') === 'peersync';
 
 function App() {
   if (IS_BREAKOUT) return <BreakoutWriterApp />;
+  if (IS_PEERSYNC_WIREFRAMES) return <PeerSyncWireframes />;
   const { isUnlocked, isInitialized, checkInitialization, lock, sessionPassword } = useAppStore();
   const loadSettings = useSettingsStore((s) => s.loadSettings);
   const hasSeenTutorial = useSettingsStore((s) => s.settings.tutorial?.hasSeenTutorial);
@@ -68,6 +72,10 @@ function App() {
     password: sessionPassword ?? '',
     enabled: isUnlocked && !!sessionPassword,
   });
+
+  // Peer-to-peer sync — initializes device identity and starts mDNS discovery.
+  // Runs for the entire app lifetime; discovery state lives in peerSyncStore.
+  usePeerSync();
 
   useEffect(() => {
     const init = async () => {

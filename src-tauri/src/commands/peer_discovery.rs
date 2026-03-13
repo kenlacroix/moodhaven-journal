@@ -1,0 +1,391 @@
+//! Peer discovery via mDNS/DNS-SD for local network sync
+//!
+//! Advertises this MoodBloom instance on the LAN and discovers other instances.
+//! Uses mdns-sd for cross-platform mDNS support (Linux/macOS/Windows).
+//!
+//! ## Event flow
+//!
+//! Background thread → AppHandle::emit("peer:discovered" | "peer:lost") → Frontend store
+//!
+//! ## State
+//!
+//! `PeerDiscoveryState` is managed by Tauri and stores the discovered peer list
+//! plus a channel sender to stop the background discovery thread.
+
+use crate::commands::peer_identity::get_or_create_device_identity;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Mutex,
+};
+use tauri::{AppHandle, Emitter, Manager, State};
+
+const SERVICE_TYPE: &str = "_moodbloom._tcp.local.";
+const SERVICE_PORT: u16 = 42424;
+const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+// ── Public types ──────────────────────────────────────────────────────────────
+
+/// A peer discovered on the local network via mDNS
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiscoveredPeer {
+    pub device_id: String,
+    pub device_name: String,
+    pub device_type: String,
+    pub host: String,
+    pub port: u16,
+    pub version: String,
+    pub pubkey_hint: String,
+    pub is_trusted: bool,
+    pub is_online: bool,
+    pub last_seen: String,
+}
+
+/// Payload for the "peer:lost" Tauri event
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PeerLostEvent {
+    pub device_id: String,
+}
+
+// ── Managed state ─────────────────────────────────────────────────────────────
+
+/// Tauri managed state for peer discovery.
+/// Stored in Tauri app state; accessed from commands and the background thread.
+pub struct PeerDiscoveryState {
+    /// Currently visible peers, keyed by device_id
+    pub peers: Mutex<HashMap<String, DiscoveredPeer>>,
+    /// Whether the background thread is running
+    pub is_active: AtomicBool,
+    /// Send () to ask the background thread to stop
+    pub stop_tx: Mutex<Option<std::sync::mpsc::SyncSender<()>>>,
+}
+
+impl PeerDiscoveryState {
+    pub fn new() -> Self {
+        Self {
+            peers: Mutex::new(HashMap::new()),
+            is_active: AtomicBool::new(false),
+            stop_tx: Mutex::new(None),
+        }
+    }
+}
+
+// AtomicBool + Mutex<T> are already Send+Sync; the unsafe impls make the
+// outer struct visible to Tauri's state manager which requires Send+Sync.
+unsafe impl Send for PeerDiscoveryState {}
+unsafe impl Sync for PeerDiscoveryState {}
+
+// ── Internal helpers ──────────────────────────────────────────────────────────
+
+/// Sanitize a string for use as an mDNS instance name (no dots, no spaces)
+fn sanitize_instance_name(s: &str) -> String {
+    let cleaned: String = s
+        .chars()
+        .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '-' })
+        .collect();
+    cleaned.trim_matches('-').to_string()
+}
+
+fn now_iso() -> String {
+    chrono::Utc::now().to_rfc3339()
+}
+
+/// Detect the primary LAN IPv4 address by consulting the OS routing table.
+/// Opens a UDP socket (no packets sent) and reads the local address the OS
+/// selects — this is the IP that would be used to reach external hosts,
+/// i.e. the address on the primary network interface.
+fn get_local_ipv4() -> Option<std::net::Ipv4Addr> {
+    use std::net::{IpAddr, UdpSocket};
+    let socket = UdpSocket::bind("0.0.0.0:0").ok()?;
+    // Connect does not send data; it just sets the routing destination so the
+    // kernel picks the right source interface.
+    socket.connect("8.8.8.8:80").ok()?;
+    match socket.local_addr().ok()?.ip() {
+        IpAddr::V4(ip) if !ip.is_loopback() => Some(ip),
+        _ => None,
+    }
+}
+
+// ── Background discovery thread ───────────────────────────────────────────────
+
+/// Runs in a dedicated OS thread (not a tokio task).
+/// Creates the mDNS daemon, registers our service, browses for peers,
+/// and emits Tauri events when peers appear or disappear.
+fn run_discovery(
+    app: AppHandle,
+    device_id: String,
+    device_name: String,
+    device_type: String,
+    public_key: String,
+    stop_rx: std::sync::mpsc::Receiver<()>,
+) {
+    use mdns_sd::{ServiceDaemon, ServiceEvent, ServiceInfo};
+
+    let daemon = match ServiceDaemon::new() {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("[peer] Failed to create mDNS daemon: {e}");
+            return;
+        }
+    };
+
+    // Detect LAN IP — must be explicit; passing "" gives mdns-sd no address
+    // to put in the DNS A record, so the announcement is never sent.
+    let local_ip = get_local_ipv4();
+    let local_ip_str = local_ip.map(|ip| ip.to_string()).unwrap_or_default();
+    eprintln!("[peer] Local IP detected: {local_ip_str:?}");
+
+    // Build TXT record properties
+    let pubkey_hint = if public_key.len() >= 8 { &public_key[..8] } else { &public_key };
+    let instance_name = sanitize_instance_name(&format!("moodbloom-{}", &device_id[..8]));
+
+    let mut properties: HashMap<String, String> = HashMap::new();
+    properties.insert("device_id".to_string(), device_id.clone());
+    properties.insert("device_type".to_string(), device_type.clone());
+    properties.insert("device_name".to_string(), device_name.clone());
+    properties.insert("version".to_string(), APP_VERSION.to_string());
+    properties.insert("pubkey_hint".to_string(), pubkey_hint.to_string());
+
+    // Register this device as a service on the LAN.
+    // host_name is the DNS hostname (.local); host_ipv4 is the A-record IP.
+    let my_host = format!("{}.local.", instance_name);
+    eprintln!("[peer] Registering service: {instance_name}.{SERVICE_TYPE} @ {local_ip_str}:{SERVICE_PORT}");
+    match ServiceInfo::new(SERVICE_TYPE, &instance_name, &my_host, local_ip_str.as_str(), SERVICE_PORT, properties) {
+        Ok(service) => {
+            if let Err(e) = daemon.register(service) {
+                eprintln!("[peer] Failed to register mDNS service: {e}");
+                // Non-fatal — we can still browse without registering
+            } else {
+                eprintln!("[peer] Service registered successfully");
+            }
+        }
+        Err(e) => {
+            eprintln!("[peer] Failed to create ServiceInfo: {e}");
+        }
+    }
+
+    // Browse for other MoodBloom instances
+    let receiver = match daemon.browse(SERVICE_TYPE) {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("[peer] Failed to start mDNS browse: {e}");
+            let _ = daemon.shutdown();
+            return;
+        }
+    };
+
+    eprintln!("[peer] Discovery started — advertising and browsing {SERVICE_TYPE}");
+
+    loop {
+        // Non-blocking check for stop signal
+        if stop_rx.try_recv().is_ok() {
+            break;
+        }
+
+        // Poll mDNS events with a 500 ms timeout so we check the stop channel regularly
+        match receiver.recv_timeout(std::time::Duration::from_millis(500)) {
+            Ok(ServiceEvent::ServiceResolved(info)) => {
+                let props = info.get_properties();
+
+                // Extract TXT record fields; val_str() returns &str directly
+                let peer_device_id = props
+                    .get("device_id")
+                    .map(|p| p.val_str())
+                    .unwrap_or("")
+                    .to_string();
+
+                // Skip our own advertisement
+                if peer_device_id == device_id || peer_device_id.is_empty() {
+                    continue;
+                }
+
+                let peer_name = props
+                    .get("device_name")
+                    .map(|p| p.val_str())
+                    .unwrap_or("Unknown Device")
+                    .to_string();
+
+                let peer_type = props
+                    .get("device_type")
+                    .map(|p| p.val_str())
+                    .unwrap_or("desktop")
+                    .to_string();
+
+                let peer_version = props
+                    .get("version")
+                    .map(|p| p.val_str())
+                    .unwrap_or("?")
+                    .to_string();
+
+                let peer_pubkey_hint = props
+                    .get("pubkey_hint")
+                    .map(|p| p.val_str())
+                    .unwrap_or("")
+                    .to_string();
+
+                // Prefer first resolved IPv4 address, fall back to hostname
+                let host = info
+                    .get_addresses()
+                    .iter()
+                    .next()
+                    .map(|a| a.to_string())
+                    .unwrap_or_else(|| info.get_hostname().trim_end_matches('.').to_string());
+
+                let peer = DiscoveredPeer {
+                    device_id: peer_device_id.clone(),
+                    device_name: peer_name,
+                    device_type: peer_type,
+                    host,
+                    port: info.get_port(),
+                    version: peer_version,
+                    pubkey_hint: peer_pubkey_hint,
+                    is_trusted: false, // trust established in Phase 2 (pairing)
+                    is_online: true,
+                    last_seen: now_iso(),
+                };
+
+                // Update shared state; try_state returns Option (not Result)
+                if let Some(state) = app.try_state::<PeerDiscoveryState>() {
+                    if let Ok(mut peers) = state.peers.lock() {
+                        peers.insert(peer_device_id.clone(), peer.clone());
+                    }
+                }
+
+                // Emit event so the frontend store can react immediately
+                let _ = app.emit("peer:discovered", &peer);
+                eprintln!("[peer] Discovered: {} ({})", peer.device_name, peer.device_id);
+            }
+
+            Ok(ServiceEvent::ServiceRemoved(_, fullname)) => {
+                // Find which stored peer matches this fullname, remove it, and notify frontend
+                let lost_id: Option<String> = {
+                    if let Some(state) = app.try_state::<PeerDiscoveryState>() {
+                        if let Ok(mut peers) = state.peers.lock() {
+                            let found: Option<String> = peers
+                                .values()
+                                .find(|p| {
+                                    // Instance names embed the first 8 chars of device_id
+                                    p.device_id.len() >= 8
+                                        && fullname.contains(&p.device_id[..8])
+                                })
+                                .map(|p| p.device_id.clone());
+
+                            if let Some(ref id) = found {
+                                peers.remove(id);
+                            }
+                            found
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                };
+
+                if let Some(gone_id) = lost_id {
+                    let _ = app.emit(
+                        "peer:lost",
+                        PeerLostEvent { device_id: gone_id.clone() },
+                    );
+                    eprintln!("[peer] Lost: {gone_id}");
+                }
+            }
+
+            Ok(mdns_sd::ServiceEvent::SearchStarted(_)) => {
+                // Fires every ~60 s per interface — expected, not worth logging
+            }
+            Ok(mdns_sd::ServiceEvent::ServiceFound(_, fullname)) => {
+                eprintln!("[peer] Found (resolving): {fullname}");
+            }
+            Ok(_) => {
+                // Other daemon events (cache expiry, etc.) — ignore
+            }
+
+            Err(flume::RecvTimeoutError::Timeout) => {
+                // Expected — check the stop channel and loop again
+            }
+
+            Err(flume::RecvTimeoutError::Disconnected) => {
+                // Daemon shut down its internal channel
+                break;
+            }
+        }
+    }
+
+    eprintln!("[peer] Discovery thread exiting — shutting down mDNS daemon");
+    let _ = daemon.stop_browse(SERVICE_TYPE);
+    let _ = daemon.shutdown();
+}
+
+// ── Tauri commands ────────────────────────────────────────────────────────────
+
+/// Start mDNS broadcast + browse. Safe to call multiple times (idempotent).
+#[tauri::command]
+pub async fn peer_discovery_start(
+    app: AppHandle,
+    state: State<'_, PeerDiscoveryState>,
+) -> Result<(), String> {
+    if state.is_active.load(Ordering::SeqCst) {
+        return Ok(()); // already running
+    }
+
+    let identity = get_or_create_device_identity(&app)?;
+
+    // Create a sync_channel so the stop signal is buffered (won't block sender)
+    let (stop_tx, stop_rx) = std::sync::mpsc::sync_channel::<()>(1);
+    {
+        let mut guard = state.stop_tx.lock().map_err(|e| e.to_string())?;
+        *guard = Some(stop_tx);
+    }
+
+    state.is_active.store(true, Ordering::SeqCst);
+
+    let app_clone = app.clone();
+    let device_id = identity.device_id.clone();
+    let device_name = identity.device_name.clone();
+    let device_type = identity.device_type.clone();
+    let public_key = identity.public_key.clone();
+
+    std::thread::spawn(move || {
+        run_discovery(app_clone, device_id, device_name, device_type, public_key, stop_rx);
+        // Mark inactive so callers can restart if needed
+        if let Some(state) = app.try_state::<PeerDiscoveryState>() {
+            state.is_active.store(false, Ordering::SeqCst);
+        }
+    });
+
+    Ok(())
+}
+
+/// Stop mDNS discovery and clear the peer list.
+#[tauri::command]
+pub fn peer_discovery_stop(state: State<'_, PeerDiscoveryState>) -> Result<(), String> {
+    if let Ok(mut guard) = state.stop_tx.lock() {
+        if let Some(tx) = guard.take() {
+            let _ = tx.send(());
+        }
+    }
+    state.is_active.store(false, Ordering::SeqCst);
+
+    if let Ok(mut peers) = state.peers.lock() {
+        peers.clear();
+    }
+
+    Ok(())
+}
+
+/// Snapshot of currently discovered nearby peers.
+#[tauri::command]
+pub fn peer_get_nearby(state: State<'_, PeerDiscoveryState>) -> Result<Vec<DiscoveredPeer>, String> {
+    let peers = state.peers.lock().map_err(|e| e.to_string())?;
+    Ok(peers.values().cloned().collect())
+}
+
+/// Whether the discovery background thread is currently active.
+#[tauri::command]
+pub fn peer_discovery_is_active(state: State<'_, PeerDiscoveryState>) -> bool {
+    state.is_active.load(Ordering::SeqCst)
+}

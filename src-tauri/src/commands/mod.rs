@@ -18,6 +18,8 @@ pub mod sync;
 pub mod updater;
 pub mod voice_memos;
 pub mod writer_window;
+pub mod peer_identity;
+pub mod peer_discovery;
 
 pub use analytics::*;
 pub use books::*;
@@ -35,3 +37,5 @@ pub use speech_to_text::*;
 pub use two_factor::*;
 pub use voice_memos::*;
 pub use writer_window::*;
+pub use peer_identity::*;
+pub use peer_discovery::*;

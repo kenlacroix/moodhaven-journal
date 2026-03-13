@@ -128,6 +128,13 @@ commands.allow = [
   "delete_voice_memo",
   "patch_voice_memo_transcription",
   "link_voice_memo_to_entry",
+  # Peer-to-peer sync — Phase 1: identity + discovery
+  "peer_get_identity",
+  "peer_rename_device",
+  "peer_discovery_start",
+  "peer_discovery_stop",
+  "peer_get_nearby",
+  "peer_discovery_is_active",
 ]
 
 [default]

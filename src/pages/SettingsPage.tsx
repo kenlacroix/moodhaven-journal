@@ -59,8 +59,9 @@ import {
   formatDuration,
   type RateLimitState,
 } from '../lib/rateLimitService';
+import { DevicesTab } from '../components/peer-sync';
 
-type SettingsTab = 'general' | 'privacy' | 'ai' | 'health' | 'about';
+type SettingsTab = 'general' | 'privacy' | 'ai' | 'health' | 'devices' | 'about';
 
 interface TabConfig {
   id: SettingsTab;
@@ -93,6 +94,12 @@ const TABS: TabConfig[] = [
     label: 'Health',
     icon: 'M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z',
     keywords: ['oura', 'ring', 'sleep', 'readiness', 'activity', 'stress', 'heart rate', 'health', 'biometrics', 'wearable'],
+  },
+  {
+    id: 'devices',
+    label: 'Devices',
+    icon: 'M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z M13 17h-2m10 0h-1.5a2 2 0 01-2-2v-4a2 2 0 012-2h1.5M5 17H3.5a2 2 0 01-2-2v-4a2 2 0 012-2H5m0 0V7a2 2 0 012-2h6a2 2 0 012 2v2M5 9h14',
+    keywords: ['devices', 'sync', 'local', 'peer', 'nearby', 'pairing', 'pair', 'wifi', 'network', 'lan'],
   },
   {
     id: 'about',
@@ -1766,6 +1773,13 @@ export function SettingsPage({ updateHook }: SettingsPageProps) {
                 </div>
               </div>
             </SettingSection>
+          </div>
+        )}
+
+        {/* Devices Tab */}
+        {activeTab === 'devices' && (
+          <div id="panel-devices" role="tabpanel" className="space-y-6">
+            <DevicesTab />
           </div>
         )}
 

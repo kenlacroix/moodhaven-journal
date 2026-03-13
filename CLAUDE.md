@@ -40,6 +40,7 @@
 | Oura Ring | P2 | **Complete** | PAT-based health context (sleep, readiness, HRV) in writing view |
 | Sync Details Modal | P2 | **Complete** | Storage type, entry count, last sync, upload/download with inline auth |
 | Speech-to-Text | P3 | In Progress | Local offline STT via whisper.cpp sidecar; Tauri commands scaffolded; UI pending |
+| Local Peer Sync | P2 | **Phase 1 Complete** | Ed25519 device identity + mDNS/DNS-SD discovery; Settings → Devices tab; v0.6.x |
 
 ### Feature Implementation Guidelines
 
@@ -538,7 +539,35 @@ interface AISettings {
 <!-- Update this section as development progresses -->
 
 ```markdown
-## Sprint: Phase 7 (v0.5.0 — Major Polish Sprint)
+## Sprint: Phase 8 (v0.6.x — Local Peer Sync)
+
+### Completed (Phase 1 — v0.6.0: Identity + Discovery)
+- [x] Ed25519 device identity generation (peer_identity.rs, peer_key.bin)
+- [x] mDNS/DNS-SD service broadcast + browse (mdns-sd crate, _moodbloom._tcp.local)
+- [x] PeerDiscoveryState Tauri managed state (background thread, stop channel)
+- [x] Tauri events: peer:discovered, peer:lost (AppHandle::emit)
+- [x] 6 Tauri commands: peer_get_identity, peer_rename_device, peer_discovery_start/stop, peer_get_nearby, peer_discovery_is_active
+- [x] peerDiscoveryService.ts IPC wrappers + event listeners
+- [x] peerSyncStore.ts Zustand store (identity, nearbyPeers, isDiscovering)
+- [x] usePeerSync hook (app-level, loads identity + wires events)
+- [x] Settings → Devices tab (DevicesTab.tsx — full polished UI)
+- [x] PeerSyncBadge in sidebar footer
+- [x] PeerSyncWireframes dev preview page (?mode=peersync)
+- [x] docs/local-peer-sync-plan.md architecture documentation
+
+### In Progress
+- [ ] Phase 2 (v0.6.1): QR code pairing + trusted_devices store
+
+### Blocked
+- None
+
+### Upcoming
+- [ ] Phase 3 (v0.7.0): Encrypted WebSocket sync engine (axum, ECDH, manifest+delta)
+- [ ] Phase 4 (v0.7.1): UDP fallback, LAN-only privacy mode, watch gateway
+
+---
+
+## Previous Sprint: Phase 7 (v0.5.0 — Major Polish Sprint)
 
 ### Completed
 - [x] Project structure setup
@@ -590,18 +619,13 @@ interface AISettings {
 - [x] Settings deep-linking (scroll-to-section, temperature unit, auto-title toggle)
 - [x] Hashtag auto-extraction on save, pinned entries, temperature unit display
 
-### In Progress
+### In Progress (carried forward)
 - [ ] Speech-to-Text (whisper.cpp sidecar; commands scaffolded, UI pending)
 - [ ] Cross-platform build testing
 
-### Blocked
-- None
-
-### Upcoming
+### Future
 - [ ] CI/CD pipeline (GitHub Actions — build + test on push)
 - [ ] Release preparation (code signing, notarisation)
-
-### Future (Post-Release)
 - [ ] Speech-to-Text (local, offline via whisper.cpp)
 ```
 

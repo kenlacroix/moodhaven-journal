@@ -135,6 +135,13 @@ commands.allow = [
   "peer_discovery_stop",
   "peer_get_nearby",
   "peer_discovery_is_active",
+  # Peer-to-peer sync — Phase 2: secure pairing
+  "peer_generate_pairing_token",
+  "peer_accept_pairing",
+  "peer_get_trusted",
+  "peer_revoke_device",
+  "peer_cancel_pairing",
+  "peer_pairing_is_active",
 ]
 
 [default]

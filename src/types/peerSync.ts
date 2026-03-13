@@ -11,10 +11,22 @@ export interface DeviceIdentity {
   created: string;     // ISO date
 }
 
-export interface TrustedDevice extends DeviceIdentity {
-  paired: string;       // ISO date
-  lastSeen?: string;    // ISO date
-  lastSyncAt?: string;  // ISO date
+export interface TrustedDevice {
+  deviceId: string;
+  deviceName: string;
+  deviceType: DeviceType;
+  publicKey: string;
+  pairedAt: string;     // ISO date
+  lastSeen: string;     // ISO date
+  lastSyncAt?: string;  // ISO date (set after first sync)
+}
+
+export interface PairingTokenInfo {
+  pin: string;         // 6-digit string
+  qrPayload: string;   // JSON string for QR image generation
+  expiresAt: number;   // Unix timestamp
+  localHost: string;   // Our LAN IP
+  pairingPort: number; // 42425
 }
 
 export interface DiscoveredPeer {
@@ -30,22 +42,11 @@ export interface DiscoveredPeer {
   lastSeen: string;
 }
 
-export interface PairingQRPayload {
-  deviceId: string;
-  deviceName: string;
-  deviceType: DeviceType;
-  publicKey: string;
-  pairingToken: string;  // 32-byte random, base64url
-  expires: string;       // ISO date (5 min from generation)
-  port: number;
-}
-
 export type PairingState =
   | { status: 'idle' }
   | { status: 'generating' }
-  | { status: 'displaying_qr'; payload: PairingQRPayload; expiresAt: number }
-  | { status: 'scanning' }
-  | { status: 'confirming'; peer: DiscoveredPeer }
+  | { status: 'showing_code'; info: PairingTokenInfo }
+  | { status: 'entering_code' }
   | { status: 'pairing' }
   | { status: 'success'; device: TrustedDevice }
   | { status: 'error'; message: string };

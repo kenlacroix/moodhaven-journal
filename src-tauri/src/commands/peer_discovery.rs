@@ -97,7 +97,7 @@ fn now_iso() -> String {
 /// Opens a UDP socket (no packets sent) and reads the local address the OS
 /// selects — this is the IP that would be used to reach external hosts,
 /// i.e. the address on the primary network interface.
-fn get_local_ipv4() -> Option<std::net::Ipv4Addr> {
+pub fn get_local_ipv4() -> Option<std::net::Ipv4Addr> {
     use std::net::{IpAddr, UdpSocket};
     let socket = UdpSocket::bind("0.0.0.0:0").ok()?;
     // Connect does not send data; it just sets the routing destination so the
@@ -242,7 +242,7 @@ fn run_discovery(
                     port: info.get_port(),
                     version: peer_version,
                     pubkey_hint: peer_pubkey_hint,
-                    is_trusted: false, // trust established in Phase 2 (pairing)
+                    is_trusted: crate::commands::peer_pairing::is_device_trusted(&app, &peer_device_id),
                     is_online: true,
                     last_seen: now_iso(),
                 };

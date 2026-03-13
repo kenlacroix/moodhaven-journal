@@ -1,12 +1,12 @@
 /**
  * Peer Sync Store
  *
- * Manages discovered peers, device identity, and discovery state.
- * Uses Zustand. Event listeners wired in usePeerSync hook.
+ * Manages discovered peers, device identity, discovery state, and trusted devices.
+ * Uses Zustand. Event listeners are wired in the usePeerSync hook.
  */
 
 import { create } from 'zustand';
-import type { DeviceIdentity, DiscoveredPeer } from '../types/peerSync';
+import type { DeviceIdentity, DiscoveredPeer, TrustedDevice } from '../types/peerSync';
 
 interface PeerSyncState {
   // This device
@@ -17,6 +17,9 @@ interface PeerSyncState {
   isDiscovering: boolean;
   nearbyPeers: DiscoveredPeer[];
 
+  // Trusted / paired devices
+  trustedDevices: TrustedDevice[];
+
   // Actions
   setIdentity: (identity: DeviceIdentity) => void;
   setIdentityLoading: (loading: boolean) => void;
@@ -25,6 +28,11 @@ interface PeerSyncState {
   removePeer: (deviceId: string) => void;
   clearPeers: () => void;
   setNearbyPeers: (peers: DiscoveredPeer[]) => void;
+  setTrustedDevices: (devices: TrustedDevice[]) => void;
+  addOrUpdateTrusted: (device: TrustedDevice) => void;
+  removeTrusted: (deviceId: string) => void;
+  /** Mark a nearby peer as trusted without a full re-fetch */
+  markPeerTrusted: (deviceId: string) => void;
 }
 
 export const usePeerSyncStore = create<PeerSyncState>((set) => ({
@@ -32,6 +40,7 @@ export const usePeerSyncStore = create<PeerSyncState>((set) => ({
   identityLoading: false,
   isDiscovering: false,
   nearbyPeers: [],
+  trustedDevices: [],
 
   setIdentity: (identity) => set({ identity }),
   setIdentityLoading: (identityLoading) => set({ identityLoading }),
@@ -51,4 +60,25 @@ export const usePeerSyncStore = create<PeerSyncState>((set) => ({
 
   clearPeers: () => set({ nearbyPeers: [] }),
   setNearbyPeers: (nearbyPeers) => set({ nearbyPeers }),
+
+  setTrustedDevices: (trustedDevices) => set({ trustedDevices }),
+
+  addOrUpdateTrusted: (device) =>
+    set((state) => ({
+      trustedDevices: state.trustedDevices.some((d) => d.deviceId === device.deviceId)
+        ? state.trustedDevices.map((d) => (d.deviceId === device.deviceId ? device : d))
+        : [...state.trustedDevices, device],
+    })),
+
+  removeTrusted: (deviceId) =>
+    set((state) => ({
+      trustedDevices: state.trustedDevices.filter((d) => d.deviceId !== deviceId),
+    })),
+
+  markPeerTrusted: (deviceId) =>
+    set((state) => ({
+      nearbyPeers: state.nearbyPeers.map((p) =>
+        p.deviceId === deviceId ? { ...p, isTrusted: true } : p
+      ),
+    })),
 }));

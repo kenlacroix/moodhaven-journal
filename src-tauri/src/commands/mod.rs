@@ -20,6 +20,7 @@ pub mod voice_memos;
 pub mod writer_window;
 pub mod peer_identity;
 pub mod peer_discovery;
+pub mod peer_pairing;
 
 pub use analytics::*;
 pub use books::*;
@@ -39,3 +40,4 @@ pub use voice_memos::*;
 pub use writer_window::*;
 pub use peer_identity::*;
 pub use peer_discovery::*;
+pub use peer_pairing::*;

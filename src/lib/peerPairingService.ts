@@ -1,0 +1,64 @@
+/**
+ * Peer Pairing Service
+ *
+ * IPC wrappers for the Rust peer pairing backend (Phase 2).
+ * Handles PIN generation, HTTP server lifecycle, and trusted device management.
+ */
+
+import { invoke } from '@tauri-apps/api/core';
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import type { TrustedDevice, PairingTokenInfo } from '../types/peerSync';
+
+// ── Pairing commands ───────────────────────────────────────────────────────────
+
+/**
+ * Generate a 6-digit PIN and start the pairing HTTP server on port 42425.
+ * The returned `qrPayload` can be encoded as a QR code for scanning.
+ * Token expires after 5 minutes.
+ */
+export async function generatePairingToken(): Promise<PairingTokenInfo> {
+  return invoke<PairingTokenInfo>('peer_generate_pairing_token');
+}
+
+/**
+ * Accept a pairing invitation from `targetHost`.
+ * Posts this device's identity + the `pin` to the peer's pairing server.
+ * On success, both devices are saved as trusted.
+ */
+export async function acceptPairing(
+  targetHost: string,
+  pin: string
+): Promise<TrustedDevice> {
+  return invoke<TrustedDevice>('peer_accept_pairing', { targetHost, pin });
+}
+
+/** Get all paired (trusted) devices. */
+export async function getTrustedDevices(): Promise<TrustedDevice[]> {
+  return invoke<TrustedDevice[]>('peer_get_trusted');
+}
+
+/** Remove a paired device by device_id. */
+export async function revokeDevice(deviceId: string): Promise<void> {
+  return invoke<void>('peer_revoke_device', { deviceId });
+}
+
+/** Cancel the in-progress pairing session (stops the HTTP server). */
+export async function cancelPairing(): Promise<void> {
+  return invoke<void>('peer_cancel_pairing');
+}
+
+/** Check if the pairing server is currently listening. */
+export async function isPairingActive(): Promise<boolean> {
+  return invoke<boolean>('peer_pairing_is_active');
+}
+
+// ── Event listeners ────────────────────────────────────────────────────────────
+
+/** Called on both sides when pairing succeeds. */
+export function onPeerPaired(
+  callback: (device: TrustedDevice) => void
+): Promise<UnlistenFn> {
+  return listen<TrustedDevice>('peer:paired', (event) => {
+    callback(event.payload);
+  });
+}

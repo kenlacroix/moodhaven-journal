@@ -6,6 +6,7 @@ pub mod commands;
 pub mod db;
 
 use commands::peer_discovery::PeerDiscoveryState;
+use commands::peer_pairing::PairingServerState;
 use commands::session_bridge::SessionBridge;
 use db::{get_db_path, Database};
 use tauri::Manager;
@@ -36,6 +37,9 @@ pub fn run() {
 
             // Peer-to-peer discovery state
             app.manage(PeerDiscoveryState::new());
+
+            // Peer-to-peer pairing server state
+            app.manage(PairingServerState::new());
 
             // Sweep leftover preview temp files from previous sessions
             let _ = commands::sweep_preview_temp(app.handle().clone());
@@ -174,6 +178,13 @@ pub fn run() {
             commands::peer_discovery_stop,
             commands::peer_get_nearby,
             commands::peer_discovery_is_active,
+            // Peer-to-peer sync (Phase 2: secure pairing)
+            commands::peer_generate_pairing_token,
+            commands::peer_accept_pairing,
+            commands::peer_get_trusted,
+            commands::peer_revoke_device,
+            commands::peer_cancel_pairing,
+            commands::peer_pairing_is_active,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

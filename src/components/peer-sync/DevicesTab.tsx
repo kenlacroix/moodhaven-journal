@@ -1,16 +1,19 @@
 /**
- * DevicesTab — Settings tab for local peer sync / Devices
+ * DevicesTab — Settings tab for local peer sync
  *
  * Shows:
- * - This device (identity card + rename)
- * - Nearby discovered devices (mDNS)
- * - Paired devices placeholder (Phase 2)
- * - Discovery toggle
+ * - Discovery toggle (Local Sync on/off)
+ * - This device card (identity + rename)
+ * - Nearby discovered devices with Pair buttons
+ * - Paired (trusted) devices with Remove
+ * - Privacy note
  */
 
 import { useState, useCallback } from 'react';
 import { usePeerSyncStore } from '../../stores/peerSyncStore';
 import { renameDevice, startDiscovery, stopDiscovery } from '../../lib/peerDiscoveryService';
+import { PairingModal } from './PairingModal';
+import { TrustedDevicesList } from './TrustedDevicesList';
 import type { DeviceIdentity, DiscoveredPeer } from '../../types/peerSync';
 
 // ── Device type icon ──────────────────────────────────────────────────────────
@@ -52,11 +55,7 @@ function SignalBars({ className = '' }: { className?: string }) {
   return (
     <span className={`inline-flex items-end gap-px ${className}`} aria-label="Strong signal" title="Strong signal">
       {[4, 7, 10].map((h, i) => (
-        <span
-          key={i}
-          className="w-1 rounded-sm bg-emerald-400"
-          style={{ height: h }}
-        />
+        <span key={i} className="w-1 rounded-sm bg-emerald-400" style={{ height: h }} />
       ))}
     </span>
   );
@@ -202,7 +201,13 @@ function ThisDeviceCard({ identity }: { identity: DeviceIdentity }) {
 
 // ── Nearby peer row ───────────────────────────────────────────────────────────
 
-function NearbyPeerRow({ peer }: { peer: DiscoveredPeer }) {
+function NearbyPeerRow({
+  peer,
+  onPair,
+}: {
+  peer: DiscoveredPeer;
+  onPair: (peer: DiscoveredPeer) => void;
+}) {
   return (
     <div className="flex items-center gap-3 py-3 px-1 border-b border-slate-100 dark:border-slate-700/50 last:border-0">
       <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 dark:text-slate-400 flex-shrink-0">
@@ -213,23 +218,32 @@ function NearbyPeerRow({ peer }: { peer: DiscoveredPeer }) {
           <span className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">
             {peer.deviceName}
           </span>
+          {peer.isTrusted && (
+            <span className="flex-shrink-0 flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
+              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M16.403 12.652a3 3 0 000-5.304 3 3 0 00-3.75-3.751 3 3 0 00-5.305 0 3 3 0 00-3.751 3.75 3 3 0 000 5.305 3 3 0 003.75 3.751 3 3 0 005.305 0 3 3 0 003.751-3.75zm-2.546-4.46a.75.75 0 00-1.214-.883l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" />
+              </svg>
+              Trusted
+            </span>
+          )}
           <span className="text-xs text-slate-400 dark:text-slate-500 flex-shrink-0 capitalize">
             {peer.deviceType}
           </span>
         </div>
         <div className="flex items-center gap-2 mt-0.5">
           <SignalBars />
-          <span className="text-xs text-slate-400 dark:text-slate-500">
-            v{peer.version}
-          </span>
+          <span className="text-xs text-slate-400 dark:text-slate-500">v{peer.version}</span>
         </div>
       </div>
       <button
-        disabled
-        title="Pairing available in the next update"
-        className="px-3 py-1.5 text-xs font-medium text-white bg-violet-600 opacity-40 cursor-not-allowed rounded-lg flex-shrink-0"
+        onClick={() => onPair(peer)}
+        className={`px-3 py-1.5 text-xs font-medium rounded-lg flex-shrink-0 transition-colors ${
+          peer.isTrusted
+            ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 hover:bg-emerald-100 dark:hover:bg-emerald-900/40'
+            : 'text-white bg-violet-600 hover:bg-violet-500'
+        }`}
       >
-        Pair
+        {peer.isTrusted ? 'Paired' : 'Pair'}
       </button>
     </div>
   );
@@ -274,6 +288,7 @@ export function DevicesTab() {
     usePeerSyncStore();
 
   const [togglingDiscovery, setTogglingDiscovery] = useState(false);
+  const [pairingPeer, setPairingPeer] = useState<DiscoveredPeer | null>(null);
 
   const handleToggleDiscovery = useCallback(async () => {
     setTogglingDiscovery(true);
@@ -305,120 +320,116 @@ export function DevicesTab() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Local Sync toggle */}
-      <div className="p-4 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex-1">
-            <div className="flex items-center gap-2 mb-1">
-              <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">Local Sync</p>
-              {isDiscovering && (
-                <span className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  Active
+    <>
+      {/* Pairing modal (rendered in a portal via fixed positioning) */}
+      {pairingPeer && (
+        <PairingModal peer={pairingPeer} onClose={() => setPairingPeer(null)} />
+      )}
+
+      <div className="space-y-6">
+        {/* Local Sync toggle */}
+        <div className="p-4 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-1">
+                <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">Local Sync</p>
+                {isDiscovering && (
+                  <span className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    Active
+                  </span>
+                )}
+              </div>
+              <p className="text-sm text-slate-500 dark:text-slate-400">
+                Discover and sync with devices on your local Wi-Fi network.
+                Your data is always encrypted end-to-end.
+              </p>
+            </div>
+            <button
+              role="switch"
+              aria-checked={isDiscovering}
+              onClick={handleToggleDiscovery}
+              disabled={togglingDiscovery}
+              className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900 ${
+                isDiscovering ? 'bg-violet-600' : 'bg-slate-200 dark:bg-slate-700'
+              } disabled:opacity-50`}
+            >
+              <span className="sr-only">Enable local sync</span>
+              <span
+                aria-hidden="true"
+                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ${
+                  isDiscovering ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
+        </div>
+
+        {/* This device */}
+        {identity ? (
+          <ThisDeviceCard identity={identity} />
+        ) : (
+          <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 text-sm text-slate-500 dark:text-slate-400">
+            Device identity not available.
+          </div>
+        )}
+
+        {/* Nearby devices */}
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Nearby Devices</h3>
+              {nearbyPeers.length > 0 && (
+                <span className="text-xs px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
+                  {nearbyPeers.length}
                 </span>
               )}
             </div>
-            <p className="text-sm text-slate-500 dark:text-slate-400">
-              Discover and sync with devices on your local Wi-Fi network.
-              Your data is always encrypted end-to-end.
-            </p>
-          </div>
-          <button
-            role="switch"
-            aria-checked={isDiscovering}
-            onClick={handleToggleDiscovery}
-            disabled={togglingDiscovery}
-            className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900 ${
-              isDiscovering ? 'bg-violet-600' : 'bg-slate-200 dark:bg-slate-700'
-            } disabled:opacity-50`}
-          >
-            <span className="sr-only">Enable local sync</span>
-            <span
-              aria-hidden="true"
-              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ${
-                isDiscovering ? 'translate-x-5' : 'translate-x-0'
-              }`}
-            />
-          </button>
-        </div>
-      </div>
-
-      {/* This device */}
-      {identity ? (
-        <ThisDeviceCard identity={identity} />
-      ) : (
-        <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 text-sm text-slate-500 dark:text-slate-400">
-          Device identity not available.
-        </div>
-      )}
-
-      {/* Nearby devices */}
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Nearby Devices</h3>
-            {nearbyPeers.length > 0 && (
-              <span className="text-xs px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
-                {nearbyPeers.length}
-              </span>
+            {isDiscovering && (
+              <div className="flex items-center gap-1.5 text-xs text-slate-400 dark:text-slate-500">
+                <ScanningDots />
+                <span>Scanning</span>
+              </div>
             )}
           </div>
-          {isDiscovering && (
-            <div className="flex items-center gap-1.5 text-xs text-slate-400 dark:text-slate-500">
-              <ScanningDots />
-              <span>Scanning</span>
-            </div>
-          )}
+
+          <div className="rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+            {nearbyPeers.length === 0 ? (
+              <EmptyNearby isDiscovering={isDiscovering} />
+            ) : (
+              <div className="px-3">
+                {nearbyPeers.map((peer) => (
+                  <NearbyPeerRow key={peer.deviceId} peer={peer} onPair={setPairingPeer} />
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
-        <div className="rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
-          {nearbyPeers.length === 0 ? (
-            <EmptyNearby isDiscovering={isDiscovering} />
-          ) : (
-            <div className="px-3">
-              {nearbyPeers.map((peer) => (
-                <NearbyPeerRow key={peer.deviceId} peer={peer} />
-              ))}
-            </div>
-          )}
+        {/* Paired devices */}
+        <div>
+          <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">
+            Paired Devices
+          </h3>
+          <TrustedDevicesList />
         </div>
-      </div>
 
-      {/* Paired devices (Phase 2 placeholder) */}
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Paired Devices</h3>
-          <span className="text-xs text-slate-400 dark:text-slate-500">Coming in v0.6.1</span>
-        </div>
-        <div className="rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 border-dashed shadow-sm p-6 text-center">
-          <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mx-auto mb-2">
-            <svg className="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />
+        {/* Privacy note */}
+        <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
+          <div className="flex gap-2.5">
+            <svg className="w-4 h-4 text-slate-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
             </svg>
-          </div>
-          <p className="text-sm text-slate-500 dark:text-slate-400">No paired devices yet</p>
-          <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
-            QR code pairing will be available in the next release
-          </p>
-        </div>
-      </div>
-
-      {/* Privacy note */}
-      <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
-        <div className="flex gap-2.5">
-          <svg className="w-4 h-4 text-slate-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
-          </svg>
-          <div>
-            <p className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-0.5">Privacy guaranteed</p>
-            <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-              Discovery stays on your local network. No data leaves your Wi-Fi.
-              Sync only works between devices you explicitly pair.
-            </p>
+            <div>
+              <p className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-0.5">Privacy guaranteed</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                Discovery stays on your local network. No data leaves your Wi-Fi.
+                Sync only works between devices you explicitly pair.
+              </p>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }

@@ -1100,7 +1100,9 @@ run_bg() {
   local label="$1"; shift
   local log="/tmp/moodbloom_${label// /_}.log"
   info "[$label] starting in background -- log: $log"
-  "$@" > "$log" 2>&1 &
+  # setsid puts the child in its own process group so cleanup can kill the
+  # entire tree (npm → node → cargo → gradle → java …) with kill -- -$pgid.
+  setsid "$@" > "$log" 2>&1 &
   local pid=$!
   BG_PIDS+=("$pid")
   echo "$pid" > "/tmp/moodbloom_bg_${label// /_}.pid"
@@ -1172,8 +1174,17 @@ start_laptop_ap() {
 cleanup() {
   echo "" >&2
   info "Shutting down..."
+  # Background jobs were started with setsid, so they are process-group leaders.
+  # Killing with -$pid sends SIGTERM to the entire group (npm → gradle → java …).
   for pid in "${BG_PIDS[@]:-}"; do
-    [[ -n "$pid" ]] && kill "$pid" 2>/dev/null || true
+    [[ -n "$pid" ]] || continue
+    kill -- -"$pid" 2>/dev/null || kill "$pid" 2>/dev/null || true
+  done
+  # Give processes a moment, then SIGKILL anything left in those groups.
+  sleep 1
+  for pid in "${BG_PIDS[@]:-}"; do
+    [[ -n "$pid" ]] || continue
+    kill -0 "$pid" 2>/dev/null && { kill -KILL -- -"$pid" 2>/dev/null || true; } || true
   done
   if [[ -n "$VITE_PID" ]]; then
     kill "$VITE_PID" 2>/dev/null || true
@@ -1419,12 +1430,12 @@ if $START_DESKTOP && $NEED_ANDROID; then
      npm run tauri android dev -- '$PHONE_SERIAL' --no-dev-server-wait \
      --config '{\"build\":{\"beforeDevCommand\":\"\"}}'"
   step "Starting Tauri Desktop dev (foreground -- Ctrl+C stops all)"
-  npm run tauri dev -- --no-dev-server-wait \
+  NO_AT_BRIDGE=1 npm run tauri dev -- --no-dev-server-wait \
     --config '{"build":{"beforeDevCommand":""}}'
 
 elif $START_DESKTOP; then
   step "Starting Tauri Desktop dev (foreground -- Ctrl+C to stop)"
-  npm run tauri dev
+  NO_AT_BRIDGE=1 npm run tauri dev
 
 elif $NEED_ANDROID; then
   step "Starting Tauri Android dev (foreground -- Ctrl+C stops all)"

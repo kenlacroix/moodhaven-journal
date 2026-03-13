@@ -7,6 +7,7 @@ pub mod db;
 
 use commands::peer_discovery::PeerDiscoveryState;
 use commands::peer_pairing::PairingServerState;
+use commands::peer_sync_engine::SyncEngineState;
 use commands::session_bridge::SessionBridge;
 use db::{get_db_path, Database};
 use tauri::Manager;
@@ -40,6 +41,17 @@ pub fn run() {
 
             // Peer-to-peer pairing server state
             app.manage(PairingServerState::new());
+
+            // Peer-to-peer sync engine state
+            app.manage(SyncEngineState::new());
+
+            // Auto-start sync server so peers can connect to us
+            if let Err(e) = commands::peer_sync_engine::peer_start_sync_server(
+                app.handle().clone(),
+                app.state::<SyncEngineState>(),
+            ) {
+                eprintln!("[sync] Auto-start failed: {e}");
+            }
 
             // Sweep leftover preview temp files from previous sessions
             let _ = commands::sweep_preview_temp(app.handle().clone());
@@ -185,6 +197,10 @@ pub fn run() {
             commands::peer_revoke_device,
             commands::peer_cancel_pairing,
             commands::peer_pairing_is_active,
+            // Peer-to-peer sync (Phase 3: sync engine)
+            commands::peer_start_sync_server,
+            commands::peer_sync_now,
+            commands::peer_get_sync_states,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -1,6 +1,6 @@
 {
   "name": "moodbloom",
-  "version": "0.6.1",
+  "version": "0.7.0",
   "description": "A calm, secure mood tracking and journaling app",
   "type": "module",
   "scripts": {

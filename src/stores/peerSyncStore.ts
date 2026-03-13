@@ -6,7 +6,7 @@
  */
 
 import { create } from 'zustand';
-import type { DeviceIdentity, DiscoveredPeer, TrustedDevice } from '../types/peerSync';
+import type { DeviceIdentity, DiscoveredPeer, SyncStatus, TrustedDevice } from '../types/peerSync';
 
 interface PeerSyncState {
   // This device
@@ -19,6 +19,9 @@ interface PeerSyncState {
 
   // Trusted / paired devices
   trustedDevices: TrustedDevice[];
+
+  // Per-device sync status (keyed by deviceId)
+  syncStatuses: Record<string, SyncStatus>;
 
   // Actions
   setIdentity: (identity: DeviceIdentity) => void;
@@ -33,6 +36,8 @@ interface PeerSyncState {
   removeTrusted: (deviceId: string) => void;
   /** Mark a nearby peer as trusted without a full re-fetch */
   markPeerTrusted: (deviceId: string) => void;
+  setSyncStatus: (deviceId: string, status: SyncStatus) => void;
+  clearSyncStatus: (deviceId: string) => void;
 }
 
 export const usePeerSyncStore = create<PeerSyncState>((set) => ({
@@ -41,6 +46,7 @@ export const usePeerSyncStore = create<PeerSyncState>((set) => ({
   isDiscovering: false,
   nearbyPeers: [],
   trustedDevices: [],
+  syncStatuses: {},
 
   setIdentity: (identity) => set({ identity }),
   setIdentityLoading: (identityLoading) => set({ identityLoading }),
@@ -81,4 +87,15 @@ export const usePeerSyncStore = create<PeerSyncState>((set) => ({
         p.deviceId === deviceId ? { ...p, isTrusted: true } : p
       ),
     })),
+
+  setSyncStatus: (deviceId, status) =>
+    set((state) => ({
+      syncStatuses: { ...state.syncStatuses, [deviceId]: status },
+    })),
+
+  clearSyncStatus: (deviceId) =>
+    set((state) => {
+      const { [deviceId]: _, ...rest } = state.syncStatuses;
+      return { syncStatuses: rest };
+    }),
 }));

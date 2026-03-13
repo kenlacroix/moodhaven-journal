@@ -203,6 +203,7 @@ impl Database {
              CREATE TRIGGER update_entry_timestamp
                  AFTER UPDATE ON journal_entries
                  FOR EACH ROW
+                 WHEN NEW.updated_at = OLD.updated_at
              BEGIN
                  UPDATE journal_entries
                  SET updated_at = strftime('%Y-%m-%dT%H:%M:%S', 'now', 'localtime')
@@ -343,6 +344,15 @@ impl Database {
                 ON voice_memos(timestamp);",
         )
         .map_err(|e| format!("Failed to create voice_memos table: {}", e))?;
+
+        // peer_sync_state — tracks last successful sync timestamp per trusted peer
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS peer_sync_state (
+                peer_device_id TEXT PRIMARY KEY,
+                last_sync_at   TEXT NOT NULL
+            );",
+        )
+        .map_err(|e| format!("Failed to create peer_sync_state table: {}", e))?;
 
         Ok(Self {
             conn: Mutex::new(conn),

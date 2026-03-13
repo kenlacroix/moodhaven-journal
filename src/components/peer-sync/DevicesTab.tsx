@@ -12,9 +12,10 @@
 import { useState, useCallback } from 'react';
 import { usePeerSyncStore } from '../../stores/peerSyncStore';
 import { renameDevice, startDiscovery, stopDiscovery } from '../../lib/peerDiscoveryService';
+import { peerSyncNow } from '../../lib/peerSyncEngineService';
 import { PairingModal } from './PairingModal';
 import { TrustedDevicesList } from './TrustedDevicesList';
-import type { DeviceIdentity, DiscoveredPeer } from '../../types/peerSync';
+import type { DeviceIdentity, DiscoveredPeer, SyncStatus } from '../../types/peerSync';
 
 // ── Device type icon ──────────────────────────────────────────────────────────
 
@@ -199,6 +200,28 @@ function ThisDeviceCard({ identity }: { identity: DeviceIdentity }) {
   );
 }
 
+// ── Sync status inline badge ──────────────────────────────────────────────────
+
+function SyncStatusInline({ status }: { status: SyncStatus | undefined }) {
+  if (!status || status.state === 'idle') return null;
+  if (status.state === 'syncing')
+    return (
+      <span className="text-xs text-violet-400 flex items-center gap-1">
+        <span className="animate-spin inline-block w-3 h-3 border border-violet-400 border-t-transparent rounded-full" />
+        Syncing...
+      </span>
+    );
+  if (status.state === 'success')
+    return (
+      <span className="text-xs text-emerald-400">
+        Synced{status.count > 0 ? ` ${status.count} new` : ''}
+      </span>
+    );
+  if (status.state === 'error')
+    return <span className="text-xs text-red-400">Sync error</span>;
+  return null;
+}
+
 // ── Nearby peer row ───────────────────────────────────────────────────────────
 
 function NearbyPeerRow({
@@ -208,6 +231,21 @@ function NearbyPeerRow({
   peer: DiscoveredPeer;
   onPair: (peer: DiscoveredPeer) => void;
 }) {
+  const syncStatuses = usePeerSyncStore((s) => s.syncStatuses);
+  const syncStatus = syncStatuses[peer.deviceId];
+  const [syncing, setSyncing] = useState(false);
+
+  const handleSyncNow = useCallback(async () => {
+    setSyncing(true);
+    try {
+      await peerSyncNow(peer.deviceId, peer.host);
+    } catch (e) {
+      console.warn('[DevicesTab] Manual sync failed:', e);
+    } finally {
+      setSyncing(false);
+    }
+  }, [peer.deviceId, peer.host]);
+
   return (
     <div className="flex items-center gap-3 py-3 px-1 border-b border-slate-100 dark:border-slate-700/50 last:border-0">
       <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 dark:text-slate-400 flex-shrink-0">
@@ -233,18 +271,25 @@ function NearbyPeerRow({
         <div className="flex items-center gap-2 mt-0.5">
           <SignalBars />
           <span className="text-xs text-slate-400 dark:text-slate-500">v{peer.version}</span>
+          {peer.isTrusted && <SyncStatusInline status={syncStatus} />}
         </div>
       </div>
-      <button
-        onClick={() => onPair(peer)}
-        className={`px-3 py-1.5 text-xs font-medium rounded-lg flex-shrink-0 transition-colors ${
-          peer.isTrusted
-            ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 hover:bg-emerald-100 dark:hover:bg-emerald-900/40'
-            : 'text-white bg-violet-600 hover:bg-violet-500'
-        }`}
-      >
-        {peer.isTrusted ? 'Paired' : 'Pair'}
-      </button>
+      {peer.isTrusted ? (
+        <button
+          onClick={handleSyncNow}
+          disabled={syncing || syncStatus?.state === 'syncing'}
+          className="px-3 py-1.5 text-xs font-medium rounded-lg flex-shrink-0 transition-colors text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/20 hover:bg-violet-100 dark:hover:bg-violet-900/40 disabled:opacity-50"
+        >
+          {syncing || syncStatus?.state === 'syncing' ? 'Syncing…' : 'Sync'}
+        </button>
+      ) : (
+        <button
+          onClick={() => onPair(peer)}
+          className="px-3 py-1.5 text-xs font-medium rounded-lg flex-shrink-0 transition-colors text-white bg-violet-600 hover:bg-violet-500"
+        >
+          Pair
+        </button>
+      )}
     </div>
   );
 }

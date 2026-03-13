@@ -21,6 +21,7 @@ pub mod writer_window;
 pub mod peer_identity;
 pub mod peer_discovery;
 pub mod peer_pairing;
+pub mod peer_sync_engine;
 
 pub use analytics::*;
 pub use books::*;
@@ -41,3 +42,4 @@ pub use writer_window::*;
 pub use peer_identity::*;
 pub use peer_discovery::*;
 pub use peer_pairing::*;
+pub use peer_sync_engine::*;

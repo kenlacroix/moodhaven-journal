@@ -142,6 +142,10 @@ commands.allow = [
   "peer_revoke_device",
   "peer_cancel_pairing",
   "peer_pairing_is_active",
+  # Peer-to-peer sync — Phase 3: sync engine
+  "peer_start_sync_server",
+  "peer_sync_now",
+  "peer_get_sync_states",
 ]
 
 [default]

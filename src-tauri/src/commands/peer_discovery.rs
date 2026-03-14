@@ -17,12 +17,14 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
-    Mutex,
+    Arc, Mutex,
 };
+use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager, State};
 
 const SERVICE_TYPE: &str = "_moodbloom._tcp.local.";
 const SERVICE_PORT: u16 = 42424;
+const UDP_DISCOVERY_PORT: u16 = 4243;
 const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 // ── Public types ──────────────────────────────────────────────────────────────
@@ -109,6 +111,144 @@ pub fn get_local_ipv4() -> Option<std::net::Ipv4Addr> {
     }
 }
 
+// ── UDP broadcast fallback discovery ─────────────────────────────────────────
+
+/// Parallel UDP broadcast discovery — runs alongside mDNS to handle networks
+/// where multicast is filtered (some corporate Wi-Fi / VPNs).
+///
+/// Protocol (LAN broadcast, port 4243):
+///   probe → broadcast  {type:"probe", device_id, device_name, device_type, public_key, version}
+///   pong  → unicast    same fields, type:"pong"  (response to a probe)
+///
+/// On receiving either, we inject the sender into the shared peer map and emit
+/// `peer:discovered` if not already present (mDNS takes priority).
+fn run_udp_discovery(
+    app: AppHandle,
+    my_device_id: String,
+    my_device_name: String,
+    my_device_type: String,
+    my_public_key: String,
+    stop_flag: Arc<AtomicBool>,
+) {
+    use std::net::UdpSocket;
+
+    let socket = match UdpSocket::bind(format!("0.0.0.0:{UDP_DISCOVERY_PORT}")) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("[peer/udp] Failed to bind UDP port {UDP_DISCOVERY_PORT}: {e}");
+            return;
+        }
+    };
+    if let Err(e) = socket.set_read_timeout(Some(Duration::from_millis(500))) {
+        eprintln!("[peer/udp] set_read_timeout failed: {e}");
+    }
+    if let Err(e) = socket.set_broadcast(true) {
+        eprintln!("[peer/udp] set_broadcast failed: {e}");
+    }
+
+    let pubkey_hint = if my_public_key.len() >= 8 { &my_public_key[..8] } else { &my_public_key };
+    let probe_json = serde_json::json!({
+        "type": "probe",
+        "device_id": my_device_id,
+        "device_name": my_device_name,
+        "device_type": my_device_type,
+        "public_key": my_public_key,
+        "pubkey_hint": pubkey_hint,
+        "version": APP_VERSION,
+    })
+    .to_string();
+
+    let broadcast_addr = format!("255.255.255.255:{UDP_DISCOVERY_PORT}");
+    // Send initial probe immediately
+    let _ = socket.send_to(probe_json.as_bytes(), &broadcast_addr);
+    let mut last_probe = Instant::now();
+
+    let mut buf = [0u8; 4096];
+    loop {
+        if stop_flag.load(Ordering::SeqCst) {
+            break;
+        }
+
+        // Re-broadcast probe every 30 s
+        if last_probe.elapsed() >= Duration::from_secs(30) {
+            let _ = socket.send_to(probe_json.as_bytes(), &broadcast_addr);
+            last_probe = Instant::now();
+        }
+
+        match socket.recv_from(&mut buf) {
+            Ok((n, src_addr)) => {
+                let Ok(json) = serde_json::from_slice::<serde_json::Value>(&buf[..n]) else {
+                    continue;
+                };
+                let peer_id = json["device_id"].as_str().unwrap_or("").to_string();
+                // Ignore own broadcasts and invalid payloads
+                if peer_id.is_empty() || peer_id == my_device_id {
+                    continue;
+                }
+
+                let msg_type = json["type"].as_str().unwrap_or("");
+
+                // Respond to probes with a pong so the sender learns about us
+                if msg_type == "probe" {
+                    let pong_json = serde_json::json!({
+                        "type": "pong",
+                        "device_id": my_device_id,
+                        "device_name": my_device_name,
+                        "device_type": my_device_type,
+                        "public_key": my_public_key,
+                        "pubkey_hint": pubkey_hint,
+                        "version": APP_VERSION,
+                    })
+                    .to_string();
+                    let _ = socket.send_to(pong_json.as_bytes(), src_addr);
+                }
+
+                // Both probe and pong tell us about a peer — inject only if mDNS hasn't
+                let peer_name = json["device_name"].as_str().unwrap_or("Unknown").to_string();
+                let peer_type = json["device_type"].as_str().unwrap_or("desktop").to_string();
+                let peer_pubkey = json["public_key"].as_str().unwrap_or("").to_string();
+                let peer_version = json["version"].as_str().unwrap_or("?").to_string();
+                let peer_hint = json["pubkey_hint"].as_str().unwrap_or(&peer_pubkey[..peer_pubkey.len().min(8)]).to_string();
+                let host = src_addr.ip().to_string();
+
+                let peer = DiscoveredPeer {
+                    device_id: peer_id.clone(),
+                    device_name: peer_name.clone(),
+                    device_type: peer_type,
+                    host,
+                    port: SERVICE_PORT,
+                    version: peer_version,
+                    pubkey_hint: peer_hint,
+                    is_trusted: crate::commands::peer_pairing::is_device_trusted(&app, &peer_id),
+                    is_online: true,
+                    last_seen: now_iso(),
+                };
+
+                if let Some(state) = app.try_state::<PeerDiscoveryState>() {
+                    if let Ok(mut peers) = state.peers.lock() {
+                        // Only inject if not already present (mDNS has richer info)
+                        if !peers.contains_key(&peer_id) {
+                            peers.insert(peer_id.clone(), peer.clone());
+                            let _ = app.emit("peer:discovered", &peer);
+                            eprintln!("[peer/udp] Discovered via UDP: {peer_name} ({peer_id})");
+                        }
+                    }
+                }
+            }
+            Err(ref e)
+                if e.kind() == std::io::ErrorKind::WouldBlock
+                    || e.kind() == std::io::ErrorKind::TimedOut =>
+            {
+                // Timeout — normal, check stop flag and loop
+            }
+            Err(e) => {
+                eprintln!("[peer/udp] Receive error: {e}");
+            }
+        }
+    }
+    eprintln!("[peer/udp] UDP discovery thread exiting");
+}
+
 // ── Background discovery thread ───────────────────────────────────────────────
 
 /// Runs in a dedicated OS thread (not a tokio task).
@@ -123,6 +263,18 @@ fn run_discovery(
     stop_rx: std::sync::mpsc::Receiver<()>,
 ) {
     use mdns_sd::{ServiceDaemon, ServiceEvent, ServiceInfo};
+
+    // Spawn UDP fallback thread — shared stop flag lets us shut it down cleanly
+    let udp_stop = Arc::new(AtomicBool::new(false));
+    let udp_stop_clone = udp_stop.clone();
+    let udp_app = app.clone();
+    let udp_device_id = device_id.clone();
+    let udp_device_name = device_name.clone();
+    let udp_device_type = device_type.clone();
+    let udp_public_key = public_key.clone();
+    let udp_handle = std::thread::spawn(move || {
+        run_udp_discovery(udp_app, udp_device_id, udp_device_name, udp_device_type, udp_public_key, udp_stop_clone);
+    });
 
     let daemon = match ServiceDaemon::new() {
         Ok(d) => d,
@@ -318,6 +470,10 @@ fn run_discovery(
     eprintln!("[peer] Discovery thread exiting — shutting down mDNS daemon");
     let _ = daemon.stop_browse(SERVICE_TYPE);
     let _ = daemon.shutdown();
+
+    // Signal UDP fallback thread to stop and wait for it
+    udp_stop.store(true, Ordering::SeqCst);
+    let _ = udp_handle.join();
 }
 
 // ── Tauri commands ────────────────────────────────────────────────────────────

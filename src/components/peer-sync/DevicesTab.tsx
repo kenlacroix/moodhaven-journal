@@ -11,6 +11,7 @@
 
 import { useState, useCallback } from 'react';
 import { usePeerSyncStore } from '../../stores/peerSyncStore';
+import { useSettingsStore } from '../../stores/settingsStore';
 import { renameDevice, startDiscovery, stopDiscovery } from '../../lib/peerDiscoveryService';
 import { peerSyncNow } from '../../lib/peerSyncEngineService';
 import { PairingModal } from './PairingModal';
@@ -328,9 +329,22 @@ function EmptyNearby({ isDiscovering }: { isDiscovering: boolean }) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
+const INTERVAL_OPTIONS = [
+  { label: '10 s', value: 10 },
+  { label: '30 s', value: 30 },
+  { label: '1 min', value: 60 },
+  { label: '5 min', value: 300 },
+];
+
 export function DevicesTab() {
   const { identity, identityLoading, isDiscovering, nearbyPeers, setDiscovering, clearPeers } =
     usePeerSyncStore();
+
+  const peerSyncLanOnly = useSettingsStore((s) => s.settings.sync.peerSyncLanOnly);
+  const peerSyncIntervalSecs = useSettingsStore((s) => s.settings.sync.peerSyncIntervalSecs);
+  const setPeerSyncLanOnly = useSettingsStore((s) => s.setPeerSyncLanOnly);
+  const setPeerSyncIntervalSecs = useSettingsStore((s) => s.setPeerSyncIntervalSecs);
+  const saveSettings = useSettingsStore((s) => s.saveSettings);
 
   const [togglingDiscovery, setTogglingDiscovery] = useState(false);
   const [pairingPeer, setPairingPeer] = useState<DiscoveredPeer | null>(null);
@@ -410,6 +424,61 @@ export function DevicesTab() {
           </div>
         </div>
 
+        {/* Sync options */}
+        {isDiscovering && (
+          <div className="p-4 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm space-y-4">
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              Sync Options
+            </p>
+
+            {/* LAN-only toggle */}
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex-1">
+                <p className="text-sm font-medium text-slate-700 dark:text-slate-200">LAN-only mode</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Only auto-sync when the peer is on your local network (RFC-1918 address).
+                  Prevents accidental sync over VPN tunnels.
+                </p>
+              </div>
+              <button
+                role="switch"
+                aria-checked={peerSyncLanOnly}
+                onClick={() => { setPeerSyncLanOnly(!peerSyncLanOnly); saveSettings(); }}
+                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900 ${
+                  peerSyncLanOnly ? 'bg-violet-600' : 'bg-slate-200 dark:bg-slate-700'
+                }`}
+              >
+                <span className="sr-only">LAN-only mode</span>
+                <span
+                  aria-hidden="true"
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ${
+                    peerSyncLanOnly ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+
+            {/* Auto-sync interval */}
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex-1">
+                <p className="text-sm font-medium text-slate-700 dark:text-slate-200">Auto-sync interval</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Minimum time between automatic syncs per device.
+                </p>
+              </div>
+              <select
+                value={peerSyncIntervalSecs}
+                onChange={(e) => { setPeerSyncIntervalSecs(Number(e.target.value)); saveSettings(); }}
+                className="text-sm px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-violet-500/40"
+              >
+                {INTERVAL_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        )}
+
         {/* This device */}
         {identity ? (
           <ThisDeviceCard identity={identity} />
@@ -468,8 +537,8 @@ export function DevicesTab() {
             <div>
               <p className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-0.5">Privacy guaranteed</p>
               <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                Discovery stays on your local network. No data leaves your Wi-Fi.
-                Sync only works between devices you explicitly pair.
+                Discovery uses mDNS (LAN multicast) with UDP broadcast fallback for networks that filter multicast.
+                No data leaves your local network. Sync only works between devices you explicitly pair.
               </p>
             </div>
           </div>

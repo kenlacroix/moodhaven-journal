@@ -164,6 +164,10 @@ export interface SyncSettings {
   lastSyncPulled: number;
   /** Number of entries pushed on the last sync */
   lastSyncPushed: number;
+  /** Peer sync: only auto-sync when the peer's IP is RFC-1918 (LAN-only). Default: true */
+  peerSyncLanOnly: boolean;
+  /** Peer sync: auto-sync cooldown in seconds (10–300). Default: 30 */
+  peerSyncIntervalSecs: number;
 }
 
 // Update manager preferences
@@ -284,6 +288,8 @@ export function createDefaultSettings(): AppSettings {
       lastSyncResult: null,
       lastSyncPulled: 0,
       lastSyncPushed: 0,
+      peerSyncLanOnly: true,
+      peerSyncIntervalSecs: 30,
     },
   };
 }

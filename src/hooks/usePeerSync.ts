@@ -19,9 +19,11 @@ import {
   onSyncStarted,
   onSyncComplete,
   onSyncError,
+  onPeerRevokedUs,
   type SyncStartedEvent,
   type SyncCompleteEvent,
   type SyncErrorEvent,
+  type PeerRevokedUsEvent,
 } from '../lib/peerSyncEngineService';
 
 /** Returns true if host is an RFC-1918 private address (LAN-local). */
@@ -45,7 +47,9 @@ export function usePeerSync() {
     setNearbyPeers,
     setTrustedDevices,
     addOrUpdateTrusted,
+    removeTrusted,
     markPeerTrusted,
+    markPeerUntrusted,
     setSyncStatus,
   } = usePeerSyncStore();
 
@@ -58,6 +62,11 @@ export function usePeerSync() {
   useEffect(() => { lanOnlyRef.current = peerSyncLanOnly; }, [peerSyncLanOnly]);
   useEffect(() => { intervalRef.current = peerSyncIntervalSecs; }, [peerSyncIntervalSecs]);
 
+  // Cooldown map survives React StrictMode double-mount (plain Map inside useEffect resets on remount)
+  const syncCooldownsRef = useRef<Map<string, number>>(new Map());
+  // Identity ref for initiator-convention check (populated during init)
+  const myDeviceIdRef = useRef<string>('');
+
   useEffect(() => {
     let unlistenDiscovered: (() => void) | null = null;
     let unlistenLost: (() => void) | null = null;
@@ -65,17 +74,22 @@ export function usePeerSync() {
     let unlistenSyncStarted: (() => void) | null = null;
     let unlistenSyncComplete: (() => void) | null = null;
     let unlistenSyncError: (() => void) | null = null;
+    let unlistenRevokedUs: (() => void) | null = null;
     let cancelled = false;
 
-    // Cooldown map — keyed by deviceId, value is the timestamp of last sync trigger
-    const syncCooldowns = new Map<string, number>();
+    // Cooldown map lives in a ref so it survives React StrictMode double-mount.
+    // A plain `const` Map inside useEffect is recreated on remount, which resets
+    // all cooldown timestamps and allows syncs to fire before the interval expires.
 
     async function init() {
       // Load device identity
       setIdentityLoading(true);
       try {
         const identity = await getDeviceIdentity();
-        if (!cancelled) setIdentity(identity);
+        if (!cancelled) {
+          setIdentity(identity);
+          myDeviceIdRef.current = identity.deviceId;
+        }
       } catch (e) {
         console.warn('[peerSync] Failed to load identity:', e);
       } finally {
@@ -99,12 +113,17 @@ export function usePeerSync() {
             // LAN-only mode: skip if peer host is not a private (RFC-1918) address
             if (lanOnlyRef.current && !isLanAddress(peer.host)) {
               console.info('[sync] Skipping auto-sync — LAN-only mode and peer is not on LAN:', peer.host);
+            } else if (peer.deviceId < myDeviceIdRef.current) {
+              // Initiator convention: the device with the lower device_id always connects.
+              // This prevents both devices from opening sessions to each other simultaneously,
+              // which wastes a round-trip and causes DB mutex contention on the same machine.
+              console.info('[sync] Skipping auto-sync — peer has lower device_id, they will initiate');
             } else {
               const now = Date.now();
-              const last = syncCooldowns.get(peer.deviceId) ?? 0;
+              const last = syncCooldownsRef.current.get(peer.deviceId) ?? 0;
               const cooldownMs = (intervalRef.current ?? 30) * 1000;
               if (now - last > cooldownMs) {
-                syncCooldowns.set(peer.deviceId, now);
+                syncCooldownsRef.current.set(peer.deviceId, now);
                 peerSyncNow(peer.deviceId, peer.host).catch((e) =>
                   console.warn('[sync] Auto-sync failed:', e)
                 );
@@ -153,6 +172,17 @@ export function usePeerSync() {
         }
       });
 
+      // The peer has revoked us — Rust already removed them from trusted_devices.json.
+      // Remove from the store so the UI reflects the change immediately.
+      unlistenRevokedUs = await onPeerRevokedUs((e: PeerRevokedUsEvent) => {
+        if (!cancelled) {
+          // Rust already removed the device from trusted_devices.json; sync the store.
+          removeTrusted(e.deviceId);
+          // Flip the nearby peer row to untrusted so the UI shows "Pair" again.
+          markPeerUntrusted(e.deviceId);
+        }
+      });
+
       // Start discovery
       try {
         await startDiscovery();
@@ -176,6 +206,7 @@ export function usePeerSync() {
       unlistenSyncStarted?.();
       unlistenSyncComplete?.();
       unlistenSyncError?.();
+      unlistenRevokedUs?.();
       // Note: discovery runs for app lifetime — not stopped on unmount
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps

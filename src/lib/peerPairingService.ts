@@ -68,3 +68,27 @@ export function onPeerPaired(
     callback(event.payload);
   });
 }
+
+/**
+ * Called on the initiator when the acceptor enters a wrong PIN.
+ * Payload contains the number of attempts remaining before lockout.
+ */
+export function onPairingAttemptFailed(
+  callback: (data: { remainingAttempts: number }) => void
+): Promise<UnlistenFn> {
+  return listen<{ remainingAttempts: number }>('peer:pairing_attempt_failed', (event) => {
+    callback(event.payload);
+  });
+}
+
+/**
+ * Called on the initiator when the pairing session is locked out
+ * after too many consecutive wrong PINs.
+ */
+export function onPairingLocked(
+  callback: (data: { reason: string }) => void
+): Promise<UnlistenFn> {
+  return listen<{ reason: string }>('peer:pairing_locked', (event) => {
+    callback(event.payload);
+  });
+}

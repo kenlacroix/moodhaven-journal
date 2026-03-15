@@ -39,7 +39,7 @@ use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::commands::peer_identity::get_or_create_device_identity;
-use crate::commands::peer_pairing::load_trusted_devices;
+use crate::commands::peer_pairing::{load_trusted_devices, remove_trusted_device};
 use crate::db::{Database, JournalEntryRow};
 
 // ── Port formula ──────────────────────────────────────────────────────────────
@@ -59,6 +59,9 @@ pub fn sync_port_for_device(device_id: &str) -> u16 {
 enum Msg {
     Hello { did: String },
     Ok { name: String },
+    /// Sent plaintext by the server when the connecting device is not in its
+    /// trusted list. The client should auto-revoke the server in response.
+    NotTrusted { server_device_id: String },
     Manifest { entries: Vec<EntryMeta> },
     Entry { row: JournalEntryRow },
     Done { sent: usize },
@@ -409,15 +412,34 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
 
     // Look up client's public key from trusted devices
     let trusted = load_trusted_devices(app)?;
-    let client_device = trusted
-        .iter()
-        .find(|d| d.device_id == client_device_id)
-        .ok_or_else(|| format!("Unknown device: {client_device_id}"))?;
+    let client_device = trusted.iter().find(|d| d.device_id == client_device_id);
+
+    // Get our own identity (needed for both the NotTrusted and OK paths)
+    let my_identity = get_or_create_device_identity(app)?;
+
+    // If the connecting device is not trusted, tell it explicitly so it can
+    // auto-revoke us from its own trusted list and update its UI.
+    let client_device = match client_device {
+        Some(d) => d,
+        None => {
+            eprintln!("[sync] Server: rejecting unknown device {client_device_id} — sending NotTrusted");
+            let _ = write_msg(
+                &mut stream,
+                &Msg::NotTrusted {
+                    server_device_id: my_identity.device_id.clone(),
+                },
+            );
+            let _ = stream.shutdown(std::net::Shutdown::Both);
+            // Emit so the server-side UI can surface "unknown device attempted sync"
+            let _ = app.emit(
+                "peer:sync_unknown_peer",
+                serde_json::json!({ "deviceId": client_device_id }),
+            );
+            return Ok(());
+        }
+    };
     let client_pubkey = client_device.public_key.clone();
     let client_name = client_device.device_name.clone();
-
-    // Get our own identity for the key derivation and OK message
-    let my_identity = get_or_create_device_identity(app)?;
 
     // Derive shared key
     let key = derive_sync_key(&my_identity.public_key, &client_pubkey);
@@ -532,20 +554,14 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
         }
     }
 
-    // Step 8: Send DONE_ACK
+    // Step 8: Send DONE_ACK then close gracefully (client reads this as confirmation)
     write_msg_enc(&mut stream, &key, &Msg::DoneAck { recv: received_count })?;
+    // Flush and close our write-half so client gets a clean EOF after DONE_ACK.
+    // This avoids an RST (caused by dropping a stream with unread data) that would
+    // make the client's DONE_ACK read fail with "Connection reset by peer".
+    let _ = stream.shutdown(std::net::Shutdown::Write);
 
-    // Step 9: Read client's DONE_ACK (our sent count confirmed)
-    match read_msg_enc(&mut stream, &key)? {
-        Msg::DoneAck { recv } => {
-            eprintln!("[sync] Server: client confirmed receipt of {recv} entries");
-        }
-        other => {
-            return Err(format!("Expected DONE_ACK, got: {other:?}"));
-        }
-    }
-
-    // Step 10: Update peer_sync_state
+    // Step 9: Update peer_sync_state
     let now = Utc::now().format("%Y-%m-%dT%H:%M:%S").to_string();
     {
         let db = app
@@ -657,6 +673,22 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
     // Step 2: Read OK (plaintext)
     let server_name = match read_msg(&mut stream)? {
         Msg::Ok { name } => name,
+        Msg::NotTrusted { server_device_id } => {
+            // The server no longer has us in its trusted list — auto-revoke it
+            // from our side so both devices are in sync without manual intervention.
+            eprintln!(
+                "[sync] Client: server {server_device_id} does not trust us — auto-revoking"
+            );
+            let _ = remove_trusted_device(app, peer_device_id);
+            let _ = app.emit(
+                "peer:peer_revoked_us",
+                serde_json::json!({
+                    "deviceId": peer_device_id,
+                    "deviceName": peer_name,
+                }),
+            );
+            return Ok(());
+        }
         Msg::Err { msg } => return Err(format!("Server rejected: {msg}")),
         other => return Err(format!("Expected OK, got: {other:?}")),
     };
@@ -762,17 +794,25 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
     }
     write_msg_enc(&mut stream, &key, &Msg::Done { sent: sent_count })?;
 
-    // Step 8: Read DONE_ACK from server
-    let server_recv = match read_msg_enc(&mut stream, &key)? {
-        Msg::DoneAck { recv } => recv,
-        other => return Err(format!("Expected DONE_ACK from server, got: {other:?}")),
-    };
-    eprintln!("[sync] Client: server confirmed receipt of {server_recv} entries");
+    // Step 8: Read DONE_ACK from server (tolerate EOF/reset — server closes after sending)
+    match read_msg_enc(&mut stream, &key) {
+        Ok(Msg::DoneAck { recv }) => {
+            eprintln!("[sync] Client: server confirmed receipt of {recv} entries");
+        }
+        Ok(other) => {
+            eprintln!("[sync] Client: unexpected message after DONE: {other:?}");
+        }
+        Err(e) => {
+            // Server closed the connection after sending DONE_ACK — this is expected.
+            eprintln!("[sync] Client: DONE_ACK read ended early ({}), treating as success", e);
+        }
+    }
+    // Close both halves promptly — mirrors the server's shutdown(Write) above.
+    // Without this the server-side read-half lingers in CLOSE_WAIT until the OS
+    // times out the half-open socket (observed as a 6+ second gap in pcap).
+    let _ = stream.shutdown(std::net::Shutdown::Both);
 
-    // Step 9: Send our DONE_ACK
-    write_msg_enc(&mut stream, &key, &Msg::DoneAck { recv: received_count })?;
-
-    // Step 10: Update peer_sync_state
+    // Step 9: Update peer_sync_state
     let now = Utc::now().format("%Y-%m-%dT%H:%M:%S").to_string();
     {
         let db = app

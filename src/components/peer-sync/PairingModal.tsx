@@ -12,8 +12,14 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { DiscoveredPeer, TrustedDevice, PairingTokenInfo } from '../../types/peerSync';
-import { generatePairingToken, acceptPairing, cancelPairing } from '../../lib/peerPairingService';
-import { onPeerPaired } from '../../lib/peerPairingService';
+import {
+  generatePairingToken,
+  acceptPairing,
+  cancelPairing,
+  onPeerPaired,
+  onPairingAttemptFailed,
+  onPairingLocked,
+} from '../../lib/peerPairingService';
 
 // ── QR image generator (uses qrcode npm package) ──────────────────────────────
 
@@ -84,10 +90,12 @@ function PINInput({
   value,
   onChange,
   disabled,
+  hasError,
 }: {
   value: string;
   onChange: (v: string) => void;
   disabled: boolean;
+  hasError?: boolean;
 }) {
   const inputs = useRef<(HTMLInputElement | null)[]>([]);
 
@@ -132,12 +140,15 @@ function PINInput({
           onKeyDown={(e) => handleKey(i, e)}
           onPaste={handlePaste}
           disabled={disabled}
-          className={`w-10 h-14 text-center text-2xl font-bold font-mono rounded-xl border-2 bg-white dark:bg-slate-800 transition-colors focus:outline-none focus:ring-2 focus:ring-violet-500/50 disabled:opacity-40 ${
-            value[i]
+          className={`w-10 h-14 text-center text-2xl font-bold font-mono rounded-xl border-2 bg-white dark:bg-slate-800 transition-colors focus:outline-none focus:ring-2 focus:ring-violet-500/50 disabled:opacity-40 disabled:cursor-not-allowed ${
+            hasError
+              ? 'border-red-400 dark:border-red-500'
+              : value[i]
               ? 'border-violet-400 dark:border-violet-500 text-violet-700 dark:text-violet-300'
               : 'border-slate-200 dark:border-slate-600 text-slate-800 dark:text-slate-100'
           } ${i === 2 ? 'mr-2' : ''}`}
           aria-label={`PIN digit ${i + 1}`}
+          aria-invalid={hasError}
         />
       ))}
     </div>
@@ -175,6 +186,32 @@ function SuccessScreen({ device, onClose }: { device: TrustedDevice; onClose: ()
   );
 }
 
+// ── Locked state (shown in ShowCodeTab after too many wrong attempts) ──────────
+
+function LockedBanner({ onRefresh }: { onRefresh: () => void }) {
+  return (
+    <div className="flex flex-col items-center gap-3 py-2 text-center">
+      <div className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/20 flex items-center justify-center">
+        <svg className="w-5 h-5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+        </svg>
+      </div>
+      <div>
+        <p className="text-sm font-semibold text-red-600 dark:text-red-400">Session locked</p>
+        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+          Too many incorrect attempts. Generate a new code to try again.
+        </p>
+      </div>
+      <button
+        onClick={onRefresh}
+        className="px-4 py-2 text-sm font-medium text-white bg-violet-600 hover:bg-violet-500 rounded-lg transition-colors"
+      >
+        Generate New Code
+      </button>
+    </div>
+  );
+}
+
 // ── Show My Code tab ───────────────────────────────────────────────────────────
 
 function ShowCodeTab({
@@ -185,23 +222,38 @@ function ShowCodeTab({
   const [tokenInfo, setTokenInfo] = useState<PairingTokenInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [attemptWarning, setAttemptWarning] = useState<number | null>(null);
+  const [lockedOut, setLockedOut] = useState(false);
   const qrDataUrl = useQRCode(tokenInfo?.qrPayload ?? null);
   const secondsLeft = useCountdown(tokenInfo?.expiresAt ?? null);
 
   useEffect(() => {
     let unlisten: (() => void) | null = null;
+    let unlistenFailed: (() => void) | null = null;
+    let unlistenLocked: (() => void) | null = null;
     let cancelled = false;
 
     async function start() {
       setLoading(true);
       setError('');
+      setAttemptWarning(null);
+      setLockedOut(false);
       try {
         const info = await generatePairingToken();
         if (!cancelled) setTokenInfo(info);
 
-        // Listen for the paired event
         unlisten = await onPeerPaired((device) => {
           if (!cancelled) onSuccess(device);
+        });
+
+        // Show warning when the other device enters a wrong PIN
+        unlistenFailed = await onPairingAttemptFailed(({ remainingAttempts }) => {
+          if (!cancelled) setAttemptWarning(remainingAttempts);
+        });
+
+        // Switch to locked state after too many failures
+        unlistenLocked = await onPairingLocked(() => {
+          if (!cancelled) setLockedOut(true);
         });
       } catch (e) {
         if (!cancelled) setError(String(e));
@@ -215,6 +267,8 @@ function ShowCodeTab({
     return () => {
       cancelled = true;
       unlisten?.();
+      unlistenFailed?.();
+      unlistenLocked?.();
       cancelPairing().catch(() => {});
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -223,6 +277,8 @@ function ShowCodeTab({
     setLoading(true);
     setError('');
     setTokenInfo(null);
+    setAttemptWarning(null);
+    setLockedOut(false);
     try {
       const info = await generatePairingToken();
       setTokenInfo(info);
@@ -288,8 +344,10 @@ function ShowCodeTab({
         <p className="text-xs text-slate-400 dark:text-slate-500">Or scan this QR code</p>
       </div>
 
-      {/* Countdown + status */}
-      {expired ? (
+      {/* Countdown / expired / locked */}
+      {lockedOut ? (
+        <LockedBanner onRefresh={handleRefresh} />
+      ) : expired ? (
         <div className="flex flex-col items-center gap-2">
           <p className="text-sm text-amber-600 dark:text-amber-400">Code expired</p>
           <button
@@ -300,12 +358,33 @@ function ShowCodeTab({
           </button>
         </div>
       ) : (
-        <div className="flex items-center justify-center gap-2 text-sm text-slate-500 dark:text-slate-400">
-          <span className="w-2 h-2 rounded-full bg-violet-400 animate-pulse flex-shrink-0" />
-          <span>Waiting for connection…</span>
-          <span className="font-mono text-xs text-slate-400 dark:text-slate-500 tabular-nums">
-            ({formatCountdown(secondsLeft)})
-          </span>
+        <div className="space-y-2">
+          {/* Wrong-PIN warning from the other device */}
+          {attemptWarning !== null && (
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+              <svg className="w-4 h-4 text-amber-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+              </svg>
+              <p className="text-xs text-amber-700 dark:text-amber-400">
+                Incorrect PIN entered —{' '}
+                <strong>{attemptWarning}</strong>{' '}
+                {attemptWarning === 1 ? 'attempt' : 'attempts'} remaining
+              </p>
+            </div>
+          )}
+
+          {/* Waiting indicator */}
+          <div
+            className="flex items-center justify-center gap-2 text-sm text-slate-500 dark:text-slate-400"
+            aria-live="polite"
+            aria-atomic="true"
+          >
+            <span className="w-2 h-2 rounded-full bg-violet-400 animate-pulse flex-shrink-0" />
+            <span>Waiting for connection…</span>
+            <span className="font-mono text-xs text-slate-400 dark:text-slate-500 tabular-nums">
+              ({formatCountdown(secondsLeft)})
+            </span>
+          </div>
         </div>
       )}
     </div>
@@ -324,27 +403,62 @@ function EnterCodeTab({
   const [pin, setPin] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [lockedOut, setLockedOut] = useState(false);
+
+  const handlePinChange = useCallback((v: string) => {
+    setPin(v);
+    // Clear error feedback as the user starts typing a new code
+    if (error) setError('');
+  }, [error]);
 
   const handleSubmit = useCallback(async () => {
-    if (pin.length !== 6) return;
+    if (pin.length !== 6 || lockedOut) return;
     setLoading(true);
     setError('');
     try {
       const device = await acceptPairing(peer.host, peer.deviceId, pin);
       onSuccess(device);
     } catch (e) {
-      setError(String(e));
+      const msg = String(e);
+      // Detect session lockout (HTTP 429 from the other device's server)
+      if (msg.toLowerCase().includes('locked') || msg.toLowerCase().includes('too many')) {
+        setLockedOut(true);
+      } else {
+        setError('Incorrect PIN — please try again');
+      }
+      // Always clear so the user has to retype (prevents auto-resubmit loop)
+      setPin('');
     } finally {
       setLoading(false);
     }
-  }, [pin, peer.host, peer.deviceId, onSuccess]);
+  }, [pin, peer.host, peer.deviceId, onSuccess, lockedOut]);
 
   // Auto-submit when 6 digits are entered
   useEffect(() => {
-    if (pin.length === 6 && !loading) {
+    if (pin.length === 6 && !loading && !lockedOut) {
       handleSubmit();
     }
-  }, [pin, loading, handleSubmit]);
+  }, [pin, loading, lockedOut, handleSubmit]);
+
+  if (lockedOut) {
+    return (
+      <div className="flex flex-col items-center gap-3 py-4 text-center">
+        <div className="w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/20 flex items-center justify-center">
+          <svg className="w-6 h-6 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+          </svg>
+        </div>
+        <div>
+          <p className="text-sm font-semibold text-red-600 dark:text-red-400">
+            Too many incorrect attempts
+          </p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+            Ask <strong>{peer.deviceName}</strong> to generate a new pairing code.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -353,10 +467,21 @@ function EnterCodeTab({
         <strong>Settings → Devices → Pair → Show My Code</strong> and enter the 6-digit code shown:
       </p>
 
-      <PINInput value={pin} onChange={setPin} disabled={loading} />
+      <PINInput
+        value={pin}
+        onChange={handlePinChange}
+        disabled={loading}
+        hasError={!!error}
+      />
 
+      {/* Error feedback */}
       {error && (
-        <p className="text-xs text-red-500 text-center">{error}</p>
+        <div className="flex items-center justify-center gap-1.5" role="alert">
+          <svg className="w-3.5 h-3.5 text-red-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+          </svg>
+          <p className="text-xs text-red-500">{error}</p>
+        </div>
       )}
 
       <button

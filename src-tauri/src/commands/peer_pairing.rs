@@ -31,6 +31,11 @@ use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, State};
 
 const TOKEN_TTL_SECS: i64 = 300; // 5 minutes
+/// Lock out the pairing session after this many consecutive wrong PINs.
+/// Keeps the 6-digit PIN space meaningful even against a LAN attacker.
+const MAX_PIN_ATTEMPTS: u32 = 5;
+/// Minimum delay between wrong-PIN responses (rate limiting).
+const WRONG_PIN_DELAY_MS: u64 = 1_000;
 
 /// Derive a stable pairing port from a device_id.
 /// Port = 43000 + (first 4 hex chars as u16) % 1000  →  range 43000–43999.
@@ -141,7 +146,7 @@ fn save_trusted_device(app: &AppHandle, device: TrustedDevice) -> Result<(), Str
 }
 
 /// Remove a trusted device by device_id.
-fn remove_trusted_device(app: &AppHandle, device_id: &str) -> Result<(), String> {
+pub fn remove_trusted_device(app: &AppHandle, device_id: &str) -> Result<(), String> {
     let mut devices = load_trusted_devices(app)?;
     devices.retain(|d| d.device_id != device_id);
     let path = trusted_path(app)?;
@@ -237,6 +242,8 @@ fn run_pairing_server(
     let deadline = std::time::Instant::now() + Duration::from_secs(TOKEN_TTL_SECS as u64 + 10);
     eprintln!("[pairing] Server started");
 
+    let mut failed_attempts: u32 = 0;
+
     loop {
         // Check stop signal or 5-min expiry
         if stop_rx.try_recv().is_ok() || std::time::Instant::now() >= deadline {
@@ -290,8 +297,32 @@ fn run_pairing_server(
 
                 // Constant-time PIN comparison (short strings, good enough)
                 if req.pin != expected_pin {
+                    failed_attempts += 1;
+                    let remaining = MAX_PIN_ATTEMPTS.saturating_sub(failed_attempts);
+                    eprintln!(
+                        "[pairing] Invalid PIN from {addr} ({failed_attempts}/{MAX_PIN_ATTEMPTS} attempts, {remaining} remaining)"
+                    );
+
+                    // Rate-limiting delay — makes brute force impractical on LAN
+                    std::thread::sleep(Duration::from_millis(WRONG_PIN_DELAY_MS));
+
+                    if failed_attempts >= MAX_PIN_ATTEMPTS {
+                        write_http_error(&mut stream, 429, "Too many failed attempts — pairing session locked");
+                        let _ = app.emit(
+                            "peer:pairing_locked",
+                            serde_json::json!({ "reason": "too_many_attempts" }),
+                        );
+                        eprintln!(
+                            "[pairing] Session locked after {MAX_PIN_ATTEMPTS} failed attempts — stopping server"
+                        );
+                        break;
+                    }
+
                     write_http_error(&mut stream, 403, "Invalid PIN");
-                    eprintln!("[pairing] Invalid PIN from {addr}");
+                    let _ = app.emit(
+                        "peer:pairing_attempt_failed",
+                        serde_json::json!({ "remainingAttempts": remaining }),
+                    );
                     continue;
                 }
 

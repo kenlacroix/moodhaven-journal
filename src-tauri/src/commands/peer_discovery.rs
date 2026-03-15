@@ -13,6 +13,7 @@
 //! plus a channel sender to stop the background discovery thread.
 
 use crate::commands::peer_identity::get_or_create_device_identity;
+use crate::commands::peer_sync_engine::sync_port_for_device;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{
@@ -23,7 +24,6 @@ use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager, State};
 
 const SERVICE_TYPE: &str = "_moodbloom._tcp.local.";
-const SERVICE_PORT: u16 = 42424;
 const UDP_DISCOVERY_PORT: u16 = 4243;
 const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -99,11 +99,86 @@ fn now_iso() -> String {
 /// Opens a UDP socket (no packets sent) and reads the local address the OS
 /// selects — this is the IP that would be used to reach external hosts,
 /// i.e. the address on the primary network interface.
+/// Returns true for interface names that belong to VPN tunnels, virtual
+/// bridges, or other non-physical interfaces that should never be used as
+/// the mDNS announcement address.
+fn is_virtual_iface(name: &str) -> bool {
+    let n = name.to_ascii_lowercase();
+    // VPN tunnel interfaces (Linux tun/tap, macOS utun, WireGuard, OpenVPN, IPsec, PPP)
+    n.starts_with("tun") ||
+    n.starts_with("tap") ||
+    n.starts_with("utun") ||
+    n.starts_with("wg") ||
+    n.starts_with("ppp") ||
+    n.starts_with("ipsec") ||
+    // Common VPN named interfaces
+    n.starts_with("vpn") ||
+    n.starts_with("nordvpn") ||
+    n.starts_with("mullvad") ||
+    n.starts_with("proton") ||
+    // VPN leak-protection pseudo-interfaces (seen on NordVPN/Mullvad on Linux)
+    n.contains("leak") ||
+    // Docker / VM virtual bridges
+    n.starts_with("docker") ||
+    n.starts_with("br-") ||
+    n.starts_with("veth") ||
+    n.starts_with("virbr") ||
+    n.starts_with("vmnet") ||
+    n.starts_with("vbox")
+}
+
+/// Score an interface name so we prefer physical LAN adapters.
+/// Higher score = more preferred.
+fn iface_preference(name: &str) -> u8 {
+    let n = name.to_ascii_lowercase();
+    if n.starts_with("eth") || n.starts_with("en") { 3 }      // Ethernet (en0, eth0)
+    else if n.starts_with("wlan") || n.starts_with("wl") { 2 } // Wi-Fi (wlan0, wlp3s0)
+    else { 1 }                                                   // anything else non-virtual
+}
+
+/// Find the best local IPv4 address to advertise on the LAN.
+///
+/// Enumerates all network interfaces and selects the most suitable one,
+/// skipping loopback, link-local, and VPN/virtual interfaces. Prefers
+/// Ethernet, then Wi-Fi, then other physical adapters. Falls back to the
+/// kernel routing trick (connect-to-8.8.8.8) only if enumeration yields
+/// nothing — which handles edge-case OS configurations.
 pub fn get_local_ipv4() -> Option<std::net::Ipv4Addr> {
-    use std::net::{IpAddr, UdpSocket};
+    use std::net::IpAddr;
+
+    // Collect all non-virtual, non-loopback, non-link-local IPv4 addresses
+    // with their interface preference score.
+    let mut candidates: Vec<(u8, std::net::Ipv4Addr)> = if_addrs::get_if_addrs()
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|iface| {
+            // Skip virtual / VPN interfaces by name
+            if is_virtual_iface(&iface.name) {
+                return None;
+            }
+            match iface.addr.ip() {
+                IpAddr::V4(ip) if !ip.is_loopback() && !ip.is_link_local() => {
+                    Some((iface_preference(&iface.name), ip))
+                }
+                _ => None,
+            }
+        })
+        .collect();
+
+    if !candidates.is_empty() {
+        // Highest preference first; stable sort keeps deterministic order within a tier.
+        candidates.sort_by(|a, b| b.0.cmp(&a.0));
+        eprintln!(
+            "[peer] LAN IP candidates: {:?}",
+            candidates.iter().map(|(_, ip)| ip.to_string()).collect::<Vec<_>>()
+        );
+        return Some(candidates[0].1);
+    }
+
+    // Fallback: routing table trick. Works on simple setups without a VPN.
+    eprintln!("[peer] Interface enumeration yielded nothing — falling back to routing trick");
+    use std::net::UdpSocket;
     let socket = UdpSocket::bind("0.0.0.0:0").ok()?;
-    // Connect does not send data; it just sets the routing destination so the
-    // kernel picks the right source interface.
     socket.connect("8.8.8.8:80").ok()?;
     match socket.local_addr().ok()?.ip() {
         IpAddr::V4(ip) if !ip.is_loopback() => Some(ip),
@@ -216,7 +291,7 @@ fn run_udp_discovery(
                     device_name: peer_name.clone(),
                     device_type: peer_type,
                     host,
-                    port: SERVICE_PORT,
+                    port: sync_port_for_device(&peer_id),
                     version: peer_version,
                     pubkey_hint: peer_hint,
                     is_trusted: crate::commands::peer_pairing::is_device_trusted(&app, &peer_id),
@@ -304,8 +379,9 @@ fn run_discovery(
     // Register this device as a service on the LAN.
     // host_name is the DNS hostname (.local); host_ipv4 is the A-record IP.
     let my_host = format!("{}.local.", instance_name);
-    eprintln!("[peer] Registering service: {instance_name}.{SERVICE_TYPE} @ {local_ip_str}:{SERVICE_PORT}");
-    match ServiceInfo::new(SERVICE_TYPE, &instance_name, &my_host, local_ip_str.as_str(), SERVICE_PORT, properties) {
+    let sync_port = sync_port_for_device(&device_id);
+    eprintln!("[peer] Registering service: {instance_name}.{SERVICE_TYPE} @ {local_ip_str}:{sync_port}");
+    match ServiceInfo::new(SERVICE_TYPE, &instance_name, &my_host, local_ip_str.as_str(), sync_port, properties) {
         Ok(service) => {
             if let Err(e) = daemon.register(service) {
                 eprintln!("[peer] Failed to register mDNS service: {e}");

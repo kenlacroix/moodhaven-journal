@@ -28,6 +28,24 @@ export interface SyncErrorEvent {
   message: string;
 }
 
+/**
+ * Fired on the client when the server replies NotTrusted — meaning the server
+ * has already revoked us. The client auto-removes the server from its trusted
+ * list and emits this event so the frontend can update its UI.
+ */
+export interface PeerRevokedUsEvent {
+  deviceId: string;
+  deviceName: string;
+}
+
+/**
+ * Fired on the server when an unknown (no longer trusted) device attempts to
+ * initiate a sync. The server replied NotTrusted and closed the connection.
+ */
+export interface SyncUnknownPeerEvent {
+  deviceId: string;
+}
+
 export async function startSyncServer(): Promise<void> {
   return invoke('peer_start_sync_server');
 }
@@ -50,4 +68,21 @@ export function onSyncComplete(cb: (e: SyncCompleteEvent) => void): Promise<Unli
 
 export function onSyncError(cb: (e: SyncErrorEvent) => void): Promise<UnlistenFn> {
   return listen<SyncErrorEvent>('peer:sync_error', (e) => cb(e.payload));
+}
+
+/**
+ * Called on the client when the server sends NotTrusted — meaning the peer
+ * has revoked us. By this point the Rust layer has already removed the peer
+ * from trusted_devices.json; the frontend just needs to update its store.
+ */
+export function onPeerRevokedUs(cb: (e: PeerRevokedUsEvent) => void): Promise<UnlistenFn> {
+  return listen<PeerRevokedUsEvent>('peer:peer_revoked_us', (e) => cb(e.payload));
+}
+
+/**
+ * Called on the server when an untrusted device attempts a sync.
+ * Useful for showing a "someone tried to connect" notification.
+ */
+export function onSyncUnknownPeer(cb: (e: SyncUnknownPeerEvent) => void): Promise<UnlistenFn> {
+  return listen<SyncUnknownPeerEvent>('peer:sync_unknown_peer', (e) => cb(e.payload));
 }

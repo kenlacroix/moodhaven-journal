@@ -36,6 +36,8 @@ interface PeerSyncState {
   removeTrusted: (deviceId: string) => void;
   /** Mark a nearby peer as trusted without a full re-fetch */
   markPeerTrusted: (deviceId: string) => void;
+  /** Mark a nearby peer as no longer trusted (revocation) */
+  markPeerUntrusted: (deviceId: string) => void;
   setSyncStatus: (deviceId: string, status: SyncStatus) => void;
   clearSyncStatus: (deviceId: string) => void;
 }
@@ -85,6 +87,13 @@ export const usePeerSyncStore = create<PeerSyncState>((set) => ({
     set((state) => ({
       nearbyPeers: state.nearbyPeers.map((p) =>
         p.deviceId === deviceId ? { ...p, isTrusted: true } : p
+      ),
+    })),
+
+  markPeerUntrusted: (deviceId) =>
+    set((state) => ({
+      nearbyPeers: state.nearbyPeers.map((p) =>
+        p.deviceId === deviceId ? { ...p, isTrusted: false } : p
       ),
     })),
 

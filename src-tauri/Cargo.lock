@@ -2707,6 +2707,7 @@ dependencies = [
  "futures-util",
  "hex",
  "hmac",
+ "if-addrs",
  "image 0.24.9",
  "mdns-sd",
  "pbkdf2",

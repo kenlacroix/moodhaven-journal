@@ -50,6 +50,7 @@ function TrustedDeviceRow({ device }: { device: TrustedDevice }) {
   const [confirming, setConfirming] = useState(false);
   const [removing, setRemoving] = useState(false);
   const removeTrusted = usePeerSyncStore((s) => s.removeTrusted);
+  const markPeerUntrusted = usePeerSyncStore((s) => s.markPeerUntrusted);
 
   const handleRevoke = useCallback(async () => {
     if (!confirming) { setConfirming(true); return; }
@@ -57,13 +58,14 @@ function TrustedDeviceRow({ device }: { device: TrustedDevice }) {
     try {
       await revokeDevice(device.deviceId);
       removeTrusted(device.deviceId);
+      markPeerUntrusted(device.deviceId);
     } catch (e) {
       console.error('[TrustedDevicesList] Revoke failed:', e);
     } finally {
       setRemoving(false);
       setConfirming(false);
     }
-  }, [confirming, device.deviceId, removeTrusted]);
+  }, [confirming, device.deviceId, removeTrusted, markPeerUntrusted]);
 
   return (
     <div className="flex items-center gap-3 py-3 px-1 border-b border-slate-100 dark:border-slate-700/50 last:border-0">

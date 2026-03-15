@@ -183,6 +183,7 @@ pub fn run() {
             commands::delete_voice_memo,
             commands::patch_voice_memo_transcription,
             commands::link_voice_memo_to_entry,
+            commands::transcribe_voice_memo,
             // Peer-to-peer sync (Phase 1: identity + discovery)
             commands::peer_get_identity,
             commands::peer_rename_device,

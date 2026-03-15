@@ -69,6 +69,18 @@ export async function patchVoiceMemoTranscription(
   return invoke<void>('patch_voice_memo_transcription', { id, transcription });
 }
 
+/**
+ * Transcribe a stored voice memo using the local whisper.cpp sidecar.
+ * Patches the `transcription` column in the database and returns the text.
+ *
+ * Requires a model to be downloaded first (e.g. via Settings → Speech to Text).
+ * The whisper sidecar must support the audio format of the memo (M4A requires
+ * a whisper-cli built with ffmpeg support).
+ */
+export async function transcribeVoiceMemo(id: string, model: string): Promise<string> {
+  return invoke<string>('transcribe_voice_memo', { id, model });
+}
+
 /** Link a voice memo to a journal entry for contextual display. */
 export async function linkVoiceMemoToEntry(
   memoId: string,

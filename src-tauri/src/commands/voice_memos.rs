@@ -18,6 +18,7 @@
 
 use crate::db::{self, Database, VoiceMemoRow};
 use tauri::{AppHandle, Manager, State};
+use tauri_plugin_shell::ShellExt;
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -157,6 +158,89 @@ pub fn patch_voice_memo_transcription(
     transcription: String,
 ) -> Result<(), String> {
     db::patch_voice_memo_transcription(&db, &id, &transcription)
+}
+
+/// Transcribe a stored voice memo with the whisper.cpp sidecar.
+///
+/// Looks up `id` in the database to get the audio file path, runs the
+/// `whisper` sidecar against it, patches the `transcription` column, and
+/// returns the transcribed text.
+///
+/// The caller is responsible for selecting a `model` (e.g. `"ggml-tiny.en.bin"`)
+/// that has already been downloaded via the STT settings screen.
+///
+/// **Note:** whisper-cli must be built with ffmpeg support to accept M4A input
+/// directly. If it is not, it will return an error and the caller should
+/// surface a "convert to WAV" suggestion.
+#[tauri::command]
+pub async fn transcribe_voice_memo(
+    app: AppHandle,
+    db: State<'_, Database>,
+    id: String,
+    model: String,
+) -> Result<String, String> {
+    // 1. Look up the stored file path
+    let row = db::get_voice_memo(&db, &id)?
+        .ok_or_else(|| format!("transcribe_voice_memo: memo not found: {}", id))?;
+
+    let audio_path = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("app_data_dir: {}", e))?
+        .join(&row.file_path);
+
+    if !audio_path.exists() {
+        return Err(format!(
+            "transcribe_voice_memo: audio file not found: {}",
+            audio_path.display()
+        ));
+    }
+
+    // 2. Resolve the model path
+    let model_path = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("app_data_dir: {}", e))?
+        .join("models")
+        .join(&model);
+
+    if !model_path.exists() {
+        return Err(format!(
+            "transcribe_voice_memo: model not found: {}",
+            model
+        ));
+    }
+
+    // 3. Run the whisper sidecar
+    let shell = app.shell();
+    let sidecar = shell
+        .sidecar("whisper")
+        .map_err(|e| format!("whisper sidecar not available: {}", e))?;
+
+    let output = sidecar
+        .args([
+            "-m",
+            &model_path.to_string_lossy(),
+            "-f",
+            &audio_path.to_string_lossy(),
+            "-nt", // no timestamps
+            "-np", // no progress output
+        ])
+        .output()
+        .await
+        .map_err(|e| format!("transcribe_voice_memo: whisper exec failed: {}", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("transcribe_voice_memo: whisper error: {}", stderr));
+    }
+
+    let text = String::from_utf8_lossy(&output.stdout).trim().to_string();
+
+    // 4. Persist the transcription
+    db::patch_voice_memo_transcription(&db, &id, &text)?;
+
+    Ok(text)
 }
 
 /// Link a voice memo to a journal entry.

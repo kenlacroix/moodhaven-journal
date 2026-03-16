@@ -31,7 +31,7 @@ export function MainLayout({ currentView, onNavigate, onLock, onSelectEntry, onN
   const distractionFree = useSettingsStore((s) => s.distractionFree);
 
   return (
-    <div className="min-h-screen flex bg-white dark:bg-slate-900">
+    <div className="h-screen flex overflow-hidden bg-white dark:bg-slate-900">
       {/* Left Sidebar — slides out in distraction-free mode */}
       <div
         className={`flex-shrink-0 overflow-hidden transition-all duration-500 ease-in-out ${
@@ -49,7 +49,7 @@ export function MainLayout({ currentView, onNavigate, onLock, onSelectEntry, onN
       </div>
 
       {/* Right column: TopBar + main content */}
-      <div className="flex-1 flex flex-col min-h-screen overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden min-h-0">
         <TopBar
           currentView={currentView}
           onLock={onLock}

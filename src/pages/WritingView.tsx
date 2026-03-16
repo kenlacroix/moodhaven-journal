@@ -1033,18 +1033,18 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
   // ── Desktop layout ────────────────────────────────────────────────────────────
   return (
     <div className={`h-full flex flex-col transition-all duration-500 ${distractionFree ? 'focus-bg' : 'writing-bg'}`}>
-      <div className="flex-1 flex flex-col min-h-0 px-6 sm:px-12 lg:px-20 py-12">
-        <div className="flex-1 flex flex-col max-w-3xl lg:max-w-[75%] w-full mx-auto min-h-0 relative">
+      <div className="flex-1 flex flex-col min-h-0 px-4 sm:px-8 lg:px-12 py-4 sm:py-7 lg:py-10">
+        <div className="flex-1 flex flex-col w-full min-h-0 relative">
 
           {/* ── Heading block: greeting + date + streak (new entries only) ── */}
           {!entryId && (
             <div
-              className={`mb-6 transition-all duration-700 ${
+              className={`mb-3 sm:mb-5 lg:mb-6 transition-all duration-700 ${
                 inFlow ? 'opacity-25 pointer-events-none' : 'opacity-100'
               } ${distractionFree ? 'max-h-0 overflow-hidden opacity-0 mb-0 pointer-events-none' : ''}`}
             >
               {/* Time-aware greeting */}
-              <h1 className="text-3xl font-light text-slate-700 dark:text-slate-300 tracking-tight mb-1">
+              <h1 className="text-xl sm:text-2xl lg:text-3xl font-light text-slate-700 dark:text-slate-300 tracking-tight mb-1">
                 {greeting}
               </h1>
 
@@ -1096,11 +1096,11 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
           <div
             onFocus={() => setIsEditorFocused(true)}
             onBlur={() => setIsEditorFocused(false)}
-            className={`flex-1 flex flex-col min-h-0 bg-white dark:bg-slate-900 rounded-2xl px-8 pt-5 pb-8 transition-all duration-300 relative ${
+            className={`flex-1 flex flex-col min-h-0 bg-white dark:bg-slate-900 rounded-2xl px-4 sm:px-6 lg:px-8 pt-4 sm:pt-5 pb-4 sm:pb-7 transition-all duration-300 relative ${
               isEditorFocused
                 ? 'shadow-lg shadow-violet-500/10 ring-1 ring-violet-500/10'
                 : 'shadow-sm'
-            } ${distractionFree ? 'rounded-none shadow-none ring-0 px-12 pt-10' : ''}`}
+            } ${distractionFree ? 'rounded-none shadow-none ring-0 sm:px-10 lg:px-14 pt-8 sm:pt-10' : ''}`}
           >
             {/* ── Card header: Mood picker + Privacy segmented control ── */}
             {/* Collapses in distraction-free mode */}
@@ -1110,7 +1110,7 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
               }`}
             >
               <div
-                className={`flex items-center justify-between mb-5 pb-4 border-b transition-colors duration-500 ${headerBorderColor}`}
+                className={`flex items-center justify-between mb-3 sm:mb-5 pb-3 sm:pb-4 border-b transition-colors duration-500 ${headerBorderColor}`}
               >
                 {/* Mood picker */}
                 <div className="flex items-center gap-2.5">
@@ -1247,7 +1247,7 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
                 onChange={handleTitleChange}
                 placeholder="Title (optional)"
                 className="
-                  w-full text-2xl font-medium
+                  w-full text-xl sm:text-2xl font-medium
                   bg-transparent border-none outline-none
                   focus-visible:ring-0 focus-visible:ring-offset-0
                   text-slate-600 dark:text-slate-300
@@ -1257,7 +1257,7 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
               />
               {/* Weather chip for existing entries — new entries show chip in heading block above */}
               {entryId && locationWeather ? (
-                <p className="flex items-center gap-1 mb-5 text-xs text-slate-400 dark:text-slate-500">
+                <p className="flex items-center gap-1 mb-3 sm:mb-5 text-xs text-slate-400 dark:text-slate-500">
                   <span>{getWeatherEmoji(locationWeather.weatherCode)}</span>
                   {locationWeather.temperature !== undefined && (
                     <span>{displayTemp(locationWeather.temperature, temperatureUnit)}</span>
@@ -1272,7 +1272,7 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
                   )}
                 </p>
               ) : (
-                <div className="mb-5" />
+                <div className="mb-3 sm:mb-5" />
               )}
             </div>
 
@@ -1339,7 +1339,7 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
 
           {/* ── Bottom status bar — centered E2E badge only ── */}
           <div
-            className={`flex items-center justify-center mt-3 px-1 text-xs text-slate-400 dark:text-slate-500 transition-all duration-700 ${
+            className={`flex items-center justify-center mt-2 sm:mt-3 px-1 text-xs text-slate-400 dark:text-slate-500 transition-all duration-700 ${
               distractionFree ? 'opacity-0 pointer-events-none' : inFlow ? 'opacity-25' : 'opacity-100'
             }`}
           >

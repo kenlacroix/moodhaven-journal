@@ -10,15 +10,20 @@
  * 6. Complete - Ready to use
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useAppStore } from '../stores/appStore';
 import { useSettingsStore } from '../stores/settingsStore';
+import { usePeerSyncStore } from '../stores/peerSyncStore';
 import { TotpSetup, HardwareKeySetup } from '../components/twoFactor';
 import { generateRecoveryKey, storeRecoveryKey } from '../lib/recoveryKeyService';
 import { readBackupFile, encryptedImport } from '../lib/dataManagementService';
+import { startDiscovery, stopDiscovery } from '../lib/peerDiscoveryService';
+import { peerSyncNow } from '../lib/peerSyncEngineService';
+import { PairingModal } from '../components/peer-sync/PairingModal';
 import type { StorageBackend } from '../types/settings';
+import type { DiscoveredPeer } from '../types/peerSync';
 
-type WizardStep = 'welcome' | 'password' | 'recovery' | 'security' | 'storage' | 'import' | 'complete';
+type WizardStep = 'welcome' | 'password' | 'recovery' | 'security' | 'storage' | 'devices' | 'import' | 'complete';
 
 interface StepConfig {
   id: WizardStep;
@@ -32,6 +37,7 @@ const STEPS: StepConfig[] = [
   { id: 'recovery', title: 'Recovery', subtitle: 'Optional backup' },
   { id: 'security', title: 'Extra Security', subtitle: 'Two-factor auth' },
   { id: 'storage', title: 'Storage', subtitle: 'Choose location' },
+  { id: 'devices', title: 'Devices', subtitle: 'Connect your devices' },
   { id: 'import', title: 'Import', subtitle: 'Restore data' },
   { id: 'complete', title: 'Ready', subtitle: 'All set!' },
 ];
@@ -53,8 +59,25 @@ export function SetupScreen() {
   const [recoveryKeyConfirmed, setRecoveryKeyConfirmed] = useState(false);
   const [showRecoveryKey, setShowRecoveryKey] = useState(false);
 
+  const [enableLanSync, setEnableLanSync] = useState(false);
+  const [pairingPeer, setPairingPeer] = useState<DiscoveredPeer | null>(null);
+
   const initialize = useAppStore((state) => state.initialize);
   const saveSettings = useSettingsStore((state) => state.saveSettings);
+
+  const nearbyPeers = usePeerSyncStore((s) => s.nearbyPeers);
+  const isDiscovering = usePeerSyncStore((s) => s.isDiscovering);
+  const trustedDevices = usePeerSyncStore((s) => s.trustedDevices);
+
+  // Start/stop discovery when entering the devices step
+  useEffect(() => {
+    if (currentStep !== 'devices') return;
+    startDiscovery().catch(() => {});
+    return () => {
+      if (!enableLanSync) stopDiscovery().catch(() => {});
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentStep]);
 
   const currentStepIndex = STEPS.findIndex((s) => s.id === currentStep);
 
@@ -103,7 +126,7 @@ export function SetupScreen() {
         return;
       }
 
-      // Save storage settings
+      // Save storage + LAN sync settings
       useSettingsStore.setState((s) => ({
         settings: {
           ...s.settings,
@@ -115,6 +138,7 @@ export function SetupScreen() {
               password: '',
             },
           },
+          sync: { ...s.settings.sync, peerSyncEnabled: enableLanSync },
         },
       }));
       await saveSettings();
@@ -141,7 +165,7 @@ export function SetupScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, [password, storageType, webdavUrl, importFile, initialize, saveSettings]);
+  }, [password, storageType, webdavUrl, importFile, enableLanSync, initialize, saveSettings]);
 
   // Password strength indicator
   const getPasswordStrength = () => {
@@ -651,6 +675,41 @@ export function SetupScreen() {
                   </div>
                 )}
 
+                {/* LAN Sync toggle */}
+                <div className="p-4 rounded-xl border-2 border-slate-200 dark:border-slate-700 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center">
+                        <svg className="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M8.288 15.038a5.25 5.25 0 017.424 0M5.106 11.856c3.807-3.808 9.98-3.808 13.788 0M1.924 8.674c5.565-5.565 14.587-5.565 20.152 0M12.53 18.22l-.53.53-.53-.53a.75.75 0 011.06 0z" />
+                        </svg>
+                      </div>
+                      <div>
+                        <p className="font-medium text-slate-700 dark:text-slate-200 text-sm">Local Network Sync</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">Sync securely with your other devices on the same network</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={enableLanSync}
+                      onClick={() => setEnableLanSync(!enableLanSync)}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                        enableLanSync ? 'bg-violet-500' : 'bg-slate-200 dark:bg-slate-600'
+                      }`}
+                    >
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                        enableLanSync ? 'translate-x-6' : 'translate-x-1'
+                      }`} />
+                    </button>
+                  </div>
+                  {enableLanSync && (
+                    <p className="text-xs text-violet-600 dark:text-violet-400">
+                      You'll be able to pair with nearby devices in the next step.
+                    </p>
+                  )}
+                </div>
+
                 <div className="flex gap-3">
                   <button
                     type="button"
@@ -667,6 +726,110 @@ export function SetupScreen() {
                     Continue
                   </button>
                 </div>
+              </div>
+            )}
+
+            {/* Devices Step */}
+            {currentStep === 'devices' && (
+              <div className="space-y-5">
+                <div className="text-center">
+                  <div className="w-12 h-12 rounded-xl bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center mx-auto mb-4">
+                    <svg className="w-6 h-6 text-violet-600 dark:text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M8.288 15.038a5.25 5.25 0 017.424 0M5.106 11.856c3.807-3.808 9.98-3.808 13.788 0M1.924 8.674c5.565-5.565 14.587-5.565 20.152 0M12.53 18.22l-.53.53-.53-.53a.75.75 0 011.06 0z" />
+                    </svg>
+                  </div>
+                  <h2 className="text-xl font-bold text-slate-800 dark:text-white mb-1">
+                    Connect Your Devices
+                  </h2>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">
+                    {isDiscovering ? (
+                      <span className="inline-flex items-center gap-2">
+                        <span className="w-3 h-3 border border-violet-400 border-t-violet-600 rounded-full animate-spin" />
+                        Scanning your network…
+                      </span>
+                    ) : (
+                      'Nearby devices running MoodBloom will appear below'
+                    )}
+                  </p>
+                </div>
+
+                {/* Nearby peers list */}
+                <div className="space-y-2 min-h-[80px]">
+                  {nearbyPeers.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-6 text-slate-400 dark:text-slate-500">
+                      <svg className="w-8 h-8 mb-2 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9.348 14.652a3.75 3.75 0 010-5.304m5.304 0a3.75 3.75 0 010 5.304m-7.425 2.121a6.75 6.75 0 010-9.546m9.546 0a6.75 6.75 0 010 9.546M5.106 18.894c-3.808-3.808-3.808-9.98 0-13.789m13.788 0c3.808 3.808 3.808 9.981 0 13.79M12 12h.008v.007H12V12zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+                      </svg>
+                      <p className="text-sm">No devices found yet</p>
+                      <p className="text-xs mt-1">Make sure other devices are open and on the same network</p>
+                    </div>
+                  ) : (
+                    nearbyPeers.map((peer) => {
+                      const isTrusted = trustedDevices.some((d) => d.deviceId === peer.deviceId);
+                      return (
+                        <div key={peer.deviceId} className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/50">
+                          <div className="w-8 h-8 rounded-lg bg-white dark:bg-slate-600 border border-slate-200 dark:border-slate-500 flex items-center justify-center flex-shrink-0">
+                            <svg className="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                              <rect x="2" y="3" width="20" height="14" rx="2" strokeLinecap="round" strokeLinejoin="round" />
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M8 21h8M12 17v4" />
+                            </svg>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">{peer.deviceName}</p>
+                            <p className="text-xs text-slate-400 dark:text-slate-500">{peer.host}</p>
+                          </div>
+                          {isTrusted ? (
+                            <span className="flex items-center gap-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                              </svg>
+                              Paired
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setPairingPeer(peer)}
+                              className="px-3 py-1.5 text-xs font-medium rounded-lg bg-violet-500 hover:bg-violet-600 text-white transition-colors"
+                            >
+                              Pair
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={goBack}
+                    className="btn-secondary flex-1 py-3"
+                  >
+                    Back
+                  </button>
+                  <button
+                    type="button"
+                    onClick={goNext}
+                    className="btn-primary flex-1 py-3"
+                  >
+                    {trustedDevices.length > 0 ? 'Continue' : 'Skip for now →'}
+                  </button>
+                </div>
+
+                {/* Pairing modal */}
+                {pairingPeer && (
+                  <PairingModal
+                    peer={pairingPeer}
+                    onClose={async () => {
+                      const justPaired = trustedDevices.find((d) => d.deviceId === pairingPeer.deviceId);
+                      if (justPaired) {
+                        peerSyncNow(pairingPeer.deviceId, pairingPeer.host).catch(() => {});
+                      }
+                      setPairingPeer(null);
+                    }}
+                  />
+                )}
               </div>
             )}
 
@@ -787,6 +950,11 @@ export function SetupScreen() {
                   <p className="text-slate-500 dark:text-slate-400">
                     Your secure journal is ready. Start tracking your mood and thoughts.
                   </p>
+                  {enableLanSync && (
+                    <p className="text-xs text-violet-600 dark:text-violet-400 mt-2">
+                      Your devices will automatically sync when on the same network.
+                    </p>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-3 gap-4 py-4">

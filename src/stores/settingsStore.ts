@@ -103,6 +103,7 @@ interface SettingsState {
   setSyncResult: (result: { at: string; success: boolean; pulled: number; pushed: number }) => void;
   setPeerSyncLanOnly: (lanOnly: boolean) => void;
   setPeerSyncIntervalSecs: (secs: number) => void;
+  setPeerSyncEnabled: (enabled: boolean) => void;
 
   // Navigation
   setScrollToSection: (section: SettingsScrollTarget) => void;
@@ -621,6 +622,13 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   setPeerSyncIntervalSecs: (peerSyncIntervalSecs) => {
     set((state) => ({
       settings: { ...state.settings, sync: { ...state.settings.sync, peerSyncIntervalSecs } },
+      hasUnsavedChanges: true,
+    }));
+  },
+
+  setPeerSyncEnabled: (peerSyncEnabled) => {
+    set((state) => ({
+      settings: { ...state.settings, sync: { ...state.settings.sync, peerSyncEnabled } },
       hasUnsavedChanges: true,
     }));
   },

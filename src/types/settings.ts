@@ -168,6 +168,8 @@ export interface SyncSettings {
   peerSyncLanOnly: boolean;
   /** Peer sync: auto-sync cooldown in seconds (10–300). Default: 30 */
   peerSyncIntervalSecs: number;
+  /** Whether LAN peer sync discovery is enabled. Default: false */
+  peerSyncEnabled: boolean;
 }
 
 // Update manager preferences
@@ -290,6 +292,7 @@ export function createDefaultSettings(): AppSettings {
       lastSyncPushed: 0,
       peerSyncLanOnly: true,
       peerSyncIntervalSecs: 30,
+      peerSyncEnabled: false,
     },
   };
 }

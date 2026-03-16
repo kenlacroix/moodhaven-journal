@@ -49,6 +49,7 @@ function App() {
   const [journalOverviewBookId, setJournalOverviewBookId] = useState<string | null>(null);
   const [showTutorial, setShowTutorial] = useState(false);
   const [showSyncModal, setShowSyncModal] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   /**
    * Incremented each time the user starts a genuinely new entry while already
    * in write mode. Changing this key remounts WritingView, giving a clean slate
@@ -125,6 +126,10 @@ function App() {
   }, []);
 
   const handleNavigate = useCallback((view: ViewType) => {
+    if (view === 'settings') {
+      setShowSettings(true);
+      return;
+    }
     setCurrentView(view);
     if (view === 'writing') {
       setSelectedEntryId(null);
@@ -159,7 +164,7 @@ function App() {
     if (section) {
       useSettingsStore.getState().setScrollToSection(section);
     }
-    setCurrentView('settings');
+    setShowSettings(true);
   }, []);
 
   // Loading state
@@ -236,11 +241,6 @@ function App() {
             <CalendarPage onSelectEntry={handleSelectEntry} />
           )}
 
-          {/* Settings */}
-          {currentView === 'settings' && (
-            <SettingsPage updateHook={updateHook} />
-          )}
-
           {/* Journal Overview */}
           {currentView === 'journalOverview' && journalOverviewBookId && (
             <JournalOverviewPage
@@ -254,6 +254,7 @@ function App() {
 
       {showTutorial && <TutorialWizard onComplete={handleTutorialComplete} />}
       {showSyncModal && <SyncDetailsModal onClose={() => setShowSyncModal(false)} onNavigateToSettings={() => handleNavigateToSettings()} />}
+      {showSettings && <SettingsPage updateHook={updateHook} onClose={() => setShowSettings(false)} />}
     </>
   );
 }

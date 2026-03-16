@@ -9,9 +9,15 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { appDataDir } from '@tauri-apps/api/path';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useAppStore } from '../../stores/appStore';
+import { usePeerSyncStore } from '../../stores/peerSyncStore';
 import { getAllEntries } from '../../lib/journalService';
 import { syncWithWebDAV, type SyncProgress } from '../../lib/syncEngine';
 import { getDeviceName, setDeviceName as persistDeviceName } from '../../lib/deviceIdentity';
+import { startDiscovery } from '../../lib/peerDiscoveryService';
+import { peerSyncNow } from '../../lib/peerSyncEngineService';
+import { revokeDevice } from '../../lib/peerPairingService';
+import { PairingModal } from '../peer-sync/PairingModal';
+import type { DiscoveredPeer } from '../../types/peerSync';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -67,7 +73,16 @@ export function SyncDetailsModal({ onClose, onNavigateToSettings }: SyncDetailsM
   const lastAutoSaved = useSettingsStore((s) => s.lastAutoSaved);
   const setLastSyncDate = useSettingsStore((s) => s.setLastSyncDate);
   const setSyncResult = useSettingsStore((s) => s.setSyncResult);
+  const setPeerSyncEnabled = useSettingsStore((s) => s.setPeerSyncEnabled);
+  const peerSyncEnabled = syncSettings.peerSyncEnabled;
 
+  const nearbyPeers = usePeerSyncStore((s) => s.nearbyPeers);
+  const trustedDevices = usePeerSyncStore((s) => s.trustedDevices);
+  const isDiscovering = usePeerSyncStore((s) => s.isDiscovering);
+  const removeTrusted = usePeerSyncStore((s) => s.removeTrusted);
+  const markPeerUntrusted = usePeerSyncStore((s) => s.markPeerUntrusted);
+
+  const [pairingPeer, setPairingPeer] = useState<DiscoveredPeer | null>(null);
   const [entryCount, setEntryCount] = useState<number | null>(null);
   const [dbPath, setDbPath] = useState<string | null>(null);
 
@@ -309,6 +324,127 @@ export function SyncDetailsModal({ onClose, onNavigateToSettings }: SyncDetailsM
             <p className="text-xs text-slate-400 dark:text-slate-500 text-center">
               Configure WebDAV in Settings to enable sync.
             </p>
+          )}
+
+          {/* LAN Sync section */}
+          <div className="h-px bg-slate-100 dark:bg-slate-800" />
+          <div className="space-y-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+                <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8.288 15.038a5.25 5.25 0 017.424 0M5.106 11.856c3.807-3.808 9.98-3.808 13.788 0M1.924 8.674c5.565-5.565 14.587-5.565 20.152 0M12.53 18.22l-.53.53-.53-.53a.75.75 0 011.06 0z" />
+                </svg>
+                Local Network Sync
+              </span>
+              {peerSyncEnabled && (
+                <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                  {isDiscovering && (
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  )}
+                  {isDiscovering ? 'Scanning' : 'On'}
+                </span>
+              )}
+            </div>
+
+            {!peerSyncEnabled ? (
+              <div className="space-y-2">
+                <p className="text-xs text-slate-400 dark:text-slate-500">
+                  Local Network Sync is disabled. Enable it to discover and sync with devices on your network.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPeerSyncEnabled(true);
+                    startDiscovery().catch(() => {});
+                    useSettingsStore.getState().saveSettings().catch(() => {});
+                  }}
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium border border-violet-300 dark:border-violet-600 text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-colors"
+                >
+                  Enable LAN Sync
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {/* Nearby devices */}
+                {nearbyPeers.length > 0 && (
+                  <div className="space-y-1.5">
+                    <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Nearby Devices</p>
+                    {nearbyPeers.map((peer) => {
+                      const trusted = trustedDevices.some((d) => d.deviceId === peer.deviceId);
+                      return (
+                        <div key={peer.deviceId} className="flex items-center gap-2 py-1.5 px-2.5 rounded-lg bg-slate-50 dark:bg-slate-800">
+                          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${peer.isOnline ? 'bg-emerald-400' : 'bg-slate-300 dark:bg-slate-600'}`} />
+                          <span className="flex-1 text-xs text-slate-700 dark:text-slate-200 truncate">{peer.deviceName}</span>
+                          {trusted ? (
+                            <span className="text-xs text-emerald-500">Paired</span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setPairingPeer(peer)}
+                              className="text-xs text-violet-600 dark:text-violet-400 hover:underline"
+                            >
+                              Pair
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Paired devices */}
+                {trustedDevices.length > 0 && (
+                  <div className="space-y-1.5">
+                    <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Paired Devices</p>
+                    {trustedDevices.map((device) => {
+                      const nearby = nearbyPeers.find((p) => p.deviceId === device.deviceId);
+                      return (
+                        <div key={device.deviceId} className="flex items-center gap-2 py-1.5 px-2.5 rounded-lg bg-slate-50 dark:bg-slate-800">
+                          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${nearby?.isOnline ? 'bg-emerald-400' : 'bg-slate-300 dark:bg-slate-600'}`} />
+                          <span className="flex-1 text-xs text-slate-700 dark:text-slate-200 truncate">{device.deviceName}</span>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            {nearby && (
+                              <button
+                                type="button"
+                                onClick={() => peerSyncNow(device.deviceId, nearby.host).catch(() => {})}
+                                className="text-xs text-violet-600 dark:text-violet-400 hover:underline"
+                              >
+                                Sync
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                await revokeDevice(device.deviceId).catch(() => {});
+                                removeTrusted(device.deviceId);
+                                markPeerUntrusted(device.deviceId);
+                              }}
+                              className="text-xs text-rose-500 hover:underline"
+                            >
+                              Revoke
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {nearbyPeers.length === 0 && trustedDevices.length === 0 && (
+                  <p className="text-xs text-slate-400 dark:text-slate-500">
+                    No devices found. Make sure other devices are on the same network.
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Pairing modal */}
+          {pairingPeer && (
+            <PairingModal
+              peer={pairingPeer}
+              onClose={() => setPairingPeer(null)}
+            />
           )}
 
           {/* Settings link */}

@@ -9,11 +9,13 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.RecyclerView
 import androidx.wear.widget.WearableLinearLayoutManager
 import androidx.wear.widget.WearableRecyclerView
 import java.util.Calendar
 import kotlin.math.abs
+import kotlinx.coroutines.launch
 
 /**
  * BreatheFragment — page 4 (rightmost).
@@ -65,7 +67,12 @@ class BreatheFragment : Fragment() {
 
     override fun onResume() {
         super.onResume()
-        view?.let { updateSuggestionChip(it) }
+        val root = view ?: return
+        updateSuggestionChip(root)                          // instant feedback from cached reading
+        viewLifecycleOwner.lifecycleScope.launch {
+            HealthSnapshot.capture(requireContext())        // one-shot sensor poll (≤10 s)
+            updateSuggestionChip(root)                     // refresh chip with fresh reading
+        }
     }
 
     // ── HR suggestion chip ────────────────────────────────────────────────────

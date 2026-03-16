@@ -66,14 +66,24 @@ data class BreathingMode(
         fun byId(id: String): BreathingMode = ALL.find { it.id == id } ?: ALL[3]
 
         /**
-         * Suggest a mode based on resting HR.
-         * Returns null if no suggestion is warranted.
+         * Suggest a breathing mode based on resting HR and time of day.
+         * Returns null when no contextual signal warrants a suggestion.
+         *
+         * Industry-standard thresholds:
+         *  ≥ 100 bpm  — AHA clinical tachycardia; Oura/Garmin "high resting HR" alert
+         *               → Relax (4-1-6): activates parasympathetic calming response
+         *  85–99 bpm  — Oura Ring / WHOOP "elevated" zone (sub-optimal HRV recovery)
+         *    + evening (≥ 18 h) → Unwind (4-7-8): pre-sleep nervous system wind-down
+         *    + daytime          → Restore (4-0-7): extended exhale, deep recovery
+         *  < 60 bpm   — AHA bradycardia boundary; Garmin/Fitbit "low resting HR" flag
+         *    + midday (10–15 h) → Energize (3-0-2): stimulating cycles vs midday slump
          */
         fun suggest(hr: Int, hourOfDay: Int): BreathingMode? = when {
-            hr > 90                               -> byId("relax")
-            hr in 80..90 && hourOfDay >= 19       -> byId("unwind")
-            hr < 60      && hourOfDay in 10..15   -> byId("energize")
-            else                                  -> null
+            hr >= 100                              -> byId("relax")
+            hr in 85..99 && hourOfDay >= 18        -> byId("unwind")
+            hr in 85..99                           -> byId("restore")
+            hr < 60      && hourOfDay in 10..15    -> byId("energize")
+            else                                   -> null
         }
     }
 

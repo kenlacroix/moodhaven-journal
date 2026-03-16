@@ -71,9 +71,13 @@ class BreatheFragment : Fragment() {
     // ── HR suggestion chip ────────────────────────────────────────────────────
 
     private fun updateSuggestionChip(root: View) {
-        val chipView = root.findViewById<TextView>(R.id.breatheSuggestionChip) ?: return
-        val lastHr   = HealthSnapshot.lastHr
-        if (lastHr == null) {
+        val chipView  = root.findViewById<TextView>(R.id.breatheSuggestionChip) ?: return
+        val lastHr    = HealthSnapshot.lastHr
+        val timestamp = HealthSnapshot.lastHrTimestamp
+        val ageMs     = if (timestamp != null) System.currentTimeMillis() - timestamp else Long.MAX_VALUE
+
+        // Hide chip if no reading or reading is older than 30 minutes
+        if (lastHr == null || ageMs > 30 * 60 * 1000L) {
             chipView.visibility = View.GONE
             return
         }

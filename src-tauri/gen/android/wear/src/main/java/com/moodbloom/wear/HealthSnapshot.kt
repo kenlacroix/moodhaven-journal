@@ -31,6 +31,9 @@ object HealthSnapshot {
     /** Most recent successfully captured HR, used by BreatheFragment suggestion chip. */
     @Volatile var lastHr: Int? = null
 
+    /** Epoch ms when lastHr was captured; used to reject stale readings. */
+    @Volatile var lastHrTimestamp: Long? = null
+
     /**
      * Capture a single heart rate reading. Returns JSON or null.
      * Safe to call from any coroutine context; suspends on Dispatchers.IO.
@@ -45,6 +48,7 @@ object HealthSnapshot {
         val hr = captureHeartRate(sm) ?: return null
 
         lastHr = hr
+        lastHrTimestamp = System.currentTimeMillis()
         return JSONObject().apply { put("hr", hr) }.toString()
     }
 

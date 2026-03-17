@@ -26,13 +26,15 @@ const RECOVERY_KEY_ENCRYPTED_PASSWORD_SETTING = 'recovery_key_encrypted_password
  */
 export function generateRecoveryKey(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Exclude ambiguous: 0,O,1,I
+  // chars.length === 32, which is a power of 2, so modulo bias is zero.
   const groups: string[] = [];
 
   for (let g = 0; g < 6; g++) {
+    const bytes = new Uint8Array(4);
+    crypto.getRandomValues(bytes);
     let group = '';
     for (let i = 0; i < 4; i++) {
-      const randomIndex = Math.floor(Math.random() * chars.length);
-      group += chars[randomIndex];
+      group += chars[bytes[i] % chars.length];
     }
     groups.push(group);
   }

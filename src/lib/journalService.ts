@@ -318,21 +318,40 @@ export async function getMoodStatistics(
   });
 }
 
+interface MoodDistributionRow {
+  mood: number;
+  count: number;
+}
+
+interface StreakStatsRow {
+  current_streak: number;
+  longest_streak: number;
+  last_entry_date: string | null;
+}
+
 /**
  * Get overall statistics
  */
 export async function getOverallStatistics(): Promise<MoodStatistics> {
-  const [averageMood, totalEntries] = await invoke<[number, number]>(
-    'get_overall_statistics'
-  );
+  const [[averageMood, totalEntries], distributionRows, streakRow] = await Promise.all([
+    invoke<[number, number]>('get_overall_statistics'),
+    invoke<MoodDistributionRow[]>('get_mood_distribution'),
+    invoke<StreakStatsRow>('get_streak_stats'),
+  ]);
 
-  // TODO: Calculate full statistics including streaks
+  const moodDistribution: Record<MoodLevel, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+  for (const row of distributionRows) {
+    if (row.mood >= 1 && row.mood <= 5) {
+      moodDistribution[row.mood as MoodLevel] = row.count;
+    }
+  }
+
   return {
     averageMood,
     totalEntries,
-    moodDistribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
-    streak: 0,
-    longestStreak: 0,
+    moodDistribution,
+    streak: streakRow.current_streak,
+    longestStreak: streakRow.longest_streak,
   };
 }
 

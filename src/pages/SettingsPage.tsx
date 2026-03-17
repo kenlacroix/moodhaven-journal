@@ -226,17 +226,18 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
     ).catch(() => {});
   }, [isAndroid]);
 
-  // Check STT model and sidecar on mount
+  // Check STT model and sidecar on mount and whenever the selected model changes.
+  // Intentionally excludes modelDownloaded from deps — this effect is the source
+  // of truth for that flag (re-running on its own update would be redundant).
   useEffect(() => {
     checkSidecarAvailable().then(setSTTSidecarAvailable);
     if (settings.speechToText.model) {
       checkModelStatus(settings.speechToText.model).then((status) => {
-        if (status.downloaded !== settings.speechToText.modelDownloaded) {
-          setSTTModelDownloaded(status.downloaded);
-        }
+        setSTTModelDownloaded(status.downloaded);
       });
     }
-  }, [settings.speechToText.model, settings.speechToText.modelDownloaded, setSTTModelDownloaded]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings.speechToText.model, setSTTModelDownloaded]);
 
   // Handle STT model download
   const handleSTTModelDownload = useCallback(async () => {

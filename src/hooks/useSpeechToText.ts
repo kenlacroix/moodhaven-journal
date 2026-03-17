@@ -5,7 +5,7 @@
  * All processing happens locally on the device.
  */
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useAudioRecorder, type RecordingState } from './useAudioRecorder';
 import { transcribeAudio, checkModelStatus } from '../lib/speechToTextService';
 import { useSettingsStore } from '../stores/settingsStore';
@@ -31,7 +31,13 @@ export function useSpeechToText(): UseSpeechToTextResult {
   const settings = useSettingsStore((s) => s.settings.speechToText);
   const checkedRef = useRef(false);
 
-  // Check availability on first use
+  // Reset the cached check whenever the model selection or enabled state changes
+  // so the next recording attempt re-validates against the real filesystem.
+  useEffect(() => {
+    checkedRef.current = false;
+  }, [settings.model, settings.enabled]);
+
+  // Check availability on first use (within the current model/enabled config)
   const checkAvailability = useCallback(async () => {
     if (checkedRef.current) return isAvailable;
     checkedRef.current = true;

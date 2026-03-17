@@ -105,6 +105,7 @@ pub struct Book {
     pub description: Option<String>,
     pub settings: Option<String>, // JSON-encoded BookSettings
     pub created_at: String,
+    pub updated_at: String,
 }
 
 /// Parse a GROUP_CONCAT tag string into a Vec of tag names.
@@ -168,9 +169,15 @@ impl Database {
             [],
         );
 
-        // Runtime migrations for books table (description + settings)
+        // Runtime migrations for books table (description + settings + updated_at)
         let _ = conn.execute("ALTER TABLE books ADD COLUMN description TEXT", []);
         let _ = conn.execute("ALTER TABLE books ADD COLUMN settings TEXT", []);
+        let _ = conn.execute("ALTER TABLE books ADD COLUMN updated_at TEXT", []);
+        // Backfill updated_at for any rows created before this migration
+        let _ = conn.execute(
+            "UPDATE books SET updated_at = created_at WHERE updated_at IS NULL",
+            [],
+        );
 
         // Runtime migration: add pinned column to journal_entries
         let _ = conn.execute(
@@ -344,6 +351,18 @@ impl Database {
                 ON voice_memos(timestamp);",
         )
         .map_err(|e| format!("Failed to create voice_memos table: {}", e))?;
+
+        // Ensure settings table exists early so the sync engine can query it.
+        // Also created lazily in commands/settings.rs and commands/oura.rs; all
+        // definitions are identical so CREATE IF NOT EXISTS is harmless.
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS settings (
+                key        TEXT PRIMARY KEY,
+                value      TEXT NOT NULL,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            );",
+        )
+        .map_err(|e| format!("Failed to create settings table: {}", e))?;
 
         // peer_sync_state — tracks last successful sync timestamp per trusted peer
         conn.execute_batch(
@@ -1037,7 +1056,8 @@ pub fn list_books(db: &Database) -> Result<Vec<Book>, String> {
 
     let mut stmt = conn
         .prepare(
-            "SELECT id, name, emoji, color, sort_order, description, settings, created_at
+            "SELECT id, name, emoji, color, sort_order, description, settings, created_at,
+                    COALESCE(updated_at, created_at)
              FROM books ORDER BY sort_order ASC, created_at ASC",
         )
         .map_err(|e| format!("Prepare failed: {}", e))?;
@@ -1053,6 +1073,7 @@ pub fn list_books(db: &Database) -> Result<Vec<Book>, String> {
                 description: row.get(5)?,
                 settings: row.get(6)?,
                 created_at: row.get(7)?,
+                updated_at: row.get(8)?,
             })
         })
         .map_err(|e| format!("Query failed: {}", e))?
@@ -1080,14 +1101,16 @@ pub fn create_book(
         .unwrap_or(1);
 
     conn.execute(
-        "INSERT INTO books (id, name, emoji, color, sort_order, description, settings, created_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, datetime('now'))",
+        "INSERT INTO books (id, name, emoji, color, sort_order, description, settings, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, strftime('%Y-%m-%dT%H:%M:%S','now','localtime'), strftime('%Y-%m-%dT%H:%M:%S','now','localtime'))",
         params![id, name, emoji, color, sort_order, description, settings],
     )
     .map_err(|e| format!("Failed to create book: {}", e))?;
 
     conn.query_row(
-        "SELECT id, name, emoji, color, sort_order, description, settings, created_at FROM books WHERE id = ?1",
+        "SELECT id, name, emoji, color, sort_order, description, settings, created_at,
+                COALESCE(updated_at, created_at)
+         FROM books WHERE id = ?1",
         params![id],
         |row| {
             Ok(Book {
@@ -1099,6 +1122,7 @@ pub fn create_book(
                 description: row.get(5)?,
                 settings: row.get(6)?,
                 created_at: row.get(7)?,
+                updated_at: row.get(8)?,
             })
         },
     )
@@ -1119,7 +1143,9 @@ pub fn update_book(
 
     let rows = conn
         .execute(
-            "UPDATE books SET name = ?1, emoji = ?2, color = ?3, description = ?4, settings = ?5 WHERE id = ?6",
+            "UPDATE books SET name = ?1, emoji = ?2, color = ?3, description = ?4, settings = ?5,
+                              updated_at = strftime('%Y-%m-%dT%H:%M:%S','now','localtime')
+             WHERE id = ?6",
             params![name, emoji, color, description, settings, id],
         )
         .map_err(|e| format!("Failed to update book: {}", e))?;

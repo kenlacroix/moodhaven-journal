@@ -354,68 +354,302 @@ Rules:
 
 ---
 
-## Phase 4 — Phone-Side Transcription
+## Phase 4 — Phone-Side Transcription ✅ COMPLETE
 
 **Goal:** Convert incoming `.m4a` files to text using whisper.cpp on the phone.
 
-### What needs building
+### Delivered
 
-#### 4a. whisper.cpp sidecar (already scaffolded in CLAUDE.md)
-- `whisper-cli` cross-compiled for `aarch64-linux-android` as a Tauri sidecar
-- Model download: on-demand from HuggingFace (`ggml-tiny.en.bin` ~75 MB default)
-- Model stored in `app_data_dir/models/`; Settings → Speech to Text shows progress
+#### 4a. whisper.cpp sidecar
+- `whisper-cli` sidecar wired via `tauri_plugin_shell`; model download/management
+  already in `speech_to_text.rs` (`stt_download_model`, `stt_check_model`, etc.)
+- Models stored in `app_data_dir/models/`; Settings → Speech to Text shows download
+  progress with cancellation and SHA-256 verification
 
-#### 4b. Tauri Rust command: `transcribe_voice_memo`
-```rust
-// src-tauri/src/commands/voice_memo.rs
-#[tauri::command]
-async fn transcribe_voice_memo(file_name: String, model: String) -> Result<String, String>
-// Invokes whisper-cli sidecar, returns transcribed text
+#### 4b. `transcribe_voice_memo` Rust command (`voice_memos.rs`)
+- Accepts `id: String, model: String`
+- Resolves audio file path from DB row → runs `whisper` sidecar with `-m -f -nt -np`
+- Patches `transcription` column via `db::patch_voice_memo_transcription`
+- Returns transcribed text; caller handles error if sidecar/model unavailable
+
+#### 4c. `useWearVoiceMemos` hook (`src/hooks/useWearVoiceMemos.ts`)
+- Loads all untranscribed memos from DB on mount and queues them sequentially
+- Exposes `addMemo(memo)` — call from `useWearSignals.onVoiceMemo` for new arrivals
+- Tracks `transcribing: Set<string>` for per-memo loading state
+- `onTranscribed` / `onTranscriptionError` callbacks for UI feedback
+
+### Wire-up pattern
+```tsx
+const { memos, transcribing, addMemo } = useWearVoiceMemos({
+  model: settings.sttModel ?? 'ggml-tiny.en.bin',
+  enabled: settings.sttEnabled,
+});
+useWearSignals({ password, onVoiceMemo: addMemo });
 ```
-
-#### 4c. TypeScript `useWearVoiceMemos` hook
-- Listens for `wear://voice_memo` Tauri event
-- Calls `transcribe_voice_memo` command
-- Stores result pending user review; cleans up `.m4a` after transcription
-
-### Acceptance criteria
-- [ ] Record on watch → text appears in phone app within 30 seconds
-- [ ] Transcription survives app restart (queued if app was in background)
-- [ ] Model download shows progress in Settings → Speech to Text
 
 ---
 
 ## Phase 5 — Metadata, Drafts & AI Enrichment
 
-**Goal:** Transcription + metadata → draft journal entry → publish.
+**Goal:** Turn raw transcriptions into rich, reviewable draft journal entries:
+richer watch-side health context → phone assembles a readable context string →
+mood is inferred locally → user opens a pre-filled editor → one tap publishes
+to the journal.
 
-### Metadata enrichment (5a)
-- Richer `HealthSnapshot`: steps in last hour, activity type (WALKING / STATIONARY)
-- Location from phone at receive time via `locationWeatherService`
-- Context summary string: `"Recorded at 9:42 AM · HR 72 · Walking · Near Downtown"`
+---
 
-### Draft journal entries (5b)
-```sql
-CREATE TABLE voice_memo_drafts (
-    id TEXT PRIMARY KEY, created_at TEXT,
-    audio_file TEXT, duration_ms INTEGER,
-    transcript TEXT,       -- encrypted
-    health_json TEXT,      -- HR, HRV, steps
-    context TEXT,          -- human-readable
-    mood INTEGER,          -- inferred, nullable
-    book_id TEXT DEFAULT 'default',
-    reviewed INTEGER DEFAULT 0
-);
+### 5a. Richer watch-side health snapshot
+
+**Current:** `HealthSnapshot.capture()` returns `{"hr":78}`.
+
+**Change:** Expand the JSON to include step count (last-hour delta) and coarse
+activity classification, so the phone can build a more useful context string.
+
+```kotlin
+// HealthSnapshot.kt — expanded JSON output
+{
+  "hr": 78,
+  "steps": 412,          // step count delta from StepCounterSensor in last ~60s window
+  "activity": "walking"  // "still" | "walking" | "running" | "unknown"
+}
 ```
-- Draft visible in Timeline with badge; not published until user confirms
-- Tap → editor pre-filled with transcript; assign mood, edit, publish
-- Published → standard `journal_entries` row; draft deleted
 
-### AI enrichment (5c, opt-in)
-- Mood inference from transcript via `metadataExtractor.ts`
-- 2–3 hashtag suggestions on draft editor
-- Optional: AI reflection prompt from transcript metadata (not raw text)
-- Weekly summary notification: "5 voice entries this week · mood trending up"
+**Implementation:**
+- Add `TYPE_STEP_COUNTER` sensor read alongside the existing HR read (same
+  `withTimeoutOrNull` pattern, 5s timeout). Store baseline on app launch;
+  emit delta from baseline.
+- Add `TYPE_LINEAR_ACCELERATION` or use the existing HR loop to infer coarse
+  activity: mean |accel| < 0.4 m/s² → "still"; 0.4–2.5 → "walking"; > 2.5 → "running".
+- No new permissions required (`ACTIVITY_RECOGNITION` is only needed for the
+  Google Activity Recognition API; raw sensor reads are permission-free).
+
+**Acceptance:** `health_json` arriving on the phone contains `steps` and
+`activity` fields when the watch has a body sensor.
+
+---
+
+### 5b. Phone-side context assembly
+
+When `useWearSignals` receives a `wear://voice_memo` event (and calls
+`store_voice_memo`), immediately:
+
+1. **Capture location + weather** via `locationWeatherService.captureLocationWeather()`
+   (same service used by WritingView). Non-blocking — proceed even if it times out.
+2. **Build context string** from the available fields:
+   ```
+   "9:42 AM · HR 78 · Walking · 412 steps · Near Downtown · ☁️ 14°C"
+   ```
+   Omit any field whose data is absent (HR optional, steps optional, location optional).
+3. **Persist context** immediately via the new `patch_voice_memo_context` command
+   so it survives app restarts.
+
+#### DB migrations (runtime, idempotent `ALTER TABLE … ADD COLUMN IF NOT EXISTS`)
+
+Add four columns to the existing `voice_memos` table:
+
+```sql
+ALTER TABLE voice_memos ADD COLUMN context       TEXT;
+ALTER TABLE voice_memos ADD COLUMN inferred_mood INTEGER;
+ALTER TABLE voice_memos ADD COLUMN book_id       TEXT NOT NULL DEFAULT 'default';
+ALTER TABLE voice_memos ADD COLUMN reviewed      INTEGER NOT NULL DEFAULT 0;
+```
+
+> **Note:** No separate `voice_memo_drafts` table needed. A memo becomes a
+> "pending draft" when `transcription IS NOT NULL AND reviewed = 0 AND entry_id IS NULL`.
+> Publishing sets `entry_id`; discarding deletes the row.
+
+#### New Rust commands (`voice_memos.rs`)
+
+| Command | Signature | Purpose |
+|---------|-----------|---------|
+| `patch_voice_memo_context` | `(id, context, location_weather_json?)` | Store context string + weather snapshot |
+| `patch_voice_memo_mood` | `(id, inferred_mood)` | Store locally-inferred mood |
+| `publish_voice_memo_draft` | `(id, encrypted_content, mood, book_id, privacy_mode)` | Create journal entry, link via `entry_id`, mark `reviewed=1`; returns `JournalEntry` |
+| `discard_voice_memo_draft` | `(id)` | Delete row + audio file (same as `delete_voice_memo` but named for clarity) |
+| `list_pending_drafts` | `(limit?)` | `WHERE reviewed=0 AND transcription IS NOT NULL AND entry_id IS NULL` |
+
+#### Updated `VoiceMemoRow` (Rust + TypeScript)
+
+```rust
+pub struct VoiceMemoRow {
+    pub id:            String,
+    pub timestamp:     String,
+    pub duration_ms:   i64,
+    pub health_json:   Option<String>,
+    pub file_path:     String,
+    pub transcription: Option<String>,
+    pub context:       Option<String>,    // ← new
+    pub inferred_mood: Option<i64>,       // ← new
+    pub book_id:       String,            // ← new (default: "default")
+    pub reviewed:      i64,              // ← new (0 = pending, 1 = published/dismissed)
+    pub entry_id:      Option<String>,
+    pub source:        String,
+    pub created_at:    String,
+}
+```
+
+---
+
+### 5c. Local mood inference + hashtag suggestions
+
+After `transcribe_voice_memo` completes, immediately run local enrichment —
+no AI API required:
+
+```typescript
+// In useWearVoiceMemos, after successful transcription:
+import { scoreContentMood, extractKeywords } from '../lib/metadataExtractor';
+
+const words = plainText.split(/\s+/).length;
+if (words >= 5) {
+  const mood = scoreContentMood(plainText);   // returns 1–5
+  await patchVoiceMemoMood(id, mood);
+  setMemos(prev => prev.map(m => m.id === id ? { ...m, inferred_mood: mood } : m));
+}
+
+// Hashtag suggestions — computed client-side on draft open, not persisted
+export function suggestHashtags(transcript: string): string[] {
+  // Re-uses extractKeywords from metadataExtractor; maps to #tag format
+  return extractKeywords(transcript).slice(0, 3).map(k => `#${k}`);
+}
+```
+
+---
+
+### 5d. Draft cards in Timeline
+
+Pending drafts surface as distinct cards at the **top of the Timeline**, above
+the date groups, until reviewed.
+
+```
+╭─────────────────────────────────────────────╮
+│  🎙  Voice Memo · 2 min 18 sec              │
+│  9:42 AM · HR 78 · Walking · Near Downtown  │  ← context chip
+│  "I've been thinking about the presentation │
+│   and I feel pretty good about where it's…" │  ← 2-line transcript preview
+│                                              │
+│  ● ● ● ○ ○   [Review]   [✕ Discard]        │  ← inferred mood dots + CTAs
+╰─────────────────────────────────────────────╯
+```
+
+**Component:** `src/components/voice-memo/VoiceMemoDraftCard.tsx`
+- Shows mic icon, duration, context chip, 2-line transcript truncation
+- Inferred mood rendered as the standard 5-dot row (pre-filled, greyed out)
+- "Review" button → opens `VoiceDraftEditor`
+- "✕" button → calls `discard_voice_memo_draft` with a single click (no confirm)
+  after a 3-second undo toast
+
+**Hook:** `src/hooks/useVoiceMemoDrafts.ts`
+```typescript
+interface UseVoiceMemoDraftsResult {
+  drafts: VoiceMemo[];           // pending drafts, newest first
+  publishDraft: (id: string, content: string, mood: number,
+                 bookId: string, privacyMode: number) => Promise<JournalEntry>;
+  discardDraft: (id: string) => Promise<void>;
+  refresh: () => Promise<void>;
+}
+```
+- Loads `list_pending_drafts()` on mount and after each `addMemo` call
+- `publishDraft` calls `publish_voice_memo_draft` then removes from local state
+- `discardDraft` calls `discard_voice_memo_draft` then removes from local state
+
+**TimelineView wiring:**
+- Import `useVoiceMemoDrafts`; render `<VoiceMemoDraftCard>` for each draft above
+  the `<DateGroup>` list
+- Draft count badge on the Timeline nav item when drafts exist
+
+---
+
+### 5e. Voice Draft Editor
+
+Reuses the full `WritingView` infrastructure via a dedicated route/modal, keeping
+implementation minimal.
+
+```
+╭─────────────────────────────────────────────────────────╮
+│  ✕   Voice Memo Draft                        [Publish]  │
+│  ──────────────────────────────────────────────────────  │
+│  9:42 AM · HR 78 · Walking · Near Downtown · ☁️ 14°C   │  ← context bar (read-only)
+│  ──────────────────────────────────────────────────────  │
+│  Mood:  ● ● ● ○ ○   (pre-selected; user can change)    │
+│  ──────────────────────────────────────────────────────  │
+│  [#gratitude]  [#work]  [#focus]                        │  ← hashtag suggestions
+│                                                          │
+│  I've been thinking about the presentation              │
+│  and I feel pretty good about where it's                │  ← editable TipTap
+│  landed. The client seemed engaged and…                 │
+╰─────────────────────────────────────────────────────────╯
+```
+
+**Component:** `src/components/voice-memo/VoiceDraftEditor.tsx`
+- Receives `memo: VoiceMemo` as prop
+- Converts `memo.transcription` → TipTap HTML via `document.createTextNode` wrap:
+  `<p>${transcript}</p>` (preserves line breaks as `<br>` if transcript contains `\n`)
+- Mood selector pre-filled from `memo.inferred_mood ?? 3`
+- Context bar renders the `memo.context` string as a read-only chip row
+- Hashtag suggestion pills: `suggestHashtags(memo.transcription)` → clicking appends
+  `#tag ` at current cursor position via TipTap `insertContent`
+- "Publish" → calls `publishDraft(id, html, mood, bookId, privacyMode)` then closes
+- Book selector (dropdown) defaults to `memo.book_id` or active book
+
+**Open from:** `VoiceMemoDraftCard → "Review"` button, and optionally from a
+future "Drafts" section in the Timeline filter bar.
+
+---
+
+### 5f. Optional AI enrichment (gated behind AI enabled flag)
+
+Only runs when `aiSettings.enabled === true`. Uses metadata, **not raw transcript**.
+
+```typescript
+// After context assembly + mood inference:
+if (aiSettings.enabled && memo.transcription) {
+  const metadata: MetadataSummary = buildMetadataFromMemo(memo);
+  const [prompts] = await generatePrompts(metadata);  // existing aiService.ts
+  // Surface as a "Reflection prompt" chip below the hashtag suggestions in VoiceDraftEditor
+}
+```
+
+Weekly notification (via existing reminder infrastructure):
+- If ≥ 3 voice memos were published in the last 7 days, fire a notification:
+  `"${count} voice entries this week · mood trending ${trend}"`
+- Scheduled in `reminderService.ts` as part of the weekly reflection check
+
+---
+
+### New files
+
+| File | Purpose |
+|------|---------|
+| `wear/.../HealthSnapshot.kt` | Extend to capture steps + activity type |
+| `src-tauri/src/db/mod.rs` | Runtime migrations for 4 new columns + `list_pending_drafts` DB fn |
+| `src-tauri/src/commands/voice_memos.rs` | 5 new commands (context, mood, publish, discard, list_pending) |
+| `src/lib/voiceMemoService.ts` | IPC wrappers for new commands + `suggestHashtags()` utility |
+| `src/hooks/useVoiceMemoDrafts.ts` | Draft list state, publish/discard actions |
+| `src/hooks/useWearVoiceMemos.ts` | Extend: call `patchVoiceMemoMood` after transcription |
+| `src/components/voice-memo/VoiceMemoDraftCard.tsx` | Timeline draft card |
+| `src/components/voice-memo/VoiceDraftEditor.tsx` | Full-screen review + publish editor |
+
+### Modified files
+
+| File | Change |
+|------|--------|
+| `src/features/timeline/TimelineView.tsx` | Render draft cards above date groups; add draft count badge |
+| `src/lib/metadataExtractor.ts` | Export `extractKeywords()` for hashtag suggestion use |
+| `src-tauri/gen/android/wear/src/main/java/com/moodbloom/wear/HealthSnapshot.kt` | Add steps + activity fields |
+
+### Acceptance criteria
+
+- [ ] Watch records → phone receives → transcription completes → draft card appears
+      in Timeline within 30 seconds (WiFi) / on next app open (offline)
+- [ ] Context chip shows HR, steps, activity, and location when all are available;
+      gracefully omits any field that failed to capture
+- [ ] Mood pre-selected correctly (or neutral if transcript < 5 words)
+- [ ] Hashtag suggestions are relevant (≥ 1 of 3 applicable in manual testing)
+- [ ] Publish flow creates a valid `journal_entries` row with correct book + mood
+- [ ] Discard removes both the DB row and the `.m4a` file
+- [ ] Drafts survive app restart (queued in DB, not just in-memory)
+- [ ] All new Rust commands covered by `cargo check` (no compile errors)
+- [ ] TypeScript `npm run typecheck` passes with no new errors
 
 ---
 
@@ -446,5 +680,8 @@ Watch cacheDir/*.m4a
 | `wear/.../AudioQueue.kt` | Offline queue |
 | `app/.../WearListenerService.kt` | Phone receive (background) |
 | `app/.../WearPlugin.kt` | Phone receive (foreground) + Tauri bridge |
-| `src-tauri/src/commands/voice_memo.rs` | whisper.cpp sidecar (Phase 4) |
-| `src/hooks/useWearVoiceMemos.ts` | TypeScript consumer (Phase 4) |
+| `src-tauri/src/commands/voice_memos.rs` | whisper.cpp sidecar + draft commands (Phase 4–5) |
+| `src/hooks/useWearVoiceMemos.ts` | Transcription queue + mood inference (Phase 4–5) |
+| `src/hooks/useVoiceMemoDrafts.ts` | Draft list + publish/discard (Phase 5) |
+| `src/components/voice-memo/VoiceMemoDraftCard.tsx` | Timeline draft card (Phase 5) |
+| `src/components/voice-memo/VoiceDraftEditor.tsx` | Review + publish editor (Phase 5) |

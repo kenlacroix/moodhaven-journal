@@ -18,8 +18,18 @@ export interface SyncStartedEvent {
 export interface SyncCompleteEvent {
   deviceId: string;
   deviceName: string;
+  /** Total items sent across all data types. */
   sent: number;
+  /** Total items received across all data types. */
   received: number;
+  sentEntries: number;
+  receivedEntries: number;
+  sentBooks: number;
+  receivedBooks: number;
+  sentSignals: number;
+  receivedSignals: number;
+  sentSettings: number;
+  receivedSettings: number;
   at: string;
 }
 

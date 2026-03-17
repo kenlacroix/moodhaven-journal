@@ -5,15 +5,38 @@
 //! ```text
 //! Client → Server: HELLO plain  {t:"hello", did:"<deviceId>"}
 //! Server → Client: OK    plain  {t:"ok",    name:"<serverName>"}
-//! Client → Server: MANIFEST enc {t:"manifest", entries:[{id, updated_at},...]}
-//! Server → Client: MANIFEST enc {t:"manifest", entries:[{id, updated_at},...]}
-//! Server → Client: ENTRY   enc  {t:"entry", row:{...}} × N
-//! Server → Client: DONE    enc  {t:"done",  sent:N}
-//! Client → Server: ENTRY   enc  {t:"entry", row:{...}} × M
-//! Client → Server: DONE    enc  {t:"done",  sent:M}
-//! Server → Client: DONE_ACK enc {t:"done_ack", recv:M}
-//! Client → Server: DONE_ACK enc {t:"done_ack", recv:N}
-//! Both: update peer_sync_state, emit events, close
+//! Client → Server: MANIFEST enc {t:"manifest", entries:[…], books:[…], signals:[…], settings:[…]}
+//! Server → Client: MANIFEST enc {same shape}
+//!
+//! ── Entry phase ──────────────────────────────────────────────────────────────
+//! Server → Client: ENTRY       enc  {t:"entry",    row:{…}} × N
+//! Server → Client: DONE        enc  {t:"done",     sent:N}
+//! Client → Server: ENTRY       enc  {t:"entry",    row:{…}} × M
+//! Client → Server: DONE        enc  {t:"done",     sent:M}
+//! Server → Client: DONE_ACK    enc  {t:"done_ack", recv:M}
+//!
+//! ── Books phase ──────────────────────────────────────────────────────────────
+//! Server → Client: BOOK        enc  {t:"book",       row:{…}} × A
+//! Server → Client: BOOKS_DONE  enc  {t:"books_done", sent:A}
+//! Client → Server: BOOK        enc  {t:"book",       row:{…}} × B
+//! Client → Server: BOOKS_DONE  enc  {t:"books_done", sent:B}
+//! Server → Client: BOOKS_ACK   enc  {t:"books_ack",  recv:B}
+//!
+//! ── Signals phase ────────────────────────────────────────────────────────────
+//! Server → Client: SIGNAL      enc  {t:"signal",       row:{…}} × C
+//! Server → Client: SIGNALS_DONE enc {t:"signals_done", sent:C}
+//! Client → Server: SIGNAL      enc  {t:"signal",       row:{…}} × D
+//! Client → Server: SIGNALS_DONE enc {t:"signals_done", sent:D}
+//! Server → Client: SIGNALS_ACK enc  {t:"signals_ack",  recv:D}
+//!
+//! ── Settings phase ───────────────────────────────────────────────────────────
+//! Server → Client: SETTING      enc  {t:"setting",       key, value, updated_at} × E
+//! Server → Client: SETTINGS_DONE enc {t:"settings_done", sent:E}
+//! Client → Server: SETTING      enc  {t:"setting",       key, value, updated_at} × F
+//! Client → Server: SETTINGS_DONE enc {t:"settings_done", sent:F}
+//! Server → Client: SETTINGS_ACK enc  {t:"settings_ack",  recv:F}
+//! Server closes write-half; client closes both halves.
+//! Both: update peer_sync_state, emit events.
 //! ```
 //!
 //! ## Transport encryption
@@ -62,17 +85,65 @@ enum Msg {
     /// Sent plaintext by the server when the connecting device is not in its
     /// trusted list. The client should auto-revoke the server in response.
     NotTrusted { server_device_id: String },
-    Manifest { entries: Vec<EntryMeta> },
+    Manifest {
+        entries: Vec<SyncMeta>,
+        books: Vec<SyncMeta>,
+        /// Signals use created_at as the version field (signals are immutable).
+        signals: Vec<SyncMeta>,
+        /// Settings manifest: only whitelisted keys; updated_at for LWW.
+        settings: Vec<SyncMeta>,
+    },
+    // ── Entry phase ──
     Entry { row: JournalEntryRow },
     Done { sent: usize },
     DoneAck { recv: usize },
+    // ── Books phase ──
+    Book { row: SyncBookRow },
+    BooksDone { sent: usize },
+    BooksAck { recv: usize },
+    // ── Signals phase ──
+    Signal { row: SyncSignalRow },
+    SignalsDone { sent: usize },
+    SignalsAck { recv: usize },
+    // ── Settings phase ──
+    Setting { key: String, value: String, updated_at: String },
+    SettingsDone { sent: usize },
+    SettingsAck { recv: usize },
     Err { msg: String },
 }
 
+/// Generic manifest item used for all data types.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct EntryMeta {
+struct SyncMeta {
     id: String,
     updated_at: String,
+}
+
+/// Book row transmitted over the wire during sync.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct SyncBookRow {
+    id: String,
+    name: String,
+    emoji: String,
+    color: String,
+    sort_order: i32,
+    description: Option<String>,
+    settings: Option<String>,
+    created_at: String,
+    updated_at: String,
+}
+
+/// Signal row transmitted over the wire during sync.
+/// Signals are immutable after creation — no updated_at.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct SyncSignalRow {
+    id: String,
+    timestamp: String,
+    #[serde(rename = "type")]
+    signal_type: String,
+    source: String,
+    payload: String,
+    created_at: String,
 }
 
 // ── Managed state ─────────────────────────────────────────────────────────────
@@ -196,20 +267,262 @@ fn read_msg_enc(stream: &mut TcpStream, key: &[u8; 32]) -> Result<Msg, String> {
 
 // ── DB helpers ────────────────────────────────────────────────────────────────
 
-fn db_get_manifest(conn: &Connection) -> Result<Vec<EntryMeta>, String> {
+fn db_get_entries_manifest(conn: &Connection) -> Result<Vec<SyncMeta>, String> {
     let mut stmt = conn
         .prepare("SELECT id, updated_at FROM journal_entries ORDER BY updated_at DESC")
-        .map_err(|e| format!("prepare manifest: {e}"))?;
+        .map_err(|e| format!("prepare entries manifest: {e}"))?;
     let rows = stmt
         .query_map([], |r| {
-            Ok(EntryMeta {
+            Ok(SyncMeta {
                 id: r.get(0)?,
                 updated_at: r.get(1)?,
             })
         })
-        .map_err(|e| format!("query manifest: {e}"))?;
+        .map_err(|e| format!("query entries manifest: {e}"))?;
     rows.collect::<Result<Vec<_>, _>>()
-        .map_err(|e| format!("collect manifest: {e}"))
+        .map_err(|e| format!("collect entries manifest: {e}"))
+}
+
+fn db_get_books_manifest(conn: &Connection) -> Result<Vec<SyncMeta>, String> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, COALESCE(updated_at, created_at) FROM books ORDER BY id",
+        )
+        .map_err(|e| format!("prepare books manifest: {e}"))?;
+    let rows = stmt
+        .query_map([], |r| Ok(SyncMeta { id: r.get(0)?, updated_at: r.get(1)? }))
+        .map_err(|e| format!("query books manifest: {e}"))?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("collect books manifest: {e}"))
+}
+
+fn db_get_signals_manifest(conn: &Connection) -> Result<Vec<SyncMeta>, String> {
+    let mut stmt = conn
+        .prepare("SELECT id, created_at FROM signals ORDER BY created_at DESC")
+        .map_err(|e| format!("prepare signals manifest: {e}"))?;
+    let rows = stmt
+        .query_map([], |r| Ok(SyncMeta { id: r.get(0)?, updated_at: r.get(1)? }))
+        .map_err(|e| format!("query signals manifest: {e}"))?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("collect signals manifest: {e}"))
+}
+
+/// Returns manifest items for whitelisted settings keys that exist in the DB.
+fn db_get_settings_manifest(conn: &Connection) -> Result<Vec<SyncMeta>, String> {
+    let result: rusqlite::Result<(String, String)> = conn.query_row(
+        "SELECT key, updated_at FROM settings WHERE key = 'app_settings'",
+        [],
+        |r| Ok((r.get(0)?, r.get(1)?)),
+    );
+    match result {
+        Ok((key, updated_at)) => Ok(vec![SyncMeta { id: key, updated_at }]),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(vec![]),
+        Err(e) => Err(format!("query settings manifest: {e}")),
+    }
+}
+
+fn db_get_books_full(conn: &Connection, ids: &[String]) -> Result<Vec<SyncBookRow>, String> {
+    if ids.is_empty() {
+        return Ok(vec![]);
+    }
+    let mut result = Vec::with_capacity(ids.len());
+    for id in ids {
+        let row: Option<SyncBookRow> = conn
+            .query_row(
+                "SELECT id, name, emoji, color, sort_order, description, settings,
+                        created_at, COALESCE(updated_at, created_at)
+                 FROM books WHERE id = ?1",
+                rusqlite::params![id],
+                |r| {
+                    Ok(SyncBookRow {
+                        id: r.get(0)?,
+                        name: r.get(1)?,
+                        emoji: r.get(2)?,
+                        color: r.get(3)?,
+                        sort_order: r.get(4)?,
+                        description: r.get(5)?,
+                        settings: r.get(6)?,
+                        created_at: r.get(7)?,
+                        updated_at: r.get(8)?,
+                    })
+                },
+            )
+            .ok();
+        if let Some(r) = row {
+            result.push(r);
+        }
+    }
+    Ok(result)
+}
+
+fn db_upsert_book(conn: &Connection, row: &SyncBookRow) -> Result<bool, String> {
+    let existing: Option<String> = conn
+        .query_row(
+            "SELECT COALESCE(updated_at, created_at) FROM books WHERE id = ?1",
+            rusqlite::params![row.id],
+            |r| r.get(0),
+        )
+        .ok();
+
+    match existing {
+        None => {
+            conn.execute(
+                "INSERT INTO books \
+                 (id, name, emoji, color, sort_order, description, settings, created_at, updated_at) \
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                rusqlite::params![
+                    row.id, row.name, row.emoji, row.color, row.sort_order,
+                    row.description, row.settings, row.created_at, row.updated_at
+                ],
+            )
+            .map_err(|e| format!("insert book: {e}"))?;
+            Ok(true)
+        }
+        Some(ref local) if row.updated_at.as_str() > local.as_str() => {
+            conn.execute(
+                "UPDATE books \
+                 SET name = ?2, emoji = ?3, color = ?4, sort_order = ?5, \
+                     description = ?6, settings = ?7, updated_at = ?8 \
+                 WHERE id = ?1",
+                rusqlite::params![
+                    row.id, row.name, row.emoji, row.color, row.sort_order,
+                    row.description, row.settings, row.updated_at
+                ],
+            )
+            .map_err(|e| format!("update book: {e}"))?;
+            Ok(true)
+        }
+        _ => Ok(false), // local is same age or newer — skip
+    }
+}
+
+fn db_get_signals_full(conn: &Connection, ids: &[String]) -> Result<Vec<SyncSignalRow>, String> {
+    if ids.is_empty() {
+        return Ok(vec![]);
+    }
+    let mut result = Vec::with_capacity(ids.len());
+    for id in ids {
+        let row: Option<SyncSignalRow> = conn
+            .query_row(
+                "SELECT id, timestamp, type, source, payload, created_at
+                 FROM signals WHERE id = ?1",
+                rusqlite::params![id],
+                |r| {
+                    Ok(SyncSignalRow {
+                        id: r.get(0)?,
+                        timestamp: r.get(1)?,
+                        signal_type: r.get(2)?,
+                        source: r.get(3)?,
+                        payload: r.get(4)?,
+                        created_at: r.get(5)?,
+                    })
+                },
+            )
+            .ok();
+        if let Some(r) = row {
+            result.push(r);
+        }
+    }
+    Ok(result)
+}
+
+/// Signals are immutable — INSERT OR IGNORE; returns true if a new row was inserted.
+fn db_insert_signal_if_new(conn: &Connection, row: &SyncSignalRow) -> Result<bool, String> {
+    let changes = conn
+        .execute(
+            "INSERT OR IGNORE INTO signals (id, timestamp, type, source, payload, created_at) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            rusqlite::params![
+                row.id, row.timestamp, row.signal_type, row.source, row.payload, row.created_at
+            ],
+        )
+        .map_err(|e| format!("insert signal: {e}"))?;
+    Ok(changes > 0)
+}
+
+fn db_get_setting_for_sync(
+    conn: &Connection,
+    key: &str,
+) -> Result<Option<(String, String)>, String> {
+    let result: rusqlite::Result<(String, String)> = conn.query_row(
+        "SELECT value, updated_at FROM settings WHERE key = ?1",
+        rusqlite::params![key],
+        |r| Ok((r.get(0)?, r.get(1)?)),
+    );
+    match result {
+        Ok(pair) => Ok(Some(pair)),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(e) => Err(format!("query setting: {e}")),
+    }
+}
+
+/// Merge whitelisted fields from `remote` JSON into `local` JSON.
+/// Non-whitelisted fields (credentials, device-specific prefs) are never overwritten.
+fn merge_settings_json(local_json: &str, remote_json: &str) -> Result<String, String> {
+    let mut local: serde_json::Value =
+        serde_json::from_str(local_json).map_err(|e| format!("parse local settings: {e}"))?;
+    let remote: serde_json::Value =
+        serde_json::from_str(remote_json).map_err(|e| format!("parse remote settings: {e}"))?;
+
+    // Take these top-level sections entirely from remote
+    for section in &["journal", "reminders"] {
+        if let Some(v) = remote.get(*section) {
+            local[section] = v.clone();
+        }
+    }
+    // Take only ai.features and ai.consent from remote (not ai.openai / ai.localAI / ai.enabled)
+    if let Some(remote_ai) = remote.get("ai") {
+        if let Some(local_ai) = local.get_mut("ai") {
+            for sub in &["features", "consent"] {
+                if let Some(v) = remote_ai.get(*sub) {
+                    local_ai[sub] = v.clone();
+                }
+            }
+        }
+    }
+    // Take specific appearance fields from remote (not theme — that's per-device)
+    if let Some(remote_app) = remote.get("appearance") {
+        if let Some(local_app) = local.get_mut("appearance") {
+            for field in &["compactMode", "animationsEnabled"] {
+                if let Some(v) = remote_app.get(*field) {
+                    local_app[field] = v.clone();
+                }
+            }
+        }
+    }
+
+    serde_json::to_string(&local).map_err(|e| format!("serialize merged settings: {e}"))
+}
+
+/// Upsert a setting received from a peer, applying whitelist merge for app_settings.
+/// Returns true if the local DB was changed.
+fn db_upsert_setting(
+    conn: &Connection,
+    key: &str,
+    remote_value: &str,
+    remote_updated_at: &str,
+) -> Result<bool, String> {
+    let local = db_get_setting_for_sync(conn, key)?;
+    let new_value = match &local {
+        None => remote_value.to_string(),
+        Some((local_value, local_updated_at)) => {
+            if remote_updated_at <= local_updated_at.as_str() {
+                return Ok(false); // local is same age or newer
+            }
+            if key == "app_settings" {
+                merge_settings_json(local_value, remote_value)?
+            } else {
+                remote_value.to_string()
+            }
+        }
+    };
+
+    conn.execute(
+        "INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?1, ?2, ?3)",
+        rusqlite::params![key, new_value, remote_updated_at],
+    )
+    .map_err(|e| format!("upsert setting: {e}"))?;
+    Ok(true)
 }
 
 fn db_get_entries_full(conn: &Connection, ids: &[String]) -> Result<Vec<JournalEntryRow>, String> {
@@ -462,32 +775,47 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
     );
 
     // Step 3: Read client's MANIFEST
-    let client_manifest = match read_msg_enc(&mut stream, &key)? {
-        Msg::Manifest { entries } => entries,
-        other => return Err(format!("Expected MANIFEST from client, got: {other:?}")),
-    };
+    let (client_entries, client_books, client_signals, client_settings) =
+        match read_msg_enc(&mut stream, &key)? {
+            Msg::Manifest { entries, books, signals, settings } => {
+                (entries, books, signals, settings)
+            }
+            other => return Err(format!("Expected MANIFEST from client, got: {other:?}")),
+        };
 
     // Step 4: Get our manifest (lock DB, then drop)
-    let my_manifest = {
+    let (my_entries, my_books, my_signals, my_settings) = {
         let db = app
             .try_state::<Database>()
             .ok_or_else(|| "No DB state".to_string())?;
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
-        db_get_manifest(&conn)?
+        (
+            db_get_entries_manifest(&conn)?,
+            db_get_books_manifest(&conn)?,
+            db_get_signals_manifest(&conn)?,
+            db_get_settings_manifest(&conn)?,
+        )
     };
 
     // Step 5: Send our MANIFEST
-    write_msg_enc(&mut stream, &key, &Msg::Manifest { entries: my_manifest.clone() })?;
+    write_msg_enc(
+        &mut stream,
+        &key,
+        &Msg::Manifest {
+            entries: my_entries.clone(),
+            books: my_books.clone(),
+            signals: my_signals.clone(),
+            settings: my_settings.clone(),
+        },
+    )?;
 
-    // Compute what client needs (entries we have that client is missing or has older version of)
-    let client_map: std::collections::HashMap<&str, &str> = client_manifest
-        .iter()
-        .map(|e| (e.id.as_str(), e.updated_at.as_str()))
-        .collect();
-    let need_by_client: Vec<String> = my_manifest
+    // ── Compute diffs ────────────────────────────────────────────────────────
+    let client_entry_map: std::collections::HashMap<&str, &str> =
+        client_entries.iter().map(|e| (e.id.as_str(), e.updated_at.as_str())).collect();
+    let need_entries_by_client: Vec<String> = my_entries
         .iter()
         .filter(|e| {
-            client_map
+            client_entry_map
                 .get(e.id.as_str())
                 .map(|&cat| e.updated_at.as_str() > cat)
                 .unwrap_or(true)
@@ -495,15 +823,12 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
         .map(|e| e.id.clone())
         .collect();
 
-    // Compute what we need from client
-    let my_map: std::collections::HashMap<&str, &str> = my_manifest
-        .iter()
-        .map(|e| (e.id.as_str(), e.updated_at.as_str()))
-        .collect();
-    let need_by_me: Vec<String> = client_manifest
+    let my_entry_map: std::collections::HashMap<&str, &str> =
+        my_entries.iter().map(|e| (e.id.as_str(), e.updated_at.as_str())).collect();
+    let need_entries_by_me: Vec<String> = client_entries
         .iter()
         .filter(|e| {
-            my_map
+            my_entry_map
                 .get(e.id.as_str())
                 .map(|&mat| e.updated_at.as_str() > mat)
                 .unwrap_or(true)
@@ -511,23 +836,92 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
         .map(|e| e.id.clone())
         .collect();
 
+    // Books diffs (same LWW pattern)
+    let client_book_map: std::collections::HashMap<&str, &str> =
+        client_books.iter().map(|e| (e.id.as_str(), e.updated_at.as_str())).collect();
+    let need_books_by_client: Vec<String> = my_books
+        .iter()
+        .filter(|e| {
+            client_book_map
+                .get(e.id.as_str())
+                .map(|&cat| e.updated_at.as_str() > cat)
+                .unwrap_or(true)
+        })
+        .map(|e| e.id.clone())
+        .collect();
+
+    let my_book_map: std::collections::HashMap<&str, &str> =
+        my_books.iter().map(|e| (e.id.as_str(), e.updated_at.as_str())).collect();
+    let need_books_by_me: Vec<String> = client_books
+        .iter()
+        .filter(|e| {
+            my_book_map
+                .get(e.id.as_str())
+                .map(|&mat| e.updated_at.as_str() > mat)
+                .unwrap_or(true)
+        })
+        .map(|e| e.id.clone())
+        .collect();
+
+    // Signals diffs (INSERT OR IGNORE — missing IDs only)
+    let my_signal_ids: std::collections::HashSet<&str> =
+        my_signals.iter().map(|s| s.id.as_str()).collect();
+    let need_signals_by_client: Vec<String> = my_signals
+        .iter()
+        .filter(|s| !client_signals.iter().any(|cs| cs.id == s.id))
+        .map(|s| s.id.clone())
+        .collect();
+    let need_signals_by_me: Vec<String> = client_signals
+        .iter()
+        .filter(|s| !my_signal_ids.contains(s.id.as_str()))
+        .map(|s| s.id.clone())
+        .collect();
+
+    // Settings diffs (LWW per key)
+    let client_settings_map: std::collections::HashMap<&str, &str> =
+        client_settings.iter().map(|s| (s.id.as_str(), s.updated_at.as_str())).collect();
+    let need_settings_by_client: Vec<String> = my_settings
+        .iter()
+        .filter(|s| {
+            client_settings_map
+                .get(s.id.as_str())
+                .map(|&cat| s.updated_at.as_str() > cat)
+                .unwrap_or(true)
+        })
+        .map(|s| s.id.clone())
+        .collect();
+
+    let my_settings_map: std::collections::HashMap<&str, &str> =
+        my_settings.iter().map(|s| (s.id.as_str(), s.updated_at.as_str())).collect();
+    let need_settings_by_me: Vec<String> = client_settings
+        .iter()
+        .filter(|s| {
+            my_settings_map
+                .get(s.id.as_str())
+                .map(|&mat| s.updated_at.as_str() > mat)
+                .unwrap_or(true)
+        })
+        .map(|s| s.id.clone())
+        .collect();
+
+    // ── Entry phase ──────────────────────────────────────────────────────────
+
     // Step 6: Fetch and send entries client needs (DB lock per batch, no lock during send)
     let to_send = {
         let db = app
             .try_state::<Database>()
             .ok_or_else(|| "No DB state".to_string())?;
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
-        db_get_entries_full(&conn, &need_by_client)?
+        db_get_entries_full(&conn, &need_entries_by_client)?
     };
-    let sent_count = to_send.len();
+    let entries_sent = to_send.len();
     for entry_row in to_send {
         write_msg_enc(&mut stream, &key, &Msg::Entry { row: entry_row })?;
     }
-    write_msg_enc(&mut stream, &key, &Msg::Done { sent: sent_count })?;
+    write_msg_enc(&mut stream, &key, &Msg::Done { sent: entries_sent })?;
 
     // Step 7: Receive entries from client until DONE
-    let mut received_count = 0usize;
-    let expected_recv = need_by_me.len();
+    let mut entries_received = 0usize;
     loop {
         let msg = read_msg_enc(&mut stream, &key)?;
         match msg {
@@ -537,31 +931,150 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
                     .ok_or_else(|| "No DB state".to_string())?;
                 let conn = db.conn.lock().map_err(|e| e.to_string())?;
                 if db_upsert_entry(&conn, &row)? {
-                    received_count += 1;
+                    entries_received += 1;
                 }
             }
             Msg::Done { sent } => {
-                eprintln!("[sync] Server: client sent {sent} entries, we received {received_count} new");
+                eprintln!("[sync] Server: client sent {sent} entries, we received {entries_received} new");
                 break;
             }
-            other => {
-                return Err(format!("Unexpected message during receive: {other:?}"));
-            }
+            other => return Err(format!("Unexpected msg in entry recv: {other:?}")),
         }
-        // Safety valve: don't spin forever
-        if received_count > expected_recv + 1000 {
+        if entries_received > need_entries_by_me.len() + 1000 {
             return Err("Received more entries than expected".into());
         }
     }
+    // Send DONE_ACK for entries (connection stays open — more phases follow)
+    write_msg_enc(&mut stream, &key, &Msg::DoneAck { recv: entries_received })?;
 
-    // Step 8: Send DONE_ACK then close gracefully (client reads this as confirmation)
-    write_msg_enc(&mut stream, &key, &Msg::DoneAck { recv: received_count })?;
-    // Flush and close our write-half so client gets a clean EOF after DONE_ACK.
-    // This avoids an RST (caused by dropping a stream with unread data) that would
-    // make the client's DONE_ACK read fail with "Connection reset by peer".
+    // ── Books phase ──────────────────────────────────────────────────────────
+
+    let books_to_send = {
+        let db = app
+            .try_state::<Database>()
+            .ok_or_else(|| "No DB state".to_string())?;
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        db_get_books_full(&conn, &need_books_by_client)?
+    };
+    let books_sent = books_to_send.len();
+    for book in books_to_send {
+        write_msg_enc(&mut stream, &key, &Msg::Book { row: book })?;
+    }
+    write_msg_enc(&mut stream, &key, &Msg::BooksDone { sent: books_sent })?;
+
+    let mut books_received = 0usize;
+    loop {
+        match read_msg_enc(&mut stream, &key)? {
+            Msg::Book { row } => {
+                let db = app
+                    .try_state::<Database>()
+                    .ok_or_else(|| "No DB state".to_string())?;
+                let conn = db.conn.lock().map_err(|e| e.to_string())?;
+                if db_upsert_book(&conn, &row)? {
+                    books_received += 1;
+                }
+            }
+            Msg::BooksDone { sent } => {
+                eprintln!("[sync] Server: client sent {sent} books, we received {books_received} new/updated");
+                break;
+            }
+            other => return Err(format!("Unexpected msg in books recv: {other:?}")),
+        }
+        if books_received > need_books_by_me.len() + 500 {
+            return Err("Received more books than expected".into());
+        }
+    }
+    write_msg_enc(&mut stream, &key, &Msg::BooksAck { recv: books_received })?;
+
+    // ── Signals phase ────────────────────────────────────────────────────────
+
+    let signals_to_send = {
+        let db = app
+            .try_state::<Database>()
+            .ok_or_else(|| "No DB state".to_string())?;
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        db_get_signals_full(&conn, &need_signals_by_client)?
+    };
+    let signals_sent = signals_to_send.len();
+    for signal in signals_to_send {
+        write_msg_enc(&mut stream, &key, &Msg::Signal { row: signal })?;
+    }
+    write_msg_enc(&mut stream, &key, &Msg::SignalsDone { sent: signals_sent })?;
+
+    let mut signals_received = 0usize;
+    loop {
+        match read_msg_enc(&mut stream, &key)? {
+            Msg::Signal { row } => {
+                let db = app
+                    .try_state::<Database>()
+                    .ok_or_else(|| "No DB state".to_string())?;
+                let conn = db.conn.lock().map_err(|e| e.to_string())?;
+                if db_insert_signal_if_new(&conn, &row)? {
+                    signals_received += 1;
+                }
+            }
+            Msg::SignalsDone { sent } => {
+                eprintln!("[sync] Server: client sent {sent} signals, we received {signals_received} new");
+                break;
+            }
+            other => return Err(format!("Unexpected msg in signals recv: {other:?}")),
+        }
+        if signals_received > need_signals_by_me.len() + 10_000 {
+            return Err("Received more signals than expected".into());
+        }
+    }
+    write_msg_enc(&mut stream, &key, &Msg::SignalsAck { recv: signals_received })?;
+
+    // ── Settings phase ───────────────────────────────────────────────────────
+
+    let settings_to_send: Vec<(String, String, String)> = {
+        let db = app
+            .try_state::<Database>()
+            .ok_or_else(|| "No DB state".to_string())?;
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        let mut out = Vec::new();
+        for key_name in &need_settings_by_client {
+            if let Some((value, updated_at)) = db_get_setting_for_sync(&conn, key_name)? {
+                out.push((key_name.clone(), value, updated_at));
+            }
+        }
+        out
+    };
+    let settings_sent = settings_to_send.len();
+    for (k, v, ua) in settings_to_send {
+        write_msg_enc(&mut stream, &key, &Msg::Setting { key: k, value: v, updated_at: ua })?;
+    }
+    write_msg_enc(&mut stream, &key, &Msg::SettingsDone { sent: settings_sent })?;
+
+    let mut settings_received = 0usize;
+    loop {
+        match read_msg_enc(&mut stream, &key)? {
+            Msg::Setting { key: k, value: v, updated_at: ua } => {
+                let db = app
+                    .try_state::<Database>()
+                    .ok_or_else(|| "No DB state".to_string())?;
+                let conn = db.conn.lock().map_err(|e| e.to_string())?;
+                if db_upsert_setting(&conn, &k, &v, &ua)? {
+                    settings_received += 1;
+                }
+            }
+            Msg::SettingsDone { sent } => {
+                eprintln!("[sync] Server: client sent {sent} settings, we received {settings_received} updated");
+                break;
+            }
+            other => return Err(format!("Unexpected msg in settings recv: {other:?}")),
+        }
+        if settings_received > need_settings_by_me.len() + 100 {
+            return Err("Received more settings than expected".into());
+        }
+    }
+    write_msg_enc(&mut stream, &key, &Msg::SettingsAck { recv: settings_received })?;
+
+    // Close write-half cleanly — all phases complete.
     let _ = stream.shutdown(std::net::Shutdown::Write);
 
-    // Step 9: Update peer_sync_state
+    // ── Finalise ─────────────────────────────────────────────────────────────
+
     let now = Utc::now().format("%Y-%m-%dT%H:%M:%S").to_string();
     {
         let db = app
@@ -571,20 +1084,32 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
         db_set_peer_sync_at(&conn, &client_device_id, &now)?;
     }
 
-    // Emit sync_complete
+    let total_sent = entries_sent + books_sent + signals_sent + settings_sent;
+    let total_received = entries_received + books_received + signals_received + settings_received;
+
     let _ = app.emit(
         "peer:sync_complete",
         serde_json::json!({
             "deviceId": client_device_id,
             "deviceName": client_name,
-            "sent": sent_count,
-            "received": received_count,
+            "sent": total_sent,
+            "received": total_received,
+            "sentEntries": entries_sent,
+            "receivedEntries": entries_received,
+            "sentBooks": books_sent,
+            "receivedBooks": books_received,
+            "sentSignals": signals_sent,
+            "receivedSignals": signals_received,
+            "sentSettings": settings_sent,
+            "receivedSettings": settings_received,
             "at": now,
         }),
     );
 
     eprintln!(
-        "[sync] Server: sync with {client_device_id} complete — sent {sent_count}, received {received_count}"
+        "[sync] Server: sync with {client_device_id} complete — \
+         entries {entries_sent}/{entries_received}, books {books_sent}/{books_received}, \
+         signals {signals_sent}/{signals_received}, settings {settings_sent}/{settings_received}"
     );
     Ok(())
 }
@@ -704,32 +1229,48 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
     );
 
     // Step 3: Get our manifest (lock DB, then drop)
-    let my_manifest = {
+    let (my_entries, my_books, my_signals, my_settings) = {
         let db = app
             .try_state::<Database>()
             .ok_or_else(|| "No DB state".to_string())?;
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
-        db_get_manifest(&conn)?
+        (
+            db_get_entries_manifest(&conn)?,
+            db_get_books_manifest(&conn)?,
+            db_get_signals_manifest(&conn)?,
+            db_get_settings_manifest(&conn)?,
+        )
     };
 
     // Step 4: Send our MANIFEST
-    write_msg_enc(&mut stream, &key, &Msg::Manifest { entries: my_manifest.clone() })?;
+    write_msg_enc(
+        &mut stream,
+        &key,
+        &Msg::Manifest {
+            entries: my_entries.clone(),
+            books: my_books.clone(),
+            signals: my_signals.clone(),
+            settings: my_settings.clone(),
+        },
+    )?;
 
     // Step 5: Read server's MANIFEST
-    let server_manifest = match read_msg_enc(&mut stream, &key)? {
-        Msg::Manifest { entries } => entries,
-        other => return Err(format!("Expected MANIFEST from server, got: {other:?}")),
-    };
+    let (server_entries, server_books, server_signals, server_settings) =
+        match read_msg_enc(&mut stream, &key)? {
+            Msg::Manifest { entries, books, signals, settings } => {
+                (entries, books, signals, settings)
+            }
+            other => return Err(format!("Expected MANIFEST from server, got: {other:?}")),
+        };
 
-    // Compute what we need from server and what server needs from us
-    let my_map: std::collections::HashMap<&str, &str> = my_manifest
-        .iter()
-        .map(|e| (e.id.as_str(), e.updated_at.as_str()))
-        .collect();
-    let need_by_me: Vec<String> = server_manifest
+    // ── Compute diffs ────────────────────────────────────────────────────────
+
+    let my_entry_map: std::collections::HashMap<&str, &str> =
+        my_entries.iter().map(|e| (e.id.as_str(), e.updated_at.as_str())).collect();
+    let need_entries_by_me: Vec<String> = server_entries
         .iter()
         .filter(|e| {
-            my_map
+            my_entry_map
                 .get(e.id.as_str())
                 .map(|&mat| e.updated_at.as_str() > mat)
                 .unwrap_or(true)
@@ -737,14 +1278,12 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
         .map(|e| e.id.clone())
         .collect();
 
-    let server_map: std::collections::HashMap<&str, &str> = server_manifest
-        .iter()
-        .map(|e| (e.id.as_str(), e.updated_at.as_str()))
-        .collect();
-    let need_by_server: Vec<String> = my_manifest
+    let server_entry_map: std::collections::HashMap<&str, &str> =
+        server_entries.iter().map(|e| (e.id.as_str(), e.updated_at.as_str())).collect();
+    let need_entries_by_server: Vec<String> = my_entries
         .iter()
         .filter(|e| {
-            server_map
+            server_entry_map
                 .get(e.id.as_str())
                 .map(|&sat| e.updated_at.as_str() > sat)
                 .unwrap_or(true)
@@ -752,9 +1291,78 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
         .map(|e| e.id.clone())
         .collect();
 
+    // Books diffs
+    let my_book_map: std::collections::HashMap<&str, &str> =
+        my_books.iter().map(|e| (e.id.as_str(), e.updated_at.as_str())).collect();
+    let need_books_by_me: Vec<String> = server_books
+        .iter()
+        .filter(|e| {
+            my_book_map
+                .get(e.id.as_str())
+                .map(|&mat| e.updated_at.as_str() > mat)
+                .unwrap_or(true)
+        })
+        .map(|e| e.id.clone())
+        .collect();
+
+    let server_book_map: std::collections::HashMap<&str, &str> =
+        server_books.iter().map(|e| (e.id.as_str(), e.updated_at.as_str())).collect();
+    let need_books_by_server: Vec<String> = my_books
+        .iter()
+        .filter(|e| {
+            server_book_map
+                .get(e.id.as_str())
+                .map(|&sat| e.updated_at.as_str() > sat)
+                .unwrap_or(true)
+        })
+        .map(|e| e.id.clone())
+        .collect();
+
+    // Signals diffs (presence only — no LWW needed)
+    let my_signal_ids: std::collections::HashSet<&str> =
+        my_signals.iter().map(|s| s.id.as_str()).collect();
+    let need_signals_by_me: Vec<String> = server_signals
+        .iter()
+        .filter(|s| !my_signal_ids.contains(s.id.as_str()))
+        .map(|s| s.id.clone())
+        .collect();
+    let need_signals_by_server: Vec<String> = my_signals
+        .iter()
+        .filter(|s| !server_signals.iter().any(|ss| ss.id == s.id))
+        .map(|s| s.id.clone())
+        .collect();
+
+    // Settings diffs (LWW per key)
+    let my_settings_map: std::collections::HashMap<&str, &str> =
+        my_settings.iter().map(|s| (s.id.as_str(), s.updated_at.as_str())).collect();
+    let need_settings_by_me: Vec<String> = server_settings
+        .iter()
+        .filter(|s| {
+            my_settings_map
+                .get(s.id.as_str())
+                .map(|&mat| s.updated_at.as_str() > mat)
+                .unwrap_or(true)
+        })
+        .map(|s| s.id.clone())
+        .collect();
+
+    let server_settings_map: std::collections::HashMap<&str, &str> =
+        server_settings.iter().map(|s| (s.id.as_str(), s.updated_at.as_str())).collect();
+    let need_settings_by_server: Vec<String> = my_settings
+        .iter()
+        .filter(|s| {
+            server_settings_map
+                .get(s.id.as_str())
+                .map(|&sat| s.updated_at.as_str() > sat)
+                .unwrap_or(true)
+        })
+        .map(|s| s.id.clone())
+        .collect();
+
+    // ── Entry phase ──────────────────────────────────────────────────────────
+
     // Step 6: Receive entries from server until DONE
-    let mut received_count = 0usize;
-    let expected_recv = need_by_me.len();
+    let mut entries_received = 0usize;
     loop {
         let msg = read_msg_enc(&mut stream, &key)?;
         match msg {
@@ -764,55 +1372,201 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
                     .ok_or_else(|| "No DB state".to_string())?;
                 let conn = db.conn.lock().map_err(|e| e.to_string())?;
                 if db_upsert_entry(&conn, &row)? {
-                    received_count += 1;
+                    entries_received += 1;
                 }
             }
             Msg::Done { sent } => {
-                eprintln!("[sync] Client: server sent {sent} entries, we received {received_count} new");
+                eprintln!("[sync] Client: server sent {sent} entries, we received {entries_received} new");
                 break;
             }
-            other => {
-                return Err(format!("Unexpected message during receive: {other:?}"));
-            }
+            other => return Err(format!("Unexpected msg in entry recv: {other:?}")),
         }
-        if received_count > expected_recv + 1000 {
+        if entries_received > need_entries_by_me.len() + 1000 {
             return Err("Received more entries than expected".into());
         }
     }
 
-    // Step 7: Fetch and send entries server needs
+    // Step 7: Send entries server needs
     let to_send = {
         let db = app
             .try_state::<Database>()
             .ok_or_else(|| "No DB state".to_string())?;
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
-        db_get_entries_full(&conn, &need_by_server)?
+        db_get_entries_full(&conn, &need_entries_by_server)?
     };
-    let sent_count = to_send.len();
+    let entries_sent = to_send.len();
     for entry_row in to_send {
         write_msg_enc(&mut stream, &key, &Msg::Entry { row: entry_row })?;
     }
-    write_msg_enc(&mut stream, &key, &Msg::Done { sent: sent_count })?;
+    write_msg_enc(&mut stream, &key, &Msg::Done { sent: entries_sent })?;
 
-    // Step 8: Read DONE_ACK from server (tolerate EOF/reset — server closes after sending)
-    match read_msg_enc(&mut stream, &key) {
-        Ok(Msg::DoneAck { recv }) => {
+    // Step 8: Read DONE_ACK for entries
+    match read_msg_enc(&mut stream, &key)? {
+        Msg::DoneAck { recv } => {
             eprintln!("[sync] Client: server confirmed receipt of {recv} entries");
         }
-        Ok(other) => {
-            eprintln!("[sync] Client: unexpected message after DONE: {other:?}");
+        other => return Err(format!("Expected DONE_ACK for entries, got: {other:?}")),
+    }
+
+    // ── Books phase ──────────────────────────────────────────────────────────
+
+    // Receive books from server
+    let mut books_received = 0usize;
+    loop {
+        match read_msg_enc(&mut stream, &key)? {
+            Msg::Book { row } => {
+                let db = app
+                    .try_state::<Database>()
+                    .ok_or_else(|| "No DB state".to_string())?;
+                let conn = db.conn.lock().map_err(|e| e.to_string())?;
+                if db_upsert_book(&conn, &row)? {
+                    books_received += 1;
+                }
+            }
+            Msg::BooksDone { sent } => {
+                eprintln!("[sync] Client: server sent {sent} books, we received {books_received} new/updated");
+                break;
+            }
+            other => return Err(format!("Unexpected msg in books recv: {other:?}")),
         }
-        Err(e) => {
-            // Server closed the connection after sending DONE_ACK — this is expected.
-            eprintln!("[sync] Client: DONE_ACK read ended early ({}), treating as success", e);
+        if books_received > need_books_by_me.len() + 500 {
+            return Err("Received more books than expected".into());
         }
     }
-    // Close both halves promptly — mirrors the server's shutdown(Write) above.
-    // Without this the server-side read-half lingers in CLOSE_WAIT until the OS
-    // times out the half-open socket (observed as a 6+ second gap in pcap).
+
+    // Send books server needs
+    let books_to_send = {
+        let db = app
+            .try_state::<Database>()
+            .ok_or_else(|| "No DB state".to_string())?;
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        db_get_books_full(&conn, &need_books_by_server)?
+    };
+    let books_sent = books_to_send.len();
+    for book in books_to_send {
+        write_msg_enc(&mut stream, &key, &Msg::Book { row: book })?;
+    }
+    write_msg_enc(&mut stream, &key, &Msg::BooksDone { sent: books_sent })?;
+
+    match read_msg_enc(&mut stream, &key)? {
+        Msg::BooksAck { recv } => {
+            eprintln!("[sync] Client: server confirmed receipt of {recv} books");
+        }
+        other => return Err(format!("Expected BOOKS_ACK, got: {other:?}")),
+    }
+
+    // ── Signals phase ────────────────────────────────────────────────────────
+
+    // Receive signals from server
+    let mut signals_received = 0usize;
+    loop {
+        match read_msg_enc(&mut stream, &key)? {
+            Msg::Signal { row } => {
+                let db = app
+                    .try_state::<Database>()
+                    .ok_or_else(|| "No DB state".to_string())?;
+                let conn = db.conn.lock().map_err(|e| e.to_string())?;
+                if db_insert_signal_if_new(&conn, &row)? {
+                    signals_received += 1;
+                }
+            }
+            Msg::SignalsDone { sent } => {
+                eprintln!("[sync] Client: server sent {sent} signals, we received {signals_received} new");
+                break;
+            }
+            other => return Err(format!("Unexpected msg in signals recv: {other:?}")),
+        }
+        if signals_received > need_signals_by_me.len() + 10_000 {
+            return Err("Received more signals than expected".into());
+        }
+    }
+
+    // Send signals server needs
+    let signals_to_send = {
+        let db = app
+            .try_state::<Database>()
+            .ok_or_else(|| "No DB state".to_string())?;
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        db_get_signals_full(&conn, &need_signals_by_server)?
+    };
+    let signals_sent = signals_to_send.len();
+    for signal in signals_to_send {
+        write_msg_enc(&mut stream, &key, &Msg::Signal { row: signal })?;
+    }
+    write_msg_enc(&mut stream, &key, &Msg::SignalsDone { sent: signals_sent })?;
+
+    match read_msg_enc(&mut stream, &key)? {
+        Msg::SignalsAck { recv } => {
+            eprintln!("[sync] Client: server confirmed receipt of {recv} signals");
+        }
+        other => return Err(format!("Expected SIGNALS_ACK, got: {other:?}")),
+    }
+
+    // ── Settings phase ───────────────────────────────────────────────────────
+
+    // Receive settings from server
+    let mut settings_received = 0usize;
+    loop {
+        match read_msg_enc(&mut stream, &key)? {
+            Msg::Setting { key: k, value: v, updated_at: ua } => {
+                let db = app
+                    .try_state::<Database>()
+                    .ok_or_else(|| "No DB state".to_string())?;
+                let conn = db.conn.lock().map_err(|e| e.to_string())?;
+                if db_upsert_setting(&conn, &k, &v, &ua)? {
+                    settings_received += 1;
+                }
+            }
+            Msg::SettingsDone { sent } => {
+                eprintln!("[sync] Client: server sent {sent} settings, we received {settings_received} updated");
+                break;
+            }
+            other => return Err(format!("Unexpected msg in settings recv: {other:?}")),
+        }
+        if settings_received > need_settings_by_me.len() + 100 {
+            return Err("Received more settings than expected".into());
+        }
+    }
+
+    // Send settings server needs
+    let settings_to_send: Vec<(String, String, String)> = {
+        let db = app
+            .try_state::<Database>()
+            .ok_or_else(|| "No DB state".to_string())?;
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        let mut out = Vec::new();
+        for key_name in &need_settings_by_server {
+            if let Some((value, updated_at)) = db_get_setting_for_sync(&conn, key_name)? {
+                out.push((key_name.clone(), value, updated_at));
+            }
+        }
+        out
+    };
+    let settings_sent = settings_to_send.len();
+    for (k, v, ua) in settings_to_send {
+        write_msg_enc(&mut stream, &key, &Msg::Setting { key: k, value: v, updated_at: ua })?;
+    }
+    write_msg_enc(&mut stream, &key, &Msg::SettingsDone { sent: settings_sent })?;
+
+    // Read SETTINGS_ACK (tolerate EOF/reset — server closes write-half after this)
+    match read_msg_enc(&mut stream, &key) {
+        Ok(Msg::SettingsAck { recv }) => {
+            eprintln!("[sync] Client: server confirmed receipt of {recv} settings");
+        }
+        Ok(other) => {
+            eprintln!("[sync] Client: unexpected message after SETTINGS_DONE: {other:?}");
+        }
+        Err(e) => {
+            // Server closed the connection after sending SETTINGS_ACK — expected.
+            eprintln!("[sync] Client: SETTINGS_ACK read ended early ({}), treating as success", e);
+        }
+    }
+
+    // Close both halves promptly.
     let _ = stream.shutdown(std::net::Shutdown::Both);
 
-    // Step 9: Update peer_sync_state
+    // ── Finalise ─────────────────────────────────────────────────────────────
+
     let now = Utc::now().format("%Y-%m-%dT%H:%M:%S").to_string();
     {
         let db = app
@@ -822,20 +1576,32 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
         db_set_peer_sync_at(&conn, peer_device_id, &now)?;
     }
 
-    // Emit sync_complete
+    let total_sent = entries_sent + books_sent + signals_sent + settings_sent;
+    let total_received = entries_received + books_received + signals_received + settings_received;
+
     let _ = app.emit(
         "peer:sync_complete",
         serde_json::json!({
             "deviceId": peer_device_id,
             "deviceName": peer_name,
-            "sent": sent_count,
-            "received": received_count,
+            "sent": total_sent,
+            "received": total_received,
+            "sentEntries": entries_sent,
+            "receivedEntries": entries_received,
+            "sentBooks": books_sent,
+            "receivedBooks": books_received,
+            "sentSignals": signals_sent,
+            "receivedSignals": signals_received,
+            "sentSettings": settings_sent,
+            "receivedSettings": settings_received,
             "at": now,
         }),
     );
 
     eprintln!(
-        "[sync] Client: sync with {peer_device_id} complete — sent {sent_count}, received {received_count}"
+        "[sync] Client: sync with {peer_device_id} complete — \
+         entries {entries_sent}/{entries_received}, books {books_sent}/{books_received}, \
+         signals {signals_sent}/{signals_received}, settings {settings_sent}/{settings_received}"
     );
     Ok(())
 }

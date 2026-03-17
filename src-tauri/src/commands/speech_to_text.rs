@@ -6,10 +6,9 @@
 use anyhow::Result;
 use base64::{engine::general_purpose::STANDARD, Engine};
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs::{self, File};
-use std::io::{Read, Write};
+use std::io::Write;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -36,17 +35,6 @@ pub struct DownloadProgress {
     pub error: Option<String>,
 }
 
-/// Expected SHA256 checksums for model files
-fn get_model_checksum(filename: &str) -> Option<&'static str> {
-    // Checksums from https://huggingface.co/ggerganov/whisper.cpp
-    match filename {
-        "ggml-tiny.en.bin" => Some("c78c86eb1a8faa21b369bcd33207cc90d64b5b0cf19e5e2a0fbf9c6fdc9b27c6"),
-        "ggml-base.en.bin" => Some("137c40403d78fd54d454da0f9bd998f78703390c9a7a1e0e0e3b8e2f8e6e4b7a"),
-        "ggml-small.en.bin" => Some("db8a495a91d927739e50b3fc1a7f78c0fcf8d8fd4b3f1f0c2f1d95b5a0f3c8f5"),
-        "ggml-medium.en.bin" => Some("6c14d5adee5f86394037b4e548e5546c7c5b7c1d3f95e2a9b8c5d7e6f3a2b1c0"),
-        _ => None,
-    }
-}
 
 /// State for tracking active downloads (for cancellation)
 pub struct DownloadState {
@@ -138,7 +126,12 @@ fn emit_progress(app: &AppHandle, progress: DownloadProgress) {
     let _ = app.emit("stt-download-progress", progress);
 }
 
-/// Download a whisper model with streaming progress, cancellation support, and verification
+/// Download a whisper model with streaming progress and cancellation support.
+///
+/// Downloads to a `.partial` temp file and renames to the final name on success,
+/// so an interrupted download never leaves a corrupt model in place.
+/// No range-resume: HuggingFace's XetHub/CAS redirect chain does not support
+/// byte-range requests, so we always start fresh.
 #[command]
 pub async fn stt_download_model(
     app: AppHandle,
@@ -150,20 +143,21 @@ pub async fn stt_download_model(
     let model_path = models_dir.join(&filename);
     let partial_path = models_dir.join(format!("{}.partial", &filename));
 
-    // Create cancellation token
+    // Remove any leftover partial file from a previous attempt
+    let _ = fs::remove_file(&partial_path);
+
+    // Register cancellation token
     let cancel_token = Arc::new(AtomicBool::new(false));
     {
         let mut downloads = state.active_downloads.lock().unwrap();
         downloads.insert(filename.clone(), cancel_token.clone());
     }
 
-    // Cleanup function
     let cleanup = |state: &State<'_, DownloadState>, filename: &str| {
         let mut downloads = state.active_downloads.lock().unwrap();
         downloads.remove(filename);
     };
 
-    // Extract host from URL for display
     let display_url = url
         .split("//")
         .nth(1)
@@ -171,7 +165,6 @@ pub async fn stt_download_model(
         .unwrap_or(&url)
         .to_string();
 
-    // Emit connecting state
     emit_progress(
         &app,
         DownloadProgress {
@@ -185,30 +178,18 @@ pub async fn stt_download_model(
         },
     );
 
+    // connect_timeout only — no overall timeout so large files can stream freely
     let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(30))
+        .connect_timeout(std::time::Duration::from_secs(30))
         .build()
         .map_err(|e| {
             cleanup(&state, &filename);
             format!("Failed to create HTTP client: {}", e)
         })?;
 
-    // Check for existing partial download to resume
-    let mut start_byte: u64 = 0;
-    if partial_path.exists() {
-        if let Ok(metadata) = fs::metadata(&partial_path) {
-            start_byte = metadata.len();
-        }
-    }
-
-    // Build request with Range header for resume support
-    let mut request = client.get(&url);
-    if start_byte > 0 {
-        request = request.header("Range", format!("bytes={}-", start_byte));
-    }
-
-    let response = request.send().await.map_err(|e| {
+    let response = client.get(&url).send().await.map_err(|e| {
         cleanup(&state, &filename);
+        let msg = format!("Connection failed: {}", e);
         emit_progress(
             &app,
             DownloadProgress {
@@ -218,17 +199,16 @@ pub async fn stt_download_model(
                 percentage: 0.0,
                 speed: 0.0,
                 url: display_url.clone(),
-                error: Some(format!("Connection failed: {}", e)),
+                error: Some(msg.clone()),
             },
         );
-        format!("Failed to connect: {}", e)
+        format!("Failed to download model: {}", msg)
     })?;
 
-    // Check if server supports resume (206 Partial Content) or full download (200 OK)
     let status = response.status();
-    if !status.is_success() && status != reqwest::StatusCode::PARTIAL_CONTENT {
+    if !status.is_success() {
         cleanup(&state, &filename);
-        let error_msg = format!("Server returned error: {}", status);
+        let error_msg = format!("Server returned {}", status);
         emit_progress(
             &app,
             DownloadProgress {
@@ -241,55 +221,26 @@ pub async fn stt_download_model(
                 error: Some(error_msg.clone()),
             },
         );
-        return Err(error_msg);
+        return Err(format!("Failed to download model: {}", error_msg));
     }
 
-    // If server doesn't support resume (200 instead of 206), start from beginning
-    if status == reqwest::StatusCode::OK && start_byte > 0 {
-        start_byte = 0;
-        let _ = fs::remove_file(&partial_path);
-    }
+    let total_size = response.content_length().unwrap_or(0);
 
-    // Get total size from Content-Length or Content-Range
-    let total_size = if status == reqwest::StatusCode::PARTIAL_CONTENT {
-        // Parse Content-Range: bytes 1000-9999/10000
-        response
-            .headers()
-            .get("content-range")
-            .and_then(|v| v.to_str().ok())
-            .and_then(|s| s.split('/').last())
-            .and_then(|s| s.parse::<u64>().ok())
-            .unwrap_or(0)
-    } else {
-        response.content_length().unwrap_or(0)
-    };
+    let mut file = File::create(&partial_path).map_err(|e| {
+        cleanup(&state, &filename);
+        format!("Failed to create temp file: {}", e)
+    })?;
 
-    // Open file for writing (append if resuming)
-    let mut file = if start_byte > 0 {
-        fs::OpenOptions::new()
-            .append(true)
-            .open(&partial_path)
-            .map_err(|e| {
-                cleanup(&state, &filename);
-                format!("Failed to open partial file: {}", e)
-            })?
-    } else {
-        File::create(&partial_path).map_err(|e| {
-            cleanup(&state, &filename);
-            format!("Failed to create file: {}", e)
-        })?
-    };
-
-    // Download with progress
-    let mut downloaded = start_byte;
+    let mut downloaded: u64 = 0;
     let start_time = std::time::Instant::now();
     let mut last_progress_time = start_time;
     let mut stream = response.bytes_stream();
 
     use futures_util::StreamExt;
     while let Some(chunk_result) = stream.next().await {
-        // Check for cancellation
         if cancel_token.load(Ordering::Relaxed) {
+            drop(file);
+            let _ = fs::remove_file(&partial_path);
             cleanup(&state, &filename);
             emit_progress(
                 &app,
@@ -322,16 +273,10 @@ pub async fn stt_download_model(
 
         downloaded += chunk.len() as u64;
 
-        // Emit progress every 100ms
         let now = std::time::Instant::now();
         if now.duration_since(last_progress_time).as_millis() >= 100 {
             let elapsed = now.duration_since(start_time).as_secs_f64();
-            let speed = if elapsed > 0.0 {
-                (downloaded - start_byte) as f64 / elapsed
-            } else {
-                0.0
-            };
-
+            let speed = if elapsed > 0.0 { downloaded as f64 / elapsed } else { 0.0 };
             emit_progress(
                 &app,
                 DownloadProgress {
@@ -352,69 +297,12 @@ pub async fn stt_download_model(
         }
     }
 
-    // Flush and close file
     file.flush().map_err(|e| {
         cleanup(&state, &filename);
         format!("Failed to flush file: {}", e)
     })?;
     drop(file);
 
-    // Verify file if checksum is available
-    if let Some(expected_checksum) = get_model_checksum(&filename) {
-        emit_progress(
-            &app,
-            DownloadProgress {
-                state: "verifying".to_string(),
-                downloaded,
-                total: total_size,
-                percentage: 100.0,
-                speed: 0.0,
-                url: display_url.clone(),
-                error: None,
-            },
-        );
-
-        let mut file = File::open(&partial_path).map_err(|e| {
-            cleanup(&state, &filename);
-            format!("Failed to open file for verification: {}", e)
-        })?;
-
-        let mut hasher = Sha256::new();
-        let mut buffer = [0u8; 8192];
-        loop {
-            let bytes_read = file.read(&mut buffer).map_err(|e| {
-                cleanup(&state, &filename);
-                format!("Failed to read file for verification: {}", e)
-            })?;
-            if bytes_read == 0 {
-                break;
-            }
-            hasher.update(&buffer[..bytes_read]);
-        }
-
-        let computed_checksum = hex::encode(hasher.finalize());
-        if computed_checksum != expected_checksum {
-            // Checksum mismatch - delete the file
-            let _ = fs::remove_file(&partial_path);
-            cleanup(&state, &filename);
-            let error_msg = "File verification failed - checksum mismatch. Please try again.".to_string();
-            emit_progress(
-                &app,
-                DownloadProgress {
-                    state: "error".to_string(),
-                    downloaded,
-                    total: total_size,
-                    percentage: 100.0,
-                    speed: 0.0,
-                    url: display_url.clone(),
-                    error: Some(error_msg.clone()),
-                },
-            );
-            return Err(error_msg);
-        }
-    }
-
-    // Rename partial file to final filename
     fs::rename(&partial_path, &model_path).map_err(|e| {
         cleanup(&state, &filename);
         format!("Failed to finalize download: {}", e)

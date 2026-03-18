@@ -8,6 +8,12 @@
 import { create } from 'zustand';
 import type { DeviceIdentity, DiscoveredPeer, SyncStatus, TrustedDevice } from '../types/peerSync';
 
+export interface PairingRequest {
+  deviceName: string;
+  deviceType: string;
+  deviceId: string;
+}
+
 interface PeerSyncState {
   // This device
   identity: DeviceIdentity | null;
@@ -22,6 +28,9 @@ interface PeerSyncState {
 
   // Per-device sync status (keyed by deviceId)
   syncStatuses: Record<string, SyncStatus>;
+
+  // Incoming pairing request (non-null when another device is trying to pair)
+  pairingRequest: PairingRequest | null;
 
   // Actions
   setIdentity: (identity: DeviceIdentity) => void;
@@ -40,6 +49,7 @@ interface PeerSyncState {
   markPeerUntrusted: (deviceId: string) => void;
   setSyncStatus: (deviceId: string, status: SyncStatus) => void;
   clearSyncStatus: (deviceId: string) => void;
+  setPairingRequest: (req: PairingRequest | null) => void;
 }
 
 export const usePeerSyncStore = create<PeerSyncState>((set) => ({
@@ -49,6 +59,7 @@ export const usePeerSyncStore = create<PeerSyncState>((set) => ({
   nearbyPeers: [],
   trustedDevices: [],
   syncStatuses: {},
+  pairingRequest: null,
 
   setIdentity: (identity) => set({ identity }),
   setIdentityLoading: (identityLoading) => set({ identityLoading }),
@@ -107,4 +118,6 @@ export const usePeerSyncStore = create<PeerSyncState>((set) => ({
       const { [deviceId]: _, ...rest } = state.syncStatuses;
       return { syncStatuses: rest };
     }),
+
+  setPairingRequest: (pairingRequest) => set({ pairingRequest }),
 }));

@@ -25,8 +25,20 @@ pub fn run() {
         // `invoke('plugin:wear|*')` calls to the Kotlin WearPlugin via pluginManager.
         .plugin(tauri::plugin::Builder::<_, ()>::new("wear").build())
         .setup(|app| {
-            // Initialize database
+            // If a full-restore pending file exists, swap it in before opening the DB.
+            // This is written by `peer_full_restore` during setup and applied on next startup.
             let db_path = get_db_path(&app.handle())?;
+            if let Some(parent) = db_path.parent() {
+                let pending = parent.join("moodbloom_restore.pending");
+                if pending.exists() {
+                    eprintln!("[restore] Applying pending DB restore: {:?} → {:?}", pending, db_path);
+                    if let Err(e) = std::fs::rename(&pending, &db_path) {
+                        eprintln!("[restore] WARNING: failed to apply pending DB: {e}");
+                    }
+                }
+            }
+
+            // Initialize database
             let database = Database::new(db_path)
                 .map_err(|e| anyhow::anyhow!("Database initialization failed: {}", e))?;
 
@@ -205,6 +217,9 @@ pub fn run() {
             commands::peer_start_sync_server,
             commands::peer_sync_now,
             commands::peer_get_sync_states,
+            // Full DB restore (setup-time, new device ← existing device)
+            commands::peer_full_restore,
+            commands::peer_apply_and_restart,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

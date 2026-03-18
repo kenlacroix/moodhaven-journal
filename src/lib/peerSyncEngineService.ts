@@ -96,3 +96,45 @@ export function onPeerRevokedUs(cb: (e: PeerRevokedUsEvent) => void): Promise<Un
 export function onSyncUnknownPeer(cb: (e: SyncUnknownPeerEvent) => void): Promise<UnlistenFn> {
   return listen<SyncUnknownPeerEvent>('peer:sync_unknown_peer', (e) => cb(e.payload));
 }
+
+// ── Full DB restore (setup-time) ──────────────────────────────────────────────
+
+export interface RestoreProgressEvent {
+  bytesReceived: number;
+  totalBytes: number;
+  percentage: number;
+  chunksReceived: number;
+  totalChunks: number;
+  deviceName: string;
+}
+
+export interface RestoreReadyEvent {
+  totalBytes: number;
+  deviceName: string;
+}
+
+export interface RestoreErrorEvent {
+  message: string;
+}
+
+/** Kick off a full DB restore from a trusted peer (setup-time). */
+export async function peerFullRestore(deviceId: string, host: string): Promise<void> {
+  return invoke('peer_full_restore', { deviceId, host });
+}
+
+/** Rename the pending restore file to moodbloom.db and restart the app. */
+export async function peerApplyAndRestart(): Promise<void> {
+  return invoke('peer_apply_and_restart');
+}
+
+export function onRestoreProgress(cb: (e: RestoreProgressEvent) => void): Promise<UnlistenFn> {
+  return listen<RestoreProgressEvent>('peer:restore_progress', (e) => cb(e.payload));
+}
+
+export function onRestoreReady(cb: (e: RestoreReadyEvent) => void): Promise<UnlistenFn> {
+  return listen<RestoreReadyEvent>('peer:restore_ready', (e) => cb(e.payload));
+}
+
+export function onRestoreError(cb: (e: RestoreErrorEvent) => void): Promise<UnlistenFn> {
+  return listen<RestoreErrorEvent>('peer:restore_error', (e) => cb(e.payload));
+}

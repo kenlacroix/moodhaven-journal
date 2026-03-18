@@ -18,12 +18,12 @@ import { TotpSetup, HardwareKeySetup } from '../components/twoFactor';
 import { generateRecoveryKey, storeRecoveryKey } from '../lib/recoveryKeyService';
 import { readBackupFile, encryptedImport } from '../lib/dataManagementService';
 import { startDiscovery, stopDiscovery } from '../lib/peerDiscoveryService';
-import { peerSyncNow } from '../lib/peerSyncEngineService';
+import { peerSyncNow, peerFullRestore, peerApplyAndRestart, onRestoreProgress, onRestoreReady, onRestoreError, type RestoreProgressEvent } from '../lib/peerSyncEngineService';
 import { PairingModal } from '../components/peer-sync/PairingModal';
 import type { StorageBackend } from '../types/settings';
 import type { DiscoveredPeer } from '../types/peerSync';
 
-type WizardStep = 'welcome' | 'password' | 'recovery' | 'security' | 'storage' | 'devices' | 'import' | 'complete';
+type WizardStep = 'welcome' | 'source' | 'password' | 'recovery' | 'security' | 'storage' | 'devices' | 'sync_from_peer' | 'import' | 'complete';
 
 interface StepConfig {
   id: WizardStep;
@@ -31,15 +31,24 @@ interface StepConfig {
   subtitle: string;
 }
 
-const STEPS: StepConfig[] = [
-  { id: 'welcome', title: 'Welcome', subtitle: 'Get started' },
-  { id: 'password', title: 'Password', subtitle: 'Protect your data' },
-  { id: 'recovery', title: 'Recovery', subtitle: 'Optional backup' },
-  { id: 'security', title: 'Extra Security', subtitle: 'Two-factor auth' },
-  { id: 'storage', title: 'Storage', subtitle: 'Choose location' },
-  { id: 'devices', title: 'Devices', subtitle: 'Connect your devices' },
-  { id: 'import', title: 'Import', subtitle: 'Restore data' },
-  { id: 'complete', title: 'Ready', subtitle: 'All set!' },
+const FRESH_STEPS: StepConfig[] = [
+  { id: 'welcome',       title: 'Welcome',        subtitle: 'Get started' },
+  { id: 'source',        title: 'Setup',          subtitle: 'Choose path' },
+  { id: 'password',      title: 'Password',       subtitle: 'Protect your data' },
+  { id: 'recovery',      title: 'Recovery',       subtitle: 'Optional backup' },
+  { id: 'security',      title: 'Extra Security', subtitle: 'Two-factor auth' },
+  { id: 'storage',       title: 'Storage',        subtitle: 'Choose location' },
+  { id: 'devices',       title: 'Devices',        subtitle: 'Connect your devices' },
+  { id: 'import',        title: 'Import',         subtitle: 'Restore data' },
+  { id: 'complete',      title: 'Ready',          subtitle: 'All set!' },
+];
+
+const SYNC_STEPS: StepConfig[] = [
+  { id: 'welcome',        title: 'Welcome',  subtitle: 'Get started' },
+  { id: 'source',         title: 'Setup',    subtitle: 'Choose path' },
+  { id: 'password',       title: 'Password', subtitle: 'Match your other device' },
+  { id: 'sync_from_peer', title: 'Sync',     subtitle: 'Pull from device' },
+  { id: 'complete',       title: 'Ready',    subtitle: 'All set!' },
 ];
 
 type StorageType = StorageBackend;
@@ -61,6 +70,10 @@ export function SetupScreen() {
 
   const [enableLanSync, setEnableLanSync] = useState(false);
   const [pairingPeer, setPairingPeer] = useState<DiscoveredPeer | null>(null);
+  const [setupMode, setSetupMode] = useState<'fresh' | 'sync'>('fresh');
+  const [restoreProgress, setRestoreProgress] = useState<RestoreProgressEvent | null>(null);
+  const [restoreReady, setRestoreReady] = useState(false);
+  const [restoreError, setRestoreError] = useState<string | null>(null);
 
   const initialize = useAppStore((state) => state.initialize);
   const saveSettings = useSettingsStore((state) => state.saveSettings);
@@ -68,15 +81,27 @@ export function SetupScreen() {
   const nearbyPeers = usePeerSyncStore((s) => s.nearbyPeers);
   const isDiscovering = usePeerSyncStore((s) => s.isDiscovering);
   const trustedDevices = usePeerSyncStore((s) => s.trustedDevices);
+  // Dynamic step path based on chosen mode
+  const STEPS = setupMode === 'sync' ? SYNC_STEPS : FRESH_STEPS;
 
-  // Start/stop discovery when entering the devices step
+  // Start/stop discovery when entering the devices or sync_from_peer step
   useEffect(() => {
-    if (currentStep !== 'devices') return;
+    if (currentStep !== 'devices' && currentStep !== 'sync_from_peer') return;
     startDiscovery().catch(() => {});
     return () => {
       if (!enableLanSync) stopDiscovery().catch(() => {});
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentStep]);
+
+  // Listen for restore events while on the sync_from_peer step
+  useEffect(() => {
+    if (currentStep !== 'sync_from_peer') return;
+    const cleanups: Array<() => void> = [];
+    onRestoreProgress((e) => setRestoreProgress(e)).then((u) => cleanups.push(u));
+    onRestoreReady(() => setRestoreReady(true)).then((u) => cleanups.push(u));
+    onRestoreError((e) => setRestoreError(e.message)).then((u) => cleanups.push(u));
+    return () => cleanups.forEach((u) => u());
   }, [currentStep]);
 
   const currentStepIndex = STEPS.findIndex((s) => s.id === currentStep);
@@ -95,6 +120,12 @@ export function SetupScreen() {
       setCurrentStep(STEPS[prevIndex].id);
       setError(null);
     }
+  };
+
+  const handleChooseSource = (mode: 'fresh' | 'sync') => {
+    setSetupMode(mode);
+    setCurrentStep('password');
+    setError(null);
   };
 
   const handlePasswordSubmit = useCallback(() => {
@@ -251,10 +282,82 @@ export function SetupScreen() {
                 </div>
                 <button
                   type="button"
-                  onClick={goNext}
+                  onClick={() => setCurrentStep('source')}
                   className="btn-primary w-full py-3"
                 >
                   Get Started
+                </button>
+              </div>
+            )}
+
+            {/* Source Step — choose path */}
+            {currentStep === 'source' && (
+              <div className="space-y-6">
+                <div className="text-center">
+                  <h2 className="text-xl font-bold text-slate-800 dark:text-white mb-1">
+                    How would you like to start?
+                  </h2>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">
+                    Start fresh or restore your data from another device on your network.
+                  </p>
+                </div>
+
+                <div className="space-y-3">
+                  {/* Start fresh */}
+                  <button
+                    type="button"
+                    onClick={() => handleChooseSource('fresh')}
+                    className="w-full text-left p-4 rounded-2xl border-2 border-slate-200 dark:border-slate-700 hover:border-violet-400 dark:hover:border-violet-500 hover:bg-violet-50 dark:hover:bg-violet-900/10 transition-all group"
+                  >
+                    <div className="flex items-start gap-4">
+                      <div className="w-10 h-10 rounded-xl bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center flex-shrink-0 group-hover:bg-violet-200 dark:group-hover:bg-violet-800/40 transition-colors">
+                        <svg className="w-5 h-5 text-violet-600 dark:text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                        </svg>
+                      </div>
+                      <div>
+                        <p className="font-semibold text-slate-800 dark:text-white">Start fresh</p>
+                        <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+                          New to MoodBloom — create a new journal from scratch.
+                        </p>
+                      </div>
+                      <svg className="w-5 h-5 text-slate-300 dark:text-slate-600 ml-auto flex-shrink-0 self-center group-hover:text-violet-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                      </svg>
+                    </div>
+                  </button>
+
+                  {/* Sync from another device */}
+                  <button
+                    type="button"
+                    onClick={() => handleChooseSource('sync')}
+                    className="w-full text-left p-4 rounded-2xl border-2 border-slate-200 dark:border-slate-700 hover:border-emerald-400 dark:hover:border-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/10 transition-all group"
+                  >
+                    <div className="flex items-start gap-4">
+                      <div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-200 dark:group-hover:bg-emerald-800/40 transition-colors">
+                        <svg className="w-5 h-5 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M8.288 15.038a5.25 5.25 0 017.424 0M5.106 11.856c3.807-3.808 9.98-3.808 13.788 0M1.924 8.674c5.565-5.565 14.587-5.565 20.152 0M12.53 18.22l-.53.53-.53-.53a.75.75 0 011.06 0z" />
+                        </svg>
+                      </div>
+                      <div>
+                        <p className="font-semibold text-slate-800 dark:text-white">Restore from another device</p>
+                        <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+                          Pull your journals, settings and data from a device already running MoodBloom on this network.
+                        </p>
+                      </div>
+                      <svg className="w-5 h-5 text-slate-300 dark:text-slate-600 ml-auto flex-shrink-0 self-center group-hover:text-emerald-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                      </svg>
+                    </div>
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={goBack}
+                  className="btn-secondary w-full py-3"
+                >
+                  Back
                 </button>
               </div>
             )}
@@ -269,10 +372,12 @@ export function SetupScreen() {
                     </svg>
                   </div>
                   <h2 className="text-xl font-bold text-slate-800 dark:text-white mb-1">
-                    Create Your Password
+                    {setupMode === 'sync' ? 'Enter Your Password' : 'Create Your Password'}
                   </h2>
                   <p className="text-sm text-slate-500 dark:text-slate-400">
-                    This password encrypts all your journal entries
+                    {setupMode === 'sync'
+                      ? 'Enter the same password used on your other device — data is encrypted with it.'
+                      : 'This password encrypts all your journal entries'}
                   </p>
                 </div>
 
@@ -833,6 +938,177 @@ export function SetupScreen() {
                 )}
               </div>
             )}
+
+            {/* Restore From Peer Step — full DB snapshot for "restore from another device" */}
+            {currentStep === 'sync_from_peer' && (() => {
+              const isTransferring = restoreProgress !== null && !restoreReady;
+              const pct = restoreProgress?.percentage ?? 0;
+              const mbReceived = ((restoreProgress?.bytesReceived ?? 0) / 1_048_576).toFixed(1);
+              const mbTotal = ((restoreProgress?.totalBytes ?? 0) / 1_048_576).toFixed(1);
+              return (
+                <div className="space-y-5">
+                  <div className="text-center">
+                    <div className="w-12 h-12 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center mx-auto mb-4">
+                      {restoreReady ? (
+                        <svg className="w-6 h-6 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                      ) : isTransferring ? (
+                        <span className="w-6 h-6 border-2 border-emerald-300 border-t-emerald-600 rounded-full animate-spin" />
+                      ) : (
+                        <svg className="w-6 h-6 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M8.288 15.038a5.25 5.25 0 017.424 0M5.106 11.856c3.807-3.808 9.98-3.808 13.788 0M1.924 8.674c5.565-5.565 14.587-5.565 20.152 0M12.53 18.22l-.53.53-.53-.53a.75.75 0 011.06 0z" />
+                        </svg>
+                      )}
+                    </div>
+                    <h2 className="text-xl font-bold text-slate-800 dark:text-white mb-1">
+                      {restoreReady ? 'Transfer Complete!' : isTransferring ? 'Transferring…' : 'Connect to Your Device'}
+                    </h2>
+                    <p className="text-sm text-slate-500 dark:text-slate-400">
+                      {restoreReady
+                        ? `All data received from ${restoreProgress?.deviceName ?? 'your device'}.`
+                        : isTransferring
+                          ? `${mbReceived} MB / ${mbTotal} MB`
+                          : isDiscovering
+                            ? (
+                              <span className="inline-flex items-center gap-2">
+                                <span className="w-3 h-3 border border-emerald-400 border-t-emerald-600 rounded-full animate-spin" />
+                                Scanning your network…
+                              </span>
+                            )
+                            : 'Open MoodBloom on your other device — it must be on the same network.'}
+                    </p>
+                  </div>
+
+                  {/* Transfer progress bar */}
+                  {isTransferring && (
+                    <div className="space-y-1.5">
+                      <div className="h-2 w-full bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-emerald-500 transition-all duration-300 rounded-full"
+                          style={{ width: `${pct.toFixed(1)}%` }}
+                        />
+                      </div>
+                      <p className="text-xs text-slate-400 dark:text-slate-500 text-right">
+                        {pct.toFixed(0)}%
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Password note — only shown before transfer starts */}
+                  {!isTransferring && !restoreReady && (
+                    <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800 text-xs text-amber-700 dark:text-amber-400">
+                      <strong>Important:</strong> The password you just entered must match the one on your source device. Both devices use the same password to encrypt data.
+                    </div>
+                  )}
+
+                  {/* Peer list — hidden while transferring or done */}
+                  {!isTransferring && !restoreReady && (
+                    <div className="space-y-2 min-h-[80px]">
+                      {nearbyPeers.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-6 text-slate-400 dark:text-slate-500">
+                          <svg className="w-8 h-8 mb-2 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9.348 14.652a3.75 3.75 0 010-5.304m5.304 0a3.75 3.75 0 010 5.304m-7.425 2.121a6.75 6.75 0 010-9.546m9.546 0a6.75 6.75 0 010 9.546M5.106 18.894c-3.808-3.808-3.808-9.98 0-13.789m13.788 0c3.808 3.808 3.808 9.981 0 13.79M12 12h.008v.007H12V12zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+                          </svg>
+                          <p className="text-sm">No devices found yet</p>
+                          <p className="text-xs mt-1">Make sure your other device is open and on the same Wi-Fi</p>
+                        </div>
+                      ) : (
+                        nearbyPeers.map((peer) => {
+                          const isTrusted = trustedDevices.some((d) => d.deviceId === peer.deviceId);
+                          return (
+                            <div key={peer.deviceId} className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/50">
+                              <div className="w-8 h-8 rounded-lg bg-white dark:bg-slate-600 border border-slate-200 dark:border-slate-500 flex items-center justify-center flex-shrink-0">
+                                <svg className="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                                  <rect x="2" y="3" width="20" height="14" rx="2" strokeLinecap="round" strokeLinejoin="round" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 21h8M12 17v4" />
+                                </svg>
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">{peer.deviceName}</p>
+                                <p className="text-xs text-slate-400 dark:text-slate-500">{peer.host}</p>
+                              </div>
+                              {isTrusted ? (
+                                <button
+                                  type="button"
+                                  onClick={() => peerFullRestore(peer.deviceId, peer.host).catch((e: unknown) => setRestoreError(String(e)))}
+                                  className="px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white transition-colors"
+                                >
+                                  Restore
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => setPairingPeer(peer)}
+                                  className="px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white transition-colors"
+                                >
+                                  Pair & Restore
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  )}
+
+                  {restoreError && (
+                    <p className="text-sm text-rose-500 dark:text-rose-400">{restoreError}</p>
+                  )}
+
+                  <div className="flex gap-3">
+                    {!isTransferring && !restoreReady && (
+                      <button
+                        type="button"
+                        onClick={goBack}
+                        className="btn-secondary flex-1 py-3"
+                      >
+                        Back
+                      </button>
+                    )}
+                    {restoreReady && (
+                      <button
+                        type="button"
+                        onClick={() => peerApplyAndRestart().catch((e: unknown) => setRestoreError(String(e)))}
+                        className="btn-primary flex-1 py-3"
+                      >
+                        Restart & Open
+                      </button>
+                    )}
+                    {!isTransferring && !restoreReady && (
+                      <button
+                        type="button"
+                        onClick={handleComplete}
+                        disabled={isLoading}
+                        className="btn-secondary flex-1 py-3"
+                      >
+                        {isLoading ? (
+                          <span className="inline-flex items-center gap-2">
+                            <span className="w-4 h-4 border-2 border-slate-400/30 border-t-slate-500 rounded-full animate-spin" />
+                            Setting up…
+                          </span>
+                        ) : 'Skip for now'}
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Pairing modal */}
+                  {pairingPeer && (
+                    <PairingModal
+                      peer={pairingPeer}
+                      onClose={async () => {
+                        const justPaired = trustedDevices.find((d) => d.deviceId === pairingPeer.deviceId);
+                        if (justPaired) {
+                          // Start full restore immediately after pairing
+                          peerFullRestore(pairingPeer.deviceId, pairingPeer.host).catch((e: unknown) => setRestoreError(String(e)));
+                        }
+                        setPairingPeer(null);
+                      }}
+                    />
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Import Step */}
             {currentStep === 'import' && (

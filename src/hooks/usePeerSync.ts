@@ -13,7 +13,7 @@ import {
   onPeerDiscovered,
   onPeerLost,
 } from '../lib/peerDiscoveryService';
-import { getTrustedDevices, onPeerPaired } from '../lib/peerPairingService';
+import { getTrustedDevices, onPeerPaired, onPairingIncoming } from '../lib/peerPairingService';
 import {
   peerSyncNow,
   onSyncStarted,
@@ -51,6 +51,7 @@ export function usePeerSync() {
     markPeerTrusted,
     markPeerUntrusted,
     setSyncStatus,
+    setPairingRequest,
   } = usePeerSyncStore();
 
   // Read peer sync settings reactively so the effect can reference latest values
@@ -71,6 +72,7 @@ export function usePeerSync() {
     let unlistenDiscovered: (() => void) | null = null;
     let unlistenLost: (() => void) | null = null;
     let unlistenPaired: (() => void) | null = null;
+    let unlistenPairingIncoming: (() => void) | null = null;
     let unlistenSyncStarted: (() => void) | null = null;
     let unlistenSyncComplete: (() => void) | null = null;
     let unlistenSyncError: (() => void) | null = null;
@@ -141,6 +143,28 @@ export function usePeerSync() {
         if (!cancelled) {
           addOrUpdateTrusted(device);
           markPeerTrusted(device.deviceId);
+          // Clear any pending pairing request indicator.
+          setPairingRequest(null);
+          // Auto-sync immediately after pairing — find the peer's host from the
+          // current discovery state without needing a separate re-discovery cycle.
+          const { nearbyPeers } = usePeerSyncStore.getState();
+          const peer = nearbyPeers.find((p) => p.deviceId === device.deviceId);
+          if (peer?.host) {
+            peerSyncNow(device.deviceId, peer.host).catch((e) =>
+              console.warn('[sync] Post-pairing auto-sync failed:', e)
+            );
+          }
+        }
+      });
+
+      unlistenPairingIncoming = await onPairingIncoming((data) => {
+        if (!cancelled) {
+          // Only surface the notification if we're not already paired with this device.
+          const { trustedDevices } = usePeerSyncStore.getState();
+          const alreadyTrusted = trustedDevices.some((d) => d.deviceId === data.deviceId);
+          if (!alreadyTrusted) {
+            setPairingRequest(data);
+          }
         }
       });
 
@@ -203,6 +227,7 @@ export function usePeerSync() {
       unlistenDiscovered?.();
       unlistenLost?.();
       unlistenPaired?.();
+      unlistenPairingIncoming?.();
       unlistenSyncStarted?.();
       unlistenSyncComplete?.();
       unlistenSyncError?.();

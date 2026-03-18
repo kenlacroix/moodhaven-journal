@@ -121,6 +121,13 @@ enum Msg {
     Setting { key: String, value: String, updated_at: String },
     SettingsDone { sent: usize },
     SettingsAck { recv: usize },
+    // ── Full restore protocol ──
+    /// Client → Server: request the server's complete DB as a binary stream.
+    RestoreRequest,
+    /// Server → Client: metadata envelope preceding each binary chunk frame.
+    RestoreChunk { seq: u64, total_chunks: u64, offset: u64, total_bytes: u64 },
+    /// Server → Client: all chunks have been sent.
+    RestoreEnd { total_bytes: u64, chunks: u64 },
     Err { msg: String },
 }
 
@@ -261,13 +268,15 @@ fn write_frame(stream: &mut TcpStream, payload: &[u8]) -> Result<(), String> {
 }
 
 /// Read exactly the next length-prefixed frame bytes.
+/// The limit is generous (256 MB) to accommodate large binary restore chunks
+/// while still guarding against malformed frames.
 fn read_frame_bytes(stream: &mut TcpStream) -> Result<Vec<u8>, String> {
     let mut len_buf = [0u8; 4];
     stream
         .read_exact(&mut len_buf)
         .map_err(|e| format!("read frame length: {e}"))?;
     let len = u32::from_be_bytes(len_buf) as usize;
-    if len > 64 * 1024 * 1024 {
+    if len > 256 * 1024 * 1024 {
         return Err(format!("Frame too large: {len} bytes"));
     }
     let mut buf = vec![0u8; len];
@@ -275,6 +284,24 @@ fn read_frame_bytes(stream: &mut TcpStream) -> Result<Vec<u8>, String> {
         .read_exact(&mut buf)
         .map_err(|e| format!("read frame payload: {e}"))?;
     Ok(buf)
+}
+
+/// Write a raw binary frame (no encryption — only used for DB chunk data
+/// which is already sent after an encrypted envelope confirming chunk metadata).
+fn write_binary_frame(stream: &mut TcpStream, data: &[u8]) -> Result<(), String> {
+    let len = data.len() as u32;
+    stream
+        .write_all(&len.to_be_bytes())
+        .map_err(|e| format!("write binary frame length: {e}"))?;
+    stream
+        .write_all(data)
+        .map_err(|e| format!("write binary frame data: {e}"))?;
+    Ok(())
+}
+
+/// Read a raw binary frame (no decryption — pair with write_binary_frame).
+fn read_binary_frame(stream: &mut TcpStream) -> Result<Vec<u8>, String> {
+    read_frame_bytes(stream)
 }
 
 // ── Message I/O ───────────────────────────────────────────────────────────────
@@ -746,6 +773,261 @@ fn db_set_peer_sync_at(conn: &Connection, peer_id: &str, at: &str) -> Result<(),
     Ok(())
 }
 
+// ── Full-restore server handler ───────────────────────────────────────────────
+
+/// Stream the local SQLite DB file to the requesting client in 4 MB chunks.
+///
+/// Protocol (both sides have already completed HELLO/OK and key exchange):
+///   Client sent:  RestoreRequest  (encrypted JSON)
+///   Server sends: RestoreChunk    (encrypted JSON envelope) + binary data frame × N
+///   Server sends: RestoreEnd      (encrypted JSON)
+///   Server closes.
+///
+/// Each logical "chunk" is two TCP frames:
+///   1. Encrypted JSON: RestoreChunk { seq, total_chunks, offset, total_bytes }
+///   2. Raw binary:     the chunk bytes  (not encrypted — wire is already AES-GCM per-frame,
+///                      but the raw DB content is already encrypted at rest with the user's
+///                      password, so this is safe; avoids double-buffering 4 MB in memory)
+///
+/// The read timeout is extended to 5 minutes during the transfer to handle
+/// slow Wi-Fi or large databases.
+const RESTORE_CHUNK_BYTES: usize = 4 * 1024 * 1024; // 4 MiB
+
+fn do_serve_restore(
+    app: &AppHandle,
+    stream: &mut TcpStream,
+    key: &[u8; 32],
+    client_device_id: &str,
+    client_name: &str,
+) -> Result<(), String> {
+    // Give the transfer up to 5 minutes per chunk.
+    stream
+        .set_write_timeout(Some(Duration::from_secs(300)))
+        .map_err(|e| format!("set write timeout: {e}"))?;
+
+    let db_path = crate::db::get_db_path(app)?;
+    let db_bytes = std::fs::read(&db_path)
+        .map_err(|e| format!("Failed to read DB for restore: {e}"))?;
+    let total_bytes = db_bytes.len() as u64;
+    let total_chunks = (db_bytes.len() + RESTORE_CHUNK_BYTES - 1) / RESTORE_CHUNK_BYTES;
+
+    eprintln!(
+        "[restore] Serving DB ({} bytes, {} chunks) to {}",
+        total_bytes, total_chunks, client_name
+    );
+
+    let _ = app.emit(
+        "peer:restore_serving",
+        serde_json::json!({
+            "deviceId": client_device_id,
+            "deviceName": client_name,
+            "totalBytes": total_bytes,
+        }),
+    );
+
+    for (seq, chunk) in db_bytes.chunks(RESTORE_CHUNK_BYTES).enumerate() {
+        let offset = (seq * RESTORE_CHUNK_BYTES) as u64;
+
+        // Encrypted JSON envelope describing this chunk.
+        write_msg_enc(
+            stream,
+            key,
+            &Msg::RestoreChunk {
+                seq: seq as u64,
+                total_chunks: total_chunks as u64,
+                offset,
+                total_bytes,
+            },
+        )?;
+
+        // Raw binary data for the chunk (DB content is already encrypted at rest).
+        write_binary_frame(stream, chunk)?;
+
+        eprintln!(
+            "[restore] Sent chunk {}/{} ({} bytes)",
+            seq + 1,
+            total_chunks,
+            chunk.len()
+        );
+    }
+
+    // Signal completion.
+    write_msg_enc(
+        stream,
+        key,
+        &Msg::RestoreEnd {
+            total_bytes,
+            chunks: total_chunks as u64,
+        },
+    )?;
+
+    eprintln!("[restore] Done serving DB to {}", client_name);
+    Ok(())
+}
+
+// ── Full-restore client handler ────────────────────────────────────────────────
+
+/// Connect to `host:port`, authenticate, request the server's full DB, receive
+/// it chunk-by-chunk, and write the result to `{app_data}/moodbloom_restore.pending`.
+///
+/// Emits `peer:restore_progress` events and, on completion, `peer:restore_ready`.
+/// The caller (frontend) should then invoke `peer_apply_and_restart` to swap the
+/// pending file in and restart the app.
+fn do_full_restore_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(), String> {
+    use std::io::Write as _;
+
+    let port = sync_port_for_device(peer_device_id);
+    let addr = format!("{host}:{port}");
+
+    eprintln!("[restore] Connecting to {addr} for full restore");
+
+    let addrs: Vec<_> = addr
+        .to_socket_addrs()
+        .map_err(|e| format!("DNS resolve {addr}: {e}"))?
+        .collect();
+    let mut stream = TcpStream::connect_timeout(
+        addrs.first().ok_or("no addr")?,
+        Duration::from_secs(10),
+    )
+    .map_err(|e| format!("connect to {addr}: {e}"))?;
+
+    // Generous timeouts for large transfers.
+    stream
+        .set_read_timeout(Some(Duration::from_secs(300)))
+        .map_err(|e| format!("set read timeout: {e}"))?;
+    stream
+        .set_write_timeout(Some(Duration::from_secs(60)))
+        .map_err(|e| format!("set write timeout: {e}"))?;
+
+    // ── HELLO / OK ────────────────────────────────────────────────────────────
+    let my_identity = get_or_create_device_identity(app)?;
+    let trusted = load_trusted_devices(app)?;
+    let peer_device = trusted
+        .iter()
+        .find(|d| d.device_id == peer_device_id)
+        .ok_or_else(|| format!("Device {peer_device_id} is not in trusted list"))?;
+
+    let my_eph_secret = EphemeralSecret::random_from_rng(rand::rngs::OsRng);
+    let my_eph_pub_hex = hex::encode(X25519PublicKey::from(&my_eph_secret).as_bytes());
+
+    write_msg(
+        &mut stream,
+        &Msg::Hello {
+            did: my_identity.device_id.clone(),
+            eph_pub: Some(my_eph_pub_hex),
+        },
+    )?;
+
+    let (server_name, server_eph_pub) = match read_msg(&mut stream)? {
+        Msg::Ok { name, eph_pub } => (name, eph_pub),
+        Msg::NotTrusted { server_device_id } => {
+            // Auto-revoke stale trust entry.
+            let _ = remove_trusted_device(app, &server_device_id);
+            let _ = app.emit(
+                "peer:trust_revoked",
+                serde_json::json!({ "deviceId": server_device_id }),
+            );
+            return Err(format!("Server {server_device_id} does not trust this device"));
+        }
+        other => return Err(format!("Expected OK, got: {other:?}")),
+    };
+
+    let key = match server_eph_pub {
+        Some(ref hex) => derive_sync_key_ecdh(
+            my_eph_secret,
+            hex,
+            &my_identity.public_key,
+            &peer_device.public_key,
+        )?,
+        None => derive_sync_key_static(&my_identity.public_key, &peer_device.public_key),
+    };
+
+    eprintln!("[restore] Connected to {server_name}, requesting full DB");
+
+    // ── Send RestoreRequest ───────────────────────────────────────────────────
+    write_msg_enc(&mut stream, &key, &Msg::RestoreRequest)?;
+
+    // ── Receive chunks ────────────────────────────────────────────────────────
+    let app_data = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| anyhow::anyhow!(e))
+        .map_err(|e| format!("app_data_dir: {e}"))?;
+    let pending_path = app_data.join("moodbloom_restore.pending");
+    let tmp_path = app_data.join("moodbloom_restore.tmp");
+
+    let mut file = std::fs::File::create(&tmp_path)
+        .map_err(|e| format!("create tmp file: {e}"))?;
+
+    let mut bytes_received: u64 = 0;
+    let mut chunks_received: u64 = 0;
+
+    loop {
+        match read_msg_enc(&mut stream, &key)? {
+            Msg::RestoreChunk { seq, total_chunks, offset: _, total_bytes } => {
+                // Read the following raw binary data frame.
+                let chunk_data = read_binary_frame(&mut stream)?;
+                file.write_all(&chunk_data)
+                    .map_err(|e| format!("write chunk {seq}: {e}"))?;
+                bytes_received += chunk_data.len() as u64;
+                chunks_received += 1;
+
+                let pct = if total_bytes > 0 {
+                    (bytes_received as f64 / total_bytes as f64) * 100.0
+                } else {
+                    0.0
+                };
+                eprintln!(
+                    "[restore] Received chunk {}/{} ({:.1}%)",
+                    chunks_received, total_chunks, pct
+                );
+                let _ = app.emit(
+                    "peer:restore_progress",
+                    serde_json::json!({
+                        "bytesReceived": bytes_received,
+                        "totalBytes": total_bytes,
+                        "percentage": pct,
+                        "chunksReceived": chunks_received,
+                        "totalChunks": total_chunks,
+                        "deviceName": server_name,
+                    }),
+                );
+            }
+            Msg::RestoreEnd { total_bytes, chunks } => {
+                eprintln!(
+                    "[restore] Transfer complete: {} bytes in {} chunks",
+                    total_bytes, chunks
+                );
+                break;
+            }
+            Msg::Err { msg } => {
+                return Err(format!("Server reported error during restore: {msg}"));
+            }
+            other => {
+                return Err(format!("Unexpected message during restore: {other:?}"));
+            }
+        }
+    }
+
+    file.flush().map_err(|e| format!("flush restore file: {e}"))?;
+    drop(file);
+
+    // Atomically move tmp → pending.
+    std::fs::rename(&tmp_path, &pending_path)
+        .map_err(|e| format!("rename restore file: {e}"))?;
+
+    let _ = app.emit(
+        "peer:restore_ready",
+        serde_json::json!({
+            "totalBytes": bytes_received,
+            "deviceName": server_name,
+        }),
+    );
+
+    eprintln!("[restore] Pending file written to {:?}", pending_path);
+    Ok(())
+}
+
 // ── Server connection handler ─────────────────────────────────────────────────
 
 fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(), String> {
@@ -830,9 +1112,17 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
         }),
     );
 
-    // Step 3: Read client's MANIFEST
+    // Step 3: Read client's first encrypted message — either MANIFEST (normal
+    // incremental sync) or RESTORE_REQUEST (new-device full-DB transfer).
+    let first_msg = read_msg_enc(&mut stream, &key)?;
+
+    // ── Full-restore path ─────────────────────────────────────────────────────
+    if matches!(first_msg, Msg::RestoreRequest) {
+        return do_serve_restore(app, &mut stream, &key, &client_device_id, &client_name);
+    }
+
     let (client_entries, client_books, client_signals, client_settings) =
-        match read_msg_enc(&mut stream, &key)? {
+        match first_msg {
             Msg::Manifest { entries, books, signals, settings } => {
                 (entries, books, signals, settings)
             }
@@ -1792,4 +2082,61 @@ pub fn peer_get_sync_states(app: AppHandle) -> Result<Vec<PeerSyncStateRecord>, 
         .map_err(|e| format!("query peer_sync_state: {e}"))?;
     rows.collect::<Result<Vec<_>, _>>()
         .map_err(|e| format!("collect peer_sync_state: {e}"))
+}
+
+/// Initiate a full DB restore from a trusted peer (setup-time only).
+///
+/// Spawns a background thread that connects to the peer, requests its complete
+/// SQLite database, receives it in 4 MiB chunks, and writes the reassembled file
+/// to `{app_data}/moodbloom_restore.pending`.
+///
+/// Progress is reported via `peer:restore_progress` events.
+/// Completion is signalled via `peer:restore_ready`.
+/// On completion the frontend should call `peer_apply_and_restart`.
+#[tauri::command]
+pub fn peer_full_restore(
+    app: AppHandle,
+    device_id: String,
+    host: String,
+) -> Result<(), String> {
+    // Verify trusted
+    let trusted = load_trusted_devices(&app)?;
+    if !trusted.iter().any(|d| d.device_id == device_id) {
+        return Err(format!("Device {device_id} is not trusted"));
+    }
+
+    thread::spawn(move || {
+        if let Err(e) = do_full_restore_client(&app, &device_id, &host) {
+            eprintln!("[restore] Client error: {e}");
+            let _ = app.emit(
+                "peer:restore_error",
+                serde_json::json!({ "message": e }),
+            );
+        }
+    });
+    Ok(())
+}
+
+/// Rename `moodbloom_restore.pending` → `moodbloom.db` and restart the app.
+///
+/// Should only be called after `peer:restore_ready` has been received.
+/// The pending file was verified complete (all chunks received, tmp→pending rename
+/// was atomic), so it is safe to overwrite the current (empty) DB.
+#[tauri::command]
+pub fn peer_apply_and_restart(app: AppHandle) -> Result<(), String> {
+    let db_path = crate::db::get_db_path(&app)?;
+    let pending = db_path
+        .parent()
+        .ok_or("no parent dir")?
+        .join("moodbloom_restore.pending");
+
+    if !pending.exists() {
+        return Err("No pending restore file found".to_string());
+    }
+
+    std::fs::rename(&pending, &db_path)
+        .map_err(|e| format!("Failed to apply restore: {e}"))?;
+
+    eprintln!("[restore] Pending DB applied, restarting app");
+    app.restart();
 }

@@ -92,3 +92,22 @@ export function onPairingLocked(
     callback(event.payload);
   });
 }
+
+/**
+ * Fired on the host (server side) whenever any device connects and sends a
+ * pairing request — before the PIN is validated. Used to surface a non-obtrusive
+ * "a device wants to pair" indicator in the sidebar badge.
+ */
+export interface PairingIncomingEvent {
+  deviceName: string;
+  deviceType: string;
+  deviceId: string;
+}
+
+export function onPairingIncoming(
+  callback: (data: PairingIncomingEvent) => void
+): Promise<UnlistenFn> {
+  return listen<PairingIncomingEvent>('peer:pairing_incoming', (event) => {
+    callback(event.payload);
+  });
+}

@@ -351,6 +351,17 @@ fn run_pairing_server(
                     }
                 };
 
+                // Notify the frontend that a device is attempting to pair.
+                // Fired before PIN check so the UI reacts immediately.
+                let _ = app.emit(
+                    "peer:pairing_incoming",
+                    serde_json::json!({
+                        "deviceName": req.device_name,
+                        "deviceType": req.device_type,
+                        "deviceId":   req.device_id,
+                    }),
+                );
+
                 // Constant-time PIN comparison (short strings, good enough)
                 if req.pin != expected_pin {
                     failed_attempts += 1;

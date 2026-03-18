@@ -42,7 +42,7 @@ pub async fn factory_reset(app: AppHandle) -> Result<bool, String> {
     }
 
     // Delete any other app data files
-    let files_to_delete = ["keys.bin", "cache.db", "logs"];
+    let files_to_delete = ["keys.bin", "cache.db", "logs", "peer_key.bin", "trusted_devices.json"];
     for file in files_to_delete {
         let path = app_data.join(file);
         if path.exists() {

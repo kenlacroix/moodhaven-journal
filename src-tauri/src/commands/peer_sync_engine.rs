@@ -2117,11 +2117,14 @@ pub fn peer_full_restore(
     Ok(())
 }
 
-/// Rename `moodbloom_restore.pending` → `moodbloom.db` and restart the app.
+/// Restart the app so `lib.rs` can apply the pending DB restore.
+///
+/// The rename of `moodbloom_restore.pending` → `moodbloom.db` is intentionally
+/// left to the startup code in `lib.rs` (before `Database::new`), not done here.
+/// This keeps the pending file intact if the process exits without relaunching
+/// (e.g. in `tauri dev` mode), so the next manual restart still picks it up.
 ///
 /// Should only be called after `peer:restore_ready` has been received.
-/// The pending file was verified complete (all chunks received, tmp→pending rename
-/// was atomic), so it is safe to overwrite the current (empty) DB.
 #[tauri::command]
 pub fn peer_apply_and_restart(app: AppHandle) -> Result<(), String> {
     let db_path = crate::db::get_db_path(&app)?;
@@ -2134,9 +2137,6 @@ pub fn peer_apply_and_restart(app: AppHandle) -> Result<(), String> {
         return Err("No pending restore file found".to_string());
     }
 
-    std::fs::rename(&pending, &db_path)
-        .map_err(|e| format!("Failed to apply restore: {e}"))?;
-
-    eprintln!("[restore] Pending DB applied, restarting app");
+    eprintln!("[restore] Triggering restart to apply pending DB restore");
     app.restart();
 }

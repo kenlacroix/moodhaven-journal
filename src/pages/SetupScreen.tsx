@@ -966,7 +966,7 @@ export function SetupScreen() {
                     </h2>
                     <p className="text-sm text-slate-500 dark:text-slate-400">
                       {restoreReady
-                        ? `All data received from ${restoreProgress?.deviceName ?? 'your device'}.`
+                        ? `All data received from ${restoreProgress?.deviceName ?? 'your device'}. The app will close — reopen it to continue.`
                         : isTransferring
                           ? `${mbReceived} MB / ${mbTotal} MB`
                           : isDiscovering
@@ -1072,7 +1072,7 @@ export function SetupScreen() {
                         onClick={() => peerApplyAndRestart().catch((e: unknown) => setRestoreError(String(e)))}
                         className="btn-primary flex-1 py-3"
                       >
-                        Restart & Open
+                        Apply & Restart
                       </button>
                     )}
                     {!isTransferring && !restoreReady && (

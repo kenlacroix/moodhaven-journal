@@ -65,4 +65,5 @@ models/
 # Lock files (optional, uncomment if not using)
 # package-lock.json
 # yarn.lock
-# docs/ is tracked — documentation belongs in the repo
+# docs/internal/ — planning docs, AI context bundles, ephemeral knowledge (not for public repo)
+docs/internal/

@@ -73,6 +73,8 @@ interface ProgressPayload {
 interface FinishedPayload {
   success: boolean;
   message: string;
+  /** false when checksums.txt was absent and SHA-256 was skipped */
+  checksum_verified?: boolean;
 }
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
@@ -122,6 +124,7 @@ export function UpdatePanel({ hook, currentVersion }: UpdatePanelProps) {
   const [progress, setProgress] = useState<ProgressPayload>({ downloaded: 0, total: 0, percent: 0 });
   const [installMessage, setInstallMessage] = useState('');
   const [installError, setInstallError] = useState('');
+  const [checksumVerified, setChecksumVerified] = useState<boolean | null>(null);
 
   // Listen to Rust progress/finished events
   useEffect(() => {
@@ -137,9 +140,11 @@ export function UpdatePanel({ hook, currentVersion }: UpdatePanelProps) {
       if (e.payload.success) {
         setPhase('ready');
         setInstallMessage(e.payload.message);
+        setChecksumVerified(e.payload.checksum_verified ?? null);
       } else {
         setPhase('error');
         setInstallError(e.payload.message);
+        setChecksumVerified(null);
       }
     }).then((fn) => { unlistenFinished = fn; });
 
@@ -353,19 +358,36 @@ export function UpdatePanel({ hook, currentVersion }: UpdatePanelProps) {
 
       {/* ── Ready / installed ── */}
       {phase === 'ready' && (
-        <StatusBadge color="green">
-          <svg className="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-          </svg>
-          <div>
-            <p className="text-sm font-semibold">Update verified and installed</p>
-            <p className="text-xs mt-0.5 opacity-80">{installMessage}</p>
-            {/* macOS: needs manual restart; Linux/Windows: already restarting */}
-            <p className="text-xs mt-1 opacity-70">
-              You may need to restart MoodBloom to use the new version.
-            </p>
-          </div>
-        </StatusBadge>
+        <div className="space-y-2">
+          <StatusBadge color={checksumVerified === false ? 'violet' : 'green'}>
+            <svg className="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <div>
+              <p className="text-sm font-semibold">
+                {checksumVerified === false ? 'Update installed (unverified)' : 'Update verified and installed'}
+              </p>
+              <p className="text-xs mt-0.5 opacity-80">{installMessage}</p>
+              {/* macOS: needs manual restart; Linux/Windows: already restarting */}
+              <p className="text-xs mt-1 opacity-70">
+                You may need to restart MoodBloom to use the new version.
+              </p>
+            </div>
+          </StatusBadge>
+          {checksumVerified === false && (
+            <div className="flex items-start gap-2 px-4 py-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 text-amber-700 dark:text-amber-400">
+              <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
+              </svg>
+              <div className="text-xs">
+                <span className="font-semibold">Integrity check skipped</span> — this release did not include a{' '}
+                <code className="font-mono">checksums.txt</code> file, so SHA-256 verification was not performed.
+                The download was served over HTTPS from github.com.
+                If you have concerns, verify the file hash manually before using the app.
+              </div>
+            </div>
+          )}
+        </div>
       )}
 
       {/* ── Install error ── */}

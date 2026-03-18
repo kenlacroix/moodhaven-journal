@@ -19,7 +19,7 @@
 //! `TrustedDevice` records (not sensitive; public keys only).
 
 use crate::commands::peer_identity::get_or_create_device_identity;
-use rand::Rng;
+use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpListener;
@@ -36,6 +36,9 @@ const TOKEN_TTL_SECS: i64 = 300; // 5 minutes
 const MAX_PIN_ATTEMPTS: u32 = 5;
 /// Minimum delay between wrong-PIN responses (rate limiting).
 const WRONG_PIN_DELAY_MS: u64 = 1_000;
+/// How long the persistent lockout lasts after MAX_PIN_ATTEMPTS is hit.
+/// Written to disk so restarting the pairing server doesn't reset it.
+const LOCKOUT_DURATION_SECS: i64 = 900; // 15 minutes
 
 /// Derive a stable pairing port from a device_id.
 /// Port = 43000 + (first 4 hex chars as u16) % 1000  →  range 43000–43999.
@@ -107,6 +110,59 @@ impl PairingServerState {
 // AtomicBool + Mutex<T> are already Send+Sync
 unsafe impl Send for PairingServerState {}
 unsafe impl Sync for PairingServerState {}
+
+// ── Persistent lockout helpers ─────────────────────────────────────────────────
+
+fn lockout_path(app: &AppHandle) -> Result<std::path::PathBuf, String> {
+    app.path()
+        .app_data_dir()
+        .map(|d| d.join("pairing_lockout.json"))
+        .map_err(|e| format!("app data dir: {e}"))
+}
+
+/// Returns Err if a lockout is still active, Ok(()) otherwise.
+/// Deletes an expired lockout file as a side effect.
+fn check_pairing_lockout(app: &AppHandle) -> Result<(), String> {
+    let path = match lockout_path(app) {
+        Ok(p) => p,
+        Err(_) => return Ok(()), // can't read path → don't block
+    };
+    if !path.exists() {
+        return Ok(());
+    }
+    let json = std::fs::read_to_string(&path).unwrap_or_default();
+    let locked_until: i64 = serde_json::from_str::<serde_json::Value>(&json)
+        .ok()
+        .and_then(|v| v.get("locked_until").and_then(|t| t.as_i64()))
+        .unwrap_or(0);
+    let now = chrono::Utc::now().timestamp();
+    if now < locked_until {
+        let remaining = locked_until - now;
+        return Err(format!(
+            "Pairing is temporarily locked after too many failed PIN attempts. \
+             Try again in {remaining} seconds."
+        ));
+    }
+    // Lockout expired — remove stale file
+    let _ = std::fs::remove_file(&path);
+    Ok(())
+}
+
+/// Write a lockout file that expires LOCKOUT_DURATION_SECS from now.
+fn set_pairing_lockout(app: &AppHandle) {
+    if let Ok(path) = lockout_path(app) {
+        let locked_until = chrono::Utc::now().timestamp() + LOCKOUT_DURATION_SECS;
+        let json = serde_json::json!({ "locked_until": locked_until }).to_string();
+        let _ = std::fs::write(&path, json);
+    }
+}
+
+/// Remove lockout file on successful pairing.
+fn clear_pairing_lockout(app: &AppHandle) {
+    if let Ok(path) = lockout_path(app) {
+        let _ = std::fs::remove_file(&path);
+    }
+}
 
 // ── Trusted-devices file helpers ───────────────────────────────────────────────
 
@@ -308,6 +364,7 @@ fn run_pairing_server(
 
                     if failed_attempts >= MAX_PIN_ATTEMPTS {
                         write_http_error(&mut stream, 429, "Too many failed attempts — pairing session locked");
+                        set_pairing_lockout(&app);
                         let _ = app.emit(
                             "peer:pairing_locked",
                             serde_json::json!({ "reason": "too_many_attempts" }),
@@ -350,6 +407,7 @@ fn run_pairing_server(
                     write_http_error(&mut stream, 500, "Failed to save pairing");
                     break;
                 }
+                clear_pairing_lockout(&app);
 
                 // Respond with our own identity
                 #[derive(Serialize)]
@@ -417,6 +475,9 @@ pub fn peer_generate_pairing_token(
     app: AppHandle,
     state: State<'_, PairingServerState>,
 ) -> Result<PairingTokenInfo, String> {
+    // Reject if a lockout from a previous session is still active
+    check_pairing_lockout(&app)?;
+
     // Stop any previous server gracefully
     // Signal any running server to stop, then join its thread.
     // Joining (not just sleeping) guarantees the TcpListener has been dropped
@@ -432,8 +493,10 @@ pub fn peer_generate_pairing_token(
         }
     }
 
-    // Generate a random 6-digit PIN
-    let pin_u32: u32 = rand::thread_rng().gen_range(0..1_000_000);
+    // Generate a cryptographically random 6-digit PIN using OsRng
+    let mut buf = [0u8; 4];
+    rand::rngs::OsRng.fill_bytes(&mut buf);
+    let pin_u32 = u32::from_le_bytes(buf) % 1_000_000;
     let pin = format!("{:06}", pin_u32);
     let expires_at = chrono::Utc::now().timestamp() + TOKEN_TTL_SECS;
 

@@ -35,6 +35,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: npm audit (high/critical only)
+        run: npm audit --audit-level=high
+
       - name: TypeScript type-check
         run: npm run typecheck
 
@@ -99,6 +102,19 @@ jobs:
         working-directory: src-tauri
         run: cargo test
 
+      - name: Cargo audit (CVE check)
+        if: matrix.os == 'ubuntu-latest'
+        working-directory: src-tauri
+        run: |
+          cargo install cargo-audit --quiet 2>/dev/null || true
+          cargo audit
+
+      - name: Cargo deny (supply chain)
+        if: matrix.os == 'ubuntu-latest'
+        uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          manifest-path: src-tauri/Cargo.toml
+
   # ─────────────────────────────────────────────
   # Lint
   # ─────────────────────────────────────────────
@@ -119,8 +135,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: ESLint
-        run: npm run lint
+      - name: ESLint (security rules, no auto-fix)
+        run: npm run lint:ci
 
       - name: Install Linux system dependencies
         run: |
@@ -145,3 +161,21 @@ jobs:
       - name: Rust format check
         working-directory: src-tauri
         run: cargo fmt --check
+
+  # ─────────────────────────────────────────────
+  # Secret scanning (gitleaks)
+  # ─────────────────────────────────────────────
+  secrets:
+    name: Secret Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout (full history for secret scan)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

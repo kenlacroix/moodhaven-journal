@@ -106,6 +106,7 @@ export function SetupScreen() {
       setError('Password must be at least 8 characters');
       return;
     }
+    // eslint-disable-next-line security/detect-possible-timing-attacks -- comparing two user-typed fields, not secrets
     if (password !== confirmPassword) {
       setError('Passwords do not match');
       return;

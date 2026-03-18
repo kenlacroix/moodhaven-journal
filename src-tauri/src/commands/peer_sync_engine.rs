@@ -47,10 +47,11 @@
 
 use aes_gcm::{aead::Aead, Aes256Gcm, KeyInit, Nonce};
 use chrono::Utc;
-use rand::Rng;
+use rand::RngCore;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use x25519_dalek::{EphemeralSecret, PublicKey as X25519PublicKey};
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream, ToSocketAddrs};
 use std::sync::{
@@ -80,8 +81,19 @@ pub fn sync_port_for_device(device_id: &str) -> u16 {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "t", rename_all = "snake_case")]
 enum Msg {
-    Hello { did: String },
-    Ok { name: String },
+    Hello {
+        did: String,
+        /// Ephemeral X25519 public key (hex) for forward-secret session key.
+        /// Absent in pre-v2 peers — falls back to static key derivation.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        eph_pub: Option<String>,
+    },
+    Ok {
+        name: String,
+        /// Ephemeral X25519 public key (hex), present when server supports v2.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        eph_pub: Option<String>,
+    },
     /// Sent plaintext by the server when the connecting device is not in its
     /// trusted list. The client should auto-revoke the server in response.
     NotTrusted { server_device_id: String },
@@ -169,8 +181,9 @@ unsafe impl Sync for SyncEngineState {}
 
 // ── Crypto helpers ────────────────────────────────────────────────────────────
 
-/// Derive shared AES-256 key = SHA-256("moodbloom-sync-v1:" || sorted(pubA, pubB))
-fn derive_sync_key(pub_a: &str, pub_b: &str) -> [u8; 32] {
+/// Legacy: static key from both Ed25519 public keys (no forward secrecy).
+/// Used as fallback when the remote peer does not advertise an eph_pub.
+fn derive_sync_key_static(pub_a: &str, pub_b: &str) -> [u8; 32] {
     let mut keys = [pub_a, pub_b];
     keys.sort_unstable();
     let mut h = Sha256::new();
@@ -180,10 +193,37 @@ fn derive_sync_key(pub_a: &str, pub_b: &str) -> [u8; 32] {
     h.finalize().into()
 }
 
+/// v2: ephemeral X25519 ECDH + static identity binding → forward-secret session key.
+/// session_key = SHA-256("moodbloom-sync-v2:" || X25519_shared || sorted(static_a, static_b))
+fn derive_sync_key_ecdh(
+    my_eph_secret: EphemeralSecret,
+    peer_eph_pub_hex: &str,
+    my_static_pub: &str,
+    peer_static_pub: &str,
+) -> Result<[u8; 32], String> {
+    let peer_bytes =
+        hex::decode(peer_eph_pub_hex).map_err(|e| format!("bad peer eph_pub hex: {e}"))?;
+    let peer_arr: [u8; 32] = peer_bytes
+        .try_into()
+        .map_err(|_| "peer eph_pub must be 32 bytes".to_string())?;
+    let peer_pub = X25519PublicKey::from(peer_arr);
+    let shared = my_eph_secret.diffie_hellman(&peer_pub);
+
+    let mut static_keys = [my_static_pub, peer_static_pub];
+    static_keys.sort_unstable();
+    let mut h = Sha256::new();
+    h.update(b"moodbloom-sync-v2:");
+    h.update(shared.as_bytes());
+    h.update(static_keys[0].as_bytes());
+    h.update(static_keys[1].as_bytes());
+    Ok(h.finalize().into())
+}
+
 /// Encrypt plaintext → [12-byte nonce][ciphertext]
 fn encrypt_payload(key: &[u8; 32], plaintext: &[u8]) -> Result<Vec<u8>, String> {
     let cipher = Aes256Gcm::new_from_slice(key).map_err(|e| format!("AES init: {e}"))?;
-    let nonce_bytes: [u8; 12] = rand::thread_rng().gen();
+    let mut nonce_bytes = [0u8; 12];
+    rand::rngs::OsRng.fill_bytes(&mut nonce_bytes);
     let nonce = Nonce::from_slice(&nonce_bytes);
     let ct = cipher
         .encrypt(nonce, plaintext)
@@ -718,8 +758,8 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
 
     // Step 1: Read HELLO (plaintext)
     let hello = read_msg(&mut stream)?;
-    let client_device_id = match hello {
-        Msg::Hello { did } => did,
+    let (client_device_id, client_eph_pub) = match hello {
+        Msg::Hello { did, eph_pub } => (did, eph_pub),
         other => return Err(format!("Expected HELLO, got: {other:?}")),
     };
 
@@ -754,16 +794,32 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
     let client_pubkey = client_device.public_key.clone();
     let client_name = client_device.device_name.clone();
 
-    // Derive shared key
-    let key = derive_sync_key(&my_identity.public_key, &client_pubkey);
+    // Generate our ephemeral X25519 keypair for this session
+    let my_eph_secret = EphemeralSecret::random_from_rng(rand::rngs::OsRng);
+    let my_eph_pub_hex = hex::encode(X25519PublicKey::from(&my_eph_secret).as_bytes());
 
-    // Step 2: Send OK (plaintext)
+    // Step 2: Send OK (plaintext) — include our ephemeral pub so client can do ECDH
     write_msg(
         &mut stream,
         &Msg::Ok {
             name: my_identity.device_name.clone(),
+            eph_pub: Some(my_eph_pub_hex),
         },
     )?;
+
+    // Derive session key: ECDH if client supports v2, else legacy static key
+    let key = match client_eph_pub {
+        Some(ref hex) => derive_sync_key_ecdh(
+            my_eph_secret,
+            hex,
+            &my_identity.public_key,
+            &client_pubkey,
+        )?,
+        None => {
+            eprintln!("[sync] Server: peer sent no eph_pub — using legacy static key");
+            derive_sync_key_static(&my_identity.public_key, &client_pubkey)
+        }
+    };
 
     // Emit sync_started
     let _ = app.emit(
@@ -1165,8 +1221,9 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
     // Get our own identity
     let my_identity = get_or_create_device_identity(app)?;
 
-    // Derive shared key
-    let key = derive_sync_key(&my_identity.public_key, &peer_pubkey);
+    // Generate our ephemeral X25519 keypair before connecting
+    let my_eph_secret = EphemeralSecret::random_from_rng(rand::rngs::OsRng);
+    let my_eph_pub_hex = hex::encode(X25519PublicKey::from(&my_eph_secret).as_bytes());
 
     // Compute sync port
     let sync_port = sync_port_for_device(peer_device_id);
@@ -1187,17 +1244,18 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
         .set_write_timeout(Some(Duration::from_secs(30)))
         .map_err(|e| format!("set write timeout: {e}"))?;
 
-    // Step 1: Send HELLO (plaintext)
+    // Step 1: Send HELLO (plaintext) — include ephemeral pub for v2 ECDH
     write_msg(
         &mut stream,
         &Msg::Hello {
             did: my_identity.device_id.clone(),
+            eph_pub: Some(my_eph_pub_hex),
         },
     )?;
 
-    // Step 2: Read OK (plaintext)
-    let server_name = match read_msg(&mut stream)? {
-        Msg::Ok { name } => name,
+    // Step 2: Read OK (plaintext) — server may include its own eph_pub
+    let (server_name, server_eph_pub) = match read_msg(&mut stream)? {
+        Msg::Ok { name, eph_pub } => (name, eph_pub),
         Msg::NotTrusted { server_device_id } => {
             // The server no longer has us in its trusted list — auto-revoke it
             // from our side so both devices are in sync without manual intervention.
@@ -1218,6 +1276,20 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
         other => return Err(format!("Expected OK, got: {other:?}")),
     };
     eprintln!("[sync] Client: connected to '{server_name}'");
+
+    // Derive session key: ECDH if server supports v2, else legacy static key
+    let key = match server_eph_pub {
+        Some(ref hex) => derive_sync_key_ecdh(
+            my_eph_secret,
+            hex,
+            &my_identity.public_key,
+            &peer_pubkey,
+        )?,
+        None => {
+            eprintln!("[sync] Client: server sent no eph_pub — using legacy static key");
+            derive_sync_key_static(&my_identity.public_key, &peer_pubkey)
+        }
+    };
 
     // Emit sync_started
     let _ = app.emit(

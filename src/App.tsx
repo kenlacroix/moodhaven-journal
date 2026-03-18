@@ -33,9 +33,14 @@ import { PeerSyncWireframes } from './pages/PeerSyncWireframes';
 const IS_BREAKOUT = new URLSearchParams(window.location.search).get('mode') === 'writer';
 const IS_PEERSYNC_WIREFRAMES = new URLSearchParams(window.location.search).get('mode') === 'peersync';
 
+/** Thin router: send special dev-mode URLs to isolated components with no hooks. */
 function App() {
   if (IS_BREAKOUT) return <BreakoutWriterApp />;
   if (IS_PEERSYNC_WIREFRAMES) return <PeerSyncWireframes />;
+  return <MainApp />;
+}
+
+function MainApp() {
   const { isUnlocked, isInitialized, checkInitialization, lock, sessionPassword } = useAppStore();
   const loadSettings = useSettingsStore((s) => s.loadSettings);
   const hasSeenTutorial = useSettingsStore((s) => s.settings.tutorial?.hasSeenTutorial);
@@ -259,4 +264,4 @@ function App() {
   );
 }
 
-export default App;
+export { App as default };

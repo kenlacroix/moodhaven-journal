@@ -145,6 +145,9 @@ struct DownloadProgress {
 struct DownloadFinished {
     success: bool,
     message: String,
+    /// true if SHA-256 was verified; false if checksums.txt was absent
+    /// and the update was installed without hash verification.
+    checksum_verified: bool,
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -213,11 +216,16 @@ async fn fetch_checksum(client: &reqwest::Client, assets: &[GitHubAsset], asset_
 }
 
 /// Verify a downloaded file's SHA-256 against an expected hex digest.
-/// Returns Ok(()) if `expected` is empty (no checksum available) so that
-/// releases without checksums.txt still work.
-fn verify_sha256(path: &std::path::Path, expected: &str) -> Result<(), String> {
+///
+/// Returns `Ok(true)` when the digest matched, `Ok(false)` when `expected`
+/// is empty (checksums.txt absent — caller should warn the user), and
+/// `Err(...)` on mismatch or I/O failure.
+fn verify_sha256(path: &std::path::Path, expected: &str) -> Result<bool, String> {
     if expected.is_empty() {
-        return Ok(()); // no checksum available — skip verification
+        // No checksum available — skip verification but signal the caller.
+        eprintln!("[updater] WARNING: no checksums.txt found for this release; \
+                   SHA-256 verification was skipped. The update may be unverified.");
+        return Ok(false);
     }
     use sha2::{Digest, Sha256};
     let data = std::fs::read(path).map_err(|e| format!("Read error: {e}"))?;
@@ -227,7 +235,7 @@ fn verify_sha256(path: &std::path::Path, expected: &str) -> Result<(), String> {
             "Checksum mismatch!\n  Expected: {expected}\n  Got:      {digest}"
         ))
     } else {
-        Ok(())
+        Ok(true)
     }
 }
 
@@ -387,22 +395,29 @@ pub async fn download_and_install_update(
     }
     drop(file);
 
-    // Verify SHA-256
-    verify_sha256(&tmp_path, &checksum)?;
+    // Verify SHA-256 (returns false — not an error — when checksums.txt was absent)
+    let checksum_verified = verify_sha256(&tmp_path, &checksum)?;
 
     // Hand off to platform installer
     let install_result = install_update(&tmp_path, &asset_name);
     match &install_result {
         Ok(_) => {
+            let message = if checksum_verified {
+                "Update downloaded and verified. Installer launched.".into()
+            } else {
+                "Update downloaded (no checksum available — integrity unverified). Installer launched.".into()
+            };
             let _ = app.emit("update-finished", DownloadFinished {
                 success: true,
-                message: "Update downloaded and verified. Installer launched.".into(),
+                message,
+                checksum_verified,
             });
         }
         Err(e) => {
             let _ = app.emit("update-finished", DownloadFinished {
                 success: false,
                 message: e.clone(),
+                checksum_verified: false,
             });
         }
     }

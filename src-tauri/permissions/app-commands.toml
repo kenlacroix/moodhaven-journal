@@ -146,6 +146,9 @@ commands.allow = [
   "peer_start_sync_server",
   "peer_sync_now",
   "peer_get_sync_states",
+  # Peer-to-peer sync — setup-time full DB restore
+  "peer_full_restore",
+  "peer_apply_and_restart",
 ]
 
 [default]

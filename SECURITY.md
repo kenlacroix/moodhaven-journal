@@ -4,8 +4,9 @@
 
 | Version | Supported |
 |:---|:---|
-| 0.4.x (current) | ✅ Yes |
-| < 0.4.0 | ❌ No |
+| 0.7.x (current) | ✅ Yes |
+| 0.6.x | ✅ Yes (security fixes only) |
+| < 0.6.0 | ❌ No |
 
 ## Reporting a Vulnerability
 
@@ -47,6 +48,7 @@ The following are **in scope** for vulnerability reports:
 - Path traversal in file operations
 - Credential exposure (API keys, PATs, WebDAV passwords)
 - Insecure IPC between the frontend and Tauri backend
+- Peer sync transport vulnerabilities (device identity spoofing, unauthenticated sync)
 
 The following are **out of scope**:
 
@@ -67,3 +69,5 @@ These are intentional decisions, not vulnerabilities:
 | Mood level stored unencrypted | Required for local analytics to work without decrypting every entry |
 | Entry timestamps stored unencrypted | Required for calendar view and timeline ordering |
 | Weather/location stored unencrypted | Opt-in; contains no journal content |
+| Hashtags stored unencrypted | Required for search index; tags are extracted keywords, not full sentences |
+| Peer sync port is deterministic | Derived from device ID; convenience trade-off, not a secret |

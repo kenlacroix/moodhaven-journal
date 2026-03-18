@@ -4,9 +4,9 @@
 
 # MoodBloom
 
-**A calm, encrypted desktop journal with mood tracking and AI insights**
+**A calm, encrypted desktop journal with mood tracking, AI insights, and local peer sync**
 
-[![Version](https://img.shields.io/badge/version-0.4.0-7c3aed?style=flat-square)](https://github.com/kenlacroix/moodhaven-journal/releases)
+[![Version](https://img.shields.io/badge/version-0.7.0-7c3aed?style=flat-square)](https://github.com/kenlacroix/moodhaven-journal/releases)
 [![License](https://img.shields.io/badge/license-MIT-22c55e?style=flat-square)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-0ea5e9?style=flat-square)](#installation)
 [![Tests](https://img.shields.io/badge/tests-371%20passing-22c55e?style=flat-square)](#tech-stack)
@@ -38,18 +38,20 @@ MoodBloom combines structured mood tracking with free-form encrypted journaling.
 ### Writing & Journaling
 
 - **Rich text editor** — Bold, italic, headings, blockquotes, and lists via TipTap
-- **Mood auto-detection** — Infers mood from your writing as you type; overridable at any time
+- **Mood auto-detection** — Infers mood from your writing as you type (threshold: 5 words); overridable at any time with a lock indicator
 - **7 guided templates** — Gratitude, Happiness, Rest & Recovery, Grounding, Daily Reflection, Goals & Dreams, Free Write — each inserts styled prompt blockquotes into the editor
 - **Multiple journals (Books)** — Organise entries into named, colour-coded journals; filter the timeline by book
 - **Privacy modes per entry** — *Open* (full analysis), *Mindful* (local only, no AI), *Private* (no analysis at all)
 - **Location & weather** — Optionally captures city, temperature, and weather condition at entry creation using Open-Meteo and Nominatim (no API key required)
 - **Focus mode** — Hides the sidebar and toolbar, dims everything except the editor, enables typewriter scrolling
+- **Hashtag auto-extraction** — Tags are automatically extracted from entry content on save
+- **Pinned entries** — Pin important entries so they surface first in the timeline
 - **Speech-to-Text** *(coming soon)* — Offline transcription via whisper.cpp sidecar; no audio ever leaves your device
 
 ### Mood & Analytics
 
 - **5-level mood scale** — 😣 Struggling · 😕 Low · 😐 Neutral · 🙂 Good · 😊 Great
-- **Calendar heatmap** — Monthly view colour-coded by average daily mood
+- **Calendar heatmap** — Monthly view colour-coded by average daily mood with 24-hour timeline view and mood distribution
 - **Mood trend chart** — Rolling average line over any date range
 - **Mood distribution** — Bar chart of how often each level appears
 - **Streak tracking** — Current and longest consecutive journaling streaks
@@ -62,6 +64,7 @@ MoodBloom combines structured mood tracking with free-form encrypted journaling.
 - AI never receives your journal text — only anonymised metadata (mood scores, general patterns)
 - Contextual writing prompts personalised to your recent mood trend
 - Wellness observations and weekly reflection summaries
+- Gratitude streak card, mood weather card, and weekly reflection card in the Insights view
 - Works with OpenAI API (bring your own key) or a local Ollama instance
 
 ### Security & Authentication
@@ -80,6 +83,7 @@ MoodBloom combines structured mood tracking with free-form encrypted journaling.
 - **On This Day** — Resurfaces entries from the same date in previous years
 - **Entry actions** — Copy as Markdown, copy plain text, or delete any entry from the timeline
 - **Multiple journals** — Create, rename, colour, and delete named books; each entry belongs to one book
+- **Hashtag auto-extraction** — Tags indexed on save; surfaced in timeline
 
 ### Health Integration *(optional)*
 
@@ -87,6 +91,7 @@ MoodBloom combines structured mood tracking with free-form encrypted journaling.
 
 ### Sync & Backup
 
+- **Local peer sync** — Encrypted, zero-config LAN sync between your devices; no cloud server required (see [Peer Sync](#local-peer-sync) below)
 - **Encrypted WebDAV sync** — Manual upload/download to any WebDAV server (Nextcloud, etc.); the server only ever receives ciphertext
 - **Encrypted local export** — Password-protected `.moodbloom` files for offline archival
 - **Sync details modal** — Shows storage type, entry count, last sync time, and upload/download controls
@@ -95,7 +100,42 @@ MoodBloom combines structured mood tracking with free-form encrypted journaling.
 
 - **Dark / Light / System** theme
 - **Configurable reminders** — Desktop notification at a time of your choosing
+- **Temperature unit** — Celsius or Fahrenheit for weather display
+- **Auto-title toggle** — Optionally suppress automatic entry title generation
 - **Factory reset** — Wipes all data and settings with confirmation
+
+---
+
+## Local Peer Sync
+
+MoodBloom can sync directly between your devices on a local network — no cloud accounts, no configuration, no third-party servers.
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Layer 4: Encrypted Sync Engine                             │
+│  TCP transport · AES-256-GCM payload · LWW conflict resolve │
+├─────────────────────────────────────────────────────────────┤
+│  Layer 3: Secure Pairing                                    │
+│  QR code or PIN exchange → trusted_devices.json             │
+├─────────────────────────────────────────────────────────────┤
+│  Layer 2: Peer Discovery                                    │
+│  mDNS/DNS-SD (_moodbloom._tcp.local) · zero config          │
+├─────────────────────────────────────────────────────────────┤
+│  Layer 1: Device Identity                                   │
+│  Ed25519 key pair · stable deviceId per device              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**How it works:**
+1. Each device generates a permanent Ed25519 identity on first launch.
+2. Devices broadcast and discover each other on the LAN via mDNS automatically.
+3. Pairing is done once via QR code or PIN — only paired (trusted) devices sync.
+4. Sync is encrypted end-to-end: transport key derived from both device public keys; entries carry per-entry salts so any same-password device can decrypt them directly.
+5. Conflicts are resolved with last-write-wins (LWW) per entry.
+
+**Privacy guarantees:** Sync never leaves the LAN. No relay server, no cloud involvement. Sync port range: 44000–44999 (deterministic per device ID).
+
+To manage paired devices, open **Settings → Devices**.
 
 ---
 
@@ -113,10 +153,10 @@ Grab the latest build from the [Releases](https://github.com/kenlacroix/moodhave
 
 | Platform | Installer | Minimum Version |
 |:---|:---|:---|
-| **Windows** | `MoodBloom_0.4.0_x64-setup.exe` | Windows 10 |
-| **macOS** | `MoodBloom_0.4.0_x64.dmg` | macOS 10.15 Catalina |
-| **Linux** | `moodbloom_0.4.0_amd64.AppImage` | Any modern distro |
-| **Linux (Debian)** | `moodbloom_0.4.0_amd64.deb` | Ubuntu 22.04+ |
+| **Windows** | `MoodBloom_0.7.0_x64-setup.exe` | Windows 10 |
+| **macOS** | `MoodBloom_0.7.0_x64.dmg` | macOS 10.15 Catalina |
+| **Linux** | `moodbloom_0.7.0_amd64.AppImage` | Any modern distro |
+| **Linux (Debian)** | `moodbloom_0.7.0_amd64.deb` | Ubuntu 22.04+ |
 
 ### First Launch
 
@@ -195,7 +235,7 @@ cargo build --release --features hardware-key
 
 ### Creating Entries
 
-Open MoodBloom and start typing — a new entry begins automatically. The mood indicator updates as you write. To override, click any mood dot and it locks.
+Open MoodBloom and start typing — a new entry begins automatically. The mood indicator updates as you write after 5 words. To override, click any mood dot and it locks.
 
 **Quick entry tips:**
 
@@ -218,7 +258,7 @@ Books are named journals — think Work, Personal, Travel, Therapy. Each has an 
 | **All Entries** | Chronological timeline with search, mood filter, and date range filter |
 | **On This Day** | Entries from this exact date in previous years |
 | **Insights** | AI-generated prompts and observations + full local analytics |
-| **Calendar** | Monthly mood heatmap |
+| **Calendar** | Monthly mood heatmap with 24-hour daily timeline |
 
 ### Search
 
@@ -253,7 +293,9 @@ Encryption Key (256-bit, never stored)
     │
     ├──▶  Journal entry content  ──▶  AES-256-GCM  ──▶  SQLite (ciphertext only)
     │
-    └──▶  Export file payload   ──▶  AES-256-GCM  ──▶  .moodbloom file (ciphertext only)
+    ├──▶  Export file payload   ──▶  AES-256-GCM  ──▶  .moodbloom file (ciphertext only)
+    │
+    └──▶  Peer sync payload     ──▶  AES-256-GCM  ──▶  LAN transport (ciphertext only)
 ```
 
 **What is stored unencrypted:**
@@ -262,6 +304,7 @@ Encryption Key (256-bit, never stored)
 - Entry timestamp — required for calendar and timeline
 - Weather/location data — opt-in; captured at entry creation
 - App preferences — non-sensitive settings only
+- Hashtags — extracted on save for search
 
 **What is never stored:**
 
@@ -295,40 +338,51 @@ When AI features are enabled, MoodBloom **never** sends journal text to any exte
 
 ---
 
-## What's New in v0.4.0
+## What's New in v0.7.0
 
-- **Multiple Journals (Books)** — Create named, colour-coded journals; assign entries to books; filter the timeline by book
-- **Merged Insights & Analytics** — One unified view: AI insights at the top, full local analytics below, with clear section labels
-- **Sync Details Modal** — Storage type, entry count, last sync time, and one-click encrypted backup from the sidebar
-- **Sidebar redesign** — Settings and Sync icons replace the logo; My Books section added; Analytics removed as a separate nav item
-- **Template blockquotes** — Template prompts now appear as styled, editable blockquotes in the editor
-- **Weather for existing entries** — Opening a saved entry now shows its captured weather and location
-- **Weather loading indicator** — A spinner chip appears while geolocation resolves; replaced when data arrives
-- **Toolbar improvements** — Larger icons, taller hit targets, `+ New Entry` button always visible
+- **Encrypted peer sync engine** — Full TCP sync between trusted LAN devices; manifest-diff protocol with AES-256-GCM transport and last-write-wins conflict resolution
+- **Auto-sync** — Triggers automatically when a trusted peer is discovered (30s cooldown); also syncs after pairing
+- **Non-obtrusive pairing notifications** — Pairing requests surface as a quiet in-app notification rather than a blocking dialog
+
+## v0.6.x
+
+- **Local peer sync foundation** — Ed25519 device identity, mDNS/DNS-SD discovery, QR/PIN pairing, trusted devices store
+- **Settings → Devices tab** — Full UI for managing nearby and paired devices; LAN sync badge in sidebar footer
+- **Deterministic sync ports** — Each device gets a stable port in the 44000–44999 range
+
+## v0.5.0 — Major Polish Sprint
+
+- **Timeline polish** — Mood rings, date groups, auto-scroll, search integration
+- **Calendar 24-hour timeline** — Hourly mood distribution within each day
+- **Writing view** — Ambient gradient background, focus fade, streak line, improved mood auto-detection UX
+- **Journal Overview page** — Per-book stats, description, settings
+- **Insights page redesign** — Section headers, AI CTA card, book filter, MoodWeatherCard, GratitudeStreakCard, WeeklyReflectionCard
+- **Settings deep-linking** — Scroll-to-section, temperature unit toggle, auto-title toggle
+- **Hashtag auto-extraction** — Tags indexed on save
+- **Pinned entries** — Pin entries to surface them first
+
+## v0.4.0
+
+- Multiple journals (Books), merged Insights + Analytics, Sync Details Modal, sidebar redesign, template blockquotes, weather fixes, toolbar improvements
 
 ---
 
 ## Version History
 
-### v0.4.0
-- Multiple journals (Books), merged Insights + Analytics, Sync Details Modal, sidebar redesign, template blockquotes, weather fixes, toolbar improvements
-
-### v0.3.x
-
-- v0.3.3 — Documentation updates, build guide
-- v0.3.2 — Journal templates (7 guided templates)
-- v0.3.1 — Encrypted export/import (`.moodbloom` format), factory reset
-- v0.3.0 — First-run setup wizard, storage backend selection
-
-### v0.2.x
-
-- v0.2.2 — Settings page tabs and search, data management section
-- v0.2.1 — Fixed: app freeze on entry save (Rust mutex deadlock)
-- v0.2.0 — Calendar heatmap, analytics dashboard, privacy-first AI insights
-
-### v0.1.0
-
-- Initial release: mood tracking and encrypted journaling
+| Version | Highlights |
+|:---|:---|
+| **v0.7.0** | Encrypted peer sync engine (TCP, AES-GCM, LWW), auto-sync on peer discovery |
+| **v0.6.1** | QR/PIN pairing, trusted devices, deterministic sync ports |
+| **v0.6.0** | Ed25519 device identity, mDNS peer discovery, Settings → Devices tab |
+| **v0.5.0** | Major polish sprint — timeline, calendar, writing view, insights, hashtags, pinning |
+| **v0.4.0** | Multiple journals (Books), merged Insights, Sync Details Modal, sidebar redesign |
+| **v0.3.2** | Journal templates (7 guided templates) |
+| **v0.3.1** | Encrypted export/import (`.moodbloom`), factory reset |
+| **v0.3.0** | First-run setup wizard |
+| **v0.2.2** | Settings page tabs and search |
+| **v0.2.1** | Fixed: app freeze on entry save (Rust mutex deadlock) |
+| **v0.2.0** | Calendar heatmap, analytics dashboard, privacy-first AI insights |
+| **v0.1.0** | Initial release: mood tracking and encrypted journaling |
 
 ---
 
@@ -342,6 +396,8 @@ When AI features are enabled, MoodBloom **never** sends journal text to any exte
 | **State** | [Zustand](https://zustand-demo.pmnd.rs) |
 | **Database** | SQLite via [rusqlite](https://github.com/rusqlite/rusqlite) (bundled) |
 | **Encryption** | AES-256-GCM + PBKDF2 (WebCrypto API) |
+| **Peer identity** | Ed25519 ([ed25519-dalek](https://github.com/dalek-cryptography/curve25519-dalek)) |
+| **Peer discovery** | mDNS/DNS-SD ([mdns-sd](https://github.com/keepsimple1/mdns-sd)) |
 | **2FA** | [totp-rs](https://github.com/constantoine/totp-rs) + native CTAP2/HID |
 | **Charts** | Custom SVG (no charting library dependency) |
 | **Testing** | [Vitest](https://vitest.dev) + Testing Library (371 tests) |
@@ -376,7 +432,17 @@ npm run typecheck                 # TypeScript strict check
 cd src-tauri && cargo check       # Rust compilation check
 ```
 
-See [CLAUDE.md](CLAUDE.md) for architectural decisions, security guidelines, and development conventions.
+See [CLAUDE.md](CLAUDE.md) for architectural decisions, security guidelines, and development conventions. Additional documentation:
+
+| Document | Purpose |
+|:---|:---|
+| [CHANGELOG.md](CHANGELOG.md) | Full version history |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Contributor guide |
+| [docs/architecture.md](docs/architecture.md) | Data model, component map, key data flows |
+| [docs/peer-sync-security.md](docs/peer-sync-security.md) | Peer sync threat model and protocol |
+| [docs/tauri-commands.md](docs/tauri-commands.md) | Complete Tauri command reference (~96 commands) |
+| [docs/speech-to-text.md](docs/speech-to-text.md) | STT architecture and usage |
+| [docs/watch-companion.md](docs/watch-companion.md) | Wear OS companion app guide |
 
 ---
 

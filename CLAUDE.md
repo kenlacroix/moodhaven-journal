@@ -40,7 +40,10 @@
 | Oura Ring | P2 | **Complete** | PAT-based health context (sleep, readiness, HRV) in writing view |
 | Sync Details Modal | P2 | **Complete** | Storage type, entry count, last sync, upload/download with inline auth |
 | Speech-to-Text | P3 | In Progress | Local offline STT via whisper.cpp sidecar; Tauri commands scaffolded; UI pending |
-| Local Peer Sync | P2 | **Phase 1 Complete** | Ed25519 device identity + mDNS/DNS-SD discovery; Settings → Devices tab; v0.6.x |
+| Local Peer Sync | P2 | **Complete** | Ed25519 identity, mDNS discovery, QR/PIN pairing, TCP sync engine, AES-GCM transport; v0.7.0 |
+| Hashtag Extraction | P2 | **Complete** | Auto-extracted from entry content on save; surfaced in timeline |
+| Pinned Entries | P2 | **Complete** | Pin important entries to surface them first in timeline |
+| Watch Companion | P3 | In Progress | Voice-first Wear OS companion app; audio pipeline complete (Phase 1); polish sprint upcoming |
 
 ### Feature Implementation Guidelines
 
@@ -536,34 +539,37 @@ interface AISettings {
 
 ### Current Sprint
 
-<!-- Update this section as development progresses -->
-
 ```markdown
-## Sprint: Phase 8 (v0.6.x — Local Peer Sync)
+## Sprint: Phase 9 (v0.7.x — Watch App Polish + STT)
 
-### Completed (Phase 1 — v0.6.0: Identity + Discovery)
-- [x] Ed25519 device identity generation (peer_identity.rs, peer_key.bin)
-- [x] mDNS/DNS-SD service broadcast + browse (mdns-sd crate, _moodbloom._tcp.local)
-- [x] PeerDiscoveryState Tauri managed state (background thread, stop channel)
-- [x] Tauri events: peer:discovered, peer:lost (AppHandle::emit)
-- [x] 6 Tauri commands: peer_get_identity, peer_rename_device, peer_discovery_start/stop, peer_get_nearby, peer_discovery_is_active
-- [x] peerDiscoveryService.ts IPC wrappers + event listeners
-- [x] peerSyncStore.ts Zustand store (identity, nearbyPeers, isDiscovering)
-- [x] usePeerSync hook (app-level, loads identity + wires events)
-- [x] Settings → Devices tab (DevicesTab.tsx — full polished UI)
-- [x] PeerSyncBadge in sidebar footer
-- [x] PeerSyncWireframes dev preview page (?mode=peersync)
-- [x] docs/local-peer-sync-plan.md architecture documentation
+### Completed (v0.7.0: Encrypted Peer Sync Engine)
+- [x] TCP sync engine (peer_sync_engine.rs) with AES-256-GCM transport
+- [x] Manifest-diff protocol — only syncs entries the peer is missing
+- [x] LWW (last-write-wins) conflict resolution per entry
+- [x] peer_sync_state table (peer_device_id PK, last_sync_at)
+- [x] peerSyncEngineService.ts IPC wrappers + useWearVoiceMemos hook
+- [x] Auto-sync on trusted peer discovered (30s cooldown)
+- [x] Auto-sync after pairing completes
+- [x] Non-obtrusive pairing request notification
+- [x] transcribe_voice_memo Tauri command (whisper sidecar hook)
+- [x] Full restore: peer_full_restore + peer_apply_and_restart commands
+
+### Completed (v0.6.x: Identity, Discovery, Pairing)
+- [x] Ed25519 device identity + mDNS discovery (v0.6.0)
+- [x] QR/PIN pairing, trusted_devices.json, deterministic ports (v0.6.1)
+- [x] Settings → Devices tab, PeerSyncBadge in sidebar
 
 ### In Progress
-- [ ] Phase 2 (v0.6.1): QR code pairing + trusted_devices store
+- [ ] Watch app Phase 2: UX polish sprint (record screen arc, breathe page, nav)
+- [ ] Speech-to-Text UI (recording UX in WritingView, model download flow)
 
 ### Blocked
 - None
 
 ### Upcoming
-- [ ] Phase 3 (v0.7.0): Encrypted WebSocket sync engine (axum, ECDH, manifest+delta)
-- [ ] Phase 4 (v0.7.1): UDP fallback, LAN-only privacy mode, watch gateway
+- [ ] CI/CD pipeline (GitHub Actions — build + test on push)
+- [ ] Release preparation (code signing, notarisation)
+- [ ] Watch app Phase 3+: phone integration, journal creation from voice memos
 
 ---
 
@@ -619,14 +625,13 @@ interface AISettings {
 - [x] Settings deep-linking (scroll-to-section, temperature unit, auto-title toggle)
 - [x] Hashtag auto-extraction on save, pinned entries, temperature unit display
 
-### In Progress (carried forward)
-- [ ] Speech-to-Text (whisper.cpp sidecar; commands scaffolded, UI pending)
+### Carried Forward
+- [ ] Speech-to-Text UI (recording UX in WritingView; Tauri commands scaffolded, model download pending)
 - [ ] Cross-platform build testing
 
 ### Future
 - [ ] CI/CD pipeline (GitHub Actions — build + test on push)
 - [ ] Release preparation (code signing, notarisation)
-- [ ] Speech-to-Text (local, offline via whisper.cpp)
 ```
 
 ### Speech-to-Text (Planned — Post-Release)
@@ -1049,17 +1054,28 @@ npm run lint:fix           # Fix auto-fixable issues
 |------|---------|
 | `src-tauri/tauri.conf.json` | Tauri app configuration |
 | `src-tauri/Cargo.toml` | Rust dependencies |
+| `src-tauri/capabilities/default.json` | Tauri ACL — permitted commands and plugins |
+| `src-tauri/src/lib.rs` | Tauri command registration (all ~96 commands) |
+| `src-tauri/src/db/mod.rs` | SQLite schema, migrations, Database struct |
 | `src/App.tsx` | React app root |
-| `src/stores/` | Global state management |
-| `src/lib/tauri.ts` | Tauri IPC wrappers |
+| `src/stores/` | Global state management (4 Zustand stores) |
 | `src/lib/crypto.ts` | AES-256-GCM encryption (PBKDF2 key derivation) |
 | `src/lib/dataManagementService.ts` | Export/import with encryption envelope |
 | `src/lib/webdavService.ts` | WebDAV HTTP operations via tauri-plugin-http |
 | `src/lib/cloudSyncService.ts` | Cloud sync orchestration (export/encrypt/upload) |
 | `src/lib/reminderService.ts` | Notification reminder scheduling |
+| `src/lib/peerSyncEngineService.ts` | P2P sync IPC wrappers |
+| `src/lib/peerPairingService.ts` | Device pairing IPC wrappers |
+| `src/lib/peerDiscoveryService.ts` | mDNS discovery IPC wrappers |
 | `src/types/settings.ts` | App settings type definitions |
+| `src/types/peerSync.ts` | Peer sync type definitions (DeviceIdentity, TrustedDevice, …) |
 | `vitest.config.ts` | Test runner configuration |
 | `src/test/setup.ts` | Global test setup and mocks |
+| `docs/architecture.md` | Full architecture reference |
+| `docs/tauri-commands.md` | Complete Tauri command reference |
+| `docs/peer-sync-security.md` | Peer sync security model and protocol |
+| `docs/speech-to-text.md` | STT architecture and setup |
+| `docs/watch-companion.md` | Wear OS companion app guide |
 
 ### Useful Links
 
@@ -1072,4 +1088,4 @@ npm run lint:fix           # Fix auto-fixable issues
 
 ---
 
-*Last Updated: March 2026 — v0.5.0*
+*Last Updated: March 2026 — v0.7.0*

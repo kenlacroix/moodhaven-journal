@@ -65,5 +65,4 @@ models/
 # Lock files (optional, uncomment if not using)
 # package-lock.json
 # yarn.lock
-docs/local-peer-sync-plan.md
-/docs
+# docs/ is tracked — documentation belongs in the repo

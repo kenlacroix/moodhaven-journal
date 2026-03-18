@@ -172,6 +172,9 @@ export function OuraConnectionCard({ onConnected, onDisconnected }: OuraConnecti
               {isSaving ? 'Connecting…' : 'Connect'}
             </button>
           </div>
+          <p className="text-xs text-slate-400 dark:text-slate-500">
+            40-character token from your Oura cloud dashboard — Personal Access Tokens page.
+          </p>
         </div>
       )}
 

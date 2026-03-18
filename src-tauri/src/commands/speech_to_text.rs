@@ -178,7 +178,9 @@ pub async fn stt_download_model(
         },
     );
 
-    // connect_timeout only — no overall timeout so large files can stream freely
+    // connect_timeout: fail fast if server is unreachable.
+    // No overall timeout — large models (1.5 GB) must be able to stream to completion.
+    // Per-chunk stall detection is handled below via tokio::time::timeout.
     let client = reqwest::Client::builder()
         .connect_timeout(std::time::Duration::from_secs(30))
         .build()
@@ -236,8 +238,22 @@ pub async fn stt_download_model(
     let mut last_progress_time = start_time;
     let mut stream = response.bytes_stream();
 
+    // 60 s between chunks — guards against stalled/dropped connections on large downloads.
+    const CHUNK_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
+
     use futures_util::StreamExt;
-    while let Some(chunk_result) = stream.next().await {
+    loop {
+        let next = tokio::time::timeout(CHUNK_TIMEOUT, stream.next()).await;
+        let chunk_result = match next {
+            Err(_elapsed) => {
+                drop(file);
+                let _ = fs::remove_file(&partial_path);
+                cleanup(&state, &filename);
+                return Err("Download stalled: no data received for 60 seconds".to_string());
+            }
+            Ok(None) => break,     // stream finished
+            Ok(Some(r)) => r,
+        };
         if cancel_token.load(Ordering::Relaxed) {
             drop(file);
             let _ = fs::remove_file(&partial_path);
@@ -261,15 +277,22 @@ pub async fn stt_download_model(
             return Err("Download cancelled".to_string());
         }
 
-        let chunk = chunk_result.map_err(|e| {
-            cleanup(&state, &filename);
-            format!("Download interrupted: {}", e)
-        })?;
+        let chunk: bytes::Bytes = match chunk_result {
+            Ok(c) => c,
+            Err(e) => {
+                drop(file);
+                let _ = fs::remove_file(&partial_path);
+                cleanup(&state, &filename);
+                return Err(format!("Download interrupted: {}", e));
+            }
+        };
 
-        file.write_all(&chunk).map_err(|e| {
+        if let Err(e) = file.write_all(&chunk) {
+            drop(file);
+            let _ = fs::remove_file(&partial_path);
             cleanup(&state, &filename);
-            format!("Failed to write data: {}", e)
-        })?;
+            return Err(format!("Failed to write data: {}", e));
+        }
 
         downloaded += chunk.len() as u64;
 
@@ -297,16 +320,19 @@ pub async fn stt_download_model(
         }
     }
 
-    file.flush().map_err(|e| {
+    if let Err(e) = file.flush() {
+        drop(file);
+        let _ = fs::remove_file(&partial_path);
         cleanup(&state, &filename);
-        format!("Failed to flush file: {}", e)
-    })?;
+        return Err(format!("Failed to flush file: {}", e));
+    }
     drop(file);
 
-    fs::rename(&partial_path, &model_path).map_err(|e| {
+    if let Err(e) = fs::rename(&partial_path, &model_path) {
+        let _ = fs::remove_file(&partial_path);
         cleanup(&state, &filename);
-        format!("Failed to finalize download: {}", e)
-    })?;
+        return Err(format!("Failed to finalize download: {}", e));
+    }
 
     cleanup(&state, &filename);
     emit_progress(

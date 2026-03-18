@@ -383,14 +383,17 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
 
   // Load rate limit state when password modal opens
   useEffect(() => {
+    let mounted = true;
     if (showPasswordModal) {
       setSyncPasswordError(null);
       loadRateLimitState().then((state) => {
+        if (!mounted) return;
         setSyncRateLimit(state);
         setSyncLockoutRemaining(getRemainingLockoutMs(state));
       });
     }
     return () => {
+      mounted = false;
       if (syncTimerRef.current) {
         clearInterval(syncTimerRef.current);
         syncTimerRef.current = null;

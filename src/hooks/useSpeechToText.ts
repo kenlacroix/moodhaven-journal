@@ -26,36 +26,40 @@ export function useSpeechToText(): UseSpeechToTextResult {
 
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [transcribeError, setTranscribeError] = useState<string | null>(null);
-  const [isAvailable, setIsAvailable] = useState(false);
 
   const settings = useSettingsStore((s) => s.settings.speechToText);
   const checkedRef = useRef(false);
+  // Stores the last check result so checkAvailability can return it without
+  // closing over the isAvailable state (which would add it to useCallback deps).
+  const availabilityResultRef = useRef(false);
 
   // Reset the cached check whenever the model selection or enabled state changes
   // so the next recording attempt re-validates against the real filesystem.
   useEffect(() => {
     checkedRef.current = false;
+    availabilityResultRef.current = false;
   }, [settings.model, settings.enabled]);
 
-  // Check availability on first use (within the current model/enabled config)
+  // Check availability on first use (within the current model/enabled config).
+  // Does NOT include isAvailable in deps — the result is tracked via ref.
   const checkAvailability = useCallback(async () => {
-    if (checkedRef.current) return isAvailable;
+    if (checkedRef.current) return availabilityResultRef.current;
     checkedRef.current = true;
 
     if (!settings.enabled) {
-      setIsAvailable(false);
+      availabilityResultRef.current = false;
       return false;
     }
 
     try {
       const status = await checkModelStatus(settings.model);
-      setIsAvailable(status.downloaded);
+      availabilityResultRef.current = status.downloaded;
       return status.downloaded;
     } catch {
-      setIsAvailable(false);
+      availabilityResultRef.current = false;
       return false;
     }
-  }, [settings.enabled, settings.model, isAvailable]);
+  }, [settings.enabled, settings.model]);
 
   const startRecording = useCallback(async () => {
     setTranscribeError(null);

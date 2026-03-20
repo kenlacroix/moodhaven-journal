@@ -183,7 +183,7 @@ export function Sidebar({ currentView, onNavigate, onOpenSync, onNavigateToJourn
         {/* Section header */}
         {!collapsed && (
           <div className="flex items-center justify-between mb-1.5">
-            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider px-1">
+            <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider px-1">
               My Books
             </span>
             <button

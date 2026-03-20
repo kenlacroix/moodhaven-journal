@@ -223,7 +223,7 @@ export function SetupScreen() {
           {/* Progress bar */}
           <div className="h-1 bg-slate-100 dark:bg-slate-700">
             <div
-              className="h-full bg-gradient-to-r from-violet-500 to-purple-600 transition-all duration-500"
+              className="h-full bg-violet-500 transition-[width] duration-500"
               style={{ width: `${((currentStepIndex + 1) / STEPS.length) * 100}%` }}
             />
           </div>
@@ -234,7 +234,7 @@ export function SetupScreen() {
               <div
                 key={step.id}
                 className={`
-                  w-2 h-2 rounded-full transition-all duration-300
+                  w-2 h-2 rounded-full transition-[width,background-color] duration-300
                   ${index === currentStepIndex
                     ? 'w-6 bg-violet-500'
                     : index < currentStepIndex
@@ -321,7 +321,7 @@ export function SetupScreen() {
                   <button
                     type="button"
                     onClick={() => handleChooseSource('fresh')}
-                    className="w-full text-left p-4 rounded-2xl border-2 border-slate-200 dark:border-slate-700 hover:border-violet-400 dark:hover:border-violet-500 hover:bg-violet-50 dark:hover:bg-violet-900/10 transition-all group"
+                    className="w-full text-left p-4 rounded-2xl border-2 border-slate-200 dark:border-slate-700 hover:border-violet-400 dark:hover:border-violet-500 hover:bg-violet-50 dark:hover:bg-violet-900/10 transition-colors focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 group"
                   >
                     <div className="flex items-start gap-4">
                       <div className="w-10 h-10 rounded-xl bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center flex-shrink-0 group-hover:bg-violet-200 dark:group-hover:bg-violet-800/40 transition-colors">
@@ -345,7 +345,7 @@ export function SetupScreen() {
                   <button
                     type="button"
                     onClick={() => handleChooseSource('sync')}
-                    className="w-full text-left p-4 rounded-2xl border-2 border-slate-200 dark:border-slate-700 hover:border-emerald-400 dark:hover:border-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/10 transition-all group"
+                    className="w-full text-left p-4 rounded-2xl border-2 border-slate-200 dark:border-slate-700 hover:border-emerald-400 dark:hover:border-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/10 transition-colors focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 group"
                   >
                     <div className="flex items-start gap-4">
                       <div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-200 dark:group-hover:bg-emerald-800/40 transition-colors">
@@ -685,7 +685,7 @@ export function SetupScreen() {
                           <button
                             type="button"
                             onClick={() => setTwoFactorSetupMode('totp')}
-                            className="w-full flex items-center gap-3 p-4 rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-violet-300 dark:hover:border-violet-600 text-left transition-all"
+                            className="w-full flex items-center gap-3 p-4 rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-violet-300 dark:hover:border-violet-600 text-left transition-colors"
                           >
                             <div className="w-10 h-10 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center flex-shrink-0">
                               <svg className="w-5 h-5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -703,7 +703,7 @@ export function SetupScreen() {
                           <button
                             type="button"
                             onClick={() => setTwoFactorSetupMode('hardwarekey')}
-                            className="w-full flex items-center gap-3 p-4 rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-violet-300 dark:hover:border-violet-600 text-left transition-all"
+                            className="w-full flex items-center gap-3 p-4 rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-violet-300 dark:hover:border-violet-600 text-left transition-colors"
                           >
                             <div className="w-10 h-10 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center flex-shrink-0">
                               <span className="text-xl">🔑</span>
@@ -1320,7 +1320,7 @@ function StorageOption({
       onClick={onSelect}
       disabled={comingSoon}
       className={`
-        w-full flex items-center gap-3 p-4 rounded-xl border-2 text-left transition-all
+        w-full flex items-center gap-3 p-4 rounded-xl border-2 text-left transition-colors
         ${selected
           ? 'border-violet-500 bg-violet-50 dark:bg-violet-900/20'
           : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'

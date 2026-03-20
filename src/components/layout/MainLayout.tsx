@@ -34,7 +34,7 @@ export function MainLayout({ currentView, onNavigate, onLock, onSelectEntry, onN
     <div className="h-screen flex overflow-hidden bg-white dark:bg-slate-900">
       {/* Left Sidebar — slides out in distraction-free mode */}
       <div
-        className={`flex-shrink-0 overflow-hidden transition-all duration-500 ease-in-out ${
+        className={`flex-shrink-0 overflow-hidden transition-[width,opacity] duration-500 ease-in-out ${
           distractionFree ? 'w-0 opacity-0' : 'opacity-100'
         }`}
       >

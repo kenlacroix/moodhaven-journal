@@ -64,7 +64,7 @@ export function CalendarDay({
       {/* Mood emoji (small, centered) replaces plain dot */}
       {hasEntries ? (
         <span
-          className="text-[10px] leading-none"
+          className="text-base leading-none"
           title={`Average mood: ${moodData!.averageMood.toFixed(1)}`}
         >
           {MOOD_OPTIONS.find((o) => o.level === Math.round(moodData!.averageMood))?.emoji ?? '•'}

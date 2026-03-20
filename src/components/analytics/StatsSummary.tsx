@@ -18,24 +18,25 @@ interface StatCardProps {
   icon: React.ReactNode;
   subtext?: string;
   isLoading?: boolean;
+  primary?: boolean;
 }
 
-function StatCard({ label, value, icon, subtext, isLoading }: StatCardProps) {
+function StatCard({ label, value, icon, subtext, isLoading, primary }: StatCardProps) {
   return (
-    <div className="card p-4">
+    <div className={`card p-4 ${primary ? 'ring-1 ring-violet-100 dark:ring-violet-900/40' : ''}`}>
       <div className="flex items-start justify-between">
         <div className="flex-1">
           <p className="text-sm font-medium text-slate-500 dark:text-slate-400">{label}</p>
           {isLoading ? (
-            <div className="h-8 w-16 bg-slate-200 dark:bg-slate-700 rounded animate-pulse mt-1" />
+            <div className={`${primary ? 'h-10 w-20' : 'h-8 w-16'} bg-slate-200 dark:bg-slate-700 rounded animate-pulse mt-1`} />
           ) : (
-            <p className="text-2xl font-bold text-slate-800 dark:text-slate-100 mt-1">{value}</p>
+            <p className={`${primary ? 'text-3xl' : 'text-2xl'} font-bold text-slate-800 dark:text-slate-100 mt-1`}>{value}</p>
           )}
           {subtext && !isLoading && (
             <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">{subtext}</p>
           )}
         </div>
-        <div className="text-2xl">{icon}</div>
+        <div className={primary ? 'text-3xl' : 'text-2xl'}>{icon}</div>
       </div>
     </div>
   );
@@ -59,6 +60,7 @@ export function StatsSummary({
         icon={<span role="img" aria-label="mood">{moodEmoji}</span>}
         subtext={averageMood > 0 ? 'out of 5' : 'No data yet'}
         isLoading={isLoading}
+        primary
       />
 
       <StatCard

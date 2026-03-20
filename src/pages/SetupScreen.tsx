@@ -229,7 +229,14 @@ export function SetupScreen() {
           </div>
 
           {/* Step indicators */}
-          <div className="flex justify-center gap-2 pt-6 pb-2">
+          <div
+            className="flex justify-center gap-2 pt-6 pb-2"
+            role="progressbar"
+            aria-label={`Step ${currentStepIndex + 1} of ${STEPS.length}`}
+            aria-valuenow={currentStepIndex + 1}
+            aria-valuemin={1}
+            aria-valuemax={STEPS.length}
+          >
             {STEPS.map((step, index) => (
               <div
                 key={step.id}

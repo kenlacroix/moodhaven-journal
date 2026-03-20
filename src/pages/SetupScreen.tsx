@@ -1286,22 +1286,6 @@ export function SetupScreen() {
   );
 }
 
-// Feature item component for welcome screen
-function FeatureItem({ icon, title, description }: { icon: string; title: string; description: string }) {
-  return (
-    <div className="flex items-start gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-700/50">
-      <div className="w-8 h-8 rounded-lg bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center flex-shrink-0">
-        <svg className="w-4 h-4 text-violet-600 dark:text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={icon} />
-        </svg>
-      </div>
-      <div>
-        <p className="font-medium text-slate-700 dark:text-slate-200 text-sm">{title}</p>
-        <p className="text-xs text-slate-500 dark:text-slate-400">{description}</p>
-      </div>
-    </div>
-  );
-}
 
 // Storage option component
 function StorageOption({

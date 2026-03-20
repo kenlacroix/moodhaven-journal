@@ -67,3 +67,4 @@ models/
 # yarn.lock
 # docs/internal/ — planning docs, AI context bundles, ephemeral knowledge (not for public repo)
 docs/internal/
+.gstack/

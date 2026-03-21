@@ -130,12 +130,23 @@ export const STT_MODELS: STTModelInfo[] = [
   { id: 'medium.en', name: 'Medium (English)', size: '~1.5 GB', quality: 'Excellent', speed: 'Slower' },
 ];
 
+// Speech-to-Text formatting layer options
+export type STTFormattingLayer = 'local' | 'ollama' | 'openai';
+
+// Speech-to-Text formatting settings
+export interface STTFormattingSettings {
+  layer: STTFormattingLayer;
+  cloudConsentGiven: boolean;
+  consentDate: string | null;
+}
+
 // Speech-to-Text settings
 export interface SpeechToTextSettings {
   enabled: boolean;
   model: STTModel;
   modelDownloaded: boolean;
   downloadProgress: number | null; // 0-100 during download, null otherwise
+  formatting: STTFormattingSettings;
 }
 
 // Oura Ring integration settings
@@ -269,6 +280,11 @@ export function createDefaultSettings(): AppSettings {
       model: 'base.en',
       modelDownloaded: false,
       downloadProgress: null,
+      formatting: {
+        layer: 'local',
+        cloudConsentGiven: false,
+        consentDate: null,
+      },
     },
     oura: {
       enabled: false,

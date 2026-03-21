@@ -352,6 +352,12 @@ impl Database {
         )
         .map_err(|e| format!("Failed to create voice_memos table: {}", e))?;
 
+        // Runtime migration: add raw_transcription column to voice_memos (idempotent)
+        let _ = conn.execute(
+            "ALTER TABLE voice_memos ADD COLUMN raw_transcription TEXT",
+            [],
+        );
+
         // Ensure settings table exists early so the sync engine can query it.
         // Also created lazily in commands/settings.rs and commands/oura.rs; all
         // definitions are identical so CREATE IF NOT EXISTS is harmless.

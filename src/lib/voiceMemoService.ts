@@ -22,6 +22,8 @@ export interface VoiceMemo {
   file_path: string;
   /** Whisper.cpp transcription text (null until processed) */
   transcription: string | null;
+  /** Raw unformatted transcription text before any formatting layer is applied (null if not yet transcribed) */
+  rawTranscription: string | null;
   /** Linked journal entry id (null until user attaches it) */
   entry_id: string | null;
   /** Origin: "watch" | "phone" */

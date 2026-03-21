@@ -7,6 +7,25 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.7.1] — 2026-03-21
+
+### Added
+- **STT transcript formatting — 3-layer privacy ladder.** Voice recordings now produce clean, formatted journal prose instead of raw whisper output. Layer 1 (always on) removes filler words, collapses false starts/repetitions, and adds paragraph breaks using whisper timestamp data. Layer 2 (optional, Ollama) applies local LLM formatting with no data leaving the device. Layer 3 (optional, OpenAI BYOK) provides cloud-quality polish with explicit separate consent.
+- **Transcript preview overlay.** When Layer 2 or Layer 3 formatting runs, a bottom-sheet overlay slides up showing the formatted text before it lands in the editor. Three choices: Use this / Edit first / Use raw text.
+- **Cloud consent modal.** Selecting OpenAI formatting requires separate explicit consent ("I understand — enable cloud formatting") distinct from the existing AI metadata consent.
+- **Quick-capture toggle.** Bolt icon next to the mic button bypasses formatting for a single recording session — raw whisper text inserts immediately.
+- **"Clean up" editor action.** Select any text in the editor and click the sparkle button in the toolbar to run the formatting pipeline on the selection.
+- **Settings → Speech to Text → Formatting sub-section.** Radio-list picker (Local / Ollama / OpenAI) with per-option descriptions; consent status and revoke link for cloud formatting.
+- **`stt_transcribe_timestamped` Rust command.** Returns whisper JSON output with per-segment timestamps enabling pause-based paragraph detection; falls back gracefully to plain text.
+- **`raw_transcription` column on `voice_memos` table.** Stores original whisper output alongside formatted version (idempotent migration).
+- **Watch memo formatting hook.** `useWearVoiceMemos` accepts an optional `formatCallback` so watch-sourced transcriptions flow through the same formatting pipeline.
+
+### Fixed
+- **btoa stack overflow on recordings >30 seconds.** `speechToTextService.ts` was using `btoa(String.fromCharCode(...bytes))` which crashes via call-stack overflow for large audio buffers. Now uses a chunked 32KB approach.
+- **OpenAI token truncation on long transcripts.** The existing `callOpenAI()` helper hardcodes `max_tokens: 1000`, silently truncating long recordings. `formatTranscript()` makes a direct fetch call with `max_tokens: 4096`.
+
+---
+
 ## [0.7.0] — 2026-03-18
 
 ### Added

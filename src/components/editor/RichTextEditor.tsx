@@ -26,6 +26,7 @@ import { EmojiPicker } from './EmojiPicker';
 import { SlashCommands } from './slashCommands';
 import { useSpeechToText, type STTState } from '../../hooks/useSpeechToText';
 import { useSettingsStore } from '../../stores/settingsStore';
+import { TranscriptPreviewOverlay } from '../transcript/TranscriptPreviewOverlay';
 
 interface RichTextEditorProps {
   value: string;
@@ -68,7 +69,17 @@ export function RichTextEditor({
 
   // Speech-to-text
   const sttSettings = useSettingsStore((s) => s.settings.speechToText);
-  const { state: sttState, error: sttError, startRecording, stopAndTranscribe, cancel: cancelSTT } = useSpeechToText();
+  const {
+    state: sttState,
+    error: sttError,
+    quickCapture,
+    toggleQuickCapture,
+    formattedResult,
+    clearFormattedResult,
+    startRecording,
+    stopAndTranscribe,
+    cancel: cancelSTT,
+  } = useSpeechToText();
 
   // Ref so the Tiptap extension can call the latest opener without stale closures
   const openLinkDialogRef = useRef<() => void>(() => {});
@@ -291,7 +302,7 @@ export function RichTextEditor({
     }
 
     if (sttState === 'recording') {
-      // Stop recording and transcribe
+      // Stop recording and transcribe (may return null if L2/L3 preview is shown)
       const text = await stopAndTranscribe();
       if (text) {
         editor.chain().focus().insertContent(text).run();
@@ -300,8 +311,28 @@ export function RichTextEditor({
       // Start recording
       await startRecording();
     }
-    // If transcribing or processing, do nothing (button should be disabled)
+    // If transcribing/formatting/processing, do nothing (button should be disabled)
   }, [editor, sttState, sttReady, startRecording, stopAndTranscribe, onNavigateToSTTSettings]);
+
+  // Transcript preview overlay handlers
+  const handleUseFormatted = useCallback(() => {
+    if (!editor || !formattedResult) return;
+    editor.chain().focus().insertContent(formattedResult.formatted).run();
+    clearFormattedResult();
+  }, [editor, formattedResult, clearFormattedResult]);
+
+  const handleEditFirst = useCallback(() => {
+    if (!editor || !formattedResult) return;
+    // Insert text and position cursor at start of insertion
+    editor.chain().focus().insertContent(formattedResult.formatted).run();
+    clearFormattedResult();
+  }, [editor, formattedResult, clearFormattedResult]);
+
+  const handleUseRaw = useCallback(() => {
+    if (!editor || !formattedResult) return;
+    editor.chain().focus().insertContent(formattedResult.raw).run();
+    clearFormattedResult();
+  }, [editor, formattedResult, clearFormattedResult]);
 
   // Show loading state while editor initializes
   if (!editor) {
@@ -330,6 +361,8 @@ export function RichTextEditor({
         sttError={sttError}
         onMicClick={handleMicClick}
         onMicCancel={cancelSTT}
+        quickCapture={quickCapture}
+        onToggleQuickCapture={toggleQuickCapture}
       />
 
       {/* Editor content */}
@@ -365,6 +398,17 @@ export function RichTextEditor({
           onClose={() => setLinkDialogOpen(false)}
         />
       )}
+
+      {/* Transcript preview overlay — shown when L2/L3 formatting returns a result */}
+      <TranscriptPreviewOverlay
+        isOpen={formattedResult !== null}
+        formattedText={formattedResult?.formatted ?? ''}
+        rawText={formattedResult?.raw ?? ''}
+        source={formattedResult?.source ?? null}
+        onUseFormatted={handleUseFormatted}
+        onEditFirst={handleEditFirst}
+        onUseRaw={handleUseRaw}
+      />
 
       {/* Editor styling — restore list styles stripped by Tailwind preflight */}
       <style>{`
@@ -627,6 +671,8 @@ interface CollapsibleToolbarProps {
   sttError?: string | null;
   onMicClick?: () => void;
   onMicCancel?: () => void;
+  quickCapture?: boolean;
+  onToggleQuickCapture?: () => void;
 }
 
 function CollapsibleToolbar({
@@ -642,6 +688,8 @@ function CollapsibleToolbar({
   sttError,
   onMicClick,
   onMicCancel,
+  quickCapture = false,
+  onToggleQuickCapture,
 }: CollapsibleToolbarProps) {
   const [formatState, setFormatState] = useState<Record<string, boolean>>({});
 
@@ -767,10 +815,16 @@ function CollapsibleToolbar({
             onClick={onEmojiClick}
           />
 
-          {/* Speech-to-text mic button - always visible */}
+          {/* Speech-to-text: quick capture toggle + mic button */}
           {onMicClick && (
             <>
               <TBDivider />
+              {onToggleQuickCapture && (
+                <QuickCaptureToggle
+                  active={quickCapture}
+                  onToggle={onToggleQuickCapture}
+                />
+              )}
               <MicButton
                 state={sttState}
                 error={sttError}
@@ -839,7 +893,8 @@ function MicButton({
   isReady?: boolean;
 }) {
   const isRecording = state === 'recording';
-  const isProcessing = state === 'processing' || state === 'transcribing' || state === 'requesting';
+  const isFormatting = state === 'formatting';
+  const isProcessing = state === 'processing' || state === 'transcribing' || state === 'requesting' || isFormatting;
 
   // Determine button appearance based on state
   let buttonClass = 'text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-600 dark:hover:text-slate-300';
@@ -851,6 +906,9 @@ function MicButton({
   } else if (isRecording) {
     buttonClass = 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 animate-pulse';
     title = 'Stop recording';
+  } else if (isFormatting) {
+    buttonClass = 'bg-amber-100 dark:bg-amber-900/30 text-amber-500 dark:text-amber-400';
+    title = 'Formatting…';
   } else if (isProcessing) {
     buttonClass = 'bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400';
     title = state === 'transcribing' ? 'Transcribing...' : 'Processing...';
@@ -873,10 +931,13 @@ function MicButton({
         title={title}
       >
         {isProcessing ? (
-          <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-          </svg>
+          <span className="flex items-center gap-1">
+            <svg className={`w-4 h-4 animate-spin ${isFormatting ? 'text-amber-500' : ''}`} fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+            </svg>
+            {isFormatting && <span className="text-xs text-amber-500">Formatting…</span>}
+          </span>
         ) : (
           <TBMicIcon isRecording={isRecording} />
         )}
@@ -908,6 +969,42 @@ function TBMicIcon({ isRecording }: { isRecording?: boolean }) {
     <svg className="w-4 h-4" fill={isRecording ? 'currentColor' : 'none'} viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z" />
     </svg>
+  );
+}
+
+/**
+ * Quick capture toggle — bolt/lightning icon. When active, transcription
+ * bypasses all formatting layers and inserts raw text immediately.
+ */
+function QuickCaptureToggle({
+  active,
+  onToggle,
+}: {
+  active: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={(e) => {
+        e.preventDefault();
+        onToggle();
+      }}
+      title="Quick capture (bypass formatting)"
+      aria-pressed={active}
+      className={[
+        'p-1.5 rounded transition-all duration-150 active:scale-90 min-w-[44px] min-h-[44px] flex items-center justify-center',
+        active
+          ? 'text-amber-500 bg-amber-50 dark:bg-amber-900/20'
+          : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-slate-100 dark:hover:bg-slate-800',
+      ].join(' ')}
+    >
+      {/* Lightning bolt / bolt icon */}
+      <svg className="w-4 h-4" fill={active ? 'currentColor' : 'none'} viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+      </svg>
+    </button>
   );
 }
 

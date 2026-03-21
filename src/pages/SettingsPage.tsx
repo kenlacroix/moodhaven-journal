@@ -61,6 +61,8 @@ import {
   type RateLimitState,
 } from '../lib/rateLimitService';
 import { DevicesTab } from '../components/peer-sync';
+import { CloudConsentModal } from '../components/transcript/CloudConsentModal';
+import type { STTFormattingLayer } from '../types/settings';
 
 type SettingsTab = 'general' | 'privacy' | 'sync' | 'ai' | 'health' | 'devices' | 'about';
 
@@ -155,6 +157,8 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
     setSTTModel,
     setSTTModelDownloaded,
     setSTTDownloadProgress,
+    setSttFormattingLayer,
+    setSttCloudConsent,
     setOuraEnabled,
     setOuraSettings,
     setAutoLocationWeather,
@@ -208,6 +212,9 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
   const [sttDownloading, setSTTDownloading] = useState(false);
   const [sttDownloadError, setSTTDownloadError] = useState<string | null>(null);
   const [sttSidecarAvailable, setSTTSidecarAvailable] = useState<boolean | null>(null);
+  const [cloudConsentModalOpen, setCloudConsentModalOpen] = useState(false);
+  // Tracks the layer the user was on before opening the consent modal (to revert on cancel)
+  const prevFormattingLayerRef = useRef<STTFormattingLayer>('local');
 
   // Tutorial state
   const handleShowTutorial = useCallback(async () => {
@@ -942,10 +949,148 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
                               Models are downloaded from Hugging Face once and stored locally.
                             </p>
                           </div>
+
+                          {/* Formatting layer sub-section */}
+                          <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
+                            <p className="text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">
+                              Formatting layer
+                            </p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
+                              How should raw whisper output be cleaned up before inserting into your journal?
+                            </p>
+
+                            <div className="space-y-2">
+                              {/* Local cleanup */}
+                              <label className="flex items-start gap-3 cursor-pointer">
+                                <input
+                                  type="radio"
+                                  name="stt-formatting-layer"
+                                  value="local"
+                                  checked={settings.speechToText.formatting?.layer === 'local' || !settings.speechToText.formatting?.layer}
+                                  onChange={() => {
+                                    setSttFormattingLayer('local');
+                                    void saveSettings();
+                                  }}
+                                  className="mt-0.5 accent-violet-600"
+                                />
+                                <div>
+                                  <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                                    Local cleanup
+                                  </span>
+                                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                                    Always on. No LLM. Removes fillers, adds paragraph breaks.
+                                  </p>
+                                </div>
+                              </label>
+
+                              {/* Ollama */}
+                              <label className={`flex items-start gap-3 ${settings.ai.localAI.enabled ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}>
+                                <input
+                                  type="radio"
+                                  name="stt-formatting-layer"
+                                  value="ollama"
+                                  checked={settings.speechToText.formatting?.layer === 'ollama'}
+                                  disabled={!settings.ai.localAI.enabled}
+                                  onChange={() => {
+                                    if (!settings.ai.localAI.enabled) return;
+                                    setSttFormattingLayer('ollama');
+                                    void saveSettings();
+                                  }}
+                                  className="mt-0.5 accent-violet-600"
+                                />
+                                <div>
+                                  <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                                    Ollama (local LLM)
+                                  </span>
+                                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                                    {settings.ai.localAI.enabled
+                                      ? 'Requires Ollama running. Full quality, stays on device.'
+                                      : 'Requires Ollama endpoint configured in AI settings.'}
+                                  </p>
+                                </div>
+                              </label>
+
+                              {/* OpenAI */}
+                              <label className={`flex items-start gap-3 ${settings.ai.openai.apiKey ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}>
+                                <input
+                                  type="radio"
+                                  name="stt-formatting-layer"
+                                  value="openai"
+                                  checked={settings.speechToText.formatting?.layer === 'openai'}
+                                  disabled={!settings.ai.openai.apiKey}
+                                  onChange={() => {
+                                    if (!settings.ai.openai.apiKey) return;
+                                    // If consent not yet given, open consent modal first
+                                    if (!settings.speechToText.formatting?.cloudConsentGiven) {
+                                      prevFormattingLayerRef.current = settings.speechToText.formatting?.layer ?? 'local';
+                                      setSttFormattingLayer('openai');
+                                      setCloudConsentModalOpen(true);
+                                    } else {
+                                      setSttFormattingLayer('openai');
+                                      void saveSettings();
+                                    }
+                                  }}
+                                  className="mt-0.5 accent-violet-600"
+                                />
+                                <div>
+                                  <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                                    OpenAI (cloud)
+                                  </span>
+                                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                                    {settings.ai.openai.apiKey
+                                      ? 'Requires API key + consent. Best quality.'
+                                      : 'Requires an OpenAI API key set in AI settings.'}
+                                  </p>
+                                </div>
+                              </label>
+                            </div>
+
+                            {/* Consent status */}
+                            {settings.speechToText.formatting?.layer === 'openai' && !settings.speechToText.formatting?.cloudConsentGiven && (
+                              <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
+                                ⚠️ Selecting OpenAI will prompt for consent before first use.
+                              </p>
+                            )}
+                            {settings.speechToText.formatting?.layer === 'openai' && settings.speechToText.formatting?.cloudConsentGiven && (
+                              <div className="flex items-center justify-between mt-2">
+                                <p className="text-xs text-green-600 dark:text-green-400">
+                                  ✓ Cloud consent granted{settings.speechToText.formatting.consentDate
+                                    ? ` on ${new Date(settings.speechToText.formatting.consentDate).toLocaleDateString()}`
+                                    : ''}
+                                </p>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSttCloudConsent(false);
+                                    setSttFormattingLayer('local');
+                                    void saveSettings();
+                                  }}
+                                  className="text-xs text-rose-500 hover:text-rose-700 underline"
+                                >
+                                  Revoke
+                                </button>
+                              </div>
+                            )}
+                          </div>
                         </>
                       )}
                     </SettingSection>
                     </div>
+
+                    {/* Cloud consent modal */}
+                    <CloudConsentModal
+                      isOpen={cloudConsentModalOpen}
+                      onConfirm={() => {
+                        setSttCloudConsent(true);
+                        setCloudConsentModalOpen(false);
+                        void saveSettings();
+                      }}
+                      onCancel={() => {
+                        // Revert to previous layer
+                        setSttFormattingLayer(prevFormattingLayerRef.current);
+                        setCloudConsentModalOpen(false);
+                      }}
+                    />
 
                     <SettingSection
                       title="Help"

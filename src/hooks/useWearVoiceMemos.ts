@@ -43,6 +43,12 @@ interface UseWearVoiceMemosOptions {
   onTranscribed?: (memo: VoiceMemo) => void;
   /** Called when transcription fails for a memo. */
   onTranscriptionError?: (id: string, error: string) => void;
+  /**
+   * Optional post-processing callback invoked after raw transcription completes.
+   * Receives the raw text and whether the recording is "short" (< 90 seconds).
+   * Return the final text to store, or undefined/null to use raw text.
+   */
+  formatCallback?: (text: string, isShort: boolean) => Promise<string | null | undefined>;
 }
 
 // ── Hook ──────────────────────────────────────────────────────────────────────
@@ -52,6 +58,7 @@ export function useWearVoiceMemos({
   enabled = true,
   onTranscribed,
   onTranscriptionError,
+  formatCallback,
 }: UseWearVoiceMemosOptions) {
   const [memos, setMemos] = useState<VoiceMemo[]>([]);
   /** Set of memo IDs currently being transcribed. */
@@ -59,8 +66,10 @@ export function useWearVoiceMemos({
 
   const onTranscribedRef = useRef(onTranscribed);
   const onErrorRef = useRef(onTranscriptionError);
+  const formatCallbackRef = useRef(formatCallback);
   useEffect(() => { onTranscribedRef.current = onTranscribed; }, [onTranscribed]);
   useEffect(() => { onErrorRef.current = onTranscriptionError; }, [onTranscriptionError]);
+  useEffect(() => { formatCallbackRef.current = formatCallback; }, [formatCallback]);
 
   // ── Load all memos on mount ──────────────────────────────────────────────
 
@@ -81,7 +90,24 @@ export function useWearVoiceMemos({
     });
 
     try {
-      const text = await transcribeVoiceMemo(id, model);
+      const rawText = await transcribeVoiceMemo(id, model);
+
+      // Apply optional format callback if provided
+      let finalText = rawText;
+      if (formatCallbackRef.current) {
+        const memo = memos.find((m) => m.id === id);
+        const isShort = memo ? memo.duration_ms < 90_000 : false;
+        try {
+          const formatted = await formatCallbackRef.current(rawText, isShort);
+          if (formatted != null) {
+            finalText = formatted;
+          }
+        } catch {
+          // Format callback error — use raw text
+        }
+      }
+
+      const text = finalText;
       setMemos((prev) =>
         prev.map((m) => (m.id === id ? { ...m, transcription: text } : m))
       );

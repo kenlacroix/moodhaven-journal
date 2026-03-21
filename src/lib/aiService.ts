@@ -16,6 +16,7 @@ import type {
   AIResponse,
 } from '../types/ai';
 import type { AppSettings } from '../types/settings';
+import { cleanTranscript } from './transcriptFormatter';
 
 // ============================================
 // AI SERVICE CONFIGURATION
@@ -612,4 +613,139 @@ export function buildHealthContextPrompts(
   }
 
   return prompts.slice(0, 3);
+}
+
+// ============================================
+// TRANSCRIPT FORMATTING (Layer 2 & 3)
+// ============================================
+
+/**
+ * System prompts used when formatting transcripts via LLM.
+ */
+export const TRANSCRIPT_FORMAT_PROMPTS = {
+  standard: `You are a journal editor. Clean up this voice transcription into well-formatted journal prose:
+- Fix grammar and punctuation
+- Remove any remaining filler words
+- Ensure natural paragraph flow
+- Preserve the speaker's voice and meaning
+- Do NOT add content that wasn't spoken
+Return only the formatted text, no explanations.`,
+
+  watch: `Clean up this short voice note into a concise journal entry. Fix grammar, remove fillers, preserve meaning. Return only the text.`,
+} as const;
+
+export type TranscriptFormatMode = keyof typeof TRANSCRIPT_FORMAT_PROMPTS;
+
+export interface FormatTranscriptSettings {
+  layer: 'local' | 'ollama' | 'openai';
+  cloudConsentGiven: boolean;
+  ollamaEndpoint?: string;
+  openaiKey?: string;
+}
+
+export interface FormatTranscriptResult {
+  formatted: string;
+  source: 'ollama' | 'openai' | 'local';
+}
+
+/**
+ * Format a transcript using the configured layer.
+ *
+ * Layer 1 (local): Always available — rule-based cleanup via cleanTranscript.
+ * Layer 2 (ollama): Local LLM. Falls back to L1 on any error.
+ * Layer 3 (openai): Cloud LLM. Requires explicit consent. Falls back to L1 on error.
+ *
+ * @throws Error with message 'CONSENT_REQUIRED' if layer is 'openai' and
+ *         cloudConsentGiven is false.
+ */
+export async function formatTranscript(
+  text: string,
+  mode: TranscriptFormatMode,
+  settings: FormatTranscriptSettings
+): Promise<FormatTranscriptResult> {
+  const { layer, cloudConsentGiven, ollamaEndpoint, openaiKey } = settings;
+  const systemPrompt = TRANSCRIPT_FORMAT_PROMPTS[mode];
+
+  // ── Layer 1: always-on local cleanup ──────────────────────────────────────
+  if (layer === 'local') {
+    return { formatted: cleanTranscript(text), source: 'local' };
+  }
+
+  // ── Layer 2: Ollama local LLM ─────────────────────────────────────────────
+  if (layer === 'ollama') {
+    const endpoint = ollamaEndpoint || 'http://localhost:11434';
+    try {
+      const response = await fetch(`${endpoint}/api/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'llama2',
+          prompt: `${systemPrompt}\n\nTranscription:\n${text}`,
+          stream: false,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Ollama returned ${response.status}`);
+      }
+
+      const data = await response.json() as { response: string };
+      return { formatted: data.response.trim(), source: 'ollama' };
+    } catch {
+      // Fall back to L1 on any Ollama error
+      return { formatted: cleanTranscript(text), source: 'local' };
+    }
+  }
+
+  // ── Layer 3: OpenAI cloud ─────────────────────────────────────────────────
+  if (!cloudConsentGiven) {
+    throw new Error('CONSENT_REQUIRED');
+  }
+
+  if (!openaiKey) {
+    // No key configured — fall back to L1
+    return { formatted: cleanTranscript(text), source: 'local' };
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10_000);
+
+  try {
+    const response = await fetch(OPENAI_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${openaiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: text },
+        ],
+        temperature: 0.3,
+        max_tokens: 4096,
+      }),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (response.status === 401) {
+      // Bad key — fall back to L1 silently
+      return { formatted: cleanTranscript(text), source: 'local' };
+    }
+
+    if (!response.ok) {
+      throw new Error(`OpenAI returned ${response.status}`);
+    }
+
+    const data = await response.json() as { choices: Array<{ message: { content: string } }> };
+    const formatted = data.choices[0]?.message?.content?.trim() ?? cleanTranscript(text);
+    return { formatted, source: 'openai' };
+  } catch (err) {
+    clearTimeout(timeoutId);
+    // Timeout or any other error — fall back to L1
+    return { formatted: cleanTranscript(text), source: 'local' };
+  }
 }

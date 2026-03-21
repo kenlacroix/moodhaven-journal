@@ -2,6 +2,7 @@ import {
   createAIServiceConfig,
   detectRecurringPatterns,
   getFallbackPrompts,
+  formatTranscript,
 } from './aiService';
 import { createDefaultSettings } from '../types/settings';
 import type { AggregatedMetadata, TimeOfDay } from '../types/ai';
@@ -224,6 +225,68 @@ describe('aiService', () => {
         expect(prompt.category).toBeTruthy();
         expect(prompt.reasoning).toBeTruthy();
         expect(typeof prompt.relevance).toBe('number');
+      }
+    });
+  });
+
+  // ── formatTranscript ───────────────────────────────────────────────────────
+
+  describe('formatTranscript', () => {
+    const rawText = 'I um went to the store and bought some uh groceries';
+
+    it('layer "local" calls cleanTranscript and returns source "local"', async () => {
+      const result = await formatTranscript(rawText, 'standard', {
+        layer: 'local',
+        cloudConsentGiven: false,
+      });
+      expect(result.source).toBe('local');
+      // Fillers should be removed
+      expect(result.formatted).not.toContain(' um ');
+      expect(result.formatted).not.toContain(' uh ');
+    });
+
+    it('layer "openai" with cloudConsentGiven false throws CONSENT_REQUIRED', async () => {
+      await expect(
+        formatTranscript(rawText, 'standard', {
+          layer: 'openai',
+          cloudConsentGiven: false,
+          openaiKey: 'sk-test',
+        })
+      ).rejects.toThrow('CONSENT_REQUIRED');
+    });
+
+    it('layer "openai" with no key falls back to local', async () => {
+      const result = await formatTranscript(rawText, 'standard', {
+        layer: 'openai',
+        cloudConsentGiven: true,
+        openaiKey: undefined,
+      });
+      expect(result.source).toBe('local');
+    });
+
+    it('layer "ollama" on network failure falls back to L1 with source "local"', async () => {
+      // Ollama is not running in tests so fetch will fail
+      const result = await formatTranscript(rawText, 'standard', {
+        layer: 'ollama',
+        cloudConsentGiven: false,
+        ollamaEndpoint: 'http://127.0.0.1:0', // unreachable port
+      });
+      expect(result.source).toBe('local');
+    });
+
+    it('layer "openai" on network failure falls back to L1 with source "local"', async () => {
+      // Provide a fake key but mock fetch to throw
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = () => Promise.reject(new Error('Network error'));
+      try {
+        const result = await formatTranscript(rawText, 'standard', {
+          layer: 'openai',
+          cloudConsentGiven: true,
+          openaiKey: 'sk-fake-key',
+        });
+        expect(result.source).toBe('local');
+      } finally {
+        globalThis.fetch = originalFetch;
       }
     });
   });

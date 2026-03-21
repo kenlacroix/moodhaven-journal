@@ -458,3 +458,160 @@ pub async fn stt_transcribe(
     let text = String::from_utf8_lossy(&output.stdout).to_string();
     Ok(text)
 }
+
+/// Transcription result with per-segment timestamps
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TranscriptionResult {
+    pub text: String,
+    pub segments: Vec<TranscriptionSegment>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TranscriptionSegment {
+    pub text: String,
+    pub start: f64,
+    pub end: f64,
+}
+
+/// Transcribe audio with timestamps using whisper.cpp sidecar.
+/// Falls back gracefully to plain stdout if JSON output is unavailable.
+#[command]
+pub async fn stt_transcribe_timestamped(
+    app: AppHandle,
+    audio_base64: String,
+    model_name: String,
+) -> Result<TranscriptionResult, String> {
+    // Decode base64 audio
+    let audio_bytes = STANDARD
+        .decode(&audio_base64)
+        .map_err(|e| format!("Failed to decode audio: {}", e))?;
+
+    // Write to temp file
+    let temp_dir = get_temp_dir(&app).map_err(|e| e.to_string())?;
+    let audio_path = temp_dir.join(format!("recording_{}.wav", uuid::Uuid::new_v4()));
+    let json_path = temp_dir.join(format!("transcript_{}.json", uuid::Uuid::new_v4()));
+
+    {
+        let mut file = File::create(&audio_path)
+            .map_err(|e| format!("Failed to create temp file: {}", e))?;
+        file.write_all(&audio_bytes)
+            .map_err(|e| format!("Failed to write audio: {}", e))?;
+    }
+
+    let models_dir = get_models_dir(&app).map_err(|e| e.to_string())?;
+    let model_path = models_dir.join(&model_name);
+
+    if !model_path.exists() {
+        let _ = fs::remove_file(&audio_path);
+        return Err(format!("Model not found: {}", model_name));
+    }
+
+    let shell = app.shell();
+    let sidecar = shell
+        .sidecar("whisper")
+        .map_err(|e| format!("Whisper sidecar not available: {}", e))?;
+
+    // Strip the ".json" extension — whisper appends it automatically
+    let json_out_base = json_path.to_string_lossy().trim_end_matches(".json").to_string();
+
+    let output = sidecar
+        .args([
+            "-m",
+            &model_path.to_string_lossy(),
+            "-f",
+            &audio_path.to_string_lossy(),
+            "--output-json",
+            "-of",
+            &json_out_base,
+            "-np",
+        ])
+        .output()
+        .await
+        .map_err(|e| format!("Failed to run whisper: {}", e))?;
+
+    let _ = fs::remove_file(&audio_path);
+
+    if !output.status.success() {
+        let _ = fs::remove_file(&json_path);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        // Fall back gracefully: return plain text from stdout if available
+        let plain_text = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if !plain_text.is_empty() {
+            return Ok(TranscriptionResult {
+                text: plain_text,
+                segments: vec![],
+            });
+        }
+        return Err(format!("Whisper failed: {}", stderr));
+    }
+
+    // Try to read the JSON output
+    if json_path.exists() {
+        match fs::read_to_string(&json_path) {
+            Ok(json_str) => {
+                let _ = fs::remove_file(&json_path);
+                // Parse whisper JSON format
+                #[derive(Deserialize)]
+                struct WhisperJson {
+                    transcription: Option<Vec<WhisperSegmentJson>>,
+                    text: Option<String>,
+                }
+                #[derive(Deserialize)]
+                struct WhisperSegmentJson {
+                    text: String,
+                    offsets: WhisperOffsets,
+                }
+                #[derive(Deserialize)]
+                struct WhisperOffsets {
+                    from: i64,
+                    to: i64,
+                }
+                match serde_json::from_str::<WhisperJson>(&json_str) {
+                    Ok(parsed) => {
+                        let segments: Vec<TranscriptionSegment> = parsed
+                            .transcription
+                            .unwrap_or_default()
+                            .into_iter()
+                            .map(|s| TranscriptionSegment {
+                                text: s.text.trim().to_string(),
+                                start: s.offsets.from as f64 / 1000.0,
+                                end: s.offsets.to as f64 / 1000.0,
+                            })
+                            .collect();
+                        let full_text = if let Some(t) = parsed.text {
+                            t
+                        } else {
+                            segments.iter().map(|s| s.text.as_str()).collect::<Vec<_>>().join(" ")
+                        };
+                        Ok(TranscriptionResult {
+                            text: full_text.trim().to_string(),
+                            segments,
+                        })
+                    }
+                    Err(_) => {
+                        // JSON parse failed — fall back to plain stdout
+                        let plain_text = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                        Ok(TranscriptionResult {
+                            text: plain_text,
+                            segments: vec![],
+                        })
+                    }
+                }
+            }
+            Err(_) => {
+                // JSON file missing — fall back to stdout
+                let plain_text = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                Ok(TranscriptionResult {
+                    text: plain_text,
+                    segments: vec![],
+                })
+            }
+        }
+    } else {
+        let plain_text = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        Ok(TranscriptionResult {
+            text: plain_text,
+            segments: vec![],
+        })
+    }
+}

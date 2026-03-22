@@ -451,8 +451,16 @@ pub async fn stt_transcribe(
     let _ = fs::remove_file(&audio_path);
 
     if !output.status.success() {
+        let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Whisper failed: {}", stderr));
+        let detail = if !stderr.trim().is_empty() {
+            stderr.trim().to_string()
+        } else if !stdout.trim().is_empty() {
+            stdout.trim().to_string()
+        } else {
+            format!("exit code {:?}", output.status.code())
+        };
+        return Err(format!("Whisper failed: {}", detail));
     }
 
     let text = String::from_utf8_lossy(&output.stdout).to_string();
@@ -542,7 +550,12 @@ pub async fn stt_transcribe_timestamped(
                 segments: vec![],
             });
         }
-        return Err(format!("Whisper failed: {}", stderr));
+        let detail = if !stderr.trim().is_empty() {
+            stderr.trim().to_string()
+        } else {
+            format!("exit code {:?}", output.status.code())
+        };
+        return Err(format!("Whisper failed: {}", detail));
     }
 
     // Try to read the JSON output

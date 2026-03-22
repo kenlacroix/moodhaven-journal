@@ -62,6 +62,12 @@ if-addrs = "0.13"
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-shell = "2"
 
+# WebKit2GTK permission-request handler (Linux only).
+# Allows getUserMedia() (microphone) to work inside the Tauri WebView.
+# The same version is already pulled transitively by Tauri — no network download needed.
+[target.'cfg(target_os = "linux")'.dependencies]
+webkit2gtk = { version = "2.0", features = [] }
+
 [profile.dev]
 incremental = true
 

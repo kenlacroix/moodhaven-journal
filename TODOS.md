@@ -20,14 +20,50 @@
 
 ## STT Transcript Formatting (follow-up from PR: transcript-formatting)
 
-### D-002: Pin amber design token for 'formatting' state
-**What:** Grep for existing amber Tailwind token usage in the codebase, then specify the exact token (e.g. `amber-400`, `amber-500`) for the new `'formatting'` MicButton state and quick-capture toggle.
-**Why:** The plan specifies amber as the color but doesn't pin a token. The implementing engineer will pick arbitrarily, risking visual clash with other amber usage (e.g. bookmark icons, warning badges).
-**Pros:** Ensures the amber formatting state feels intentional and cohesive rather than accidentally different from nearby amber elements.
-**Cons:** Tiny scope — 5-minute task.
-**Context:** Identified during STT design review Pass 2 (interaction states). The quick-capture toggle is also amber when active — both must match.
-**Depends on:** D-001 (DESIGN.md) — ideally token is pinned in the design system, not just the plan.
-**Effort:** human ~30min / CC+gstack ~5min
+### ~~D-002: Pin amber design token for 'formatting' state~~ ✅ RESOLVED 2026-03-22
+**Decision:** `text-amber-500 dark:text-amber-400` for both MicButton `'formatting'` spinner and QuickCaptureToggle active bolt.
+**Rationale:** amber-500 matches in-progress semantic (InsightsView streak + PeerSync connecting). Distinct from mood-3 (amber-400 dot), warning text (amber-600/400), danger CTA (amber-600).
+**Updated in:** `ceo-plans/2026-03-21-stt-transcript-formatting.md` → State color spec section.
+
+---
+
+## STT — Adversarial Review Follow-ups
+
+> Items from the adversarial review of `feat/stt-transcript-formatting`. Critical fixes (#1–6) were applied in the same PR. The 8 below are deferred.
+
+### A-04: MediaStream / AudioContext not cleaned up on unmount (P1)
+**What:** If the component unmounts mid-recording, the MediaStream and AudioContext are left open — the OS microphone indicator (red dot / LED) stays on indefinitely.
+**Fix:** Return a cleanup function from the `useEffect` that creates the stream; call `stream.getTracks().forEach(t => t.stop())` and `audioContext.close()`.
+
+### A-05: `cancel()` doesn't abort in-flight Tauri invoke or formatting fetch (P1)
+**What:** Calling `cancel()` sets local state to idle but the running `transcribeAudio` invoke and `formatTranscript` fetch continue running in the background. If they resolve after cancellation they may still call `setFormattedResult`.
+**Fix:** Use `AbortController` + `useRef` to signal cancellation into `stopAndTranscribe`; check `isCancelled` ref before calling any `setState` after each await.
+
+### A-07: Path traversal — model filename not canonicalized in Rust STT commands (P1, security)
+**What:** `stt_transcribe` and related commands accept a `model_name` string from the WebView and build a file path from it without canonicalizing or validating it. A crafted value like `../../etc/passwd` could read arbitrary files.
+**Fix:** Resolve the path with `std::fs::canonicalize`, verify it starts with the expected models directory, and return an error otherwise.
+
+### A-08: TipTap `insertContent` parses Ollama/OpenAI response as HTML — link injection risk (P1, security)
+**What:** `insertContent(formattedResult.formatted)` treats the string as HTML. If an Ollama or OpenAI response contains `<a href="javascript:…">` or similar, it will be inserted as live HTML into the editor.
+**Fix:** Either sanitize the string with DOMPurify before insertion, or use `insertText` instead of `insertContent` (loses formatting but is safe), or restrict the TipTap schema to disallow anchor hrefs with non-http protocols.
+
+### A-10: `isAvailable` uses stale `modelDownloaded` setting instead of real filesystem (P2)
+**What:** `isAvailable` is computed as `settings.enabled && settings.modelDownloaded`. The `modelDownloaded` flag in settings can drift from reality (e.g. user deletes the model file manually).
+**Fix:** `checkAvailability()` already calls `checkModelStatus` which hits the filesystem. Wire its result into the returned `isAvailable` value instead of the settings flag.
+
+### A-12: `stt_cancel_download` not registered in `lib.rs`; download progress events never wired (P2)
+**What:** The `stt_cancel_download` Tauri command exists in Rust but is never added to `generate_handler![]` in `lib.rs`, so it's unreachable from the frontend. Download progress events emitted by the Rust side are also not listened to in any frontend hook.
+**Fix:** Register `commands::speech_to_text::stt_cancel_download` in `lib.rs`. Add a `listen('stt-download-progress', …)` call in `useSpeechToText` or a dedicated `useModelDownload` hook.
+
+### A-13: `raw_transcription` DB column added but never written to (P2)
+**What:** A `raw_transcription TEXT` column was added to the schema but the `create_journal_entry` / `update_journal_entry` commands never populate it. The column is always NULL.
+**Fix:** Pass the raw transcript text from `useSpeechToText` through to the save path and include it in the INSERT/UPDATE SQL.
+
+### A-14: `stt_download_model` URL is attacker-controllable from the WebView — no allowlist in Rust (P2, security)
+**What:** The download URL for Whisper models is constructed from a `model_name` parameter passed by the frontend. A compromised WebView could supply an arbitrary URL and cause the Rust sidecar to fetch from an attacker-controlled server.
+**Fix:** Maintain an allowlist of valid model names in Rust, map each name to its canonical Hugging Face URL, and reject any model name not in the allowlist.
+
+---
 
 ### D-003: Spec the voice memos empty state
 **What:** Define the empty-state copy and primary action for the voice memos panel in WritingView — the screen a brand-new STT user sees before their first recording.

@@ -27,6 +27,8 @@ import { SlashCommands } from './slashCommands';
 import { useSpeechToText, type STTState } from '../../hooks/useSpeechToText';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { TranscriptPreviewOverlay } from '../transcript/TranscriptPreviewOverlay';
+import { MicrophonePermissionModal } from '../stt/MicrophonePermissionModal';
+import { MicrophoneBlockedModal } from '../stt/MicrophoneBlockedModal';
 
 interface RichTextEditorProps {
   value: string;
@@ -72,11 +74,14 @@ export function RichTextEditor({
   const {
     state: sttState,
     error: sttError,
+    permissionModal,
     quickCapture,
     toggleQuickCapture,
     formattedResult,
     clearFormattedResult,
     startRecording,
+    proceedAfterConsent,
+    dismissPermissionModal,
     stopAndTranscribe,
     cancel: cancelSTT,
   } = useSpeechToText();
@@ -323,8 +328,9 @@ export function RichTextEditor({
 
   const handleEditFirst = useCallback(() => {
     if (!editor || !formattedResult) return;
-    // Insert text and position cursor at start of insertion
-    editor.chain().focus().insertContent(formattedResult.formatted).run();
+    // Insert text and reposition cursor to start of the inserted block
+    const { from } = editor.state.selection;
+    editor.chain().focus().insertContent(formattedResult.formatted).setTextSelection(from).run();
     clearFormattedResult();
   }, [editor, formattedResult, clearFormattedResult]);
 
@@ -408,6 +414,19 @@ export function RichTextEditor({
         onUseFormatted={handleUseFormatted}
         onEditFirst={handleEditFirst}
         onUseRaw={handleUseRaw}
+      />
+
+      {/* Microphone permission consent modal — explains why we need mic access */}
+      <MicrophonePermissionModal
+        isOpen={permissionModal === 'consent'}
+        onAllow={proceedAfterConsent}
+        onCancel={dismissPermissionModal}
+      />
+
+      {/* Microphone blocked modal — shown when the OS has denied mic access */}
+      <MicrophoneBlockedModal
+        isOpen={permissionModal === 'blocked'}
+        onDismiss={dismissPermissionModal}
       />
 
       {/* Editor styling — restore list styles stripped by Tailwind preflight */}

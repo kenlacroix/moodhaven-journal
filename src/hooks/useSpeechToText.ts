@@ -6,7 +6,7 @@
  */
 
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { useAudioRecorder, type RecordingState } from './useAudioRecorder';
+import { useAudioRecorder, type RecordingState, type MicPermissionModal } from './useAudioRecorder';
 import { transcribeAudio, checkModelStatus } from '../lib/speechToTextService';
 import { formatTranscript } from '../lib/aiService';
 import { useSettingsStore } from '../stores/settingsStore';
@@ -22,18 +22,30 @@ export interface FormattedResult {
 interface UseSpeechToTextResult {
   state: STTState;
   error: string | null;
+  permissionModal: MicPermissionModal;
   isAvailable: boolean;
   quickCapture: boolean;
   toggleQuickCapture: () => void;
   formattedResult: FormattedResult | null;
   clearFormattedResult: () => void;
   startRecording: () => Promise<void>;
+  proceedAfterConsent: () => Promise<void>;
+  dismissPermissionModal: () => void;
   stopAndTranscribe: () => Promise<string | null>;
   cancel: () => void;
 }
 
 export function useSpeechToText(): UseSpeechToTextResult {
-  const { state: recorderState, error: recorderError, startRecording: startAudioRecording, stopRecording, cancelRecording } = useAudioRecorder();
+  const {
+    state: recorderState,
+    error: recorderError,
+    permissionModal,
+    startRecording: startAudioRecording,
+    proceedAfterConsent: proceedAudioAfterConsent,
+    dismissPermissionModal,
+    stopRecording,
+    cancelRecording,
+  } = useAudioRecorder();
 
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [isFormatting, setIsFormatting] = useState(false);
@@ -42,6 +54,7 @@ export function useSpeechToText(): UseSpeechToTextResult {
   const [formattedResult, setFormattedResult] = useState<FormattedResult | null>(null);
 
   const settings = useSettingsStore((s) => s.settings.speechToText);
+  const aiSettings = useSettingsStore((s) => s.settings.ai);
   const checkedRef = useRef(false);
   // Stores the last check result so checkAvailability can return it without
   // closing over the isAvailable state (which would add it to useCallback deps).
@@ -86,6 +99,13 @@ export function useSpeechToText(): UseSpeechToTextResult {
 
     await startAudioRecording();
   }, [checkAvailability, startAudioRecording]);
+
+  // Called when the user clicks "Allow access" in the consent modal.
+  // Skips the availability re-check (already passed in startRecording).
+  const proceedAfterConsent = useCallback(async () => {
+    setTranscribeError(null);
+    await proceedAudioAfterConsent();
+  }, [proceedAudioAfterConsent]);
 
   const toggleQuickCapture = useCallback(() => {
     setQuickCapture((prev) => !prev);
@@ -143,8 +163,9 @@ export function useSpeechToText(): UseSpeechToTextResult {
       const formatResult = await formatTranscript(rawText, 'standard', {
         layer: formattingLayer,
         cloudConsentGiven: settings.formatting?.cloudConsentGiven ?? false,
-        ollamaEndpoint: undefined,
-        openaiKey: undefined,
+        ollamaEndpoint: aiSettings.localAI.endpoint || undefined,
+        ollamaModel: aiSettings.localAI.model || 'llama2',
+        openaiKey: aiSettings.openai.apiKey ?? undefined,
       });
       setIsFormatting(false);
 
@@ -160,12 +181,15 @@ export function useSpeechToText(): UseSpeechToTextResult {
 
       // Fell back to local — return directly
       return formatResult.formatted;
-    } catch {
+    } catch (err) {
       setIsFormatting(false);
+      if (err instanceof Error && err.message === 'CONSENT_REQUIRED') {
+        setTranscribeError('Cloud formatting requires consent. Enable it in Settings → Speech to Text.');
+      }
       // Fall back to raw on any error
       return rawText;
     }
-  }, [stopRecording, settings.model, settings.formatting, quickCapture]);
+  }, [stopRecording, settings.model, settings.formatting, quickCapture, aiSettings]);
 
   const cancel = useCallback(() => {
     cancelRecording();
@@ -185,12 +209,15 @@ export function useSpeechToText(): UseSpeechToTextResult {
   return {
     state,
     error: transcribeError || recorderError,
+    permissionModal,
     isAvailable: settings.enabled && settings.modelDownloaded,
     quickCapture,
     toggleQuickCapture,
     formattedResult,
     clearFormattedResult,
     startRecording,
+    proceedAfterConsent,
+    dismissPermissionModal,
     stopAndTranscribe,
     cancel,
   };

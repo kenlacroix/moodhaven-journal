@@ -79,6 +79,32 @@ pub fn run() {
                 }
             }
 
+            // Linux/WebKit2GTK: handle WebKit permission-request events so that
+            // getUserMedia() (microphone) works inside the Tauri WebView.
+            //
+            // Without this, WebKit fires an internal PermissionRequest event that
+            // nobody handles, so it auto-denies and getUserMedia() throws NotAllowedError
+            // before the OS ever gets a chance to show its own prompt.
+            //
+            // Allowing here hands control to the OS-level permission system, which
+            // will either show a native prompt or honour the existing system setting.
+            #[cfg(target_os = "linux")]
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.with_webview(|webview| {
+                    use webkit2gtk::glib::ObjectExt;
+                    use webkit2gtk::{PermissionRequestExt, WebViewExt};
+                    webview.inner().connect_permission_request(|_view, request: &webkit2gtk::PermissionRequest| {
+                        // Only allow microphone (UserMedia) — deny camera, geolocation, notifications, etc.
+                        if request.is::<webkit2gtk::UserMediaPermissionRequest>() {
+                            request.allow();
+                        } else {
+                            request.deny();
+                        }
+                        true
+                    });
+                });
+            }
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

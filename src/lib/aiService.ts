@@ -640,6 +640,7 @@ export interface FormatTranscriptSettings {
   layer: 'local' | 'ollama' | 'openai';
   cloudConsentGiven: boolean;
   ollamaEndpoint?: string;
+  ollamaModel?: string;
   openaiKey?: string;
 }
 
@@ -663,7 +664,7 @@ export async function formatTranscript(
   mode: TranscriptFormatMode,
   settings: FormatTranscriptSettings
 ): Promise<FormatTranscriptResult> {
-  const { layer, cloudConsentGiven, ollamaEndpoint, openaiKey } = settings;
+  const { layer, cloudConsentGiven, ollamaEndpoint, ollamaModel, openaiKey } = settings;
   const systemPrompt = TRANSCRIPT_FORMAT_PROMPTS[mode];
 
   // ── Layer 1: always-on local cleanup ──────────────────────────────────────
@@ -674,16 +675,20 @@ export async function formatTranscript(
   // ── Layer 2: Ollama local LLM ─────────────────────────────────────────────
   if (layer === 'ollama') {
     const endpoint = ollamaEndpoint || 'http://localhost:11434';
+    const ollamaController = new AbortController();
+    const ollamaTimeoutId = setTimeout(() => ollamaController.abort(), 15_000);
     try {
       const response = await fetch(`${endpoint}/api/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'llama2',
+          model: ollamaModel || 'llama2',
           prompt: `${systemPrompt}\n\nTranscription:\n${text}`,
           stream: false,
         }),
+        signal: ollamaController.signal,
       });
+      clearTimeout(ollamaTimeoutId);
 
       if (!response.ok) {
         throw new Error(`Ollama returned ${response.status}`);
@@ -692,7 +697,8 @@ export async function formatTranscript(
       const data = await response.json() as { response: string };
       return { formatted: data.response.trim(), source: 'ollama' };
     } catch {
-      // Fall back to L1 on any Ollama error
+      clearTimeout(ollamaTimeoutId);
+      // Fall back to L1 on any Ollama error (includes AbortError on timeout)
       return { formatted: cleanTranscript(text), source: 'local' };
     }
   }

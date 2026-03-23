@@ -82,7 +82,8 @@ describe('settingsStore', () => {
       mockSaveSettings.mockResolvedValue(undefined);
       await useSettingsStore.getState().saveSettings();
       expect(mockSaveSettings).toHaveBeenCalledWith(
-        useSettingsStore.getState().settings
+        useSettingsStore.getState().settings,
+        undefined  // no session password in test environment
       );
     });
 

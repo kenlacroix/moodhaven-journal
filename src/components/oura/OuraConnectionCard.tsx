@@ -8,6 +8,7 @@
 import { useState, useEffect } from 'react';
 import { savePAT, disconnect, getStatus, syncToday, backfill } from '../../lib/ouraService';
 import type { OuraStatusResponse } from '../../types/oura';
+import { useAppStore } from '../../stores/appStore';
 
 interface OuraConnectionCardProps {
   onConnected?: () => void;
@@ -15,6 +16,7 @@ interface OuraConnectionCardProps {
 }
 
 export function OuraConnectionCard({ onConnected, onDisconnected }: OuraConnectionCardProps) {
+  const sessionPassword = useAppStore((s) => s.sessionPassword);
   const [status, setStatus] = useState<OuraStatusResponse | null>(null);
   const [pat, setPat] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -38,9 +40,10 @@ export function OuraConnectionCard({ onConnected, onDisconnected }: OuraConnecti
     setSuccessMsg(null);
     setIsSaving(true);
     try {
-      await savePAT(pat.trim());
+      if (!sessionPassword) throw new Error('App is locked — please unlock before connecting Oura');
+      await savePAT(pat.trim(), sessionPassword);
       // Prime the 7-day history so trend-aware prompts work immediately
-      try { await backfill(7); } catch { /* non-critical */ }
+      try { await backfill(7, sessionPassword); } catch { /* non-critical */ }
       const newStatus = await getStatus();
       setStatus(newStatus);
       setPat('');
@@ -57,7 +60,8 @@ export function OuraConnectionCard({ onConnected, onDisconnected }: OuraConnecti
     setError(null);
     setIsSyncing(true);
     try {
-      await syncToday();
+      if (!sessionPassword) throw new Error('App is locked');
+      await syncToday(sessionPassword);
       const newStatus = await getStatus();
       setStatus(newStatus);
       setSuccessMsg('Health data synced for today');

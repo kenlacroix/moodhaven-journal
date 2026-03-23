@@ -34,14 +34,6 @@ function uint8ArrayToBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
-// Model download URLs from Hugging Face (ggerganov/whisper.cpp)
-const MODEL_URLS: Record<STTModel, string> = {
-  'tiny.en': 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.en.bin',
-  'base.en': 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin',
-  'small.en': 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.en.bin',
-  'medium.en': 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.en.bin',
-};
-
 // Model file names
 const MODEL_FILENAMES: Record<STTModel, string> = {
   'tiny.en': 'ggml-tiny.en.bin',
@@ -89,12 +81,11 @@ export async function downloadModel(
   model: STTModel,
   onProgress?: (progress: DownloadProgress) => void
 ): Promise<void> {
-  const url = MODEL_URLS[model];
   const filename = MODEL_FILENAMES[model];
 
   try {
+    // url is derived from the allowlist inside the Rust command — do not pass it
     await invoke('stt_download_model', {
-      url,
       filename,
     });
 

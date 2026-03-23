@@ -27,6 +27,15 @@
 
 ---
 
+## Security Hardening (fix/security-hardening — v0.7.3)
+
+### → F-001: API credentials stored plaintext in SQLite → fix/security-hardening
+- OpenAI key, WebDAV password, Oura PAT encrypted with AES-256-GCM using session password before storage
+- `secureStorage.ts` (new), `settingsService.ts` + `settingsStore.ts` + `ouraService.ts` updated
+- `oura_validate_pat` new Tauri command; `oura_sync_today` accepts `pat: String` param
+
+---
+
 ## STT — Adversarial Review Follow-ups
 
 > Items from the adversarial review of `feat/stt-transcript-formatting`. Critical fixes (#1–6) were applied in the same PR. The 8 below are deferred.
@@ -39,7 +48,7 @@
 **What:** Calling `cancel()` sets local state to idle but the running `transcribeAudio` invoke and `formatTranscript` fetch continue running in the background. If they resolve after cancellation they may still call `setFormattedResult`.
 **Fix:** Use `AbortController` + `useRef` to signal cancellation into `stopAndTranscribe`; check `isCancelled` ref before calling any `setState` after each await.
 
-### A-07: Path traversal — model filename not canonicalized in Rust STT commands (P1, security)
+### ~~A-07: Path traversal — model filename not canonicalized in Rust STT commands~~ → fix/security-hardening
 **What:** `stt_transcribe` and related commands accept a `model_name` string from the WebView and build a file path from it without canonicalizing or validating it. A crafted value like `../../etc/passwd` could read arbitrary files.
 **Fix:** Resolve the path with `std::fs::canonicalize`, verify it starts with the expected models directory, and return an error otherwise.
 
@@ -59,7 +68,7 @@
 **What:** A `raw_transcription TEXT` column was added to the schema but the `create_journal_entry` / `update_journal_entry` commands never populate it. The column is always NULL.
 **Fix:** Pass the raw transcript text from `useSpeechToText` through to the save path and include it in the INSERT/UPDATE SQL.
 
-### A-14: `stt_download_model` URL is attacker-controllable from the WebView — no allowlist in Rust (P2, security)
+### ~~A-14: `stt_download_model` URL is attacker-controllable from the WebView — no allowlist in Rust~~ → fix/security-hardening
 **What:** The download URL for Whisper models is constructed from a `model_name` parameter passed by the frontend. A compromised WebView could supply an arbitrary URL and cause the Rust sidecar to fetch from an attacker-controlled server.
 **Fix:** Maintain an allowlist of valid model names in Rust, map each name to its canonical Hugging Face URL, and reject any model name not in the allowlist.
 

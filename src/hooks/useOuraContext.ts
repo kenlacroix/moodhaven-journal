@@ -26,6 +26,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useSettingsStore } from '../stores/settingsStore';
+import { useAppStore } from '../stores/appStore';
 import { syncToday, getHistory } from '../lib/ouraService';
 import type { OuraHealthContext, OuraHealthSummary, OuraHealthBadge } from '../types/oura';
 
@@ -216,6 +217,7 @@ export function buildHealthSummary(
 export function useOuraContext() {
   const settings = useSettingsStore((s) => s.settings);
   const setOuraSettings = useSettingsStore((s) => s.setOuraSettings);
+  const sessionPassword = useAppStore((s) => s.sessionPassword);
 
   const [history, setHistory] = useState<OuraHealthContext[]>([]);
   const [context, setContext] = useState<OuraHealthContext | null>(null);
@@ -244,8 +246,8 @@ export function useOuraContext() {
     setIsSyncing(true);
     try {
       // Auto-sync today+yesterday if enabled (best-effort — don't fail on network error)
-      if (settings.oura.autoSyncOnOpen) {
-        try { await syncToday(); } catch { /* non-critical */ }
+      if (settings.oura.autoSyncOnOpen && sessionPassword) {
+        try { await syncToday(sessionPassword); } catch { /* non-critical */ }
       }
       // Load 7-day history from local cache
       const hist = await getHistory(7);
@@ -255,14 +257,14 @@ export function useOuraContext() {
     } finally {
       setIsSyncing(false);
     }
-  }, [isEnabled, settings.oura.autoSyncOnOpen, applyHistory]);
+  }, [isEnabled, sessionPassword, settings.oura.autoSyncOnOpen, applyHistory]);
 
   const refresh = useCallback(async () => {
-    if (!isEnabled) return;
+    if (!isEnabled || !sessionPassword) return;
     setError(null);
     setIsSyncing(true);
     try {
-      await syncToday();
+      await syncToday(sessionPassword);
       const hist = await getHistory(7);
       applyHistory(hist);
     } catch (e) {
@@ -270,7 +272,7 @@ export function useOuraContext() {
     } finally {
       setIsSyncing(false);
     }
-  }, [isEnabled, applyHistory]);
+  }, [isEnabled, sessionPassword, applyHistory]);
 
   useEffect(() => {
     void load();

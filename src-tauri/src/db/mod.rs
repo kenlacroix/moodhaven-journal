@@ -3,7 +3,7 @@
 //! Handles SQLite connection, migrations, and CRUD operations
 //! for encrypted journal entries.
 
-use rusqlite::{Connection, params};
+use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -124,8 +124,8 @@ pub struct Database {
 impl Database {
     /// Initialize database with schema
     pub fn new(db_path: PathBuf) -> Result<Self, String> {
-        let conn = Connection::open(&db_path)
-            .map_err(|e| format!("Failed to open database: {}", e))?;
+        let conn =
+            Connection::open(&db_path).map_err(|e| format!("Failed to open database: {}", e))?;
 
         // Enable foreign keys
         conn.execute("PRAGMA foreign_keys = ON", [])
@@ -274,7 +274,8 @@ impl Database {
 
         // sync_log triggers — fire on every mutation of the core tables so that any
         // future sync engine can query sync_log to find what changed since last sync.
-        conn.execute_batch("
+        conn.execute_batch(
+            "
             CREATE TRIGGER IF NOT EXISTS sync_log_entry_insert
                 AFTER INSERT ON journal_entries FOR EACH ROW
             BEGIN
@@ -330,7 +331,8 @@ impl Database {
                 INSERT INTO sync_log(object_id, object_type, action)
                 VALUES (OLD.id, 'book', 'delete');
             END;
-        ")
+        ",
+        )
         .map_err(|e| format!("Failed to create sync_log triggers: {}", e))?;
 
         // voice_memos — raw .m4a files received from Wear OS watch (or phone mic)
@@ -526,8 +528,11 @@ pub fn patch_entry_pinned(db: &Database, id: &str, pinned: bool) -> Result<(), S
 pub fn sync_entry_tags(db: &Database, entry_id: &str, tags: &[String]) -> Result<(), String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
-    conn.execute("DELETE FROM entry_tags WHERE entry_id = ?1", params![entry_id])
-        .map_err(|e| format!("Failed to clear entry tags: {}", e))?;
+    conn.execute(
+        "DELETE FROM entry_tags WHERE entry_id = ?1",
+        params![entry_id],
+    )
+    .map_err(|e| format!("Failed to clear entry tags: {}", e))?;
 
     for tag in tags {
         let name = tag.trim();
@@ -672,7 +677,9 @@ pub fn get_all_entries(db: &Database, limit: Option<i32>) -> Result<Vec<JournalE
                 mood: row.get(2)?,
                 privacy_mode: row.get(3)?,
                 location_weather: row.get(4)?,
-                book_id: row.get::<_, Option<String>>(5)?.unwrap_or_else(|| "default".to_string()),
+                book_id: row
+                    .get::<_, Option<String>>(5)?
+                    .unwrap_or_else(|| "default".to_string()),
                 pinned: row.get::<_, i32>(6)? != 0,
                 created_at: row.get(7)?,
                 updated_at: row.get(8)?,
@@ -719,7 +726,9 @@ pub fn get_entries_by_date_range(
                 mood: row.get(2)?,
                 privacy_mode: row.get(3)?,
                 location_weather: row.get(4)?,
-                book_id: row.get::<_, Option<String>>(5)?.unwrap_or_else(|| "default".to_string()),
+                book_id: row
+                    .get::<_, Option<String>>(5)?
+                    .unwrap_or_else(|| "default".to_string()),
                 pinned: row.get::<_, i32>(6)? != 0,
                 created_at: row.get(7)?,
                 updated_at: row.get(8)?,
@@ -928,19 +937,26 @@ pub fn get_streak_stats(db: &Database) -> Result<StreakStats, String> {
                 // Streak is broken
                 current_streak = 0;
             } else {
-                check_date = check_date - chrono::Duration::days(1);
+                check_date -= chrono::Duration::days(1);
             }
         }
     }
 
     // Count consecutive days
-    if current_streak == 0 && (last_entry_date.as_ref() == Some(&today) ||
-        last_entry_date.as_ref() == Some(&(chrono::Local::now() - chrono::Duration::days(1)).format("%Y-%m-%d").to_string())) {
+    if current_streak == 0
+        && (last_entry_date.as_ref() == Some(&today)
+            || last_entry_date.as_ref()
+                == Some(
+                    &(chrono::Local::now() - chrono::Duration::days(1))
+                        .format("%Y-%m-%d")
+                        .to_string(),
+                ))
+    {
         for date_str in &dates {
             let expected = check_date.format("%Y-%m-%d").to_string();
             if date_str == &expected {
                 current_streak += 1;
-                check_date = check_date - chrono::Duration::days(1);
+                check_date -= chrono::Duration::days(1);
             } else {
                 break;
             }
@@ -981,7 +997,15 @@ pub fn get_streak_stats(db: &Database) -> Result<StreakStats, String> {
 pub fn get_day_of_week_stats(db: &Database) -> Result<Vec<DayOfWeekStats>, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
-    let day_names = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+    let day_names = [
+        "Sunday",
+        "Monday",
+        "Tuesday",
+        "Wednesday",
+        "Thursday",
+        "Friday",
+        "Saturday",
+    ];
 
     let mut stmt = conn
         .prepare(
@@ -1000,7 +1024,10 @@ pub fn get_day_of_week_stats(db: &Database) -> Result<Vec<DayOfWeekStats>, Strin
             let dow: i32 = row.get(0)?;
             Ok(DayOfWeekStats {
                 day_of_week: dow,
-                day_name: day_names.get(dow as usize).unwrap_or(&"Unknown").to_string(),
+                day_name: day_names
+                    .get(dow as usize)
+                    .unwrap_or(&"Unknown")
+                    .to_string(),
                 average_mood: row.get(1)?,
                 entry_count: row.get(2)?,
             })
@@ -1103,7 +1130,11 @@ pub fn create_book(
 
     // Get next sort_order
     let sort_order: i32 = conn
-        .query_row("SELECT COALESCE(MAX(sort_order) + 1, 1) FROM books", [], |row| row.get(0))
+        .query_row(
+            "SELECT COALESCE(MAX(sort_order) + 1, 1) FROM books",
+            [],
+            |row| row.get(0),
+        )
         .unwrap_or(1);
 
     conn.execute(
@@ -1259,20 +1290,21 @@ pub fn list_signals(
                  ORDER BY timestamp DESC LIMIT ?2",
             )
             .map_err(|e| e.to_string())?;
-        let collected: Vec<SignalRow> = stmt.query_map(params![st, lim], |r| {
-            Ok(SignalRow {
-                id: r.get(0)?,
-                timestamp: r.get(1)?,
-                signal_type: r.get(2)?,
-                source: r.get(3)?,
-                payload: r.get(4)?,
-                synced: r.get::<_, i32>(5)? != 0,
-                created_at: r.get(6)?,
+        let collected: Vec<SignalRow> = stmt
+            .query_map(params![st, lim], |r| {
+                Ok(SignalRow {
+                    id: r.get(0)?,
+                    timestamp: r.get(1)?,
+                    signal_type: r.get(2)?,
+                    source: r.get(3)?,
+                    payload: r.get(4)?,
+                    synced: r.get::<_, i32>(5)? != 0,
+                    created_at: r.get(6)?,
+                })
             })
-        })
-        .map_err(|e| e.to_string())?
-        .filter_map(|r| r.ok())
-        .collect();
+            .map_err(|e| e.to_string())?
+            .filter_map(|r| r.ok())
+            .collect();
         collected
     } else {
         let mut stmt = conn
@@ -1281,20 +1313,21 @@ pub fn list_signals(
                  FROM signals ORDER BY timestamp DESC LIMIT ?1",
             )
             .map_err(|e| e.to_string())?;
-        let collected: Vec<SignalRow> = stmt.query_map(params![lim], |r| {
-            Ok(SignalRow {
-                id: r.get(0)?,
-                timestamp: r.get(1)?,
-                signal_type: r.get(2)?,
-                source: r.get(3)?,
-                payload: r.get(4)?,
-                synced: r.get::<_, i32>(5)? != 0,
-                created_at: r.get(6)?,
+        let collected: Vec<SignalRow> = stmt
+            .query_map(params![lim], |r| {
+                Ok(SignalRow {
+                    id: r.get(0)?,
+                    timestamp: r.get(1)?,
+                    signal_type: r.get(2)?,
+                    source: r.get(3)?,
+                    payload: r.get(4)?,
+                    synced: r.get::<_, i32>(5)? != 0,
+                    created_at: r.get(6)?,
+                })
             })
-        })
-        .map_err(|e| e.to_string())?
-        .filter_map(|r| r.ok())
-        .collect();
+            .map_err(|e| e.to_string())?
+            .filter_map(|r| r.ok())
+            .collect();
         collected
     };
 

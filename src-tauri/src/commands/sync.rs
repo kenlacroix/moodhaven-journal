@@ -4,8 +4,8 @@
 //! upsert command for applying entries received from a remote device.
 
 use crate::db::Database;
-use tauri::State;
 use serde::{Deserialize, Serialize};
+use tauri::State;
 
 /// Lightweight entry metadata used by the sync engine manifest diff.
 #[derive(Debug, Serialize, Deserialize)]
@@ -49,8 +49,8 @@ pub fn get_entry_timestamps(db: State<Database>) -> Result<Vec<SyncEntryMeta>, S
 pub fn upsert_entry_from_sync(db: State<Database>, entry_json: String) -> Result<(), String> {
     // Deserialize as a generic Value so we can pick out fields without
     // reproducing the full JournalEntryRow struct in this module.
-    let v: serde_json::Value = serde_json::from_str(&entry_json)
-        .map_err(|e| format!("Invalid entry JSON: {}", e))?;
+    let v: serde_json::Value =
+        serde_json::from_str(&entry_json).map_err(|e| format!("Invalid entry JSON: {}", e))?;
 
     let id = v["id"].as_str().ok_or("Missing id")?;
     let updated_at = v["updated_at"].as_str().ok_or("Missing updated_at")?;
@@ -62,7 +62,9 @@ pub fn upsert_entry_from_sync(db: State<Database>, entry_json: String) -> Result
     let location_weather = v["location_weather"].as_str();
 
     // Re-serialize encrypted_content as compact JSON for storage
-    let ec = v.get("encrypted_content").ok_or("Missing encrypted_content")?;
+    let ec = v
+        .get("encrypted_content")
+        .ok_or("Missing encrypted_content")?;
     let ec_json = serde_json::to_string(ec)
         .map_err(|e| format!("Failed to re-serialize encrypted_content: {}", e))?;
 
@@ -79,11 +81,13 @@ pub fn upsert_entry_from_sync(db: State<Database>, entry_json: String) -> Result
 
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
-    let existing_updated_at: Option<String> = conn.query_row(
-        "SELECT updated_at FROM journal_entries WHERE id = ?1",
-        rusqlite::params![id],
-        |row| row.get(0),
-    ).ok();
+    let existing_updated_at: Option<String> = conn
+        .query_row(
+            "SELECT updated_at FROM journal_entries WHERE id = ?1",
+            rusqlite::params![id],
+            |row| row.get(0),
+        )
+        .ok();
 
     match existing_updated_at {
         None => {
@@ -93,10 +97,18 @@ pub fn upsert_entry_from_sync(db: State<Database>, entry_json: String) -> Result
                   book_id, pinned, created_at, updated_at) \
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
                 rusqlite::params![
-                    id, ec_json, mood, privacy_mode, location_weather,
-                    book_id, pinned, created_at, updated_at
+                    id,
+                    ec_json,
+                    mood,
+                    privacy_mode,
+                    location_weather,
+                    book_id,
+                    pinned,
+                    created_at,
+                    updated_at
                 ],
-            ).map_err(|e| e.to_string())?;
+            )
+            .map_err(|e| e.to_string())?;
             upsert_tags_for_entry(&conn, id, &tags)?;
         }
         Some(ref local) if updated_at > local.as_str() => {
@@ -106,10 +118,17 @@ pub fn upsert_entry_from_sync(db: State<Database>, entry_json: String) -> Result
                      location_weather = ?5, book_id = ?6, pinned = ?7, updated_at = ?8 \
                  WHERE id = ?1",
                 rusqlite::params![
-                    id, ec_json, mood, privacy_mode, location_weather,
-                    book_id, pinned, updated_at
+                    id,
+                    ec_json,
+                    mood,
+                    privacy_mode,
+                    location_weather,
+                    book_id,
+                    pinned,
+                    updated_at
                 ],
-            ).map_err(|e| e.to_string())?;
+            )
+            .map_err(|e| e.to_string())?;
             upsert_tags_for_entry(&conn, id, &tags)?;
         }
         _ => {} // local is same age or newer — skip
@@ -127,24 +146,29 @@ fn upsert_tags_for_entry(
     conn.execute(
         "DELETE FROM entry_tags WHERE entry_id = ?1",
         rusqlite::params![entry_id],
-    ).map_err(|e| e.to_string())?;
+    )
+    .map_err(|e| e.to_string())?;
 
     for name in tags {
         conn.execute(
             "INSERT OR IGNORE INTO tags (name) VALUES (?1)",
             rusqlite::params![name],
-        ).map_err(|e| e.to_string())?;
+        )
+        .map_err(|e| e.to_string())?;
 
-        let tag_id: i32 = conn.query_row(
-            "SELECT id FROM tags WHERE name = ?1",
-            rusqlite::params![name],
-            |row| row.get(0),
-        ).map_err(|e| e.to_string())?;
+        let tag_id: i32 = conn
+            .query_row(
+                "SELECT id FROM tags WHERE name = ?1",
+                rusqlite::params![name],
+                |row| row.get(0),
+            )
+            .map_err(|e| e.to_string())?;
 
         conn.execute(
             "INSERT OR IGNORE INTO entry_tags (entry_id, tag_id) VALUES (?1, ?2)",
             rusqlite::params![entry_id, tag_id],
-        ).map_err(|e| e.to_string())?;
+        )
+        .map_err(|e| e.to_string())?;
     }
     Ok(())
 }

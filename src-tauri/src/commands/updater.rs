@@ -67,12 +67,12 @@ const CURRENT_ARCH: &str = "unknown";
 
 fn expected_asset_suffix() -> Option<&'static str> {
     match (CURRENT_OS, CURRENT_ARCH) {
-        ("linux",   "x86_64")  => Some("_amd64.AppImage"),
-        ("linux",   "aarch64") => Some("_arm64.AppImage"),
-        ("windows", "x86_64")  => Some("_x64-setup.exe"),
+        ("linux", "x86_64") => Some("_amd64.AppImage"),
+        ("linux", "aarch64") => Some("_arm64.AppImage"),
+        ("windows", "x86_64") => Some("_x64-setup.exe"),
         ("windows", "aarch64") => Some("_arm64-setup.exe"),
-        ("macos",   "x86_64")  => Some("_x64.dmg"),
-        ("macos",   "aarch64") => Some("_aarch64.dmg"),
+        ("macos", "x86_64") => Some("_x64.dmg"),
+        ("macos", "aarch64") => Some("_aarch64.dmg"),
         _ => None,
     }
 }
@@ -154,17 +154,14 @@ struct DownloadFinished {
 
 fn build_http_client() -> Result<reqwest::Client, String> {
     let mut headers = HeaderMap::new();
-    headers.insert(
-        USER_AGENT,
-        HeaderValue::from_static(USER_AGENT_STRING),
-    );
+    headers.insert(USER_AGENT, HeaderValue::from_static(USER_AGENT_STRING));
     headers.insert(
         "Accept",
         HeaderValue::from_static("application/vnd.github.v3+json"),
     );
     reqwest::Client::builder()
         .default_headers(headers)
-        .https_only(true)   // never follow redirects to plain HTTP
+        .https_only(true) // never follow redirects to plain HTTP
         .build()
         .map_err(|e| format!("Failed to build HTTP client: {e}"))
 }
@@ -198,12 +195,22 @@ fn human_size(bytes: u64) -> String {
 /// release asset (if present). Returns an empty string on any failure —
 /// the caller should treat an absent checksum as "unverified" rather than
 /// "failed", since older releases may not include checksums.txt.
-async fn fetch_checksum(client: &reqwest::Client, assets: &[GitHubAsset], asset_name: &str) -> String {
+async fn fetch_checksum(
+    client: &reqwest::Client,
+    assets: &[GitHubAsset],
+    asset_name: &str,
+) -> String {
     let checksum_asset = assets.iter().find(|a| a.name == "checksums.txt");
-    let Some(cs_asset) = checksum_asset else { return String::new() };
+    let Some(cs_asset) = checksum_asset else {
+        return String::new();
+    };
 
-    let Ok(resp) = client.get(&cs_asset.browser_download_url).send().await else { return String::new() };
-    let Ok(text) = resp.text().await else { return String::new() };
+    let Ok(resp) = client.get(&cs_asset.browser_download_url).send().await else {
+        return String::new();
+    };
+    let Ok(text) = resp.text().await else {
+        return String::new();
+    };
 
     // Format: "<sha256hex>  <filename>\n" (sha256sum output)
     for line in text.lines() {
@@ -223,8 +230,10 @@ async fn fetch_checksum(client: &reqwest::Client, assets: &[GitHubAsset], asset_
 fn verify_sha256(path: &std::path::Path, expected: &str) -> Result<bool, String> {
     if expected.is_empty() {
         // No checksum available — skip verification but signal the caller.
-        eprintln!("[updater] WARNING: no checksums.txt found for this release; \
-                   SHA-256 verification was skipped. The update may be unverified.");
+        eprintln!(
+            "[updater] WARNING: no checksums.txt found for this release; \
+                   SHA-256 verification was skipped. The update may be unverified."
+        );
         return Ok(false);
     }
     use sha2::{Digest, Sha256};
@@ -289,7 +298,10 @@ pub async fn check_for_update(app: AppHandle) -> Result<UpdateInfo, String> {
     let asset = if available && can_self_update {
         let suffix = expected_asset_suffix().unwrap();
         let ver_clean = new_ver.trim_start_matches('v');
-        release.assets.iter().find(|a| a.name.ends_with(suffix) && a.name.contains(ver_clean))
+        release
+            .assets
+            .iter()
+            .find(|a| a.name.ends_with(suffix) && a.name.contains(ver_clean))
             .map(|a| {
                 // We'll fetch the checksum lazily — returned as empty here,
                 // download_and_install_update will verify it.
@@ -335,11 +347,18 @@ pub async fn download_and_install_update(
     expected_checksum: String,
 ) -> Result<(), String> {
     // Safety: reject any URL that isn't github.com or objects.githubusercontent.com
-    let allowed_hosts = ["github.com", "objects.githubusercontent.com", "raw.githubusercontent.com"];
-    let parsed = reqwest::Url::parse(&download_url)
-        .map_err(|_| "Invalid download URL".to_string())?;
+    let allowed_hosts = [
+        "github.com",
+        "objects.githubusercontent.com",
+        "raw.githubusercontent.com",
+    ];
+    let parsed =
+        reqwest::Url::parse(&download_url).map_err(|_| "Invalid download URL".to_string())?;
     let host = parsed.host_str().unwrap_or("");
-    if !allowed_hosts.iter().any(|h| host == *h || host.ends_with(&format!(".{h}"))) {
+    if !allowed_hosts
+        .iter()
+        .any(|h| host == *h || host.ends_with(&format!(".{h}")))
+    {
         return Err(format!("Download URL host '{host}' is not allowed"));
     }
 
@@ -351,8 +370,13 @@ pub async fn download_and_install_update(
         expected_checksum.clone()
     } else {
         // Try to pull checksums.txt from the same release
-        let rel_url = format!("{GITHUB_API_BASE}/repos/{GITHUB_OWNER}/{GITHUB_REPO}/releases/latest");
-        let rel_resp = client.get(&rel_url).send().await.map_err(|e| e.to_string())?;
+        let rel_url =
+            format!("{GITHUB_API_BASE}/repos/{GITHUB_OWNER}/{GITHUB_REPO}/releases/latest");
+        let rel_resp = client
+            .get(&rel_url)
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
         if rel_resp.status().is_success() {
             let release: GitHubRelease = rel_resp.json().await.map_err(|e| e.to_string())?;
             fetch_checksum(&client, &release.assets, &asset_name).await
@@ -377,21 +401,29 @@ pub async fn download_and_install_update(
 
     let total = resp.content_length().unwrap_or(0);
     let mut downloaded: u64 = 0;
-    let mut file = std::fs::File::create(&tmp_path)
-        .map_err(|e| format!("Cannot create temp file: {e}"))?;
+    let mut file =
+        std::fs::File::create(&tmp_path).map_err(|e| format!("Cannot create temp file: {e}"))?;
 
     let mut stream = resp.bytes_stream();
     use futures_util::StreamExt;
     while let Some(chunk) = stream.next().await {
         let chunk = chunk.map_err(|e| format!("Stream error: {e}"))?;
-        file.write_all(&chunk).map_err(|e| format!("Write error: {e}"))?;
+        file.write_all(&chunk)
+            .map_err(|e| format!("Write error: {e}"))?;
         downloaded += chunk.len() as u64;
         let percent = if total > 0 {
             ((downloaded * 100) / total).min(100) as u8
         } else {
             0
         };
-        let _ = app.emit("update-progress", DownloadProgress { downloaded, total, percent });
+        let _ = app.emit(
+            "update-progress",
+            DownloadProgress {
+                downloaded,
+                total,
+                percent,
+            },
+        );
     }
     drop(file);
 
@@ -407,18 +439,24 @@ pub async fn download_and_install_update(
             } else {
                 "Update downloaded (no checksum available — integrity unverified). Installer launched.".into()
             };
-            let _ = app.emit("update-finished", DownloadFinished {
-                success: true,
-                message,
-                checksum_verified,
-            });
+            let _ = app.emit(
+                "update-finished",
+                DownloadFinished {
+                    success: true,
+                    message,
+                    checksum_verified,
+                },
+            );
         }
         Err(e) => {
-            let _ = app.emit("update-finished", DownloadFinished {
-                success: false,
-                message: e.clone(),
-                checksum_verified: false,
-            });
+            let _ = app.emit(
+                "update-finished",
+                DownloadFinished {
+                    success: false,
+                    message: e.clone(),
+                    checksum_verified: false,
+                },
+            );
         }
     }
     install_result
@@ -450,9 +488,11 @@ fn install_update(path: &std::path::Path, _asset_name: &str) -> Result<(), Strin
 #[cfg(target_os = "linux")]
 fn install_linux_appimage(new_appimage: &std::path::Path) -> Result<(), String> {
     // $APPIMAGE is set by the AppImage runtime — it's the path to the running binary
-    let current_path = std::env::var("APPIMAGE")
-        .map_err(|_| "APPIMAGE environment variable not set. \
-                       Are you running from an AppImage?".to_string())?;
+    let current_path = std::env::var("APPIMAGE").map_err(|_| {
+        "APPIMAGE environment variable not set. \
+                       Are you running from an AppImage?"
+            .to_string()
+    })?;
     let current = std::path::Path::new(&current_path);
 
     // Make the downloaded file executable
@@ -465,13 +505,12 @@ fn install_linux_appimage(new_appimage: &std::path::Path) -> Result<(), String> 
         .map_err(|e| format!("Cannot set permissions: {e}"))?;
 
     // Atomically replace the current AppImage
-    std::fs::rename(new_appimage, current)
-        .or_else(|_| {
-            // rename fails across filesystems — fall back to copy + delete
-            std::fs::copy(new_appimage, current)
-                .map(|_| ())
-                .map_err(|e| format!("Copy failed: {e}"))
-        })?;
+    std::fs::rename(new_appimage, current).or_else(|_| {
+        // rename fails across filesystems — fall back to copy + delete
+        std::fs::copy(new_appimage, current)
+            .map(|_| ())
+            .map_err(|e| format!("Copy failed: {e}"))
+    })?;
 
     // Re-launch the updated binary and exit
     std::process::Command::new(current)

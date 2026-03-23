@@ -22,15 +22,15 @@ pub struct TotpSetupData {
 /// Backup codes returned after 2FA setup
 #[derive(Debug, Serialize, Deserialize)]
 pub struct BackupCodes {
-    pub codes: Vec<String>,    // 10 plaintext codes (shown once)
-    pub generated_at: String,  // ISO timestamp
+    pub codes: Vec<String>,   // 10 plaintext codes (shown once)
+    pub generated_at: String, // ISO timestamp
 }
 
 /// 2FA status for frontend
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TwoFactorStatus {
     pub enabled: bool,
-    pub method: Option<String>,      // "totp", "webauthn", "both"
+    pub method: Option<String>, // "totp", "webauthn", "both"
     pub has_backup_codes: bool,
     pub enabled_date: Option<String>,
 }
@@ -38,8 +38,8 @@ pub struct TwoFactorStatus {
 /// WebAuthn credential storage
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct WebAuthnCredential {
-    pub id: String,           // Base64 credential ID
-    pub public_key: String,   // Base64 public key
+    pub id: String,         // Base64 credential ID
+    pub public_key: String, // Base64 public key
     pub created_at: String,
 }
 
@@ -61,9 +61,9 @@ fn create_totp(secret: &str) -> Result<TOTP, String> {
 
     TOTP::new(
         Algorithm::SHA1,
-        6,      // 6 digits
-        1,      // 1 step (30 seconds)
-        30,     // 30 second period
+        6,  // 6 digits
+        1,  // 1 step (30 seconds)
+        30, // 30 second period
         secret_bytes,
         Some("MoodBloom".to_string()),
         "user@moodbloom".to_string(),
@@ -105,7 +105,11 @@ fn hash_backup_code(code: &str) -> String {
 // We need hex encoding for the hash
 mod hex {
     pub fn encode(bytes: impl AsRef<[u8]>) -> String {
-        bytes.as_ref().iter().map(|b| format!("{:02x}", b)).collect()
+        bytes
+            .as_ref()
+            .iter()
+            .map(|b| format!("{:02x}", b))
+            .collect()
     }
 }
 
@@ -279,8 +283,7 @@ pub fn generate_totp_secret(db: State<Database>) -> Result<TotpSetupData, String
 /// Verify a TOTP code against the pending secret
 #[tauri::command]
 pub fn verify_totp_code(db: State<Database>, code: String) -> Result<bool, String> {
-    let row = get_2fa_row(&db)?
-        .ok_or_else(|| "No 2FA setup in progress".to_string())?;
+    let row = get_2fa_row(&db)?.ok_or_else(|| "No 2FA setup in progress".to_string())?;
 
     let secret = row
         .totp_secret
@@ -384,8 +387,7 @@ pub fn get_webauthn_credentials(db: State<Database>) -> Result<Vec<WebAuthnCrede
 /// Generate new backup codes (replaces existing)
 #[tauri::command]
 pub fn regenerate_backup_codes(db: State<Database>) -> Result<BackupCodes, String> {
-    let row = get_2fa_row(&db)?
-        .ok_or_else(|| "2FA not enabled".to_string())?;
+    let row = get_2fa_row(&db)?.ok_or_else(|| "2FA not enabled".to_string())?;
 
     if !row.enabled {
         return Err("2FA not enabled".to_string());
@@ -407,8 +409,7 @@ pub fn regenerate_backup_codes(db: State<Database>) -> Result<BackupCodes, Strin
 /// Verify a backup code (single-use)
 #[tauri::command]
 pub fn verify_backup_code(db: State<Database>, code: String) -> Result<bool, String> {
-    let row = get_2fa_row(&db)?
-        .ok_or_else(|| "2FA not enabled".to_string())?;
+    let row = get_2fa_row(&db)?.ok_or_else(|| "2FA not enabled".to_string())?;
 
     let backup_codes_json = row
         .backup_codes
@@ -461,7 +462,7 @@ pub fn get_2fa_status(db: State<Database>) -> Result<TwoFactorStatus, String> {
             let has_backup_codes = r
                 .backup_codes
                 .and_then(|s| serde_json::from_str::<Vec<String>>(&s).ok())
-                .map_or(false, |codes| !codes.is_empty());
+                .is_some_and(|codes| !codes.is_empty());
 
             Ok(TwoFactorStatus {
                 enabled: r.enabled,
@@ -489,8 +490,7 @@ pub fn disable_2fa(db: State<Database>) -> Result<bool, String> {
 /// Verify TOTP code for login (returns true if valid)
 #[tauri::command]
 pub fn verify_2fa_totp(db: State<Database>, code: String) -> Result<bool, String> {
-    let row = get_2fa_row(&db)?
-        .ok_or_else(|| "2FA not enabled".to_string())?;
+    let row = get_2fa_row(&db)?.ok_or_else(|| "2FA not enabled".to_string())?;
 
     if !row.enabled {
         return Err("2FA not enabled".to_string());

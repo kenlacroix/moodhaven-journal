@@ -92,14 +92,18 @@ pub fn hardware_key_feature_available() -> HardwareKeyFeatureInfo {
             if !check_libudev_available() {
                 return HardwareKeyFeatureInfo {
                     available: false,
-                    reason: Some("libudev library not found. Required for USB hardware key support.".to_string()),
+                    reason: Some(
+                        "libudev library not found. Required for USB hardware key support."
+                            .to_string(),
+                    ),
                     install_instructions: Some(
                         "To enable hardware key support on Linux:\n\n\
                          Install the libudev library:\n   \
                             sudo apt-get install libudev1\n\n\
                          Or on Fedora/RHEL:\n   \
                             sudo dnf install systemd-libs\n\n\
-                         Then restart the application.".to_string()
+                         Then restart the application."
+                            .to_string(),
                     ),
                 };
             }
@@ -141,7 +145,10 @@ pub fn hardware_key_feature_available() -> HardwareKeyFeatureInfo {
 
         HardwareKeyFeatureInfo {
             available: false,
-            reason: Some("Hardware key feature not compiled. Requires 'hardware-key' cargo feature.".to_string()),
+            reason: Some(
+                "Hardware key feature not compiled. Requires 'hardware-key' cargo feature."
+                    .to_string(),
+            ),
             install_instructions: Some(instructions.to_string()),
         }
     }
@@ -197,7 +204,10 @@ mod implementation {
     }
 
     /// Derive encryption key from assertion signature using Argon2id
-    pub fn derive_key_from_assertion(assertion_sig: &[u8], salt: &[u8]) -> Result<[u8; 32], String> {
+    pub fn derive_key_from_assertion(
+        assertion_sig: &[u8],
+        salt: &[u8],
+    ) -> Result<[u8; 32], String> {
         let mut hasher = Sha256::new();
         hasher.update(assertion_sig);
         let sig_hash = hasher.finalize();
@@ -233,7 +243,11 @@ mod implementation {
     }
 
     /// Decrypt data with AES-256-GCM
-    pub fn decrypt_secret(ciphertext: &[u8], key: &[u8; 32], nonce: &[u8]) -> Result<Vec<u8>, String> {
+    pub fn decrypt_secret(
+        ciphertext: &[u8],
+        key: &[u8; 32],
+        nonce: &[u8],
+    ) -> Result<Vec<u8>, String> {
         let cipher = Aes256Gcm::new_from_slice(key).map_err(|e| format!("Cipher error: {}", e))?;
         let nonce = Nonce::from_slice(nonce);
 
@@ -495,7 +509,8 @@ pub fn hardware_key_required(db: State<Database>) -> Result<bool, String> {
 // ============================================================================
 
 #[cfg(not(feature = "hardware-key"))]
-const FEATURE_DISABLED_MSG: &str = "Hardware key feature not available. Rebuild with --features hardware-key";
+const FEATURE_DISABLED_MSG: &str =
+    "Hardware key feature not available. Rebuild with --features hardware-key";
 
 #[cfg(not(feature = "hardware-key"))]
 #[tauri::command]

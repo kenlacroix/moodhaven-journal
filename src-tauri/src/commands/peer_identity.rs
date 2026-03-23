@@ -17,8 +17,8 @@ use tauri::{AppHandle, Manager};
 pub struct DeviceIdentity {
     pub device_name: String,
     pub device_type: String,
-    pub device_id: String,   // first 16 hex chars of SHA-256(public_key)
-    pub public_key: String,  // base64url-encoded Ed25519 public key
+    pub device_id: String,  // first 16 hex chars of SHA-256(public_key)
+    pub public_key: String, // base64url-encoded Ed25519 public key
     pub created: String,
 }
 
@@ -52,7 +52,9 @@ fn default_device_name() -> String {
 
 /// Get or create this device's identity. Called on first launch and cached.
 pub fn get_or_create_device_identity(app: &AppHandle) -> Result<DeviceIdentity, String> {
-    let app_data_dir = app.path().app_data_dir()
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
         .map_err(|e| format!("Failed to get app data dir: {e}"))?;
 
     let identity_path = app_data_dir.join("peer_identity.json");
@@ -62,8 +64,8 @@ pub fn get_or_create_device_identity(app: &AppHandle) -> Result<DeviceIdentity, 
     if identity_path.exists() && key_path.exists() {
         let json = fs::read_to_string(&identity_path)
             .map_err(|e| format!("Failed to read identity: {e}"))?;
-        let persisted: PersistedIdentity = serde_json::from_str(&json)
-            .map_err(|e| format!("Failed to parse identity: {e}"))?;
+        let persisted: PersistedIdentity =
+            serde_json::from_str(&json).map_err(|e| format!("Failed to parse identity: {e}"))?;
         return Ok(DeviceIdentity {
             device_name: persisted.device_name,
             device_type: persisted.device_type,
@@ -80,10 +82,10 @@ pub fn get_or_create_device_identity(app: &AppHandle) -> Result<DeviceIdentity, 
     let private_key_bytes = signing_key.to_bytes();
 
     // Derive device ID from public key hash
-    let hash = Sha256::digest(&public_key_bytes);
+    let hash = Sha256::digest(public_key_bytes);
     let device_id = hex::encode(&hash[..8]); // 16 hex chars
 
-    let public_key = URL_SAFE_NO_PAD.encode(&public_key_bytes);
+    let public_key = URL_SAFE_NO_PAD.encode(public_key_bytes);
     let device_name = default_device_name();
     let device_type = detect_device_type().to_string();
     let created = chrono::Utc::now().to_rfc3339();
@@ -97,17 +99,15 @@ pub fn get_or_create_device_identity(app: &AppHandle) -> Result<DeviceIdentity, 
     };
 
     // Ensure app data dir exists
-    fs::create_dir_all(&app_data_dir)
-        .map_err(|e| format!("Failed to create app data dir: {e}"))?;
+    fs::create_dir_all(&app_data_dir).map_err(|e| format!("Failed to create app data dir: {e}"))?;
 
     // Write identity JSON (public info)
     let json = serde_json::to_string_pretty(&identity)
         .map_err(|e| format!("Failed to serialize identity: {e}"))?;
-    fs::write(&identity_path, &json)
-        .map_err(|e| format!("Failed to write identity: {e}"))?;
+    fs::write(&identity_path, &json).map_err(|e| format!("Failed to write identity: {e}"))?;
 
     // Write private key bytes (raw 32-byte seed) - restricted permissions
-    fs::write(&key_path, &private_key_bytes)
+    fs::write(&key_path, private_key_bytes)
         .map_err(|e| format!("Failed to write private key: {e}"))?;
 
     // Set restrictive permissions on private key (Unix only)
@@ -133,14 +133,16 @@ pub fn get_or_create_device_identity(app: &AppHandle) -> Result<DeviceIdentity, 
 
 /// Update the device name in the persisted identity
 pub fn update_device_name(app: &AppHandle, new_name: String) -> Result<DeviceIdentity, String> {
-    let app_data_dir = app.path().app_data_dir()
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
         .map_err(|e| format!("Failed to get app data dir: {e}"))?;
     let identity_path = app_data_dir.join("peer_identity.json");
 
-    let json = fs::read_to_string(&identity_path)
-        .map_err(|e| format!("Failed to read identity: {e}"))?;
-    let mut persisted: PersistedIdentity = serde_json::from_str(&json)
-        .map_err(|e| format!("Failed to parse identity: {e}"))?;
+    let json =
+        fs::read_to_string(&identity_path).map_err(|e| format!("Failed to read identity: {e}"))?;
+    let mut persisted: PersistedIdentity =
+        serde_json::from_str(&json).map_err(|e| format!("Failed to parse identity: {e}"))?;
 
     let name = new_name.trim().to_string();
     if name.is_empty() {

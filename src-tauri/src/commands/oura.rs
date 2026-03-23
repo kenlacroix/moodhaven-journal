@@ -207,18 +207,34 @@ async fn fetch_date_context(pat: &str, date: &str) -> OuraHealthContext {
     let spo2_res = oura_get::<OuraSpo2Item>(pat, "daily_spo2", date).await;
 
     let d = date.to_string();
-    let sleep = sleep_res.ok().and_then(|r| r.data.into_iter().find(|i| i.day == d));
-    let readiness = readiness_res.ok().and_then(|r| r.data.into_iter().find(|i| i.day == d));
-    let activity = activity_res.ok().and_then(|r| r.data.into_iter().find(|i| i.day == d));
-    let stress = stress_res.ok().and_then(|r| r.data.into_iter().find(|i| i.day == d));
-    let spo2 = spo2_res.ok().and_then(|r| r.data.into_iter().find(|i| i.day == d));
+    let sleep = sleep_res
+        .ok()
+        .and_then(|r| r.data.into_iter().find(|i| i.day == d));
+    let readiness = readiness_res
+        .ok()
+        .and_then(|r| r.data.into_iter().find(|i| i.day == d));
+    let activity = activity_res
+        .ok()
+        .and_then(|r| r.data.into_iter().find(|i| i.day == d));
+    let stress = stress_res
+        .ok()
+        .and_then(|r| r.data.into_iter().find(|i| i.day == d));
+    let spo2 = spo2_res
+        .ok()
+        .and_then(|r| r.data.into_iter().find(|i| i.day == d));
 
     OuraHealthContext {
         date: d,
         sleep_score: sleep.as_ref().and_then(|s| s.score),
-        sleep_total_minutes: sleep.as_ref().and_then(|s| s.total_sleep_duration.map(|v| v / 60)),
-        sleep_rem_minutes: sleep.as_ref().and_then(|s| s.rem_sleep_duration.map(|v| v / 60)),
-        sleep_deep_minutes: sleep.as_ref().and_then(|s| s.deep_sleep_duration.map(|v| v / 60)),
+        sleep_total_minutes: sleep
+            .as_ref()
+            .and_then(|s| s.total_sleep_duration.map(|v| v / 60)),
+        sleep_rem_minutes: sleep
+            .as_ref()
+            .and_then(|s| s.rem_sleep_duration.map(|v| v / 60)),
+        sleep_deep_minutes: sleep
+            .as_ref()
+            .and_then(|s| s.deep_sleep_duration.map(|v| v / 60)),
         sleep_efficiency: sleep.as_ref().and_then(|s| s.efficiency),
         readiness_score: readiness.as_ref().and_then(|r| r.score),
         activity_score: activity.as_ref().and_then(|a| a.score),
@@ -227,7 +243,9 @@ async fn fetch_date_context(pat: &str, date: &str) -> OuraHealthContext {
         stress_summary: stress.as_ref().and_then(|s| s.summary.clone()),
         stress_high_minutes: stress.as_ref().and_then(|s| s.stress_high),
         recovery_high_minutes: stress.as_ref().and_then(|s| s.recovery_high),
-        avg_spo2: spo2.as_ref().and_then(|s| s.spo2_percentage.as_ref()?.average),
+        avg_spo2: spo2
+            .as_ref()
+            .and_then(|s| s.spo2_percentage.as_ref()?.average),
         fetched_at: chrono::Utc::now().to_rfc3339(),
     }
 }
@@ -243,8 +261,39 @@ fn cache_context(conn: &rusqlite::Connection, ctx: &OuraHealthContext) -> Result
 // Tauri commands
 // ============================================================================
 
+/// Validate a Personal Access Token by calling the Oura API.
+/// Does NOT store the token — storage is handled by the frontend (encrypted via secureStorage).
+#[tauri::command]
+pub async fn oura_validate_pat(_app: AppHandle, pat: String) -> Result<(), String> {
+    if pat.trim().is_empty() {
+        return Err("Token cannot be empty".to_string());
+    }
+
+    let client = reqwest::Client::new();
+    let resp = client
+        .get("https://api.ouraring.com/v2/usercollection/personal_info")
+        .header("Authorization", format!("Bearer {}", pat.trim()))
+        .header("Accept", "application/json")
+        .send()
+        .await
+        .map_err(|e| format!("Could not reach Oura servers: {}", e))?;
+
+    if resp.status() == 401 {
+        return Err("Invalid token — please check your Personal Access Token".to_string());
+    }
+
+    if !resp.status().is_success() {
+        return Err(format!(
+            "Oura API returned status {}",
+            resp.status().as_u16()
+        ));
+    }
+
+    Ok(())
+}
+
 /// Validate and save a Personal Access Token.
-/// Tests the token by calling /personal_info before storing.
+/// Kept for backwards compatibility; new flow calls oura_validate_pat + secureStorage instead.
 #[tauri::command]
 pub async fn oura_save_pat(app: AppHandle, pat: String) -> Result<(), String> {
     if pat.trim().is_empty() {
@@ -277,7 +326,11 @@ pub async fn oura_save_pat(app: AppHandle, pat: String) -> Result<(), String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     ensure_settings_table(&conn)?;
     db_set(&conn, SETTING_PAT, pat.trim())?;
-    db_set(&conn, SETTING_CONNECTED_AT, &chrono::Utc::now().to_rfc3339())?;
+    db_set(
+        &conn,
+        SETTING_CONNECTED_AT,
+        &chrono::Utc::now().to_rfc3339(),
+    )?;
 
     Ok(())
 }
@@ -294,11 +347,8 @@ pub async fn oura_disconnect(app: AppHandle) -> Result<(), String> {
     db_delete(&conn, SETTING_LAST_SYNC_AT)?;
 
     // Remove all cached daily metrics
-    conn.execute(
-        "DELETE FROM settings WHERE key LIKE 'oura_cache_%'",
-        [],
-    )
-    .map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM settings WHERE key LIKE 'oura_cache_%'", [])
+        .map_err(|e| e.to_string())?;
 
     Ok(())
 }
@@ -329,21 +379,20 @@ pub async fn oura_get_status(app: AppHandle) -> Result<OuraStatusResponse, Strin
 ///
 /// The frontend merges these two cached entries into a single "session context"
 /// that gives complete data for morning journaling.
+///
+/// `pat` is passed from the frontend (decrypted from secureStorage) rather than read from
+/// the database, so the credential never needs to be stored unencrypted in Rust.
 #[tauri::command]
-pub async fn oura_sync_today(app: AppHandle) -> Result<OuraHealthContext, String> {
+pub async fn oura_sync_today(app: AppHandle, pat: String) -> Result<OuraHealthContext, String> {
+    if pat.trim().is_empty() {
+        return Err("Oura not connected — save a Personal Access Token first".to_string());
+    }
     let today = chrono::Local::now().format("%Y-%m-%d").to_string();
     let yesterday = (chrono::Local::now() - chrono::Duration::days(1))
         .format("%Y-%m-%d")
         .to_string();
 
-    // Get PAT before HTTP calls (lock → read → drop lock)
-    let pat = {
-        let db = app.state::<Database>();
-        let conn = db.conn.lock().map_err(|e| e.to_string())?;
-        ensure_settings_table(&conn)?;
-        db_get(&conn, SETTING_PAT)?
-            .ok_or_else(|| "Oura not connected — save a Personal Access Token first".to_string())?
-    };
+    let pat = pat.trim().to_string();
 
     // Fetch both dates (sequential; each call is ~100ms)
     let today_ctx = fetch_date_context(&pat, &today).await;
@@ -356,7 +405,11 @@ pub async fn oura_sync_today(app: AppHandle) -> Result<OuraHealthContext, String
         ensure_settings_table(&conn)?;
         cache_context(&conn, &today_ctx)?;
         cache_context(&conn, &yesterday_ctx)?;
-        db_set(&conn, SETTING_LAST_SYNC_AT, &chrono::Utc::now().to_rfc3339())?;
+        db_set(
+            &conn,
+            SETTING_LAST_SYNC_AT,
+            &chrono::Utc::now().to_rfc3339(),
+        )?;
     }
 
     Ok(today_ctx)
@@ -394,7 +447,7 @@ pub async fn oura_get_history(app: AppHandle, days: i32) -> Result<Vec<OuraHealt
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     ensure_settings_table(&conn)?;
 
-    let limit = days.max(1).min(90) as i64;
+    let limit = days.clamp(1, 90) as i64;
 
     let mut stmt = conn
         .prepare(
@@ -426,17 +479,15 @@ pub async fn oura_get_history(app: AppHandle, days: i32) -> Result<Vec<OuraHealt
 /// Called automatically on first PAT connect to prime the 7-day history
 /// needed for trend-aware prompt modifiers.  Returns the number of newly
 /// fetched days.
+///
+/// `pat` is passed from the frontend (decrypted from secureStorage).
 #[tauri::command]
-pub async fn oura_backfill(app: AppHandle, days: i32) -> Result<i32, String> {
-    let days = days.max(1).min(30); // cap at 30 days
-
-    // Get PAT before the loop
-    let pat = {
-        let db = app.state::<Database>();
-        let conn = db.conn.lock().map_err(|e| e.to_string())?;
-        ensure_settings_table(&conn)?;
-        db_get(&conn, SETTING_PAT)?.ok_or_else(|| "Oura not connected".to_string())?
-    };
+pub async fn oura_backfill(app: AppHandle, days: i32, pat: String) -> Result<i32, String> {
+    if pat.trim().is_empty() {
+        return Err("Oura not connected".to_string());
+    }
+    let days = days.clamp(1, 30); // cap at 30 days
+    let pat = pat.trim().to_string();
 
     let mut fetched = 0i32;
 

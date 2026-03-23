@@ -26,15 +26,14 @@ pub struct ModelStatus {
 /// Download progress event payload
 #[derive(Debug, Clone, Serialize)]
 pub struct DownloadProgress {
-    pub state: String,       // "connecting", "downloading", "verifying", "complete", "error", "cancelled"
-    pub downloaded: u64,     // bytes downloaded
-    pub total: u64,          // total bytes (0 if unknown)
-    pub percentage: f64,     // 0-100
-    pub speed: f64,          // bytes per second
-    pub url: String,         // current URL (for display)
+    pub state: String, // "connecting", "downloading", "verifying", "complete", "error", "cancelled"
+    pub downloaded: u64, // bytes downloaded
+    pub total: u64,    // total bytes (0 if unknown)
+    pub percentage: f64, // 0-100
+    pub speed: f64,    // bytes per second
+    pub url: String,   // current URL (for display)
     pub error: Option<String>,
 }
-
 
 /// State for tracking active downloads (for cancellation)
 pub struct DownloadState {
@@ -46,6 +45,45 @@ impl Default for DownloadState {
         Self {
             active_downloads: Mutex::new(HashMap::new()),
         }
+    }
+}
+
+/// Validate that a model filename does not escape the models directory.
+///
+/// For files that may not yet exist we canonicalize the models directory itself
+/// and reconstruct the candidate path, then verify the prefix.
+/// For files that already exist we use a full `canonicalize` + `starts_with` check.
+///
+/// Returns the resolved, safe `PathBuf` on success, or an error string on rejection.
+fn validate_model_path(models_dir: &PathBuf, name: &str) -> std::result::Result<PathBuf, String> {
+    // Fast reject: path separators or `..` components in the name
+    if name.contains('/') || name.contains('\\') || name.contains("..") {
+        return Err(format!(
+            "Invalid model name '{name}': path separators are not allowed"
+        ));
+    }
+
+    let candidate = models_dir.join(name);
+
+    if candidate.exists() {
+        // File is present — full canonicalize + prefix check
+        let canonical = std::fs::canonicalize(&candidate)
+            .map_err(|e| format!("Path resolution failed for '{name}': {e}"))?;
+        let canonical_dir = std::fs::canonicalize(models_dir)
+            .map_err(|e| format!("Models dir resolution failed: {e}"))?;
+        if !canonical.starts_with(&canonical_dir) {
+            return Err(format!("Model path '{name}' escapes the models directory"));
+        }
+        Ok(canonical)
+    } else {
+        // File does not exist yet — canonicalize the directory, reconstruct the path
+        let canonical_dir = std::fs::canonicalize(models_dir)
+            .map_err(|e| format!("Models dir resolution failed: {e}"))?;
+        let result = canonical_dir.join(name);
+        if !result.starts_with(&canonical_dir) {
+            return Err(format!("Model path '{name}' escapes the models directory"));
+        }
+        Ok(result)
     }
 }
 
@@ -103,7 +141,7 @@ pub async fn stt_get_models_dir(app: AppHandle) -> Result<String, String> {
 #[command]
 pub async fn stt_check_model(app: AppHandle, model_name: String) -> Result<ModelStatus, String> {
     let models_dir = get_models_dir(&app).map_err(|e| e.to_string())?;
-    let model_path = models_dir.join(&model_name);
+    let model_path = validate_model_path(&models_dir, &model_name)?;
 
     if model_path.exists() {
         let metadata = fs::metadata(&model_path).map_err(|e| e.to_string())?;
@@ -126,22 +164,43 @@ fn emit_progress(app: &AppHandle, progress: DownloadProgress) {
     let _ = app.emit("stt-download-progress", progress);
 }
 
+/// Map an approved model filename to its canonical Hugging Face download URL.
+///
+/// Only models in this list may be downloaded. Any other filename is rejected,
+/// preventing a compromised WebView from directing downloads to attacker-controlled servers.
+fn model_url(filename: &str) -> std::result::Result<String, String> {
+    const BASE: &str = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main";
+    match filename {
+        "ggml-tiny.en.bin" => Ok(format!("{BASE}/ggml-tiny.en.bin")),
+        "ggml-base.en.bin" => Ok(format!("{BASE}/ggml-base.en.bin")),
+        "ggml-small.en.bin" => Ok(format!("{BASE}/ggml-small.en.bin")),
+        "ggml-medium.en.bin" => Ok(format!("{BASE}/ggml-medium.en.bin")),
+        "ggml-large-v3.bin" => Ok(format!("{BASE}/ggml-large-v3.bin")),
+        other => Err(format!(
+            "Unknown model '{other}'. Only approved Whisper models may be downloaded."
+        )),
+    }
+}
+
 /// Download a whisper model with streaming progress and cancellation support.
 ///
 /// Downloads to a `.partial` temp file and renames to the final name on success,
 /// so an interrupted download never leaves a corrupt model in place.
 /// No range-resume: HuggingFace's XetHub/CAS redirect chain does not support
 /// byte-range requests, so we always start fresh.
+///
+/// The download URL is derived from the `filename` via an internal allowlist —
+/// the caller cannot supply an arbitrary URL (security: SSRF / supply chain protection).
 #[command]
 pub async fn stt_download_model(
     app: AppHandle,
     state: State<'_, DownloadState>,
-    url: String,
     filename: String,
 ) -> Result<(), String> {
+    let url = model_url(&filename)?;
     let models_dir = get_models_dir(&app).map_err(|e| e.to_string())?;
-    let model_path = models_dir.join(&filename);
-    let partial_path = models_dir.join(format!("{}.partial", &filename));
+    let model_path = validate_model_path(&models_dir, &filename)?;
+    let partial_path = validate_model_path(&models_dir, &format!("{}.partial", &filename))?;
 
     // Remove any leftover partial file from a previous attempt
     let _ = fs::remove_file(&partial_path);
@@ -251,7 +310,7 @@ pub async fn stt_download_model(
                 cleanup(&state, &filename);
                 return Err("Download stalled: no data received for 60 seconds".to_string());
             }
-            Ok(None) => break,     // stream finished
+            Ok(None) => break, // stream finished
             Ok(Some(r)) => r,
         };
         if cancel_token.load(Ordering::Relaxed) {
@@ -299,7 +358,11 @@ pub async fn stt_download_model(
         let now = std::time::Instant::now();
         if now.duration_since(last_progress_time).as_millis() >= 100 {
             let elapsed = now.duration_since(start_time).as_secs_f64();
-            let speed = if elapsed > 0.0 { downloaded as f64 / elapsed } else { 0.0 };
+            let speed = if elapsed > 0.0 {
+                downloaded as f64 / elapsed
+            } else {
+                0.0
+            };
             emit_progress(
                 &app,
                 DownloadProgress {
@@ -370,10 +433,11 @@ pub async fn stt_cancel_download(
 #[command]
 pub async fn stt_cleanup_partial(app: AppHandle, filename: String) -> Result<(), String> {
     let models_dir = get_models_dir(&app).map_err(|e| e.to_string())?;
-    let partial_path = models_dir.join(format!("{}.partial", &filename));
+    let partial_path = validate_model_path(&models_dir, &format!("{}.partial", &filename))?;
 
     if partial_path.exists() {
-        fs::remove_file(&partial_path).map_err(|e| format!("Failed to delete partial file: {}", e))?;
+        fs::remove_file(&partial_path)
+            .map_err(|e| format!("Failed to delete partial file: {}", e))?;
     }
 
     Ok(())
@@ -383,14 +447,15 @@ pub async fn stt_cleanup_partial(app: AppHandle, filename: String) -> Result<(),
 #[command]
 pub async fn stt_delete_model(app: AppHandle, filename: String) -> Result<(), String> {
     let models_dir = get_models_dir(&app).map_err(|e| e.to_string())?;
-    let model_path = models_dir.join(&filename);
-    let partial_path = models_dir.join(format!("{}.partial", &filename));
+    let model_path = validate_model_path(&models_dir, &filename)?;
+    let partial_path = validate_model_path(&models_dir, &format!("{}.partial", &filename))?;
 
     if model_path.exists() {
         fs::remove_file(&model_path).map_err(|e| format!("Failed to delete model: {}", e))?;
     }
     if partial_path.exists() {
-        fs::remove_file(&partial_path).map_err(|e| format!("Failed to delete partial file: {}", e))?;
+        fs::remove_file(&partial_path)
+            .map_err(|e| format!("Failed to delete partial file: {}", e))?;
     }
 
     Ok(())
@@ -421,7 +486,9 @@ pub async fn stt_transcribe(
 
     // Get model path
     let models_dir = get_models_dir(&app).map_err(|e| e.to_string())?;
-    let model_path = models_dir.join(&model_name);
+    let model_path = validate_model_path(&models_dir, &model_name).inspect_err(|_| {
+        let _ = fs::remove_file(&audio_path);
+    })?;
 
     if !model_path.exists() {
         let _ = fs::remove_file(&audio_path);
@@ -500,14 +567,16 @@ pub async fn stt_transcribe_timestamped(
     let json_path = temp_dir.join(format!("transcript_{}.json", uuid::Uuid::new_v4()));
 
     {
-        let mut file = File::create(&audio_path)
-            .map_err(|e| format!("Failed to create temp file: {}", e))?;
+        let mut file =
+            File::create(&audio_path).map_err(|e| format!("Failed to create temp file: {}", e))?;
         file.write_all(&audio_bytes)
             .map_err(|e| format!("Failed to write audio: {}", e))?;
     }
 
     let models_dir = get_models_dir(&app).map_err(|e| e.to_string())?;
-    let model_path = models_dir.join(&model_name);
+    let model_path = validate_model_path(&models_dir, &model_name).inspect_err(|_| {
+        let _ = fs::remove_file(&audio_path);
+    })?;
 
     if !model_path.exists() {
         let _ = fs::remove_file(&audio_path);
@@ -520,7 +589,10 @@ pub async fn stt_transcribe_timestamped(
         .map_err(|e| format!("Whisper sidecar not available: {}", e))?;
 
     // Strip the ".json" extension — whisper appends it automatically
-    let json_out_base = json_path.to_string_lossy().trim_end_matches(".json").to_string();
+    let json_out_base = json_path
+        .to_string_lossy()
+        .trim_end_matches(".json")
+        .to_string();
 
     let output = sidecar
         .args([
@@ -594,7 +666,11 @@ pub async fn stt_transcribe_timestamped(
                         let full_text = if let Some(t) = parsed.text {
                             t
                         } else {
-                            segments.iter().map(|s| s.text.as_str()).collect::<Vec<_>>().join(" ")
+                            segments
+                                .iter()
+                                .map(|s| s.text.as_str())
+                                .collect::<Vec<_>>()
+                                .join(" ")
                         };
                         Ok(TranscriptionResult {
                             text: full_text.trim().to_string(),
@@ -626,5 +702,93 @@ pub async fn stt_transcribe_timestamped(
             text: plain_text,
             segments: vec![],
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::TempDir;
+
+    fn make_models_dir() -> TempDir {
+        tempfile::tempdir().expect("tempdir")
+    }
+
+    // ── validate_model_path ──────────────────────────────────────────────────
+
+    #[test]
+    fn valid_model_name_nonexistent() {
+        let tmp = make_models_dir();
+        let dir = tmp.path().to_path_buf();
+        let result = validate_model_path(&dir, "ggml-base.en.bin");
+        assert!(
+            result.is_ok(),
+            "expected Ok for valid name, got {:?}",
+            result
+        );
+        assert!(result.unwrap().starts_with(&dir));
+    }
+
+    #[test]
+    fn valid_model_name_existing() {
+        let tmp = make_models_dir();
+        let dir = tmp.path().to_path_buf();
+        fs::write(dir.join("ggml-base.en.bin"), b"fake model").unwrap();
+        let result = validate_model_path(&dir, "ggml-base.en.bin");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn traversal_with_dotdot_rejected() {
+        let tmp = make_models_dir();
+        let dir = tmp.path().to_path_buf();
+        let result = validate_model_path(&dir, "../../etc/passwd");
+        assert!(result.is_err(), "expected Err for path traversal");
+    }
+
+    #[test]
+    fn traversal_with_slash_rejected() {
+        let tmp = make_models_dir();
+        let dir = tmp.path().to_path_buf();
+        let result = validate_model_path(&dir, "subdir/ggml-base.en.bin");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn partial_suffix_valid() {
+        let tmp = make_models_dir();
+        let dir = tmp.path().to_path_buf();
+        let result = validate_model_path(&dir, "ggml-base.en.bin.partial");
+        assert!(result.is_ok());
+    }
+
+    // ── model_url ────────────────────────────────────────────────────────────
+
+    #[test]
+    fn known_model_returns_hf_url() {
+        let url = model_url("ggml-base.en.bin").unwrap();
+        assert!(url.starts_with("https://huggingface.co/ggerganov/whisper.cpp/resolve/main"));
+        assert!(url.ends_with("ggml-base.en.bin"));
+    }
+
+    #[test]
+    fn all_approved_models_have_urls() {
+        for name in &[
+            "ggml-tiny.en.bin",
+            "ggml-base.en.bin",
+            "ggml-small.en.bin",
+            "ggml-medium.en.bin",
+            "ggml-large-v3.bin",
+        ] {
+            assert!(model_url(name).is_ok(), "no URL for {name}");
+        }
+    }
+
+    #[test]
+    fn unknown_model_rejected() {
+        assert!(model_url("evil.sh").is_err());
+        assert!(model_url("../../moodbloom.db").is_err());
+        assert!(model_url("ggml-base.en.bin.malicious").is_err());
     }
 }

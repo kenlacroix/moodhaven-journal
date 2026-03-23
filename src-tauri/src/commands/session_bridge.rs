@@ -16,9 +16,17 @@ pub struct SessionBridge {
     pub password: Mutex<Option<String>>,
 }
 
+impl Default for SessionBridge {
+    fn default() -> Self {
+        Self {
+            password: Mutex::new(None),
+        }
+    }
+}
+
 impl SessionBridge {
     pub fn new() -> Self {
-        Self { password: Mutex::new(None) }
+        Self::default()
     }
 }
 

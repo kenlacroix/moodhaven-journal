@@ -14,11 +14,7 @@ pub fn check_password_exists(db: State<Database>) -> Result<bool, String> {
 
 /// Store password verification hash (not the password itself)
 #[tauri::command]
-pub fn store_password_hash(
-    db: State<Database>,
-    hash: String,
-    salt: String,
-) -> Result<(), String> {
+pub fn store_password_hash(db: State<Database>, hash: String, salt: String) -> Result<(), String> {
     db::set_password_hash(&db, &hash, &salt)
 }
 
@@ -49,12 +45,23 @@ pub fn create_journal_entry(
         return Err("Privacy mode must be 0, 1, or 2".to_string());
     }
 
-    db::create_entry(&db, &id, &encrypted_content, mood, pm, location_weather.as_deref(), book_id.as_deref())
+    db::create_entry(
+        &db,
+        &id,
+        &encrypted_content,
+        mood,
+        pm,
+        location_weather.as_deref(),
+        book_id.as_deref(),
+    )
 }
 
 /// Get a single journal entry by ID
 #[tauri::command]
-pub fn get_journal_entry(db: State<Database>, id: String) -> Result<Option<JournalEntryRow>, String> {
+pub fn get_journal_entry(
+    db: State<Database>,
+    id: String,
+) -> Result<Option<JournalEntryRow>, String> {
     db::get_entry(&db, &id)
 }
 

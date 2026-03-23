@@ -51,7 +51,6 @@ use rand::RngCore;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use x25519_dalek::{EphemeralSecret, PublicKey as X25519PublicKey};
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream, ToSocketAddrs};
 use std::sync::{
@@ -61,6 +60,7 @@ use std::sync::{
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, State};
+use x25519_dalek::{EphemeralSecret, PublicKey as X25519PublicKey};
 
 use crate::commands::peer_identity::get_or_create_device_identity;
 use crate::commands::peer_pairing::{load_trusted_devices, remove_trusted_device};
@@ -96,7 +96,9 @@ enum Msg {
     },
     /// Sent plaintext by the server when the connecting device is not in its
     /// trusted list. The client should auto-revoke the server in response.
-    NotTrusted { server_device_id: String },
+    NotTrusted {
+        server_device_id: String,
+    },
     Manifest {
         entries: Vec<SyncMeta>,
         books: Vec<SyncMeta>,
@@ -106,29 +108,65 @@ enum Msg {
         settings: Vec<SyncMeta>,
     },
     // ── Entry phase ──
-    Entry { row: JournalEntryRow },
-    Done { sent: usize },
-    DoneAck { recv: usize },
+    Entry {
+        row: JournalEntryRow,
+    },
+    Done {
+        sent: usize,
+    },
+    DoneAck {
+        recv: usize,
+    },
     // ── Books phase ──
-    Book { row: SyncBookRow },
-    BooksDone { sent: usize },
-    BooksAck { recv: usize },
+    Book {
+        row: SyncBookRow,
+    },
+    BooksDone {
+        sent: usize,
+    },
+    BooksAck {
+        recv: usize,
+    },
     // ── Signals phase ──
-    Signal { row: SyncSignalRow },
-    SignalsDone { sent: usize },
-    SignalsAck { recv: usize },
+    Signal {
+        row: SyncSignalRow,
+    },
+    SignalsDone {
+        sent: usize,
+    },
+    SignalsAck {
+        recv: usize,
+    },
     // ── Settings phase ──
-    Setting { key: String, value: String, updated_at: String },
-    SettingsDone { sent: usize },
-    SettingsAck { recv: usize },
+    Setting {
+        key: String,
+        value: String,
+        updated_at: String,
+    },
+    SettingsDone {
+        sent: usize,
+    },
+    SettingsAck {
+        recv: usize,
+    },
     // ── Full restore protocol ──
     /// Client → Server: request the server's complete DB as a binary stream.
     RestoreRequest,
     /// Server → Client: metadata envelope preceding each binary chunk frame.
-    RestoreChunk { seq: u64, total_chunks: u64, offset: u64, total_bytes: u64 },
+    RestoreChunk {
+        seq: u64,
+        total_chunks: u64,
+        offset: u64,
+        total_bytes: u64,
+    },
     /// Server → Client: all chunks have been sent.
-    RestoreEnd { total_bytes: u64, chunks: u64 },
-    Err { msg: String },
+    RestoreEnd {
+        total_bytes: u64,
+        chunks: u64,
+    },
+    Err {
+        msg: String,
+    },
 }
 
 /// Generic manifest item used for all data types.
@@ -173,13 +211,19 @@ pub struct SyncEngineState {
     server_handle: Mutex<Option<JoinHandle<()>>>,
 }
 
-impl SyncEngineState {
-    pub fn new() -> Self {
+impl Default for SyncEngineState {
+    fn default() -> Self {
         Self {
             is_running: AtomicBool::new(false),
             stop_tx: Mutex::new(None),
             server_handle: Mutex::new(None),
         }
+    }
+}
+
+impl SyncEngineState {
+    pub fn new() -> Self {
+        Self::default()
     }
 }
 
@@ -352,12 +396,15 @@ fn db_get_entries_manifest(conn: &Connection) -> Result<Vec<SyncMeta>, String> {
 
 fn db_get_books_manifest(conn: &Connection) -> Result<Vec<SyncMeta>, String> {
     let mut stmt = conn
-        .prepare(
-            "SELECT id, COALESCE(updated_at, created_at) FROM books ORDER BY id",
-        )
+        .prepare("SELECT id, COALESCE(updated_at, created_at) FROM books ORDER BY id")
         .map_err(|e| format!("prepare books manifest: {e}"))?;
     let rows = stmt
-        .query_map([], |r| Ok(SyncMeta { id: r.get(0)?, updated_at: r.get(1)? }))
+        .query_map([], |r| {
+            Ok(SyncMeta {
+                id: r.get(0)?,
+                updated_at: r.get(1)?,
+            })
+        })
         .map_err(|e| format!("query books manifest: {e}"))?;
     rows.collect::<Result<Vec<_>, _>>()
         .map_err(|e| format!("collect books manifest: {e}"))
@@ -368,7 +415,12 @@ fn db_get_signals_manifest(conn: &Connection) -> Result<Vec<SyncMeta>, String> {
         .prepare("SELECT id, created_at FROM signals ORDER BY created_at DESC")
         .map_err(|e| format!("prepare signals manifest: {e}"))?;
     let rows = stmt
-        .query_map([], |r| Ok(SyncMeta { id: r.get(0)?, updated_at: r.get(1)? }))
+        .query_map([], |r| {
+            Ok(SyncMeta {
+                id: r.get(0)?,
+                updated_at: r.get(1)?,
+            })
+        })
         .map_err(|e| format!("query signals manifest: {e}"))?;
     rows.collect::<Result<Vec<_>, _>>()
         .map_err(|e| format!("collect signals manifest: {e}"))
@@ -382,7 +434,10 @@ fn db_get_settings_manifest(conn: &Connection) -> Result<Vec<SyncMeta>, String> 
         |r| Ok((r.get(0)?, r.get(1)?)),
     );
     match result {
-        Ok((key, updated_at)) => Ok(vec![SyncMeta { id: key, updated_at }]),
+        Ok((key, updated_at)) => Ok(vec![SyncMeta {
+            id: key,
+            updated_at,
+        }]),
         Err(rusqlite::Error::QueryReturnedNoRows) => Ok(vec![]),
         Err(e) => Err(format!("query settings manifest: {e}")),
     }
@@ -452,8 +507,14 @@ fn db_upsert_book(conn: &Connection, row: &SyncBookRow) -> Result<bool, String> 
                      description = ?6, settings = ?7, updated_at = ?8 \
                  WHERE id = ?1",
                 rusqlite::params![
-                    row.id, row.name, row.emoji, row.color, row.sort_order,
-                    row.description, row.settings, row.updated_at
+                    row.id,
+                    row.name,
+                    row.emoji,
+                    row.color,
+                    row.sort_order,
+                    row.description,
+                    row.settings,
+                    row.updated_at
                 ],
             )
             .map_err(|e| format!("update book: {e}"))?;
@@ -500,7 +561,12 @@ fn db_insert_signal_if_new(conn: &Connection, row: &SyncSignalRow) -> Result<boo
             "INSERT OR IGNORE INTO signals (id, timestamp, type, source, payload, created_at) \
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             rusqlite::params![
-                row.id, row.timestamp, row.signal_type, row.source, row.payload, row.created_at
+                row.id,
+                row.timestamp,
+                row.signal_type,
+                row.source,
+                row.payload,
+                row.created_at
             ],
         )
         .map_err(|e| format!("insert signal: {e}"))?;
@@ -618,8 +684,8 @@ fn db_get_entries_full(conn: &Connection, ids: &[String]) -> Result<Vec<JournalE
                     } else {
                         tags_str.split(',').map(|s| s.to_string()).collect()
                     };
-                    let ec: crate::db::EncryptedContent = serde_json::from_str(&ec_json)
-                        .map_err(|e| {
+                    let ec: crate::db::EncryptedContent =
+                        serde_json::from_str(&ec_json).map_err(|e| {
                             rusqlite::Error::FromSqlConversionFailure(
                                 1,
                                 rusqlite::types::Type::Text,
@@ -785,9 +851,9 @@ fn db_set_peer_sync_at(conn: &Connection, peer_id: &str, at: &str) -> Result<(),
 ///
 /// Each logical "chunk" is two TCP frames:
 ///   1. Encrypted JSON: RestoreChunk { seq, total_chunks, offset, total_bytes }
-///   2. Raw binary:     the chunk bytes  (not encrypted — wire is already AES-GCM per-frame,
-///                      but the raw DB content is already encrypted at rest with the user's
-///                      password, so this is safe; avoids double-buffering 4 MB in memory)
+///   2. Raw binary: the chunk bytes (not encrypted — wire is already AES-GCM per-frame,
+///      but the raw DB content is already encrypted at rest with the user's
+///      password, so this is safe; avoids double-buffering 4 MB in memory)
 ///
 /// The read timeout is extended to 5 minutes during the transfer to handle
 /// slow Wi-Fi or large databases.
@@ -806,10 +872,10 @@ fn do_serve_restore(
         .map_err(|e| format!("set write timeout: {e}"))?;
 
     let db_path = crate::db::get_db_path(app)?;
-    let db_bytes = std::fs::read(&db_path)
-        .map_err(|e| format!("Failed to read DB for restore: {e}"))?;
+    let db_bytes =
+        std::fs::read(&db_path).map_err(|e| format!("Failed to read DB for restore: {e}"))?;
     let total_bytes = db_bytes.len() as u64;
-    let total_chunks = (db_bytes.len() + RESTORE_CHUNK_BYTES - 1) / RESTORE_CHUNK_BYTES;
+    let total_chunks = db_bytes.len().div_ceil(RESTORE_CHUNK_BYTES);
 
     eprintln!(
         "[restore] Serving DB ({} bytes, {} chunks) to {}",
@@ -885,11 +951,9 @@ fn do_full_restore_client(app: &AppHandle, peer_device_id: &str, host: &str) -> 
         .to_socket_addrs()
         .map_err(|e| format!("DNS resolve {addr}: {e}"))?
         .collect();
-    let mut stream = TcpStream::connect_timeout(
-        addrs.first().ok_or("no addr")?,
-        Duration::from_secs(10),
-    )
-    .map_err(|e| format!("connect to {addr}: {e}"))?;
+    let mut stream =
+        TcpStream::connect_timeout(addrs.first().ok_or("no addr")?, Duration::from_secs(10))
+            .map_err(|e| format!("connect to {addr}: {e}"))?;
 
     // Generous timeouts for large transfers.
     stream
@@ -927,7 +991,9 @@ fn do_full_restore_client(app: &AppHandle, peer_device_id: &str, host: &str) -> 
                 "peer:trust_revoked",
                 serde_json::json!({ "deviceId": server_device_id }),
             );
-            return Err(format!("Server {server_device_id} does not trust this device"));
+            return Err(format!(
+                "Server {server_device_id} does not trust this device"
+            ));
         }
         other => return Err(format!("Expected OK, got: {other:?}")),
     };
@@ -956,15 +1022,19 @@ fn do_full_restore_client(app: &AppHandle, peer_device_id: &str, host: &str) -> 
     let pending_path = app_data.join("moodbloom_restore.pending");
     let tmp_path = app_data.join("moodbloom_restore.tmp");
 
-    let mut file = std::fs::File::create(&tmp_path)
-        .map_err(|e| format!("create tmp file: {e}"))?;
+    let mut file = std::fs::File::create(&tmp_path).map_err(|e| format!("create tmp file: {e}"))?;
 
     let mut bytes_received: u64 = 0;
     let mut chunks_received: u64 = 0;
 
     loop {
         match read_msg_enc(&mut stream, &key)? {
-            Msg::RestoreChunk { seq, total_chunks, offset: _, total_bytes } => {
+            Msg::RestoreChunk {
+                seq,
+                total_chunks,
+                offset: _,
+                total_bytes,
+            } => {
                 // Read the following raw binary data frame.
                 let chunk_data = read_binary_frame(&mut stream)?;
                 file.write_all(&chunk_data)
@@ -993,7 +1063,10 @@ fn do_full_restore_client(app: &AppHandle, peer_device_id: &str, host: &str) -> 
                     }),
                 );
             }
-            Msg::RestoreEnd { total_bytes, chunks } => {
+            Msg::RestoreEnd {
+                total_bytes,
+                chunks,
+            } => {
                 eprintln!(
                     "[restore] Transfer complete: {} bytes in {} chunks",
                     total_bytes, chunks
@@ -1009,12 +1082,12 @@ fn do_full_restore_client(app: &AppHandle, peer_device_id: &str, host: &str) -> 
         }
     }
 
-    file.flush().map_err(|e| format!("flush restore file: {e}"))?;
+    file.flush()
+        .map_err(|e| format!("flush restore file: {e}"))?;
     drop(file);
 
     // Atomically move tmp → pending.
-    std::fs::rename(&tmp_path, &pending_path)
-        .map_err(|e| format!("rename restore file: {e}"))?;
+    std::fs::rename(&tmp_path, &pending_path).map_err(|e| format!("rename restore file: {e}"))?;
 
     let _ = app.emit(
         "peer:restore_ready",
@@ -1057,7 +1130,9 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
     let client_device = match client_device {
         Some(d) => d,
         None => {
-            eprintln!("[sync] Server: rejecting unknown device {client_device_id} — sending NotTrusted");
+            eprintln!(
+                "[sync] Server: rejecting unknown device {client_device_id} — sending NotTrusted"
+            );
             let _ = write_msg(
                 &mut stream,
                 &Msg::NotTrusted {
@@ -1091,12 +1166,9 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
 
     // Derive session key: ECDH if client supports v2, else legacy static key
     let key = match client_eph_pub {
-        Some(ref hex) => derive_sync_key_ecdh(
-            my_eph_secret,
-            hex,
-            &my_identity.public_key,
-            &client_pubkey,
-        )?,
+        Some(ref hex) => {
+            derive_sync_key_ecdh(my_eph_secret, hex, &my_identity.public_key, &client_pubkey)?
+        }
         None => {
             eprintln!("[sync] Server: peer sent no eph_pub — using legacy static key");
             derive_sync_key_static(&my_identity.public_key, &client_pubkey)
@@ -1121,13 +1193,15 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
         return do_serve_restore(app, &mut stream, &key, &client_device_id, &client_name);
     }
 
-    let (client_entries, client_books, client_signals, client_settings) =
-        match first_msg {
-            Msg::Manifest { entries, books, signals, settings } => {
-                (entries, books, signals, settings)
-            }
-            other => return Err(format!("Expected MANIFEST from client, got: {other:?}")),
-        };
+    let (client_entries, client_books, client_signals, client_settings) = match first_msg {
+        Msg::Manifest {
+            entries,
+            books,
+            signals,
+            settings,
+        } => (entries, books, signals, settings),
+        other => return Err(format!("Expected MANIFEST from client, got: {other:?}")),
+    };
 
     // Step 4: Get our manifest (lock DB, then drop)
     let (my_entries, my_books, my_signals, my_settings) = {
@@ -1156,8 +1230,10 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
     )?;
 
     // ── Compute diffs ────────────────────────────────────────────────────────
-    let client_entry_map: std::collections::HashMap<&str, &str> =
-        client_entries.iter().map(|e| (e.id.as_str(), e.updated_at.as_str())).collect();
+    let client_entry_map: std::collections::HashMap<&str, &str> = client_entries
+        .iter()
+        .map(|e| (e.id.as_str(), e.updated_at.as_str()))
+        .collect();
     let need_entries_by_client: Vec<String> = my_entries
         .iter()
         .filter(|e| {
@@ -1169,8 +1245,10 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
         .map(|e| e.id.clone())
         .collect();
 
-    let my_entry_map: std::collections::HashMap<&str, &str> =
-        my_entries.iter().map(|e| (e.id.as_str(), e.updated_at.as_str())).collect();
+    let my_entry_map: std::collections::HashMap<&str, &str> = my_entries
+        .iter()
+        .map(|e| (e.id.as_str(), e.updated_at.as_str()))
+        .collect();
     let need_entries_by_me: Vec<String> = client_entries
         .iter()
         .filter(|e| {
@@ -1183,8 +1261,10 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
         .collect();
 
     // Books diffs (same LWW pattern)
-    let client_book_map: std::collections::HashMap<&str, &str> =
-        client_books.iter().map(|e| (e.id.as_str(), e.updated_at.as_str())).collect();
+    let client_book_map: std::collections::HashMap<&str, &str> = client_books
+        .iter()
+        .map(|e| (e.id.as_str(), e.updated_at.as_str()))
+        .collect();
     let need_books_by_client: Vec<String> = my_books
         .iter()
         .filter(|e| {
@@ -1196,8 +1276,10 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
         .map(|e| e.id.clone())
         .collect();
 
-    let my_book_map: std::collections::HashMap<&str, &str> =
-        my_books.iter().map(|e| (e.id.as_str(), e.updated_at.as_str())).collect();
+    let my_book_map: std::collections::HashMap<&str, &str> = my_books
+        .iter()
+        .map(|e| (e.id.as_str(), e.updated_at.as_str()))
+        .collect();
     let need_books_by_me: Vec<String> = client_books
         .iter()
         .filter(|e| {
@@ -1224,8 +1306,10 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
         .collect();
 
     // Settings diffs (LWW per key)
-    let client_settings_map: std::collections::HashMap<&str, &str> =
-        client_settings.iter().map(|s| (s.id.as_str(), s.updated_at.as_str())).collect();
+    let client_settings_map: std::collections::HashMap<&str, &str> = client_settings
+        .iter()
+        .map(|s| (s.id.as_str(), s.updated_at.as_str()))
+        .collect();
     let need_settings_by_client: Vec<String> = my_settings
         .iter()
         .filter(|s| {
@@ -1237,8 +1321,10 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
         .map(|s| s.id.clone())
         .collect();
 
-    let my_settings_map: std::collections::HashMap<&str, &str> =
-        my_settings.iter().map(|s| (s.id.as_str(), s.updated_at.as_str())).collect();
+    let my_settings_map: std::collections::HashMap<&str, &str> = my_settings
+        .iter()
+        .map(|s| (s.id.as_str(), s.updated_at.as_str()))
+        .collect();
     let need_settings_by_me: Vec<String> = client_settings
         .iter()
         .filter(|s| {
@@ -1281,7 +1367,9 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
                 }
             }
             Msg::Done { sent } => {
-                eprintln!("[sync] Server: client sent {sent} entries, we received {entries_received} new");
+                eprintln!(
+                    "[sync] Server: client sent {sent} entries, we received {entries_received} new"
+                );
                 break;
             }
             other => return Err(format!("Unexpected msg in entry recv: {other:?}")),
@@ -1291,7 +1379,13 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
         }
     }
     // Send DONE_ACK for entries (connection stays open — more phases follow)
-    write_msg_enc(&mut stream, &key, &Msg::DoneAck { recv: entries_received })?;
+    write_msg_enc(
+        &mut stream,
+        &key,
+        &Msg::DoneAck {
+            recv: entries_received,
+        },
+    )?;
 
     // ── Books phase ──────────────────────────────────────────────────────────
 
@@ -1330,7 +1424,13 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
             return Err("Received more books than expected".into());
         }
     }
-    write_msg_enc(&mut stream, &key, &Msg::BooksAck { recv: books_received })?;
+    write_msg_enc(
+        &mut stream,
+        &key,
+        &Msg::BooksAck {
+            recv: books_received,
+        },
+    )?;
 
     // ── Signals phase ────────────────────────────────────────────────────────
 
@@ -1360,7 +1460,9 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
                 }
             }
             Msg::SignalsDone { sent } => {
-                eprintln!("[sync] Server: client sent {sent} signals, we received {signals_received} new");
+                eprintln!(
+                    "[sync] Server: client sent {sent} signals, we received {signals_received} new"
+                );
                 break;
             }
             other => return Err(format!("Unexpected msg in signals recv: {other:?}")),
@@ -1369,7 +1471,13 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
             return Err("Received more signals than expected".into());
         }
     }
-    write_msg_enc(&mut stream, &key, &Msg::SignalsAck { recv: signals_received })?;
+    write_msg_enc(
+        &mut stream,
+        &key,
+        &Msg::SignalsAck {
+            recv: signals_received,
+        },
+    )?;
 
     // ── Settings phase ───────────────────────────────────────────────────────
 
@@ -1388,14 +1496,32 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
     };
     let settings_sent = settings_to_send.len();
     for (k, v, ua) in settings_to_send {
-        write_msg_enc(&mut stream, &key, &Msg::Setting { key: k, value: v, updated_at: ua })?;
+        write_msg_enc(
+            &mut stream,
+            &key,
+            &Msg::Setting {
+                key: k,
+                value: v,
+                updated_at: ua,
+            },
+        )?;
     }
-    write_msg_enc(&mut stream, &key, &Msg::SettingsDone { sent: settings_sent })?;
+    write_msg_enc(
+        &mut stream,
+        &key,
+        &Msg::SettingsDone {
+            sent: settings_sent,
+        },
+    )?;
 
     let mut settings_received = 0usize;
     loop {
         match read_msg_enc(&mut stream, &key)? {
-            Msg::Setting { key: k, value: v, updated_at: ua } => {
+            Msg::Setting {
+                key: k,
+                value: v,
+                updated_at: ua,
+            } => {
                 let db = app
                     .try_state::<Database>()
                     .ok_or_else(|| "No DB state".to_string())?;
@@ -1414,7 +1540,13 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
             return Err("Received more settings than expected".into());
         }
     }
-    write_msg_enc(&mut stream, &key, &Msg::SettingsAck { recv: settings_received })?;
+    write_msg_enc(
+        &mut stream,
+        &key,
+        &Msg::SettingsAck {
+            recv: settings_received,
+        },
+    )?;
 
     // Close write-half cleanly — all phases complete.
     let _ = stream.shutdown(std::net::Shutdown::Write);
@@ -1549,9 +1681,7 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
         Msg::NotTrusted { server_device_id } => {
             // The server no longer has us in its trusted list — auto-revoke it
             // from our side so both devices are in sync without manual intervention.
-            eprintln!(
-                "[sync] Client: server {server_device_id} does not trust us — auto-revoking"
-            );
+            eprintln!("[sync] Client: server {server_device_id} does not trust us — auto-revoking");
             let _ = remove_trusted_device(app, peer_device_id);
             let _ = app.emit(
                 "peer:peer_revoked_us",
@@ -1569,12 +1699,9 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
 
     // Derive session key: ECDH if server supports v2, else legacy static key
     let key = match server_eph_pub {
-        Some(ref hex) => derive_sync_key_ecdh(
-            my_eph_secret,
-            hex,
-            &my_identity.public_key,
-            &peer_pubkey,
-        )?,
+        Some(ref hex) => {
+            derive_sync_key_ecdh(my_eph_secret, hex, &my_identity.public_key, &peer_pubkey)?
+        }
         None => {
             eprintln!("[sync] Client: server sent no eph_pub — using legacy static key");
             derive_sync_key_static(&my_identity.public_key, &peer_pubkey)
@@ -1619,16 +1746,21 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
     // Step 5: Read server's MANIFEST
     let (server_entries, server_books, server_signals, server_settings) =
         match read_msg_enc(&mut stream, &key)? {
-            Msg::Manifest { entries, books, signals, settings } => {
-                (entries, books, signals, settings)
-            }
+            Msg::Manifest {
+                entries,
+                books,
+                signals,
+                settings,
+            } => (entries, books, signals, settings),
             other => return Err(format!("Expected MANIFEST from server, got: {other:?}")),
         };
 
     // ── Compute diffs ────────────────────────────────────────────────────────
 
-    let my_entry_map: std::collections::HashMap<&str, &str> =
-        my_entries.iter().map(|e| (e.id.as_str(), e.updated_at.as_str())).collect();
+    let my_entry_map: std::collections::HashMap<&str, &str> = my_entries
+        .iter()
+        .map(|e| (e.id.as_str(), e.updated_at.as_str()))
+        .collect();
     let need_entries_by_me: Vec<String> = server_entries
         .iter()
         .filter(|e| {
@@ -1640,8 +1772,10 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
         .map(|e| e.id.clone())
         .collect();
 
-    let server_entry_map: std::collections::HashMap<&str, &str> =
-        server_entries.iter().map(|e| (e.id.as_str(), e.updated_at.as_str())).collect();
+    let server_entry_map: std::collections::HashMap<&str, &str> = server_entries
+        .iter()
+        .map(|e| (e.id.as_str(), e.updated_at.as_str()))
+        .collect();
     let need_entries_by_server: Vec<String> = my_entries
         .iter()
         .filter(|e| {
@@ -1654,8 +1788,10 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
         .collect();
 
     // Books diffs
-    let my_book_map: std::collections::HashMap<&str, &str> =
-        my_books.iter().map(|e| (e.id.as_str(), e.updated_at.as_str())).collect();
+    let my_book_map: std::collections::HashMap<&str, &str> = my_books
+        .iter()
+        .map(|e| (e.id.as_str(), e.updated_at.as_str()))
+        .collect();
     let need_books_by_me: Vec<String> = server_books
         .iter()
         .filter(|e| {
@@ -1667,8 +1803,10 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
         .map(|e| e.id.clone())
         .collect();
 
-    let server_book_map: std::collections::HashMap<&str, &str> =
-        server_books.iter().map(|e| (e.id.as_str(), e.updated_at.as_str())).collect();
+    let server_book_map: std::collections::HashMap<&str, &str> = server_books
+        .iter()
+        .map(|e| (e.id.as_str(), e.updated_at.as_str()))
+        .collect();
     let need_books_by_server: Vec<String> = my_books
         .iter()
         .filter(|e| {
@@ -1695,8 +1833,10 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
         .collect();
 
     // Settings diffs (LWW per key)
-    let my_settings_map: std::collections::HashMap<&str, &str> =
-        my_settings.iter().map(|s| (s.id.as_str(), s.updated_at.as_str())).collect();
+    let my_settings_map: std::collections::HashMap<&str, &str> = my_settings
+        .iter()
+        .map(|s| (s.id.as_str(), s.updated_at.as_str()))
+        .collect();
     let need_settings_by_me: Vec<String> = server_settings
         .iter()
         .filter(|s| {
@@ -1708,8 +1848,10 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
         .map(|s| s.id.clone())
         .collect();
 
-    let server_settings_map: std::collections::HashMap<&str, &str> =
-        server_settings.iter().map(|s| (s.id.as_str(), s.updated_at.as_str())).collect();
+    let server_settings_map: std::collections::HashMap<&str, &str> = server_settings
+        .iter()
+        .map(|s| (s.id.as_str(), s.updated_at.as_str()))
+        .collect();
     let need_settings_by_server: Vec<String> = my_settings
         .iter()
         .filter(|s| {
@@ -1738,7 +1880,9 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
                 }
             }
             Msg::Done { sent } => {
-                eprintln!("[sync] Client: server sent {sent} entries, we received {entries_received} new");
+                eprintln!(
+                    "[sync] Client: server sent {sent} entries, we received {entries_received} new"
+                );
                 break;
             }
             other => return Err(format!("Unexpected msg in entry recv: {other:?}")),
@@ -1833,7 +1977,9 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
                 }
             }
             Msg::SignalsDone { sent } => {
-                eprintln!("[sync] Client: server sent {sent} signals, we received {signals_received} new");
+                eprintln!(
+                    "[sync] Client: server sent {sent} signals, we received {signals_received} new"
+                );
                 break;
             }
             other => return Err(format!("Unexpected msg in signals recv: {other:?}")),
@@ -1870,7 +2016,11 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
     let mut settings_received = 0usize;
     loop {
         match read_msg_enc(&mut stream, &key)? {
-            Msg::Setting { key: k, value: v, updated_at: ua } => {
+            Msg::Setting {
+                key: k,
+                value: v,
+                updated_at: ua,
+            } => {
                 let db = app
                     .try_state::<Database>()
                     .ok_or_else(|| "No DB state".to_string())?;
@@ -1906,9 +2056,23 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
     };
     let settings_sent = settings_to_send.len();
     for (k, v, ua) in settings_to_send {
-        write_msg_enc(&mut stream, &key, &Msg::Setting { key: k, value: v, updated_at: ua })?;
+        write_msg_enc(
+            &mut stream,
+            &key,
+            &Msg::Setting {
+                key: k,
+                value: v,
+                updated_at: ua,
+            },
+        )?;
     }
-    write_msg_enc(&mut stream, &key, &Msg::SettingsDone { sent: settings_sent })?;
+    write_msg_enc(
+        &mut stream,
+        &key,
+        &Msg::SettingsDone {
+            sent: settings_sent,
+        },
+    )?;
 
     // Read SETTINGS_ACK (tolerate EOF/reset — server closes write-half after this)
     match read_msg_enc(&mut stream, &key) {
@@ -1920,7 +2084,10 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
         }
         Err(e) => {
             // Server closed the connection after sending SETTINGS_ACK — expected.
-            eprintln!("[sync] Client: SETTINGS_ACK read ended early ({}), treating as success", e);
+            eprintln!(
+                "[sync] Client: SETTINGS_ACK read ended early ({}), treating as success",
+                e
+            );
         }
     }
 
@@ -2040,11 +2207,7 @@ pub fn peer_start_sync_server(
 /// Initiate a sync with a trusted peer (client side).
 /// Verifies the peer is trusted, then spawns a background thread.
 #[tauri::command]
-pub fn peer_sync_now(
-    app: AppHandle,
-    device_id: String,
-    host: String,
-) -> Result<(), String> {
+pub fn peer_sync_now(app: AppHandle, device_id: String, host: String) -> Result<(), String> {
     // Verify trusted
     let trusted = load_trusted_devices(&app)?;
     if !trusted.iter().any(|d| d.device_id == device_id) {
@@ -2070,7 +2233,9 @@ pub fn peer_get_sync_states(app: AppHandle) -> Result<Vec<PeerSyncStateRecord>, 
         .ok_or_else(|| "No DB state".to_string())?;
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let mut stmt = conn
-        .prepare("SELECT peer_device_id, last_sync_at FROM peer_sync_state ORDER BY last_sync_at DESC")
+        .prepare(
+            "SELECT peer_device_id, last_sync_at FROM peer_sync_state ORDER BY last_sync_at DESC",
+        )
         .map_err(|e| format!("prepare peer_sync_state: {e}"))?;
     let rows = stmt
         .query_map([], |r| {
@@ -2094,11 +2259,7 @@ pub fn peer_get_sync_states(app: AppHandle) -> Result<Vec<PeerSyncStateRecord>, 
 /// Completion is signalled via `peer:restore_ready`.
 /// On completion the frontend should call `peer_apply_and_restart`.
 #[tauri::command]
-pub fn peer_full_restore(
-    app: AppHandle,
-    device_id: String,
-    host: String,
-) -> Result<(), String> {
+pub fn peer_full_restore(app: AppHandle, device_id: String, host: String) -> Result<(), String> {
     // Verify trusted
     let trusted = load_trusted_devices(&app)?;
     if !trusted.iter().any(|d| d.device_id == device_id) {
@@ -2108,10 +2269,7 @@ pub fn peer_full_restore(
     thread::spawn(move || {
         if let Err(e) = do_full_restore_client(&app, &device_id, &host) {
             eprintln!("[restore] Client error: {e}");
-            let _ = app.emit(
-                "peer:restore_error",
-                serde_json::json!({ "message": e }),
-            );
+            let _ = app.emit("peer:restore_error", serde_json::json!({ "message": e }));
         }
     });
     Ok(())

@@ -2,7 +2,7 @@
 //!
 //! Commands for calendar view and analytics dashboard features.
 
-use crate::db::{self, Database, CalendarDayData, DayOfWeekStats, MoodDistribution, StreakStats};
+use crate::db::{self, CalendarDayData, Database, DayOfWeekStats, MoodDistribution, StreakStats};
 use tauri::State;
 
 /// Get mood distribution (count per mood level 1-5)

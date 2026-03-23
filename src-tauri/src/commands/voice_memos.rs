@@ -5,10 +5,10 @@
 //!
 //! File lifecycle on Android:
 //!   1. WearListenerService writes raw audio to:
-//!        filesDir/voice_memos_incoming/<id>.m4a
+//!      filesDir/voice_memos_incoming/<id>.m4a
 //!   2. TypeScript hears "wear://voice_memo" event and calls `store_voice_memo`.
 //!   3. `store_voice_memo` moves the file to:
-//!        app_data_dir/voice_memos/<id>.m4a
+//!      app_data_dir/voice_memos/<id>.m4a
 //!      and inserts a row into `voice_memos`.
 //!   4. Transcription (whisper.cpp) fills the `transcription` column later.
 //!
@@ -82,8 +82,7 @@ pub fn store_voice_memo(
 
     // Try rename first; fall back to copy+delete across mount points
     if std::fs::rename(&src, &dest).is_err() {
-        std::fs::copy(&src, &dest)
-            .map_err(|e| format!("store_voice_memo: copy failed: {}", e))?;
+        std::fs::copy(&src, &dest).map_err(|e| format!("store_voice_memo: copy failed: {}", e))?;
         let _ = std::fs::remove_file(&src);
     }
 
@@ -116,20 +115,13 @@ pub fn list_voice_memos(
 
 /// Get a single voice memo by id.
 #[tauri::command]
-pub fn get_voice_memo(
-    db: State<Database>,
-    id: String,
-) -> Result<Option<VoiceMemoRow>, String> {
+pub fn get_voice_memo(db: State<Database>, id: String) -> Result<Option<VoiceMemoRow>, String> {
     db::get_voice_memo(&db, &id)
 }
 
 /// Delete a voice memo record and its audio file.
 #[tauri::command]
-pub fn delete_voice_memo(
-    app: AppHandle,
-    db: State<Database>,
-    id: String,
-) -> Result<(), String> {
+pub fn delete_voice_memo(app: AppHandle, db: State<Database>, id: String) -> Result<(), String> {
     // Look up file path before deleting the row
     let row = db::get_voice_memo(&db, &id)?;
 
@@ -205,10 +197,7 @@ pub async fn transcribe_voice_memo(
         .join(&model);
 
     if !model_path.exists() {
-        return Err(format!(
-            "transcribe_voice_memo: model not found: {}",
-            model
-        ));
+        return Err(format!("transcribe_voice_memo: model not found: {}", model));
     }
 
     // 3. Run the whisper sidecar

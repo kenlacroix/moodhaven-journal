@@ -133,9 +133,15 @@ export function TranscriptPreviewOverlay({
 
         {/* Formatted text preview */}
         <div className="max-h-48 overflow-y-auto rounded-lg bg-slate-50 dark:bg-slate-800 p-3 mb-4">
-          <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">
-            {formattedText || rawText}
-          </p>
+          {formattedText ? (
+            <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">
+              {formattedText}
+            </p>
+          ) : (
+            <p className="text-sm text-gray-400 dark:text-gray-500 italic">
+              Formatting returned an empty result — use raw text below.
+            </p>
+          )}
         </div>
 
         {/* Action buttons */}

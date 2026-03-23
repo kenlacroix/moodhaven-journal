@@ -63,6 +63,14 @@
 **What:** The download URL for Whisper models is constructed from a `model_name` parameter passed by the frontend. A compromised WebView could supply an arbitrary URL and cause the Rust sidecar to fetch from an attacker-controlled server.
 **Fix:** Maintain an allowlist of valid model names in Rust, map each name to its canonical Hugging Face URL, and reject any model name not in the allowlist.
 
+### A-15: OpenAI 401 silently falls back to local formatting without user feedback (P2)
+**What:** When the OpenAI API returns 401 (invalid/revoked key), `formatTranscript` silently returns L1-formatted text with `source: 'local'`. The user believes they're using OpenAI but silently gets local quality.
+**Fix:** Return an error result (e.g. `{ error: 'INVALID_KEY' }`) and surface it in the UI as an amber error on the mic button, prompting the user to update their OpenAI key in Settings.
+
+### A-16: Ollama response body has no size limit — vulnerable to rogue server DoS (P3)
+**What:** `response.json()` buffers the entire Ollama response in memory. A misconfigured or adversarial Ollama endpoint could return a 500MB body, causing OOM in the renderer process.
+**Fix:** Use `response.body` with a `TransformStream` byte counter. If the body exceeds 1MB before parsing, abort the stream and fall back to L1.
+
 ---
 
 ### D-003: Spec the voice memos empty state

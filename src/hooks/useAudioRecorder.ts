@@ -28,16 +28,22 @@ const SAMPLE_RATE = 16000; // whisper.cpp expects 16kHz
 const NUM_CHANNELS = 1; // Mono audio
 
 /**
- * Encode raw PCM samples to WAV format
+ * Encode raw PCM samples to WAV format.
+ * Throws if the audio is too long to fit in a 32-bit WAV chunk size field
+ * (~2h 28min at 16kHz mono 16-bit).
  */
 function encodeWAV(samples: Float32Array, sampleRate: number): ArrayBuffer {
-  const buffer = new ArrayBuffer(44 + samples.length * 2);
+  const dataBytes = samples.length * 2;
+  if (dataBytes > 0xFFFFFFFF - 36) {
+    throw new Error('Recording is too long to encode as WAV (max ~2h 28min at 16kHz).');
+  }
+  const buffer = new ArrayBuffer(44 + dataBytes);
   const view = new DataView(buffer);
 
   // WAV header
   // "RIFF" chunk descriptor
   writeString(view, 0, 'RIFF');
-  view.setUint32(4, 36 + samples.length * 2, true); // File size - 8
+  view.setUint32(4, 36 + dataBytes, true); // File size - 8
   writeString(view, 8, 'WAVE');
 
   // "fmt " sub-chunk
@@ -52,7 +58,7 @@ function encodeWAV(samples: Float32Array, sampleRate: number): ArrayBuffer {
 
   // "data" sub-chunk
   writeString(view, 36, 'data');
-  view.setUint32(40, samples.length * 2, true); // Subchunk2Size
+  view.setUint32(40, dataBytes, true); // Subchunk2Size
 
   // Write PCM samples as 16-bit integers
   let offset = 44;

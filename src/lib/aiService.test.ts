@@ -289,5 +289,80 @@ describe('aiService', () => {
         globalThis.fetch = originalFetch;
       }
     });
+
+    it('L2 Ollama happy path returns formatted text with source "ollama"', async () => {
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ response: 'I went to the store and bought groceries.' }),
+      } as Response);
+      try {
+        const result = await formatTranscript(rawText, 'standard', {
+          layer: 'ollama',
+          cloudConsentGiven: false,
+          ollamaEndpoint: 'http://localhost:11434',
+          ollamaModel: 'llama2',
+        });
+        expect(result.source).toBe('ollama');
+        expect(result.formatted).toBe('I went to the store and bought groceries.');
+      } finally {
+        fetchSpy.mockRestore();
+      }
+    });
+
+    it('L3 OpenAI happy path returns formatted text with source "openai"', async () => {
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({
+          choices: [{ message: { content: 'I went to the store and bought groceries.' } }],
+        }),
+      } as Response);
+      try {
+        const result = await formatTranscript(rawText, 'standard', {
+          layer: 'openai',
+          cloudConsentGiven: true,
+          openaiKey: 'sk-test-key',
+        });
+        expect(result.source).toBe('openai');
+        expect(result.formatted).toBe('I went to the store and bought groceries.');
+      } finally {
+        fetchSpy.mockRestore();
+      }
+    });
+
+    it('L2 Ollama AbortError (timeout) falls back to L1 with source "local"', async () => {
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(
+        new DOMException('The operation was aborted.', 'AbortError')
+      );
+      try {
+        const result = await formatTranscript(rawText, 'standard', {
+          layer: 'ollama',
+          cloudConsentGiven: false,
+          ollamaEndpoint: 'http://localhost:11434',
+          ollamaModel: 'llama2',
+        });
+        expect(result.source).toBe('local');
+      } finally {
+        fetchSpy.mockRestore();
+      }
+    });
+
+    it('L3 OpenAI 401 falls back to L1 with source "local"', async () => {
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        json: () => Promise.resolve({}),
+      } as Response);
+      try {
+        const result = await formatTranscript(rawText, 'standard', {
+          layer: 'openai',
+          cloudConsentGiven: true,
+          openaiKey: 'sk-bad-key',
+        });
+        expect(result.source).toBe('local');
+      } finally {
+        fetchSpy.mockRestore();
+      }
+    });
   });
 });

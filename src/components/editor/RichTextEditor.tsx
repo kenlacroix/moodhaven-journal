@@ -322,21 +322,24 @@ export function RichTextEditor({
   // Transcript preview overlay handlers
   const handleUseFormatted = useCallback(() => {
     if (!editor || !formattedResult) return;
-    editor.chain().focus().insertContent(formattedResult.formatted).run();
+    // A-08: use tr.insertText (not insertContent) — LLM output is plain text, not HTML
+    editor.chain().focus().command(({ tr }) => { tr.insertText(formattedResult.formatted); return true; }).run();
     clearFormattedResult();
   }, [editor, formattedResult, clearFormattedResult]);
 
   const handleEditFirst = useCallback(() => {
     if (!editor || !formattedResult) return;
-    // Insert text and reposition cursor to start of the inserted block
+    // Insert text then reposition cursor to start of the inserted block
     const { from } = editor.state.selection;
-    editor.chain().focus().insertContent(formattedResult.formatted).setTextSelection(from).run();
+    // A-08: use tr.insertText (not insertContent) — LLM output is plain text, not HTML
+    editor.chain().focus().command(({ tr }) => { tr.insertText(formattedResult.formatted); return true; }).setTextSelection(from).run();
     clearFormattedResult();
   }, [editor, formattedResult, clearFormattedResult]);
 
   const handleUseRaw = useCallback(() => {
     if (!editor || !formattedResult) return;
-    editor.chain().focus().insertContent(formattedResult.raw).run();
+    // A-08: raw whisper output is plain text — use tr.insertText not insertContent
+    editor.chain().focus().command(({ tr }) => { tr.insertText(formattedResult.raw); return true; }).run();
     clearFormattedResult();
   }, [editor, formattedResult, clearFormattedResult]);
 

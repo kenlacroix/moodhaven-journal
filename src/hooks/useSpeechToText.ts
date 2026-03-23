@@ -56,6 +56,8 @@ export function useSpeechToText(): UseSpeechToTextResult {
   const settings = useSettingsStore((s) => s.settings.speechToText);
   const aiSettings = useSettingsStore((s) => s.settings.ai);
   const checkedRef = useRef(false);
+  // A-05: flag to abort in-flight async chains after cancel() is called
+  const cancelledRef = useRef(false);
   // Stores the last check result so checkAvailability can return it without
   // closing over the isAvailable state (which would add it to useCallback deps).
   const availabilityResultRef = useRef(false);
@@ -116,9 +118,10 @@ export function useSpeechToText(): UseSpeechToTextResult {
   }, []);
 
   const stopAndTranscribe = useCallback(async (): Promise<string | null> => {
+    cancelledRef.current = false; // A-05: reset at start of each transcription
     const audioBuffer = await stopRecording();
 
-    if (!audioBuffer) {
+    if (!audioBuffer || cancelledRef.current) {
       return null;
     }
 
@@ -136,6 +139,9 @@ export function useSpeechToText(): UseSpeechToTextResult {
       setTranscribeError(message);
       return null;
     }
+
+    // A-05: bail if cancel() was called while transcribeAudio was in flight
+    if (cancelledRef.current) return null;
 
     // Quick capture bypasses formatting — return raw text immediately
     if (quickCapture) {
@@ -169,6 +175,9 @@ export function useSpeechToText(): UseSpeechToTextResult {
       });
       setIsFormatting(false);
 
+      // A-05: bail if cancel() was called while formatTranscript was in flight
+      if (cancelledRef.current) return null;
+
       if (formatResult.source === 'ollama' || formatResult.source === 'openai') {
         // Store for preview overlay; caller will handle insertion
         setFormattedResult({
@@ -192,6 +201,7 @@ export function useSpeechToText(): UseSpeechToTextResult {
   }, [stopRecording, settings.model, settings.formatting, quickCapture, aiSettings]);
 
   const cancel = useCallback(() => {
+    cancelledRef.current = true; // A-05: signal any in-flight async chain to abort
     cancelRecording();
     setIsTranscribing(false);
     setIsFormatting(false);
@@ -210,7 +220,7 @@ export function useSpeechToText(): UseSpeechToTextResult {
     state,
     error: transcribeError || recorderError,
     permissionModal,
-    isAvailable: settings.enabled && settings.modelDownloaded,
+    isAvailable: settings.enabled && availabilityResultRef.current,
     quickCapture,
     toggleQuickCapture,
     formattedResult,

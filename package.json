@@ -15,7 +15,10 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "check:deny": "cd src-tauri && cargo deny check",
+    "check:audit": "cd src-tauri && cargo audit",
+    "check:all": "npm run typecheck && npm run lint:ci && npm run test && npm run check:deny && npm run check:audit"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.0.0",

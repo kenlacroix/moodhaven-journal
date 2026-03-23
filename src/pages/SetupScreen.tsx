@@ -9,7 +9,7 @@
  * Sync path:  welcome → source → password → sync_from_peer → complete
  */
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useAppStore } from '../stores/appStore';
 import { useSettingsStore } from '../stores/settingsStore';
 import { usePeerSyncStore } from '../stores/peerSyncStore';
@@ -73,6 +73,7 @@ export function SetupScreen() {
   const [recoveryKeyConfirmed, setRecoveryKeyConfirmed] = useState(false);
   const [showRecoveryKey, setShowRecoveryKey] = useState(false);
   const [enableLanSync, setEnableLanSync] = useState(false);
+  const enableLanSyncRef = useRef(false);
   const [pairingPeer, setPairingPeer] = useState<DiscoveredPeer | null>(null);
   const [setupMode, setSetupMode] = useState<'fresh' | 'sync'>('fresh');
   const [restoreProgress, setRestoreProgress] = useState<RestoreProgressEvent | null>(null);
@@ -92,19 +93,32 @@ export function SetupScreen() {
     if (currentStep !== 'devices' && currentStep !== 'sync_from_peer') return;
     startDiscovery().catch(() => {});
     return () => {
-      if (!enableLanSync) stopDiscovery().catch(() => {});
+      if (!enableLanSyncRef.current) stopDiscovery().catch(() => {});
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentStep]);
 
-  // Listen for restore events while on the sync_from_peer step
+  // Listen for restore events while on the sync_from_peer step.
+  // Promise.all ensures all 3 unlisteners are captured before any cleanup can run —
+  // avoids a race where React's cleanup fires before .then() callbacks register the fns.
   useEffect(() => {
     if (currentStep !== 'sync_from_peer') return;
-    const cleanups: Array<() => void> = [];
-    onRestoreProgress((e) => setRestoreProgress(e)).then((u) => cleanups.push(u));
-    onRestoreReady(() => setRestoreReady(true)).then((u) => cleanups.push(u));
-    onRestoreError((e) => setRestoreError(e.message)).then((u) => cleanups.push(u));
-    return () => cleanups.forEach((u) => u());
+    let cancelled = false;
+    let unlisteners: Array<() => void> = [];
+    Promise.all([
+      onRestoreProgress((e) => setRestoreProgress(e)),
+      onRestoreReady(() => setRestoreReady(true)),
+      onRestoreError((e) => setRestoreError(e.message)),
+    ]).then((fns) => {
+      if (cancelled) {
+        fns.forEach((u) => u());
+      } else {
+        unlisteners = fns;
+      }
+    });
+    return () => {
+      cancelled = true;
+      unlisteners.forEach((u) => u());
+    };
   }, [currentStep]);
 
   const currentStepIndex = STEPS.findIndex((s) => s.id === currentStep);
@@ -181,7 +195,6 @@ export function SetupScreen() {
         const count = await encryptedImport(fileContents, password);
         if (count === 0) {
           setError('No entries found in backup file.');
-          setIsLoading(false);
           return;
         }
       }
@@ -304,7 +317,7 @@ export function SetupScreen() {
                 webdavUrl={webdavUrl}
                 onWebdavUrlChange={setWebdavUrl}
                 enableLanSync={enableLanSync}
-                onEnableLanSyncChange={setEnableLanSync}
+                onEnableLanSyncChange={(v) => { setEnableLanSync(v); enableLanSyncRef.current = v; }}
               />
             )}
 

@@ -7,6 +7,20 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.7.2] — 2026-03-22
+
+### Added
+- **Microphone permission modals.** `MicrophonePermissionModal` (pre-OS-prompt consent) and `MicrophoneBlockedModal` (platform-specific unblock instructions for macOS, Windows, Linux) handle Tauri WebView permission quirks where `navigator.permissions` may return `'denied'` before the user has ever been prompted.
+- **CI whisper.cpp sidecar build.** GitHub Actions workflow now compiles `whisper-cli` from source on each platform (Linux, Windows, macOS) and caches the binary by upstream HEAD SHA, eliminating the need to commit binaries.
+- **18 new tests.** `TranscriptPreviewOverlay`, `CloudConsentModal` component tests; existing test suite now 429 tests total (19 files).
+
+### Fixed
+- **Improved whisper error messages.** When the whisper sidecar exits non-zero, the error now includes stdout as a fallback (whisper writes some errors there) and the exit code — previously only stderr was included, resulting in empty error messages on some failure modes.
+- **WAV header overflow guard.** `encodeWAV()` now throws explicitly if a recording would exceed the 32-bit WAV chunk size limit (~2h 28min at 16kHz), preventing silent header corruption.
+- **TranscriptPreviewOverlay empty formatted text.** When L2/L3 formatting returns an empty string, the overlay now shows "Formatting returned an empty result" instead of silently displaying the raw text as if it were formatted.
+
+---
+
 ## [0.7.1] — 2026-03-21
 
 ### Added

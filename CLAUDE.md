@@ -39,7 +39,7 @@
 | Focus Mode | P2 | **Complete** | Distraction-free writing with typewriter scroll |
 | Oura Ring | P2 | **Complete** | PAT-based health context (sleep, readiness, HRV) in writing view |
 | Sync Details Modal | P2 | **Complete** | Storage type, entry count, last sync, upload/download with inline auth |
-| Speech-to-Text | P3 | In Progress | Local offline STT via whisper.cpp sidecar; Tauri commands scaffolded; UI pending |
+| Speech-to-Text | P3 | In Progress | Local offline STT via whisper.cpp sidecar; 3-layer formatting pipeline (L1 rules/L2 Ollama/L3 OpenAI); mic permission modals; recording UX complete in RichTextEditor; model download UI pending |
 | Local Peer Sync | P2 | **Complete** | Ed25519 identity, mDNS discovery, QR/PIN pairing, TCP sync engine, AES-GCM transport; v0.7.0 |
 | Hashtag Extraction | P2 | **Complete** | Auto-extracted from entry content on save; surfaced in timeline |
 | Pinned Entries | P2 | **Complete** | Pin important entries to surface them first in timeline |
@@ -561,7 +561,8 @@ interface AISettings {
 
 ### In Progress
 - [ ] Watch app Phase 2: UX polish sprint (record screen arc, breathe page, nav)
-- [ ] Speech-to-Text UI (recording UX in WritingView, model download flow)
+- [ ] Speech-to-Text: model download UI in Settings (progress bar, model picker)
+- [ ] Speech-to-Text: pre-public hardening (path traversal fix, TipTap XSS guard, stream cleanup on unmount — see TODOS.md A-04 through A-16)
 
 ### Blocked
 - None
@@ -1088,4 +1089,4 @@ npm run lint:fix           # Fix auto-fixable issues
 
 ---
 
-*Last Updated: March 2026 — v0.7.0*
+*Last Updated: March 2026 — v0.7.2*

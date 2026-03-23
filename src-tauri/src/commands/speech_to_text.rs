@@ -727,7 +727,10 @@ mod tests {
             "expected Ok for valid name, got {:?}",
             result
         );
-        assert!(result.unwrap().starts_with(&dir));
+        // Canonicalize the dir for comparison — on macOS /tmp is a symlink to
+        // /private/tmp, so validate_model_path returns the resolved path.
+        let canonical_dir = fs::canonicalize(&dir).unwrap_or(dir);
+        assert!(result.unwrap().starts_with(&canonical_dir));
     }
 
     #[test]

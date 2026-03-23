@@ -65,13 +65,19 @@ pub struct PeerDiscoveryState {
     pub stop_tx: Mutex<Option<std::sync::mpsc::SyncSender<()>>>,
 }
 
-impl PeerDiscoveryState {
-    pub fn new() -> Self {
+impl Default for PeerDiscoveryState {
+    fn default() -> Self {
         Self {
             peers: Mutex::new(HashMap::new()),
             is_active: AtomicBool::new(false),
             stop_tx: Mutex::new(None),
         }
+    }
+}
+
+impl PeerDiscoveryState {
+    pub fn new() -> Self {
+        Self::default()
     }
 }
 
@@ -86,7 +92,13 @@ unsafe impl Sync for PeerDiscoveryState {}
 fn sanitize_instance_name(s: &str) -> String {
     let cleaned: String = s
         .chars()
-        .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '-' })
+        .map(|c| {
+            if c.is_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '-'
+            }
+        })
         .collect();
     cleaned.trim_matches('-').to_string()
 }
@@ -131,9 +143,17 @@ fn is_virtual_iface(name: &str) -> bool {
 /// Higher score = more preferred.
 fn iface_preference(name: &str) -> u8 {
     let n = name.to_ascii_lowercase();
-    if n.starts_with("eth") || n.starts_with("en") { 3 }      // Ethernet (en0, eth0)
-    else if n.starts_with("wlan") || n.starts_with("wl") { 2 } // Wi-Fi (wlan0, wlp3s0)
-    else { 1 }                                                   // anything else non-virtual
+    if n.starts_with("eth") || n.starts_with("en") {
+        3
+    }
+    // Ethernet (en0, eth0)
+    else if n.starts_with("wlan") || n.starts_with("wl") {
+        2
+    }
+    // Wi-Fi (wlan0, wlp3s0)
+    else {
+        1
+    } // anything else non-virtual
 }
 
 /// Find the best local IPv4 address to advertise on the LAN.
@@ -170,7 +190,10 @@ pub fn get_local_ipv4() -> Option<std::net::Ipv4Addr> {
         candidates.sort_by(|a, b| b.0.cmp(&a.0));
         eprintln!(
             "[peer] LAN IP candidates: {:?}",
-            candidates.iter().map(|(_, ip)| ip.to_string()).collect::<Vec<_>>()
+            candidates
+                .iter()
+                .map(|(_, ip)| ip.to_string())
+                .collect::<Vec<_>>()
         );
         return Some(candidates[0].1);
     }
@@ -221,7 +244,11 @@ fn run_udp_discovery(
         eprintln!("[peer/udp] set_broadcast failed: {e}");
     }
 
-    let pubkey_hint = if my_public_key.len() >= 8 { &my_public_key[..8] } else { &my_public_key };
+    let pubkey_hint = if my_public_key.len() >= 8 {
+        &my_public_key[..8]
+    } else {
+        &my_public_key
+    };
     let probe_json = serde_json::json!({
         "type": "probe",
         "device_id": my_device_id,
@@ -279,11 +306,20 @@ fn run_udp_discovery(
                 }
 
                 // Both probe and pong tell us about a peer — inject only if mDNS hasn't
-                let peer_name = json["device_name"].as_str().unwrap_or("Unknown").to_string();
-                let peer_type = json["device_type"].as_str().unwrap_or("desktop").to_string();
+                let peer_name = json["device_name"]
+                    .as_str()
+                    .unwrap_or("Unknown")
+                    .to_string();
+                let peer_type = json["device_type"]
+                    .as_str()
+                    .unwrap_or("desktop")
+                    .to_string();
                 let peer_pubkey = json["public_key"].as_str().unwrap_or("").to_string();
                 let peer_version = json["version"].as_str().unwrap_or("?").to_string();
-                let peer_hint = json["pubkey_hint"].as_str().unwrap_or(&peer_pubkey[..peer_pubkey.len().min(8)]).to_string();
+                let peer_hint = json["pubkey_hint"]
+                    .as_str()
+                    .unwrap_or(&peer_pubkey[..peer_pubkey.len().min(8)])
+                    .to_string();
                 let host = src_addr.ip().to_string();
 
                 let peer = DiscoveredPeer {
@@ -348,7 +384,14 @@ fn run_discovery(
     let udp_device_type = device_type.clone();
     let udp_public_key = public_key.clone();
     let udp_handle = std::thread::spawn(move || {
-        run_udp_discovery(udp_app, udp_device_id, udp_device_name, udp_device_type, udp_public_key, udp_stop_clone);
+        run_udp_discovery(
+            udp_app,
+            udp_device_id,
+            udp_device_name,
+            udp_device_type,
+            udp_public_key,
+            udp_stop_clone,
+        );
     });
 
     let daemon = match ServiceDaemon::new() {
@@ -366,7 +409,11 @@ fn run_discovery(
     eprintln!("[peer] Local IP detected: {local_ip_str:?}");
 
     // Build TXT record properties
-    let pubkey_hint = if public_key.len() >= 8 { &public_key[..8] } else { &public_key };
+    let pubkey_hint = if public_key.len() >= 8 {
+        &public_key[..8]
+    } else {
+        &public_key
+    };
     let instance_name = sanitize_instance_name(&format!("moodbloom-{}", &device_id[..8]));
 
     let mut properties: HashMap<String, String> = HashMap::new();
@@ -380,8 +427,17 @@ fn run_discovery(
     // host_name is the DNS hostname (.local); host_ipv4 is the A-record IP.
     let my_host = format!("{}.local.", instance_name);
     let sync_port = sync_port_for_device(&device_id);
-    eprintln!("[peer] Registering service: {instance_name}.{SERVICE_TYPE} @ {local_ip_str}:{sync_port}");
-    match ServiceInfo::new(SERVICE_TYPE, &instance_name, &my_host, local_ip_str.as_str(), sync_port, properties) {
+    eprintln!(
+        "[peer] Registering service: {instance_name}.{SERVICE_TYPE} @ {local_ip_str}:{sync_port}"
+    );
+    match ServiceInfo::new(
+        SERVICE_TYPE,
+        &instance_name,
+        &my_host,
+        local_ip_str.as_str(),
+        sync_port,
+        properties,
+    ) {
         Ok(service) => {
             if let Err(e) = daemon.register(service) {
                 eprintln!("[peer] Failed to register mDNS service: {e}");
@@ -470,7 +526,10 @@ fn run_discovery(
                     port: info.get_port(),
                     version: peer_version,
                     pubkey_hint: peer_pubkey_hint,
-                    is_trusted: crate::commands::peer_pairing::is_device_trusted(&app, &peer_device_id),
+                    is_trusted: crate::commands::peer_pairing::is_device_trusted(
+                        &app,
+                        &peer_device_id,
+                    ),
                     is_online: true,
                     last_seen: now_iso(),
                 };
@@ -484,7 +543,10 @@ fn run_discovery(
 
                 // Emit event so the frontend store can react immediately
                 let _ = app.emit("peer:discovered", &peer);
-                eprintln!("[peer] Discovered: {} ({})", peer.device_name, peer.device_id);
+                eprintln!(
+                    "[peer] Discovered: {} ({})",
+                    peer.device_name, peer.device_id
+                );
             }
 
             Ok(ServiceEvent::ServiceRemoved(_, fullname)) => {
@@ -496,8 +558,7 @@ fn run_discovery(
                                 .values()
                                 .find(|p| {
                                     // Instance names embed the first 8 chars of device_id
-                                    p.device_id.len() >= 8
-                                        && fullname.contains(&p.device_id[..8])
+                                    p.device_id.len() >= 8 && fullname.contains(&p.device_id[..8])
                                 })
                                 .map(|p| p.device_id.clone());
 
@@ -516,7 +577,9 @@ fn run_discovery(
                 if let Some(gone_id) = lost_id {
                     let _ = app.emit(
                         "peer:lost",
-                        PeerLostEvent { device_id: gone_id.clone() },
+                        PeerLostEvent {
+                            device_id: gone_id.clone(),
+                        },
                     );
                     eprintln!("[peer] Lost: {gone_id}");
                 }
@@ -582,7 +645,14 @@ pub async fn peer_discovery_start(
     let public_key = identity.public_key.clone();
 
     std::thread::spawn(move || {
-        run_discovery(app_clone, device_id, device_name, device_type, public_key, stop_rx);
+        run_discovery(
+            app_clone,
+            device_id,
+            device_name,
+            device_type,
+            public_key,
+            stop_rx,
+        );
         // Mark inactive so callers can restart if needed
         if let Some(state) = app.try_state::<PeerDiscoveryState>() {
             state.is_active.store(false, Ordering::SeqCst);
@@ -611,7 +681,9 @@ pub fn peer_discovery_stop(state: State<'_, PeerDiscoveryState>) -> Result<(), S
 
 /// Snapshot of currently discovered nearby peers.
 #[tauri::command]
-pub fn peer_get_nearby(state: State<'_, PeerDiscoveryState>) -> Result<Vec<DiscoveredPeer>, String> {
+pub fn peer_get_nearby(
+    state: State<'_, PeerDiscoveryState>,
+) -> Result<Vec<DiscoveredPeer>, String> {
     let peers = state.peers.lock().map_err(|e| e.to_string())?;
     Ok(peers.values().cloned().collect())
 }

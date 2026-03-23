@@ -27,11 +27,14 @@ pub fn run() {
         .setup(|app| {
             // If a full-restore pending file exists, swap it in before opening the DB.
             // This is written by `peer_full_restore` during setup and applied on next startup.
-            let db_path = get_db_path(&app.handle())?;
+            let db_path = get_db_path(app.handle())?;
             if let Some(parent) = db_path.parent() {
                 let pending = parent.join("moodbloom_restore.pending");
                 if pending.exists() {
-                    eprintln!("[restore] Applying pending DB restore: {:?} → {:?}", pending, db_path);
+                    eprintln!(
+                        "[restore] Applying pending DB restore: {:?} → {:?}",
+                        pending, db_path
+                    );
                     if let Err(e) = std::fs::rename(&pending, &db_path) {
                         eprintln!("[restore] WARNING: failed to apply pending DB: {e}");
                     }
@@ -77,6 +80,34 @@ pub fn run() {
                 if let Some(window) = app.get_webview_window("main") {
                     window.open_devtools();
                 }
+            }
+
+            // Linux/WebKit2GTK: handle WebKit permission-request events so that
+            // getUserMedia() (microphone) works inside the Tauri WebView.
+            //
+            // Without this, WebKit fires an internal PermissionRequest event that
+            // nobody handles, so it auto-denies and getUserMedia() throws NotAllowedError
+            // before the OS ever gets a chance to show its own prompt.
+            //
+            // Allowing here hands control to the OS-level permission system, which
+            // will either show a native prompt or honour the existing system setting.
+            #[cfg(target_os = "linux")]
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.with_webview(|webview| {
+                    use webkit2gtk::glib::ObjectExt;
+                    use webkit2gtk::{PermissionRequestExt, WebViewExt};
+                    webview.inner().connect_permission_request(
+                        |_view, request: &webkit2gtk::PermissionRequest| {
+                            // Only allow microphone (UserMedia) — deny camera, geolocation, notifications, etc.
+                            if request.is::<webkit2gtk::UserMediaPermissionRequest>() {
+                                request.allow();
+                            } else {
+                                request.deny();
+                            }
+                            true
+                        },
+                    );
+                });
             }
 
             Ok(())
@@ -145,6 +176,7 @@ pub fn run() {
             commands::stt_download_model,
             commands::stt_delete_model,
             commands::stt_transcribe,
+            commands::stt_transcribe_timestamped,
             // Books (named journals)
             commands::list_books,
             commands::create_book,

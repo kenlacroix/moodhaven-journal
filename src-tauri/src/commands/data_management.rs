@@ -2,8 +2,8 @@
 //!
 //! Provides factory reset, export, and import functionality.
 
-use tauri::{AppHandle, Manager};
 use std::fs;
+use tauri::{AppHandle, Manager};
 
 use crate::db::{self, Database};
 
@@ -30,19 +30,23 @@ pub async fn factory_reset(app: AppHandle) -> Result<bool, String> {
 
     // Delete database file
     if db_path.exists() {
-        fs::remove_file(&db_path)
-            .map_err(|e| format!("Failed to delete database: {}", e))?;
+        fs::remove_file(&db_path).map_err(|e| format!("Failed to delete database: {}", e))?;
     }
 
     // Delete settings file if it exists
     let settings_path = app_data.join("settings.json");
     if settings_path.exists() {
-        fs::remove_file(&settings_path)
-            .map_err(|e| format!("Failed to delete settings: {}", e))?;
+        fs::remove_file(&settings_path).map_err(|e| format!("Failed to delete settings: {}", e))?;
     }
 
     // Delete any other app data files
-    let files_to_delete = ["keys.bin", "cache.db", "logs", "peer_key.bin", "trusted_devices.json"];
+    let files_to_delete = [
+        "keys.bin",
+        "cache.db",
+        "logs",
+        "peer_key.bin",
+        "trusted_devices.json",
+    ];
     for file in files_to_delete {
         let path = app_data.join(file);
         if path.exists() {
@@ -59,10 +63,7 @@ pub async fn factory_reset(app: AppHandle) -> Result<bool, String> {
 
 /// Export all journal entries, settings, 2FA config, and tags to encrypted backup
 #[tauri::command]
-pub async fn export_data(
-    app: AppHandle,
-    _password: String,
-) -> Result<String, String> {
+pub async fn export_data(app: AppHandle, _password: String) -> Result<String, String> {
     let db = app.state::<Database>();
 
     // Get all journal entries
@@ -86,14 +87,18 @@ pub async fn export_data(
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
         (|| -> Result<Vec<serde_json::Value>, rusqlite::Error> {
             let mut stmt = conn.prepare("SELECT key, value FROM settings")?;
-            let rows = stmt.query_map([], |row| {
-                Ok(serde_json::json!({
-                    "key": row.get::<_, String>(0)?,
-                    "value": row.get::<_, String>(1)?,
-                }))
-            })?.filter_map(|r| r.ok()).collect();
+            let rows = stmt
+                .query_map([], |row| {
+                    Ok(serde_json::json!({
+                        "key": row.get::<_, String>(0)?,
+                        "value": row.get::<_, String>(1)?,
+                    }))
+                })?
+                .filter_map(|r| r.ok())
+                .collect();
             Ok(rows)
-        })().unwrap_or_default()
+        })()
+        .unwrap_or_default()
     };
 
     // Get 2FA configuration
@@ -112,7 +117,8 @@ pub async fn export_data(
                     "backup_codes": row.get::<_, Option<String>>(4)?,
                 }))
             },
-        ).unwrap_or(serde_json::json!(null))
+        )
+        .unwrap_or(serde_json::json!(null))
     };
 
     // Get tags
@@ -120,14 +126,18 @@ pub async fn export_data(
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
         (|| -> Result<Vec<serde_json::Value>, rusqlite::Error> {
             let mut stmt = conn.prepare("SELECT id, name FROM tags")?;
-            let rows = stmt.query_map([], |row| {
-                Ok(serde_json::json!({
-                    "id": row.get::<_, i32>(0)?,
-                    "name": row.get::<_, String>(1)?,
-                }))
-            })?.filter_map(|r| r.ok()).collect();
+            let rows = stmt
+                .query_map([], |row| {
+                    Ok(serde_json::json!({
+                        "id": row.get::<_, i32>(0)?,
+                        "name": row.get::<_, String>(1)?,
+                    }))
+                })?
+                .filter_map(|r| r.ok())
+                .collect();
             Ok(rows)
-        })().unwrap_or_default()
+        })()
+        .unwrap_or_default()
     };
 
     // Get entry-tag relationships
@@ -135,14 +145,18 @@ pub async fn export_data(
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
         (|| -> Result<Vec<serde_json::Value>, rusqlite::Error> {
             let mut stmt = conn.prepare("SELECT entry_id, tag_id FROM entry_tags")?;
-            let rows = stmt.query_map([], |row| {
-                Ok(serde_json::json!({
-                    "entry_id": row.get::<_, String>(0)?,
-                    "tag_id": row.get::<_, i32>(1)?,
-                }))
-            })?.filter_map(|r| r.ok()).collect();
+            let rows = stmt
+                .query_map([], |row| {
+                    Ok(serde_json::json!({
+                        "entry_id": row.get::<_, String>(0)?,
+                        "tag_id": row.get::<_, i32>(1)?,
+                    }))
+                })?
+                .filter_map(|r| r.ok())
+                .collect();
             Ok(rows)
-        })().unwrap_or_default()
+        })()
+        .unwrap_or_default()
     };
 
     // Create export structure
@@ -160,7 +174,7 @@ pub async fn export_data(
     let json_str = serde_json::to_string_pretty(&export_data)
         .map_err(|e| format!("Failed to serialize export data: {}", e))?;
 
-    use base64::{Engine as _, engine::general_purpose};
+    use base64::{engine::general_purpose, Engine as _};
     let encoded = general_purpose::STANDARD.encode(json_str.as_bytes());
 
     Ok(encoded)
@@ -168,26 +182,23 @@ pub async fn export_data(
 
 /// Import entries from backup file
 #[tauri::command]
-pub async fn import_data(
-    app: AppHandle,
-    data: String,
-    _password: String,
-) -> Result<i32, String> {
+pub async fn import_data(app: AppHandle, data: String, _password: String) -> Result<i32, String> {
     let db = app.state::<Database>();
 
-    use base64::{Engine as _, engine::general_purpose};
+    use base64::{engine::general_purpose, Engine as _};
     let decoded = general_purpose::STANDARD
         .decode(&data)
         .map_err(|e| format!("Failed to decode backup data: {}", e))?;
 
-    let json_str = String::from_utf8(decoded)
-        .map_err(|e| format!("Invalid backup data encoding: {}", e))?;
+    let json_str =
+        String::from_utf8(decoded).map_err(|e| format!("Invalid backup data encoding: {}", e))?;
 
     let export_data: serde_json::Value = serde_json::from_str(&json_str)
         .map_err(|e| format!("Failed to parse backup data: {}", e))?;
 
     // Validate version
-    let version = export_data.get("version")
+    let version = export_data
+        .get("version")
         .and_then(|v| v.as_str())
         .unwrap_or("unknown");
 
@@ -196,28 +207,33 @@ pub async fn import_data(
     }
 
     // Import journal entries
-    let entries = export_data.get("entries")
+    let entries = export_data
+        .get("entries")
         .and_then(|e| e.as_array())
         .ok_or("Invalid backup format: missing entries")?;
 
     let mut imported_count = 0;
 
     for entry in entries {
-        let id = entry.get("id")
+        let id = entry
+            .get("id")
             .and_then(|v| v.as_str())
             .ok_or("Invalid entry: missing id")?;
 
-        let encrypted_content = entry.get("encrypted_content")
+        let encrypted_content = entry
+            .get("encrypted_content")
             .ok_or("Invalid entry: missing encrypted_content")?;
 
         let ec: db::EncryptedContent = serde_json::from_value(encrypted_content.clone())
             .map_err(|e| format!("Invalid encrypted content: {}", e))?;
 
-        let mood = entry.get("mood")
+        let mood = entry
+            .get("mood")
             .and_then(|v| v.as_i64())
             .ok_or("Invalid entry: missing mood")? as i32;
 
-        let privacy_mode = entry.get("privacy_mode")
+        let privacy_mode = entry
+            .get("privacy_mode")
             .and_then(|v| v.as_i64())
             .map(|v| v as i32)
             .unwrap_or(0)
@@ -242,7 +258,8 @@ pub async fn import_data(
                 updated_at TEXT DEFAULT CURRENT_TIMESTAMP
             )",
             [],
-        ).map_err(|e| format!("Failed to create settings table: {}", e))?;
+        )
+        .map_err(|e| format!("Failed to create settings table: {}", e))?;
 
         for setting in db_settings {
             if let (Some(key), Some(value)) = (
@@ -269,7 +286,8 @@ pub async fn import_data(
                 conn.execute(
                     "INSERT OR IGNORE INTO tags (name) VALUES (?1)",
                     rusqlite::params![name],
-                ).ok();
+                )
+                .ok();
             }
         }
     }
@@ -285,7 +303,8 @@ pub async fn import_data(
                 conn.execute(
                     "INSERT OR IGNORE INTO entry_tags (entry_id, tag_id) VALUES (?1, ?2)",
                     rusqlite::params![entry_id, tag_id as i32],
-                ).ok();
+                )
+                .ok();
             }
         }
     }
@@ -310,7 +329,7 @@ pub async fn import_data(
 
     // Import frontend settings (settings.json) (v1.1.0+)
     if let Some(settings) = export_data.get("settings") {
-        if !settings.is_null() && settings.as_object().map_or(false, |o| !o.is_empty()) {
+        if !settings.is_null() && settings.as_object().is_some_and(|o| !o.is_empty()) {
             let settings_path = app
                 .path()
                 .app_data_dir()
@@ -339,12 +358,11 @@ pub async fn write_text_file(path: String, contents: String) -> Result<u64, Stri
     }
 
     // Write the file
-    fs::write(file_path, &contents)
-        .map_err(|e| format!("Failed to write file: {}", e))?;
+    fs::write(file_path, &contents).map_err(|e| format!("Failed to write file: {}", e))?;
 
     // Verify the file was written by reading back its size
-    let metadata = fs::metadata(file_path)
-        .map_err(|e| format!("File verification failed: {}", e))?;
+    let metadata =
+        fs::metadata(file_path).map_err(|e| format!("File verification failed: {}", e))?;
 
     let written_size = metadata.len();
     let expected_size = contents.len() as u64;

@@ -6,10 +6,10 @@
 
 **A calm, encrypted desktop journal with mood tracking, AI insights, and local peer sync**
 
-[![Version](https://img.shields.io/badge/version-0.7.0-7c3aed?style=flat-square)](https://github.com/kenlacroix/moodhaven-journal/releases)
+[![Version](https://img.shields.io/badge/version-0.7.2-7c3aed?style=flat-square)](https://github.com/kenlacroix/moodhaven-journal/releases)
 [![License](https://img.shields.io/badge/license-MIT-22c55e?style=flat-square)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-0ea5e9?style=flat-square)](#installation)
-[![Tests](https://img.shields.io/badge/tests-371%20passing-22c55e?style=flat-square)](#tech-stack)
+[![Tests](https://img.shields.io/badge/tests-429%20passing-22c55e?style=flat-square)](#tech-stack)
 [![Built with Tauri](https://img.shields.io/badge/built%20with-Tauri%202-ffd866?style=flat-square)](https://tauri.app)
 [![Encryption](https://img.shields.io/badge/encryption-AES--256--GCM-ef4444?style=flat-square)](#security--privacy)
 
@@ -46,7 +46,7 @@ MoodBloom combines structured mood tracking with free-form encrypted journaling.
 - **Focus mode** — Hides the sidebar and toolbar, dims everything except the editor, enables typewriter scrolling
 - **Hashtag auto-extraction** — Tags are automatically extracted from entry content on save
 - **Pinned entries** — Pin important entries so they surface first in the timeline
-- **Speech-to-Text** *(coming soon)* — Offline transcription via whisper.cpp sidecar; no audio ever leaves your device
+- **Speech-to-Text** — Offline transcription via whisper.cpp sidecar with 3-layer formatting pipeline (local rules → Ollama → OpenAI BYOK); no audio ever leaves your device
 
 ### Mood & Analytics
 
@@ -338,7 +338,15 @@ When AI features are enabled, MoodBloom **never** sends journal text to any exte
 
 ---
 
-## What's New in v0.7.0
+## What's New in v0.7.2
+
+- **3-layer transcript formatting** — L1 (local rules: filler removal, false-start collapse, pause-based paragraph breaks), L2 (Ollama local LLM), L3 (OpenAI BYOK with explicit cloud consent)
+- **Transcript preview overlay** — See formatted text before it lands in the editor; choose Use this / Edit first / Use raw text
+- **Microphone permission modals** — Consent dialog before OS prompt; platform-specific unblock instructions if access is denied
+- **Quick-capture toggle** — Bolt icon bypasses formatting for immediate raw insertion
+- **CI whisper.cpp sidecar build** — Compiled per platform in GitHub Actions
+
+## v0.7.0
 
 - **Encrypted peer sync engine** — Full TCP sync between trusted LAN devices; manifest-diff protocol with AES-256-GCM transport and last-write-wins conflict resolution
 - **Auto-sync** — Triggers automatically when a trusted peer is discovered (30s cooldown); also syncs after pairing
@@ -371,6 +379,8 @@ When AI features are enabled, MoodBloom **never** sends journal text to any exte
 
 | Version | Highlights |
 |:---|:---|
+| **v0.7.2** | STT transcript formatting pipeline (L1/L2/L3), mic permission modals, CI whisper build |
+| **v0.7.1** | STT pipeline foundation — whisper sidecar commands, timestamped transcription, formatting settings |
 | **v0.7.0** | Encrypted peer sync engine (TCP, AES-GCM, LWW), auto-sync on peer discovery |
 | **v0.6.1** | QR/PIN pairing, trusted devices, deterministic sync ports |
 | **v0.6.0** | Ed25519 device identity, mDNS peer discovery, Settings → Devices tab |

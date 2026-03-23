@@ -27,15 +27,23 @@ jobs:
           - platform: Linux (x86_64)
             os: ubuntu-22.04
             args: ""
+            whisper_binary: whisper-x86_64-unknown-linux-gnu
+            cmake_arch: ""
           - platform: Windows (x86_64)
             os: windows-latest
             args: ""
+            whisper_binary: whisper-x86_64-pc-windows-msvc.exe
+            cmake_arch: ""
           - platform: macOS (x86_64)
             os: macos-latest
             args: "--target x86_64-apple-darwin"
+            whisper_binary: whisper-x86_64-apple-darwin
+            cmake_arch: "-DCMAKE_OSX_ARCHITECTURES=x86_64"
           - platform: macOS (Apple Silicon)
             os: macos-latest
             args: "--target aarch64-apple-darwin"
+            whisper_binary: whisper-aarch64-apple-darwin
+            cmake_arch: "-DCMAKE_OSX_ARCHITECTURES=arm64"
 
     steps:
       - name: Checkout
@@ -50,7 +58,9 @@ jobs:
             libgtk-3-dev \
             libayatana-appindicator3-dev \
             librsvg2-dev \
-            patchelf
+            patchelf \
+            cmake \
+            build-essential
 
       - name: Setup Node 22
         uses: actions/setup-node@v4
@@ -71,6 +81,50 @@ jobs:
 
       - name: Install frontend dependencies
         run: npm ci
+
+      # ── whisper-cli sidecar ──────────────────────────────────────────────
+      # Compile whisper.cpp for the target platform and drop the binary in
+      # src-tauri/binaries/ so Tauri bundles it as a sidecar.
+      # Cache key is the upstream HEAD SHA — only rebuilds when whisper changes.
+
+      - name: Get whisper.cpp HEAD SHA (for cache key)
+        id: whisper_hash
+        shell: bash
+        run: |
+          SHA=$(git ls-remote https://github.com/ggerganov/whisper.cpp HEAD | cut -f1 | cut -c1-8)
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Cache whisper-cli binary
+        id: whisper_cache
+        uses: actions/cache@v4
+        with:
+          path: src-tauri/binaries/${{ matrix.whisper_binary }}
+          key: whisper-${{ matrix.whisper_binary }}-${{ steps.whisper_hash.outputs.sha }}
+
+      - name: Build whisper-cli sidecar
+        if: steps.whisper_cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          git clone --depth 1 https://github.com/ggerganov/whisper.cpp /tmp/whisper
+          cd /tmp/whisper
+
+          # Configure — cmake_arch is empty on Linux/Windows, set for macOS cross-compile
+          cmake -B build -DCMAKE_BUILD_TYPE=Release ${{ matrix.cmake_arch }}
+
+          # Build only the CLI target to keep CI fast
+          cmake --build build --config Release --target whisper-cli -j4
+
+          # Locate the binary (output path differs: flat on Linux/macOS, Release/ subdir on MSVC)
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            BIN="build/bin/Release/whisper-cli.exe"
+          else
+            BIN="build/bin/whisper-cli"
+          fi
+
+          cp "$BIN" "$GITHUB_WORKSPACE/src-tauri/binaries/${{ matrix.whisper_binary }}"
+          chmod +x "$GITHUB_WORKSPACE/src-tauri/binaries/${{ matrix.whisper_binary }}"
+
+      # ────────────────────────────────────────────────────────────────────
 
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0

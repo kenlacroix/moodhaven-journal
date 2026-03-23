@@ -90,6 +90,22 @@ jobs:
         with:
           workspaces: src-tauri
 
+      - name: Create stub whisper sidecar (non-Linux)
+        if: matrix.os != 'ubuntu-latest'
+        shell: bash
+        run: |
+          # tauri-build validates sidecar existence at compile time.
+          # Create a stub binary for the current host triple so cargo check passes
+          # on Windows/macOS without shipping a real whisper binary in CI.
+          TRIPLE=$(rustc -vV | sed -n 's/host: //p')
+          EXT=""
+          if [[ "$TRIPLE" == *"windows"* ]]; then EXT=".exe"; fi
+          STUB="src-tauri/binaries/whisper-${TRIPLE}${EXT}"
+          if [[ ! -f "$STUB" ]]; then
+            printf '\x4D\x5A' > "$STUB" 2>/dev/null || touch "$STUB"
+            echo "Created stub: $STUB"
+          fi
+
       - name: Cargo check
         working-directory: src-tauri
         run: cargo check --all-targets
@@ -168,6 +184,10 @@ jobs:
   secrets:
     name: Secret Scan
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      pull-requests: read
 
     steps:
       - name: Checkout (full history for secret scan)

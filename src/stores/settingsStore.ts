@@ -14,6 +14,7 @@ import type {
   StorageBackend,
   WebDAVConfig,
   STTModel,
+  STTFormattingLayer,
   OuraSettings,
 } from '../types/settings';
 import { createDefaultSettings } from '../types/settings';
@@ -86,6 +87,8 @@ interface SettingsState {
   setSTTModel: (model: STTModel) => void;
   setSTTModelDownloaded: (downloaded: boolean) => void;
   setSTTDownloadProgress: (progress: number | null) => void;
+  setSttFormattingLayer: (layer: STTFormattingLayer) => void;
+  setSttCloudConsent: (given: boolean) => void;
 
   // Oura Ring
   setOuraEnabled: (enabled: boolean) => void;
@@ -519,6 +522,36 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         speechToText: { ...state.settings.speechToText, downloadProgress },
       },
       // Don't mark as unsaved for progress updates
+    }));
+  },
+
+  setSttFormattingLayer: (layer) => {
+    set((state) => ({
+      settings: {
+        ...state.settings,
+        speechToText: {
+          ...state.settings.speechToText,
+          formatting: { ...state.settings.speechToText.formatting, layer },
+        },
+      },
+      hasUnsavedChanges: true,
+    }));
+  },
+
+  setSttCloudConsent: (given) => {
+    set((state) => ({
+      settings: {
+        ...state.settings,
+        speechToText: {
+          ...state.settings.speechToText,
+          formatting: {
+            ...state.settings.speechToText.formatting,
+            cloudConsentGiven: given,
+            consentDate: given ? new Date().toISOString() : null,
+          },
+        },
+      },
+      hasUnsavedChanges: true,
     }));
   },
 

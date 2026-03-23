@@ -96,14 +96,20 @@ pub struct PairingServerState {
     server_handle: Mutex<Option<std::thread::JoinHandle<()>>>,
 }
 
-impl PairingServerState {
-    pub fn new() -> Self {
+impl Default for PairingServerState {
+    fn default() -> Self {
         Self {
             is_serving: AtomicBool::new(false),
             active_token: Mutex::new(None),
             stop_tx: Mutex::new(None),
             server_handle: Mutex::new(None),
         }
+    }
+}
+
+impl PairingServerState {
+    pub fn new() -> Self {
+        Self::default()
     }
 }
 
@@ -265,7 +271,10 @@ fn read_request_body(stream: &mut std::net::TcpStream) -> Option<serde_json::Val
             break; // blank line = end of headers
         }
         if trimmed.to_lowercase().starts_with("content-length:") {
-            content_length = trimmed["content-length:".len()..].trim().parse().unwrap_or(0);
+            content_length = trimmed["content-length:".len()..]
+                .trim()
+                .parse()
+                .unwrap_or(0);
         }
     }
 
@@ -374,7 +383,11 @@ fn run_pairing_server(
                     std::thread::sleep(Duration::from_millis(WRONG_PIN_DELAY_MS));
 
                     if failed_attempts >= MAX_PIN_ATTEMPTS {
-                        write_http_error(&mut stream, 429, "Too many failed attempts — pairing session locked");
+                        write_http_error(
+                            &mut stream,
+                            429,
+                            "Too many failed attempts — pairing session locked",
+                        );
                         set_pairing_lockout(&app);
                         let _ = app.emit(
                             "peer:pairing_locked",
@@ -540,7 +553,10 @@ pub fn peer_generate_pairing_token(
     // Persist active token
     {
         let mut g = state.active_token.lock().map_err(|e| e.to_string())?;
-        *g = Some(ActiveToken { pin: pin.clone(), expires_at });
+        *g = Some(ActiveToken {
+            pin: pin.clone(),
+            expires_at,
+        });
     }
 
     // Bind TCP listener before spawning thread (fail fast on port conflict)
@@ -613,7 +629,11 @@ pub async fn peer_accept_pairing(
         let err_text = response.text().await.unwrap_or_default();
         let msg = serde_json::from_str::<serde_json::Value>(&err_text)
             .ok()
-            .and_then(|v| v.get("error").and_then(|e| e.as_str()).map(|s| s.to_string()))
+            .and_then(|v| {
+                v.get("error")
+                    .and_then(|e| e.as_str())
+                    .map(|s| s.to_string())
+            })
             .unwrap_or_else(|| format!("HTTP {status}"));
         return Err(format!("Pairing rejected: {msg}"));
     }

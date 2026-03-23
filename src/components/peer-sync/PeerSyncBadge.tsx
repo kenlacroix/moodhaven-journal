@@ -43,7 +43,7 @@ export function PeerSyncBadge({ collapsed, onOpenDevices }: PeerSyncBadgeProps) 
             ? `Syncing with ${syncingName} — open Devices settings`
             : count > 0
               ? `${count} device${count !== 1 ? 's' : ''} nearby — open Devices settings`
-              : 'Scanning for nearby devices'
+              : 'Looking for nearby devices'
       }
       className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs transition-colors text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-600 dark:hover:text-slate-300"
     >
@@ -71,7 +71,7 @@ export function PeerSyncBadge({ collapsed, onOpenDevices }: PeerSyncBadgeProps) 
               ? 'Syncing…'
               : count > 0
                 ? `${count} device${count !== 1 ? 's' : ''} nearby`
-                : 'Scanning…'}
+                : 'Looking for devices'}
         </span>
       )}
 

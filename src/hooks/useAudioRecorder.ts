@@ -10,11 +10,15 @@
 import { useState, useRef, useCallback } from 'react';
 
 export type RecordingState = 'idle' | 'requesting' | 'recording' | 'processing';
+export type MicPermissionModal = 'none' | 'consent' | 'blocked';
 
 interface UseAudioRecorderResult {
   state: RecordingState;
   error: string | null;
+  permissionModal: MicPermissionModal;
   startRecording: () => Promise<void>;
+  proceedAfterConsent: () => Promise<void>;
+  dismissPermissionModal: () => void;
   stopRecording: () => Promise<ArrayBuffer | null>;
   cancelRecording: () => void;
 }
@@ -24,16 +28,22 @@ const SAMPLE_RATE = 16000; // whisper.cpp expects 16kHz
 const NUM_CHANNELS = 1; // Mono audio
 
 /**
- * Encode raw PCM samples to WAV format
+ * Encode raw PCM samples to WAV format.
+ * Throws if the audio is too long to fit in a 32-bit WAV chunk size field
+ * (~2h 28min at 16kHz mono 16-bit).
  */
 function encodeWAV(samples: Float32Array, sampleRate: number): ArrayBuffer {
-  const buffer = new ArrayBuffer(44 + samples.length * 2);
+  const dataBytes = samples.length * 2;
+  if (dataBytes > 0xFFFFFFFF - 36) {
+    throw new Error('Recording is too long to encode as WAV (max ~2h 28min at 16kHz).');
+  }
+  const buffer = new ArrayBuffer(44 + dataBytes);
   const view = new DataView(buffer);
 
   // WAV header
   // "RIFF" chunk descriptor
   writeString(view, 0, 'RIFF');
-  view.setUint32(4, 36 + samples.length * 2, true); // File size - 8
+  view.setUint32(4, 36 + dataBytes, true); // File size - 8
   writeString(view, 8, 'WAVE');
 
   // "fmt " sub-chunk
@@ -48,7 +58,7 @@ function encodeWAV(samples: Float32Array, sampleRate: number): ArrayBuffer {
 
   // "data" sub-chunk
   writeString(view, 36, 'data');
-  view.setUint32(40, samples.length * 2, true); // Subchunk2Size
+  view.setUint32(40, dataBytes, true); // Subchunk2Size
 
   // Write PCM samples as 16-bit integers
   let offset = 44;
@@ -101,6 +111,7 @@ function resample(
 export function useAudioRecorder(): UseAudioRecorderResult {
   const [state, setState] = useState<RecordingState>('idle');
   const [error, setError] = useState<string | null>(null);
+  const [permissionModal, setPermissionModal] = useState<MicPermissionModal>('none');
 
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -129,12 +140,14 @@ export function useAudioRecorder(): UseAudioRecorderResult {
     chunksRef.current = [];
   }, []);
 
-  const startRecording = useCallback(async () => {
+  // Internal: acquires the mic stream and starts the audio capture pipeline.
+  // Call only after permission has been confirmed (granted or consented).
+  const doStartCapture = useCallback(async () => {
     setError(null);
+    setPermissionModal('none');
     setState('requesting');
 
     try {
-      // Request microphone access
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           channelCount: NUM_CHANNELS,
@@ -146,15 +159,12 @@ export function useAudioRecorder(): UseAudioRecorderResult {
 
       mediaStreamRef.current = stream;
 
-      // Create audio context
       const audioContext = new AudioContext({ sampleRate: SAMPLE_RATE });
       audioContextRef.current = audioContext;
 
-      // Create source from stream
       const source = audioContext.createMediaStreamSource(stream);
 
-      // Use ScriptProcessorNode to capture raw audio data
-      // Note: ScriptProcessorNode is deprecated but AudioWorklet requires more setup
+      // ScriptProcessorNode is deprecated but AudioWorklet requires more setup
       // and may not work well in all WebView environments
       const bufferSize = 4096;
       const processor = audioContext.createScriptProcessor(bufferSize, NUM_CHANNELS, NUM_CHANNELS);
@@ -164,11 +174,9 @@ export function useAudioRecorder(): UseAudioRecorderResult {
 
       processor.onaudioprocess = (event) => {
         const inputData = event.inputBuffer.getChannelData(0);
-        // Copy the data since the buffer will be reused
         chunksRef.current.push(new Float32Array(inputData));
       };
 
-      // Connect the chain: source -> processor -> destination
       source.connect(processor);
       processor.connect(audioContext.destination);
 
@@ -179,7 +187,8 @@ export function useAudioRecorder(): UseAudioRecorderResult {
 
       if (err instanceof DOMException) {
         if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-          setError('Microphone access was denied. Please allow microphone access in your system settings.');
+          // User denied the OS prompt — show blocked modal
+          setPermissionModal('blocked');
         } else if (err.name === 'NotFoundError') {
           setError('No microphone found. Please connect a microphone and try again.');
         } else {
@@ -190,6 +199,44 @@ export function useAudioRecorder(): UseAudioRecorderResult {
       }
     }
   }, [cleanup]);
+
+  const startRecording = useCallback(async () => {
+    setError(null);
+
+    // Check the current permission state before calling getUserMedia.
+    // - 'granted'  → proceed directly (no dialog needed)
+    // - 'prompt'   → show our consent modal so the user knows why we need the mic
+    // - 'denied'   → also show consent modal (NOT the blocked modal).
+    //                In Tauri's embedded WebView (WebKit2GTK, WKWebView) the
+    //                Permissions API may return 'denied' before the user has ever
+    //                been asked, because the WebView process hasn't been granted
+    //                access at the OS level yet. The only reliable signal that the
+    //                user actively blocked the mic is a NotAllowedError thrown by
+    //                getUserMedia() itself (handled in doStartCapture).
+    // - query fails → show consent modal as a safe default
+    try {
+      const status = await navigator.permissions.query({ name: 'microphone' as PermissionName });
+      if (status.state === 'granted') {
+        // Skip the consent modal — we already have permission.
+        await doStartCapture();
+        return;
+      }
+      // 'prompt' or 'denied' — show consent modal and let getUserMedia decide.
+      setPermissionModal('consent');
+    } catch {
+      // Permissions API unavailable — show consent modal as a safe default
+      setPermissionModal('consent');
+    }
+  }, [doStartCapture]);
+
+  // Called when the user clicks "Allow access" in the consent modal.
+  const proceedAfterConsent = useCallback(async () => {
+    await doStartCapture();
+  }, [doStartCapture]);
+
+  const dismissPermissionModal = useCallback(() => {
+    setPermissionModal('none');
+  }, []);
 
   const stopRecording = useCallback(async (): Promise<ArrayBuffer | null> => {
     if (state !== 'recording') {
@@ -245,7 +292,10 @@ export function useAudioRecorder(): UseAudioRecorderResult {
   return {
     state,
     error,
+    permissionModal,
     startRecording,
+    proceedAfterConsent,
+    dismissPermissionModal,
     stopRecording,
     cancelRecording,
   };

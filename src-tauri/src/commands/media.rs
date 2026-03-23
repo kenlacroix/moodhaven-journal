@@ -67,8 +67,7 @@ fn derive_key(password: &str, salt: &[u8]) -> [u8; 32] {
 
 /// Encrypt `plaintext` with AES-256-GCM. Returns `nonce || ciphertext+tag`.
 fn aes_encrypt(key: &[u8; 32], plaintext: &[u8]) -> Result<Vec<u8>, String> {
-    let cipher = Aes256Gcm::new_from_slice(key)
-        .map_err(|e| format!("Cipher init: {}", e))?;
+    let cipher = Aes256Gcm::new_from_slice(key).map_err(|e| format!("Cipher init: {}", e))?;
     let mut nonce_bytes = [0u8; NONCE_LEN];
     rand::thread_rng().fill_bytes(&mut nonce_bytes);
     let nonce = Nonce::from_slice(&nonce_bytes);
@@ -86,8 +85,7 @@ fn aes_decrypt(key: &[u8; 32], data: &[u8]) -> Result<Vec<u8>, String> {
     if data.len() < NONCE_LEN {
         return Err("Data too short".to_string());
     }
-    let cipher = Aes256Gcm::new_from_slice(key)
-        .map_err(|e| format!("Cipher init: {}", e))?;
+    let cipher = Aes256Gcm::new_from_slice(key).map_err(|e| format!("Cipher init: {}", e))?;
     let nonce = Nonce::from_slice(&data[..NONCE_LEN]);
     cipher
         .decrypt(nonce, &data[NONCE_LEN..])
@@ -272,9 +270,7 @@ pub fn save_media_attachment(
         .map_err(|e| format!("Failed to write encrypted file: {}", e))?;
 
     let rel_path = format!("media/{}/{}", entry_id, enc_filename);
-    let created_at = chrono::Local::now()
-        .format("%Y-%m-%dT%H:%M:%S")
-        .to_string();
+    let created_at = chrono::Local::now().format("%Y-%m-%dT%H:%M:%S").to_string();
 
     {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
@@ -282,15 +278,7 @@ pub fn save_media_attachment(
             "INSERT INTO entry_media \
              (id, entry_id, filename, mime_type, size_bytes, enc_path, created_at) \
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-            params![
-                media_id,
-                entry_id,
-                filename,
-                mime_type,
-                size_bytes,
-                rel_path,
-                created_at
-            ],
+            params![media_id, entry_id, filename, mime_type, size_bytes, rel_path, created_at],
         )
         .map_err(|e| format!("DB insert failed: {}", e))?;
     }
@@ -364,14 +352,10 @@ pub fn open_media_attachment(
     let preview_dir = get_preview_dir(&app)?;
     let temp_name = format!("{}_{}", Uuid::new_v4(), filename);
     let temp_path = preview_dir.join(&temp_name);
-    std::fs::write(&temp_path, &plaintext)
-        .map_err(|e| format!("Write temp file: {}", e))?;
+    std::fs::write(&temp_path, &plaintext).map_err(|e| format!("Write temp file: {}", e))?;
 
     // Open with platform default viewer
-    let _temp_str = temp_path
-        .to_str()
-        .ok_or("Non-UTF8 temp path")?
-        .to_string();
+    let _temp_str = temp_path.to_str().ok_or("Non-UTF8 temp path")?.to_string();
 
     #[cfg(target_os = "macos")]
     std::process::Command::new("open")
@@ -427,8 +411,7 @@ pub fn get_media_thumbnail(
         .map_err(|e| format!("Read encrypted file: {}", e))?;
     let plaintext = decrypt_mbmf(&encrypted, &password)?;
 
-    let img = image::load_from_memory(&plaintext)
-        .map_err(|e| format!("Decode image: {}", e))?;
+    let img = image::load_from_memory(&plaintext).map_err(|e| format!("Decode image: {}", e))?;
 
     let thumb = img.thumbnail(400, 400).to_rgb8();
 
@@ -471,11 +454,8 @@ pub fn delete_media_attachment(
 
     {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
-        conn.execute(
-            "DELETE FROM entry_media WHERE id = ?1",
-            params![media_id],
-        )
-        .map_err(|e| format!("DB delete: {}", e))?;
+        conn.execute("DELETE FROM entry_media WHERE id = ?1", params![media_id])
+            .map_err(|e| format!("DB delete: {}", e))?;
     }
 
     Ok(())
@@ -557,6 +537,7 @@ pub fn read_media_for_sync(
 /// For sync: receive an encrypted media file from another device, write it to
 /// disk under `app_data_dir/media/<entry_id>/`, and insert the DB record.
 /// Uses `INSERT OR IGNORE` so this is idempotent on repeated sync runs.
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub fn write_media_from_sync(
     app: AppHandle,
@@ -607,9 +588,7 @@ pub fn write_media_from_sync(
             "INSERT OR IGNORE INTO entry_media \
              (id, entry_id, filename, mime_type, size_bytes, enc_path, created_at) \
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-            params![
-                media_id, entry_id, filename, mime_type, size_bytes, rel_path, created_at
-            ],
+            params![media_id, entry_id, filename, mime_type, size_bytes, rel_path, created_at],
         )
         .map_err(|e| format!("DB insert: {}", e))?;
     }

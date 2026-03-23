@@ -103,7 +103,8 @@ pub fn debug_signal_self_test(db: State<Database>) -> Result<serde_json::Value, 
     use serde_json::json;
 
     let test_id = format!("__selftest_{}", chrono::Utc::now().timestamp_millis());
-    let fake_payload = r#"{"ciphertext":"dGVzdA==","iv":"AAAAAAAAAA==","salt":"AAAAAAAAAA==","version":1}"#;
+    let fake_payload =
+        r#"{"ciphertext":"dGVzdA==","iv":"AAAAAAAAAA==","salt":"AAAAAAAAAA==","version":1}"#;
     let mut results: Vec<serde_json::Value> = Vec::new();
     let mut passed = 0u32;
     let mut failed = 0u32;
@@ -122,33 +123,59 @@ pub fn debug_signal_self_test(db: State<Database>) -> Result<serde_json::Value, 
 
     // 1. Create
     let create_result = db::create_signal(
-        &db, &test_id, "2026-01-01T00:00:00", "mood_tap", "test", fake_payload,
+        &db,
+        &test_id,
+        "2026-01-01T00:00:00",
+        "mood_tap",
+        "test",
+        fake_payload,
     );
-    check!("create_signal", create_result.is_ok(),
-        create_result.as_ref().err().map(|e| e.as_str()).unwrap_or("ok"));
+    check!(
+        "create_signal",
+        create_result.is_ok(),
+        create_result
+            .as_ref()
+            .err()
+            .map(|e| e.as_str())
+            .unwrap_or("ok")
+    );
 
     // 2. List all — our signal must appear
     let list_result = db::list_signals(&db, None, Some(500));
-    let found_in_list = list_result.as_ref()
+    let found_in_list = list_result
+        .as_ref()
         .map(|rows| rows.iter().any(|r| r.id == test_id))
         .unwrap_or(false);
-    check!("list_signals (appears)", found_in_list, if found_in_list { "found" } else { "missing" });
+    check!(
+        "list_signals (appears)",
+        found_in_list,
+        if found_in_list { "found" } else { "missing" }
+    );
 
     // 3. List by type filter
     let filtered = db::list_signals(&db, Some("mood_tap"), Some(500));
-    let found_filtered = filtered.as_ref()
+    let found_filtered = filtered
+        .as_ref()
         .map(|rows| rows.iter().any(|r| r.id == test_id))
         .unwrap_or(false);
-    check!("list_signals (type filter)", found_filtered,
-        if found_filtered { "found" } else { "missing" });
+    check!(
+        "list_signals (type filter)",
+        found_filtered,
+        if found_filtered { "found" } else { "missing" }
+    );
 
     // 4. Verify payload round-trip
-    let payload_ok = list_result.as_ref()
+    let payload_ok = list_result
+        .as_ref()
         .ok()
         .and_then(|rows| rows.iter().find(|r| r.id == test_id))
         .map(|r| r.payload == fake_payload)
         .unwrap_or(false);
-    check!("payload round-trip", payload_ok, if payload_ok { "match" } else { "mismatch" });
+    check!(
+        "payload round-trip",
+        payload_ok,
+        if payload_ok { "match" } else { "mismatch" }
+    );
 
     // 5. Sync log populated — query directly for THIS test id to avoid limit/ordering issues
     let log_count: i64 = {
@@ -162,18 +189,39 @@ pub fn debug_signal_self_test(db: State<Database>) -> Result<serde_json::Value, 
         .unwrap_or(0)
     };
     let log_has_signal = log_count > 0;
-    check!("sync_log trigger fired", log_has_signal, if log_has_signal { "entry found" } else { "missing" });
+    check!(
+        "sync_log trigger fired",
+        log_has_signal,
+        if log_has_signal {
+            "entry found"
+        } else {
+            "missing"
+        }
+    );
 
     // 6. Delete
     let del = db::delete_signal(&db, &test_id);
-    check!("delete_signal", del.is_ok(), del.err().as_deref().unwrap_or("ok"));
+    check!(
+        "delete_signal",
+        del.is_ok(),
+        del.err().as_deref().unwrap_or("ok")
+    );
 
     // 7. Confirm gone
     let after_delete = db::list_signals(&db, None, Some(500));
-    let gone = after_delete.as_ref()
+    let gone = after_delete
+        .as_ref()
         .map(|rows| !rows.iter().any(|r| r.id == test_id))
         .unwrap_or(false);
-    check!("signal deleted", gone, if gone { "confirmed gone" } else { "still present!" });
+    check!(
+        "signal deleted",
+        gone,
+        if gone {
+            "confirmed gone"
+        } else {
+            "still present!"
+        }
+    );
 
     Ok(json!({
         "passed": passed,

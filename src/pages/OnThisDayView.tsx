@@ -88,7 +88,10 @@ export function OnThisDayView({ onSelectEntry }: OnThisDayViewProps) {
             </svg>
           </div>
           <p className="text-slate-500 dark:text-slate-400">
-            No entries from previous years on {monthDay}
+            Nothing yet for {monthDay}
+          </p>
+          <p className="text-sm text-slate-400 dark:text-slate-500 mt-1">
+            Entries you write today will resurface here in future years.
           </p>
         </div>
       )}

@@ -14,6 +14,25 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import type { STTModel } from '../types/settings';
+import type { WhisperOutput } from './transcriptFormatter';
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Convert a Uint8Array to a base64 string without hitting the call-stack
+ * limit that `btoa(String.fromCharCode(...bytes))` causes for large buffers.
+ */
+function uint8ArrayToBase64(bytes: Uint8Array): string {
+  let binary = '';
+  const chunkSize = 0x8000; // 32 KB
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, i + chunkSize);
+    binary += String.fromCharCode(...chunk);
+  }
+  return btoa(binary);
+}
 
 // Model download URLs from Hugging Face (ggerganov/whisper.cpp)
 const MODEL_URLS: Record<STTModel, string> = {
@@ -117,8 +136,9 @@ export async function transcribeAudio(
 
   try {
     // Convert ArrayBuffer to base64 for transfer to Rust
+    // Use chunked conversion to avoid call-stack overflow for large audio buffers
     const bytes = new Uint8Array(audioBuffer);
-    const base64 = btoa(String.fromCharCode(...bytes));
+    const base64 = uint8ArrayToBase64(bytes);
 
     const text = await invoke<string>('stt_transcribe', {
       audioBase64: base64,
@@ -153,4 +173,40 @@ export async function checkSidecarAvailable(): Promise<boolean> {
  */
 export async function getModelsDirectory(): Promise<string> {
   return invoke<string>('stt_get_models_dir');
+}
+
+/**
+ * Transcribe audio with timestamps using the `stt_transcribe_timestamped` Tauri command.
+ * Returns a WhisperOutput containing the full text and per-segment timestamps.
+ *
+ * Falls back gracefully to an empty segments array if the sidecar cannot produce JSON.
+ */
+export async function transcribeAudioTimestamped(
+  audioBuffer: ArrayBuffer,
+  model: STTModel
+): Promise<WhisperOutput> {
+  try {
+    const bytes = new Uint8Array(audioBuffer);
+    const base64 = uint8ArrayToBase64(bytes);
+
+    const result = await invoke<{ text: string; segments: Array<{ text: string; start: number; end: number }> }>(
+      'stt_transcribe_timestamped',
+      {
+        audioBase64: base64,
+        modelName: MODEL_FILENAMES[model],
+      }
+    );
+
+    return {
+      text: result.text.trim(),
+      segments: result.segments.map((s) => ({
+        text: s.text,
+        start: s.start,
+        end: s.end,
+      })),
+    };
+  } catch (error) {
+    console.error('Timestamped transcription failed:', error);
+    throw new Error(`Timestamped transcription failed: ${error}`);
+  }
 }

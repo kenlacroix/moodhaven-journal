@@ -7,7 +7,7 @@
  * - No audio data leaves the device
  */
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 
 export type RecordingState = 'idle' | 'requesting' | 'recording' | 'processing';
 export type MicPermissionModal = 'none' | 'consent' | 'blocked';
@@ -287,6 +287,13 @@ export function useAudioRecorder(): UseAudioRecorderResult {
     cleanup();
     setState('idle');
     setError(null);
+  }, [cleanup]);
+
+  // A-04: Cleanup on unmount — prevents mic-indicator leak if component navigates away
+  useEffect(() => {
+    return () => {
+      cleanup();
+    };
   }, [cleanup]);
 
   return {

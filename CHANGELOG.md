@@ -7,6 +7,26 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.7.3] — 2026-03-23
+
+### Added
+- **SetupScreen component extraction.** The first-run wizard is now composed of 10 focused step components (`WelcomeStep`, `PasswordStep`, `RecoveryStep`, `SecurityStep`, `StorageStep`, `DevicesStep`, `SyncFromPeerStep`, `ImportStep`, `SourceStep`, `CompleteStep`) replacing the previous 1200-line monolith. `SetupScreen` is now an orchestrator holding shared wizard state.
+- **Makefile.** Adds `make build`, `make dev`, `make test`, `make typecheck`, `make lint` convenience targets.
+- **CI security audit scripts.** `check:deny` (`cargo deny check`) and `check:audit` (`cargo audit`) added to `package.json`. `check:all` runs typecheck + lint + tests + both audits in sequence.
+- **28 new tests.** `useSpeechToText` hook (228 lines, covers A-05 cancelled-ref race, A-10 isAvailable from ref, L2/L3 paths, model-not-downloaded guard); `aiService` additions. Total: 450 tests.
+
+### Fixed
+- **A-04: Mic indicator leak on navigation.** `useAudioRecorder` now calls `cleanup()` on unmount via a `useEffect` return — prevents the browser mic indicator remaining active if the user navigates away mid-recording.
+- **A-05: Cancelled-ref race in `useSpeechToText`.** `cancelledRef` signals in-flight async chains (`transcribeAudio`, `formatTranscript`) to abort after `cancel()` is called — prevents stale `formattedResult` from appearing after cancellation.
+- **A-08: TipTap XSS guard (complete).** `insertContent()` (which interprets input as HTML) is replaced throughout the STT path with `tr.insertText()`. Additionally, `RichTextEditor` now exposes a typed `insertHtml` prop for intentional HTML (templates/blockquotes), while `insertText` is strictly plain text — AI prompt suggestions now go through `tr.insertText` instead of `insertContent`.
+- **A-10: `isAvailable` from ref.** `useSpeechToText.isAvailable` now reads `availabilityResultRef.current` (always current) instead of the `settings.modelDownloaded` state value, eliminating a stale-closure race.
+- **CI: `dry_run` boolean string coercion.** GitHub Actions `inputs.dry_run == true/false` comparisons are now `== 'true'/'false'` (inputs are always strings) — the dry-run build step was silently never executing.
+- **CI: Linux arm64 `PKG_CONFIG_PATH` appends** instead of overwriting, preserving any paths set by prior steps.
+- **`build-whisper.sh` Windows path.** Removed `local` keyword used outside a function — it caused an immediate bash runtime error on `--windows` cross-compile runs.
+- **Discovery cleanup stale closure.** `useEffect` cleanup in `SetupScreen` now reads `enableLanSyncRef.current` (always fresh) instead of the closure-captured `enableLanSync` state value, preventing mDNS from staying active after the wizard completes.
+
+---
+
 ## [0.7.2] — 2026-03-22
 
 ### Added

@@ -174,6 +174,7 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
   }, [isSaving, lastSavedAt]);
   const [isEditorFocused, setIsEditorFocused] = useState(false);
   const [pendingInsert, setPendingInsert] = useState<string | null>(null);
+  const [pendingInsertHtml, setPendingInsertHtml] = useState<string | null>(null);
 
   /**
    * Tracks the DB entry ID created by the first auto-save.
@@ -481,7 +482,7 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
   }, []);
 
   const handleUseTemplate = useCallback((template: JournalTemplate) => {
-    setPendingInsert(formatTemplateContent(template));
+    setPendingInsertHtml(formatTemplateContent(template));
     markTemplateUsed(template.id);
     setUsedTemplateIds(getUsedTemplates());
     // Close drawer immediately after template insertion
@@ -837,7 +838,8 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
               value={content}
               onChange={handleContentChange}
               insertText={pendingInsert}
-              onInsertTextConsumed={() => setPendingInsert(null)}
+              insertHtml={pendingInsertHtml}
+              onInsertTextConsumed={() => { setPendingInsert(null); setPendingInsertHtml(null); }}
               placeholder={editorPlaceholder}
               autoFocus={!entryId}
               className="min-h-full"
@@ -1284,7 +1286,8 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
               className="flex-1 min-h-0"
               onNavigateToSTTSettings={onNavigateToSTTSettings}
               insertText={pendingInsert}
-              onInsertTextConsumed={() => setPendingInsert(null)}
+              insertHtml={pendingInsertHtml}
+              onInsertTextConsumed={() => { setPendingInsert(null); setPendingInsertHtml(null); }}
               distractionFree={distractionFree}
             />
 

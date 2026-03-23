@@ -40,25 +40,25 @@
 
 > Items from the adversarial review of `feat/stt-transcript-formatting`. Critical fixes (#1–6) were applied in the same PR. The 8 below are deferred.
 
-### A-04: MediaStream / AudioContext not cleaned up on unmount (P1)
+### ~~A-04: MediaStream / AudioContext not cleaned up on unmount~~ ✅ RESOLVED v0.7.3
 **What:** If the component unmounts mid-recording, the MediaStream and AudioContext are left open — the OS microphone indicator (red dot / LED) stays on indefinitely.
-**Fix:** Return a cleanup function from the `useEffect` that creates the stream; call `stream.getTracks().forEach(t => t.stop())` and `audioContext.close()`.
+**Fix:** Added `useEffect` cleanup in `useAudioRecorder.ts` that calls `cleanup()` on unmount.
 
-### A-05: `cancel()` doesn't abort in-flight Tauri invoke or formatting fetch (P1)
+### ~~A-05: `cancel()` doesn't abort in-flight Tauri invoke or formatting fetch~~ ✅ RESOLVED v0.7.3
 **What:** Calling `cancel()` sets local state to idle but the running `transcribeAudio` invoke and `formatTranscript` fetch continue running in the background. If they resolve after cancellation they may still call `setFormattedResult`.
-**Fix:** Use `AbortController` + `useRef` to signal cancellation into `stopAndTranscribe`; check `isCancelled` ref before calling any `setState` after each await.
+**Fix:** Added `cancelledRef` in `useSpeechToText.ts`; checked at each `await` point in `stopAndTranscribe`. Tests added.
 
 ### ~~A-07: Path traversal — model filename not canonicalized in Rust STT commands~~ → fix/security-hardening
 **What:** `stt_transcribe` and related commands accept a `model_name` string from the WebView and build a file path from it without canonicalizing or validating it. A crafted value like `../../etc/passwd` could read arbitrary files.
 **Fix:** Resolve the path with `std::fs::canonicalize`, verify it starts with the expected models directory, and return an error otherwise.
 
-### A-08: TipTap `insertContent` parses Ollama/OpenAI response as HTML — link injection risk (P1, security)
+### ~~A-08: TipTap `insertContent` parses Ollama/OpenAI response as HTML — link injection risk~~ ✅ RESOLVED v0.7.3
 **What:** `insertContent(formattedResult.formatted)` treats the string as HTML. If an Ollama or OpenAI response contains `<a href="javascript:…">` or similar, it will be inserted as live HTML into the editor.
-**Fix:** Either sanitize the string with DOMPurify before insertion, or use `insertText` instead of `insertContent` (loses formatting but is safe), or restrict the TipTap schema to disallow anchor hrefs with non-http protocols.
+**Fix:** Switched to `tr.insertText` (via `editor.chain().command()`) in `RichTextEditor.tsx` for all three handlers (handleUseFormatted, handleEditFirst, handleUseRaw).
 
-### A-10: `isAvailable` uses stale `modelDownloaded` setting instead of real filesystem (P2)
+### ~~A-10: `isAvailable` uses stale `modelDownloaded` setting instead of real filesystem~~ ✅ RESOLVED v0.7.3
 **What:** `isAvailable` is computed as `settings.enabled && settings.modelDownloaded`. The `modelDownloaded` flag in settings can drift from reality (e.g. user deletes the model file manually).
-**Fix:** `checkAvailability()` already calls `checkModelStatus` which hits the filesystem. Wire its result into the returned `isAvailable` value instead of the settings flag.
+**Fix:** `isAvailable` now reads from `availabilityResultRef.current` (populated by `checkAvailability()`) instead of the settings flag.
 
 ### A-12: `stt_cancel_download` not registered in `lib.rs`; download progress events never wired (P2)
 **What:** The `stt_cancel_download` Tauri command exists in Rust but is never added to `generate_handler![]` in `lib.rs`, so it's unreachable from the frontend. Download progress events emitted by the Rust side are also not listened to in any frontend hook.

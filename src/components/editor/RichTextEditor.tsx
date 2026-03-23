@@ -38,9 +38,11 @@ interface RichTextEditorProps {
   className?: string;
   onOpenContextMenu?: () => void;
   onNavigateToSTTSettings?: () => void;
-  /** When set, inserts this text at the current cursor position */
+  /** When set, inserts this plain text at the current cursor position (A-08: never treated as HTML) */
   insertText?: string | null;
-  /** Called after insertText has been consumed so the parent can clear it */
+  /** When set, inserts this HTML content at the current cursor position (for templates that intentionally contain markup) */
+  insertHtml?: string | null;
+  /** Called after insertText or insertHtml has been consumed so the parent can clear it */
   onInsertTextConsumed?: () => void;
   /** When true, keeps the cursor at ~38% from top of the scroll container (typewriter mode) */
   distractionFree?: boolean;
@@ -58,6 +60,7 @@ export function RichTextEditor({
   onOpenContextMenu,
   onNavigateToSTTSettings,
   insertText,
+  insertHtml,
   onInsertTextConsumed,
   distractionFree = false,
   onEditorReady,
@@ -164,14 +167,23 @@ export function RichTextEditor({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor]);
 
-  // Insert text at cursor when insertText prop is set (used by prompt suggestions)
+  // Insert plain text at cursor when insertText prop is set (A-08: plain text only, never HTML)
   useEffect(() => {
     if (insertText && editor) {
       editor.commands.focus('end');
-      editor.commands.insertContent(insertText);
+      editor.commands.command(({ tr }) => { tr.insertText(insertText); return true; });
       onInsertTextConsumed?.();
     }
   }, [insertText, editor, onInsertTextConsumed]);
+
+  // Insert HTML content at cursor when insertHtml prop is set (for templates with intentional markup)
+  useEffect(() => {
+    if (insertHtml && editor) {
+      editor.commands.focus('end');
+      editor.commands.insertContent(insertHtml);
+      onInsertTextConsumed?.();
+    }
+  }, [insertHtml, editor, onInsertTextConsumed]);
 
   // Sync external value changes
   useEffect(() => {
@@ -310,7 +322,8 @@ export function RichTextEditor({
       // Stop recording and transcribe (may return null if L2/L3 preview is shown)
       const text = await stopAndTranscribe();
       if (text) {
-        editor.chain().focus().insertContent(text).run();
+        // A-08 (mic path): whisper output is plain text — use tr.insertText not insertContent
+        editor.chain().focus().command(({ tr }) => { tr.insertText(text); return true; }).run();
       }
     } else if (sttState === 'idle') {
       // Start recording
@@ -322,21 +335,24 @@ export function RichTextEditor({
   // Transcript preview overlay handlers
   const handleUseFormatted = useCallback(() => {
     if (!editor || !formattedResult) return;
-    editor.chain().focus().insertContent(formattedResult.formatted).run();
+    // A-08: use tr.insertText (not insertContent) — LLM output is plain text, not HTML
+    editor.chain().focus().command(({ tr }) => { tr.insertText(formattedResult.formatted); return true; }).run();
     clearFormattedResult();
   }, [editor, formattedResult, clearFormattedResult]);
 
   const handleEditFirst = useCallback(() => {
     if (!editor || !formattedResult) return;
-    // Insert text and reposition cursor to start of the inserted block
+    // Insert text then reposition cursor to start of the inserted block
     const { from } = editor.state.selection;
-    editor.chain().focus().insertContent(formattedResult.formatted).setTextSelection(from).run();
+    // A-08: use tr.insertText (not insertContent) — LLM output is plain text, not HTML
+    editor.chain().focus().command(({ tr }) => { tr.insertText(formattedResult.formatted); return true; }).setTextSelection(from).run();
     clearFormattedResult();
   }, [editor, formattedResult, clearFormattedResult]);
 
   const handleUseRaw = useCallback(() => {
     if (!editor || !formattedResult) return;
-    editor.chain().focus().insertContent(formattedResult.raw).run();
+    // A-08: raw whisper output is plain text — use tr.insertText not insertContent
+    editor.chain().focus().command(({ tr }) => { tr.insertText(formattedResult.raw); return true; }).run();
     clearFormattedResult();
   }, [editor, formattedResult, clearFormattedResult]);
 

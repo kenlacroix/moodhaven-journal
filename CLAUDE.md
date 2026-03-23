@@ -562,7 +562,8 @@ interface AISettings {
 ### In Progress
 - [ ] Watch app Phase 2: UX polish sprint (record screen arc, breathe page, nav)
 - [ ] Speech-to-Text: model download UI in Settings (progress bar, model picker)
-- [ ] Speech-to-Text: pre-public hardening (path traversal fix, TipTap XSS guard, stream cleanup on unmount — see TODOS.md A-04 through A-16)
+- [x] Speech-to-Text: A-04/A-05/A-08/A-10 hardening (stream cleanup on unmount, cancel ref, TipTap XSS fix with `insertHtml`/`insertText` prop split, `isAvailable` from ref) — v0.7.3
+- [ ] Speech-to-Text: remaining hardening (A-12 `stt_cancel_download` unregistered, A-16 Ollama response size limit — see TODOS.md)
 
 ### Blocked
 - None
@@ -1089,4 +1090,4 @@ npm run lint:fix           # Fix auto-fixable issues
 
 ---
 
-*Last Updated: March 2026 — v0.7.2*
+*Last Updated: March 2026 — v0.7.3*

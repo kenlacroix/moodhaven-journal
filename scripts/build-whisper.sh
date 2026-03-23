@@ -58,7 +58,7 @@ if [[ "$BUILD_WINDOWS" == "true" ]]; then
 
   # Ubuntu MinGW headers lack THREAD_POWER_THROTTLING_STATE (added in newer Win SDK).
   # Patch the guard to check symbol availability instead of _WIN32_WINNT version.
-  local GGML_CPU="$WHISPER_DIR/ggml/src/ggml-cpu/ggml-cpu.c"
+  GGML_CPU="$WHISPER_DIR/ggml/src/ggml-cpu/ggml-cpu.c"
   if grep -q '_WIN32_WINNT >= 0x0602' "$GGML_CPU" 2>/dev/null; then
     sed -i 's/#if _WIN32_WINNT >= 0x0602/#if defined(THREAD_POWER_THROTTLING_CURRENT_VERSION)/' "$GGML_CPU"
     echo "    (patched ggml-cpu.c for MinGW header compatibility)"

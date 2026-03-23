@@ -1,21 +1,25 @@
-name: Build
+name: Build & Release
 
+# Triggered by:
+#   - Pushing a version tag (v1.2.3)  → builds + creates GitHub release
+#   - Manual dispatch                  → builds only (dry_run=true by default)
 on:
   push:
     tags:
-      - "v*"
+      - "v[0-9]+.[0-9]+.[0-9]+"
   workflow_dispatch:
     inputs:
       dry_run:
-        description: Build without publishing release
+        description: Build without publishing a release
         type: boolean
-        default: false
+        default: true
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
+  # ── Build on all platforms ──────────────────────────────────────────────────
   build:
     name: Build (${{ matrix.platform }})
     runs-on: ${{ matrix.os }}
@@ -26,24 +30,41 @@ jobs:
         include:
           - platform: Linux (x86_64)
             os: ubuntu-22.04
-            args: ""
+            target: x86_64-unknown-linux-gnu
             whisper_binary: whisper-x86_64-unknown-linux-gnu
-            cmake_arch: ""
+            cmake_extra: ""
+            cross: false
+
+          - platform: Linux (aarch64)
+            os: ubuntu-22.04
+            target: aarch64-unknown-linux-gnu
+            whisper_binary: whisper-aarch64-unknown-linux-gnu
+            cmake_extra: >-
+              -DCMAKE_SYSTEM_PROCESSOR=aarch64
+              -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc
+              -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++
+            cross: true
+
           - platform: Windows (x86_64)
             os: windows-latest
-            args: ""
+            target: x86_64-pc-windows-msvc
             whisper_binary: whisper-x86_64-pc-windows-msvc.exe
-            cmake_arch: ""
+            cmake_extra: ""
+            cross: false
+
           - platform: macOS (x86_64)
             os: macos-latest
-            args: "--target x86_64-apple-darwin"
+            target: x86_64-apple-darwin
             whisper_binary: whisper-x86_64-apple-darwin
-            cmake_arch: "-DCMAKE_OSX_ARCHITECTURES=x86_64"
+            cmake_extra: "-DCMAKE_OSX_ARCHITECTURES=x86_64"
+            cross: false
+
           - platform: macOS (Apple Silicon)
             os: macos-latest
-            args: "--target aarch64-apple-darwin"
+            target: aarch64-apple-darwin
             whisper_binary: whisper-aarch64-apple-darwin
-            cmake_arch: "-DCMAKE_OSX_ARCHITECTURES=arm64"
+            cmake_extra: "-DCMAKE_OSX_ARCHITECTURES=arm64"
+            cross: false
 
     steps:
       - name: Checkout
@@ -62,6 +83,12 @@ jobs:
             cmake \
             build-essential
 
+      - name: Install aarch64 cross-compile toolchain (Linux arm64 only)
+        if: matrix.cross == true
+        run: |
+          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
+
       - name: Setup Node 22
         uses: actions/setup-node@v4
         with:
@@ -71,22 +98,18 @@ jobs:
       - name: Setup Rust (stable)
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: >-
-            ${{ matrix.os == 'macos-latest' && 'x86_64-apple-darwin,aarch64-apple-darwin' || '' }}
+          targets: ${{ matrix.target }}
 
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+          key: ${{ matrix.target }}
 
       - name: Install frontend dependencies
         run: npm ci
 
-      # ── whisper-cli sidecar ──────────────────────────────────────────────
-      # Compile whisper.cpp for the target platform and drop the binary in
-      # src-tauri/binaries/ so Tauri bundles it as a sidecar.
-      # Cache key is the upstream HEAD SHA — only rebuilds when whisper changes.
-
+      # ── whisper-cli sidecar ─────────────────────────────────────────────────
       - name: Get whisper.cpp HEAD SHA (for cache key)
         id: whisper_hash
         shell: bash
@@ -107,14 +130,9 @@ jobs:
         run: |
           git clone --depth 1 https://github.com/ggerganov/whisper.cpp /tmp/whisper
           cd /tmp/whisper
-
-          # Configure — cmake_arch is empty on Linux/Windows, set for macOS cross-compile
-          cmake -B build -DCMAKE_BUILD_TYPE=Release ${{ matrix.cmake_arch }}
-
-          # Build only the CLI target to keep CI fast
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DGGML_NATIVE=OFF ${{ matrix.cmake_extra }}
           cmake --build build --config Release --target whisper-cli -j4
 
-          # Locate the binary (output path differs: flat on Linux/macOS, Release/ subdir on MSVC)
           if [[ "${{ runner.os }}" == "Windows" ]]; then
             BIN="build/bin/Release/whisper-cli.exe"
           else
@@ -124,16 +142,14 @@ jobs:
           cp "$BIN" "$GITHUB_WORKSPACE/src-tauri/binaries/${{ matrix.whisper_binary }}"
           chmod +x "$GITHUB_WORKSPACE/src-tauri/binaries/${{ matrix.whisper_binary }}"
 
-      # ────────────────────────────────────────────────────────────────────
-
+      # ── Tauri build + release ───────────────────────────────────────────────
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Code signing — set these secrets in repo settings to enable signing
-          # TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          # TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          # macOS notarization
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # macOS notarization (optional — uncomment when certs are configured)
           # APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           # APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           # APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
@@ -147,4 +163,69 @@ jobs:
             See [CHANGELOG](https://github.com/kenlacroix/moodhaven-journal/blob/main/CHANGELOG.md) for details.
           releaseDraft: true
           prerelease: false
-          args: ${{ matrix.args }}
+          args: --target ${{ matrix.target }}
+        # Skip release creation on manual dry-run dispatches
+        if: github.event_name == 'push' || inputs.dry_run == false
+
+      - name: Build Tauri app (dry run — no release)
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          args: --target ${{ matrix.target }}
+        if: github.event_name == 'workflow_dispatch' && inputs.dry_run == true
+
+      # Upload artifacts for the checksum job
+      - name: Upload artifacts
+        if: github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: bundle-${{ matrix.target }}
+          path: |
+            src-tauri/target/${{ matrix.target }}/release/bundle/**/*.AppImage
+            src-tauri/target/${{ matrix.target }}/release/bundle/**/*.exe
+            src-tauri/target/${{ matrix.target }}/release/bundle/**/*.dmg
+            src-tauri/target/${{ matrix.target }}/release/bundle/**/*.sig
+          retention-days: 1
+
+  # ── Post-build: checksums + release notes ──────────────────────────────────
+  update-manifest:
+    needs: build
+    if: github.event_name == 'push'
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Generate checksums.txt and attach to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: node scripts/generate-checksums.js
+
+      - name: Update release notes from tag annotation
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          TAG_MSG=$(git tag -l --format='%(contents)' "$TAG" 2>/dev/null || echo "")
+          if [ -n "$TAG_MSG" ]; then
+            gh release edit "$TAG" --notes "$TAG_MSG"
+          fi

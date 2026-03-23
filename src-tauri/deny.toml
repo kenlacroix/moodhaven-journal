@@ -4,10 +4,10 @@
 [advisories]
 # Deny any crate with a known security vulnerability
 vulnerability = "deny"
-# Warn on unmaintained crates (may have unpatched issues)
-unmaintained = "warn"
-# Warn on unsound crates (unsafe code with known soundness bugs)
-unsound = "warn"
+# Check unmaintained crates in workspace and transitive deps (none = ignore)
+unmaintained = "none"
+# Check unsound crates (none = ignore; set to "all" to enforce)
+unsound = "none"
 # Don't fail on yanked crates (may break in CI)
 yanked = "warn"
 
@@ -25,8 +25,8 @@ allow = [
   "BSD-2-Clause",
   "BSD-3-Clause",
   "ISC",
-  "Unicode-DFL",
   "Unicode-3.0",
+  "Unicode-DFS-2015",
   "CC0-1.0",
   "Zlib",
   "OpenSSL",

@@ -24,6 +24,7 @@ import {
   getAppVersion,
   resetSettings as resetSettingsService,
 } from '../lib/settingsService';
+import { useAppStore } from './appStore';
 
 // Section to scroll to when settings page opens
 export type SettingsScrollTarget = 'speech-to-text' | 'ai' | 'privacy' | 'health' | 'notifications' | 'sync' | null;
@@ -136,8 +137,9 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   loadSettings: async () => {
     set({ isLoading: true, error: null });
     try {
+      const password = useAppStore.getState().sessionPassword ?? undefined;
       const [settings, version] = await Promise.all([
-        loadSettings(),
+        loadSettings(password),
         getAppVersion(),
       ]);
       set({ settings, appVersion: version, isLoading: false, hasUnsavedChanges: false });
@@ -154,8 +156,9 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
 
   saveSettings: async () => {
     const { settings } = get();
+    const password = useAppStore.getState().sessionPassword ?? undefined;
     try {
-      await saveSettings(settings);
+      await saveSettings(settings, password);
       set({ hasUnsavedChanges: false, error: null });
     } catch (error) {
       set({

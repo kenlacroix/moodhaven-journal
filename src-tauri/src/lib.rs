@@ -183,6 +183,7 @@ pub fn run() {
             commands::update_book,
             commands::delete_book,
             // Oura Ring health integration
+            commands::oura_validate_pat,
             commands::oura_save_pat,
             commands::oura_disconnect,
             commands::oura_get_status,

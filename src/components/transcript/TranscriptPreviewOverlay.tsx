@@ -40,7 +40,7 @@ const SOURCE_PILL: Record<'ollama' | 'openai', { label: string; className: strin
 export function TranscriptPreviewOverlay({
   isOpen,
   formattedText,
-  rawText,
+  rawText: _rawText,
   source,
   onUseFormatted,
   onEditFirst,

@@ -52,6 +52,52 @@
   }
 }
 
+/* ── Writing-view utilities ───────────────────────────────────────────────── */
+
+/* Weather loading shimmer — CSS custom properties let dark/light share one animation */
+@keyframes shimmer {
+  0%   { background-position: -200px 0; }
+  100% { background-position: calc(200px + 100%) 0; }
+}
+
+.weather-shimmer {
+  --shimmer-base: #e2e8f0;
+  --shimmer-highlight: #f1f5f9;
+  background: linear-gradient(
+    90deg,
+    var(--shimmer-base) 25%,
+    var(--shimmer-highlight) 50%,
+    var(--shimmer-base) 75%
+  );
+  background-size: 200px 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+  will-change: background-position;
+}
+.dark .weather-shimmer {
+  --shimmer-base: #334155;
+  --shimmer-highlight: #475569;
+}
+
+/* kbd key inside focus-hint pill */
+.focus-hint-kbd {
+  font-family: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, monospace;
+  font-size: 10px;
+  /* Light mode: dark-on-light so the key is visible against the white pill */
+  background: rgba(0, 0, 0, 0.07);
+  border: 1px solid rgba(0, 0, 0, 0.14);
+  border-radius: 3px;
+  padding: 0 4px;
+  line-height: 1.5;
+  display: inline-block;
+}
+/* Dark mode: white-on-dark, pill background is slate-800/80 */
+.dark .focus-hint-kbd {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+/* ──────────────────────────────────────────────────────────────────────────── */
+
 /* Component styles */
 @layer components {
   /* Card component */

@@ -1024,7 +1024,9 @@ When adding a new module or component:
 | `stores/settingsStore.test.ts` | 18 | Settings CRUD, AI/appearance/privacy/journal setters |
 | `components/journal/MoodSelector.test.tsx` | 9 | Rendering, aria attributes, click handling, disabled state |
 | `components/journal/TemplateSelector.test.tsx` | 9 | Grid mode, compact mode, selection highlight |
-| **Total** | **371** | |
+| `lib/writingUtils.test.ts` | 10 | getReadingTime (boundaries), didHitMilestone (all 4 milestones) |
+| `lib/dateUtils.test.ts` | 54 | All 18 exported date functions + getGreeting (pools, rotation, boundaries) |
+| **Total** | **467** | |
 
 ---
 

@@ -1,6 +1,6 @@
 [package]
 name = "moodbloom"
-version = "0.7.3"
+version = "0.7.4"
 description = "A calm, secure mood tracking and journaling app"
 authors = ["MoodBloom"]
 license = "MIT"

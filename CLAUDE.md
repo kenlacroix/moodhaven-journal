@@ -1092,4 +1092,4 @@ npm run lint:fix           # Fix auto-fixable issues
 
 ---
 
-*Last Updated: March 2026 — v0.7.3*
+*Last Updated: March 2026 — v0.7.4*

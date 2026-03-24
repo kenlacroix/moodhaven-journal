@@ -21,6 +21,7 @@ Versions follow [Semantic Versioning](https://semver.org/).
 - **17 new tests** covering `getReadingTime`, `didHitMilestone`, and `getGreeting` with full boundary coverage. Total: 467 tests.
 
 ### Fixed
+- **Sidebar header icon size.** Gear (settings) and cloud (sync) icons were 16px (`w-4 h-4`) while all sidebar nav icons are 20px (`w-5 h-5`). All four icon states (gear, spinning ring, cloud+check, cloud at rest) are now consistently `w-5 h-5`.
 - **Esc key exits focus mode.** The focus-mode keyboard handler now responds to `Escape` in addition to `Ctrl+Shift+F`.
 - **Focus hint timer leak.** Exiting focus mode before the 3-second hint timer fires no longer leaves `showFocusHint` stuck `true` (which would cause the hint to appear immediately on the next entry into focus mode without animating in).
 - **Save success animation on failure.** A failed auto-save no longer plays the ✓ Saved bloom or keeps showing "✓ Saved" from a prior successful save. The indicator is now gated on per-save success tracking.

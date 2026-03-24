@@ -7,6 +7,28 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.7.4] — 2026-03-24
+
+### Added
+- **Reading time estimate.** Word count bar shows `· N min read` next to word count once an entry reaches 200 words (1 min per 200 words, ceiling).
+- **Daily-rotating greeting.** The writing view heading cycles through 8 contextual greetings per time-of-day (morning / afternoon / evening), seeded by day-of-year so the greeting stays stable all day and rotates tomorrow.
+- **Weather loading skeleton.** While location/weather resolves, the weather chip shows a CSS shimmer skeleton pill instead of a spinner — matches the card's ambient style.
+- **Focus mode exit hint.** A `Press Esc to exit focus` pill fades in for 3 s when distraction-free mode activates. Pressing Esc now also exits focus mode (previously only Ctrl+Shift+F worked).
+- **Save micro-animation.** The ✓ Saved indicator blooms with a scale pulse each time a save completes successfully. Animation is a scale-only bounce (no opacity flash) so it works cleanly on repeated saves.
+- **Inline tag chips.** Hashtags extracted from the entry appear as chips in the card header, with a `+ tag` button to open the tag manager. Chips are hidden in distraction-free mode.
+- **Desktop word-count milestone glow.** Hitting 50 / 100 / 200 / 500 words triggers a violet glow pulse on the word count (desktop). Android already had a flash + haptic; both now share the same `didHitMilestone()` logic.
+- **Flow-positioned prompt CTA.** "Not sure what to write?" fades out below the editor as the user starts typing, replacing the previous absolute-positioned overlay that could occlude content.
+- **17 new tests** covering `getReadingTime`, `didHitMilestone`, and `getGreeting` with full boundary coverage. Total: 467 tests.
+
+### Fixed
+- **Esc key exits focus mode.** The focus-mode keyboard handler now responds to `Escape` in addition to `Ctrl+Shift+F`.
+- **Focus hint timer leak.** Exiting focus mode before the 3-second hint timer fires no longer leaves `showFocusHint` stuck `true` (which would cause the hint to appear immediately on the next entry into focus mode without animating in).
+- **Save success animation on failure.** A failed auto-save no longer plays the ✓ Saved bloom or keeps showing "✓ Saved" from a prior successful save. The indicator is now gated on per-save success tracking.
+- **Weather shimmer keyframe.** `@keyframes shimmer` is now declared directly in `globals.css` — previously it was only in `tailwind.config.js`, where Tailwind's tree-shaking suppressed it (no `animate-shimmer` utility class was used), causing the skeleton to render as a static grey rectangle.
+- **Word-count span reflow.** The word count and ✓ Saved spans now always have `display: inline-block`, preventing layout reflow on every milestone and save event.
+
+---
+
 ## [0.7.3] — 2026-03-23
 
 ### Added

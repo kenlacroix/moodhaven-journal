@@ -6,10 +6,10 @@
 
 **A calm, encrypted desktop journal with mood tracking, AI insights, and local peer sync**
 
-[![Version](https://img.shields.io/badge/version-0.7.2-7c3aed?style=flat-square)](https://github.com/kenlacroix/moodhaven-journal/releases)
+[![Version](https://img.shields.io/badge/version-0.7.4-7c3aed?style=flat-square)](https://github.com/kenlacroix/moodhaven-journal/releases)
 [![License](https://img.shields.io/badge/license-MIT-22c55e?style=flat-square)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-0ea5e9?style=flat-square)](#installation)
-[![Tests](https://img.shields.io/badge/tests-429%20passing-22c55e?style=flat-square)](#tech-stack)
+[![Tests](https://img.shields.io/badge/tests-450%20passing-22c55e?style=flat-square)](#tech-stack)
 [![Built with Tauri](https://img.shields.io/badge/built%20with-Tauri%202-ffd866?style=flat-square)](https://tauri.app)
 [![Encryption](https://img.shields.io/badge/encryption-AES--256--GCM-ef4444?style=flat-square)](#security--privacy)
 
@@ -153,10 +153,10 @@ Grab the latest build from the [Releases](https://github.com/kenlacroix/moodhave
 
 | Platform | Installer | Minimum Version |
 |:---|:---|:---|
-| **Windows** | `MoodBloom_0.7.0_x64-setup.exe` | Windows 10 |
-| **macOS** | `MoodBloom_0.7.0_x64.dmg` | macOS 10.15 Catalina |
-| **Linux** | `moodbloom_0.7.0_amd64.AppImage` | Any modern distro |
-| **Linux (Debian)** | `moodbloom_0.7.0_amd64.deb` | Ubuntu 22.04+ |
+| **Windows** | `MoodBloom_0.7.4_x64-setup.exe` | Windows 10 |
+| **macOS** | `MoodBloom_0.7.4_x64.dmg` | macOS 10.15 Catalina |
+| **Linux** | `moodbloom_0.7.4_amd64.AppImage` | Any modern distro |
+| **Linux (Debian)** | `moodbloom_0.7.4_amd64.deb` | Ubuntu 22.04+ |
 
 ### First Launch
 
@@ -338,7 +338,18 @@ When AI features are enabled, MoodBloom **never** sends journal text to any exte
 
 ---
 
-## What's New in v0.7.2
+## What's New in v0.7.4
+
+- **Sidebar icon consistency** — Header icons (settings gear, cloud sync) now match the 20px size of all sidebar nav icons
+
+## v0.7.3
+
+- **SetupScreen decomposition** — First-run wizard refactored into 10 focused step components; replaces the former 1200-line monolith
+- **CI security audits** — `cargo deny check` and `cargo audit` added to CI and available locally via `npm run check:all`
+- **STT hardening** — Four adversarial-review fixes: mic stream cleanup on unmount, cancelled-ref race in async chains, TipTap XSS guard completed (typed `insertHtml`/`insertText` props), `isAvailable` now reads from ref to avoid stale closures
+- **28 new tests** — `useSpeechToText` hook coverage, L2/L3 formatting paths; 450 tests total
+
+## v0.7.2
 
 - **3-layer transcript formatting** — L1 (local rules: filler removal, false-start collapse, pause-based paragraph breaks), L2 (Ollama local LLM), L3 (OpenAI BYOK with explicit cloud consent)
 - **Transcript preview overlay** — See formatted text before it lands in the editor; choose Use this / Edit first / Use raw text
@@ -379,6 +390,8 @@ When AI features are enabled, MoodBloom **never** sends journal text to any exte
 
 | Version | Highlights |
 |:---|:---|
+| **v0.7.4** | Sidebar header icon size consistency |
+| **v0.7.3** | SetupScreen decomposition, CI security audits, STT hardening (4 fixes), 450 tests |
 | **v0.7.2** | STT transcript formatting pipeline (L1/L2/L3), mic permission modals, CI whisper build |
 | **v0.7.1** | STT pipeline foundation — whisper sidecar commands, timestamped transcription, formatting settings |
 | **v0.7.0** | Encrypted peer sync engine (TCP, AES-GCM, LWW), auto-sync on peer discovery |
@@ -410,8 +423,22 @@ When AI features are enabled, MoodBloom **never** sends journal text to any exte
 | **Peer discovery** | mDNS/DNS-SD ([mdns-sd](https://github.com/keepsimple1/mdns-sd)) |
 | **2FA** | [totp-rs](https://github.com/constantoine/totp-rs) + native CTAP2/HID |
 | **Charts** | Custom SVG (no charting library dependency) |
-| **Testing** | [Vitest](https://vitest.dev) + Testing Library (371 tests) |
+| **Testing** | [Vitest](https://vitest.dev) + Testing Library (450 tests) |
 | **Build** | Vite 5 + `npm run tauri build` |
+
+---
+
+## Beta Testing
+
+MoodBloom is in public beta. The core feature set is complete and stable — the app is used daily in production. What beta testers can help with:
+
+- **Try the full setup flow** — First-run wizard, password, 2FA, recovery key
+- **Write entries and use Books** — Does auto-save, mood detection, and templates behave as expected?
+- **Test on your OS** — Especially Windows and macOS (primary dev is on Linux)
+- **Exercise peer sync** — If you have two machines on the same LAN, try pairing and syncing
+- **Break it** — Edge cases, unusual input, rapid navigation, large entry counts
+
+File issues at [GitHub Issues](https://github.com/kenlacroix/moodhaven-journal/issues). Screenshots are always appreciated.
 
 ---
 
@@ -437,7 +464,7 @@ npm run tauri:dev
 ```
 
 ```bash
-npm test                          # Run 371 tests
+npm test                          # Run 450 tests
 npm run typecheck                 # TypeScript strict check
 cd src-tauri && cargo check       # Rust compilation check
 ```

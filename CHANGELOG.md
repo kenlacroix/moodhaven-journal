@@ -7,6 +7,13 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.7.4] — 2026-03-24
+
+### Fixed
+- **Sidebar header icon size.** Gear (settings) and cloud (sync) icons were 16px (`w-4 h-4`) while all sidebar nav icons are 20px (`w-5 h-5`). All four icon states (gear, spinning ring, cloud+check, cloud at rest) are now consistently `w-5 h-5`.
+
+---
+
 ## [0.7.3] — 2026-03-23
 
 ### Added

@@ -204,6 +204,59 @@ export function formatDisplayDate(date: Date | string): string {
   });
 }
 
+// ── Greeting pools ────────────────────────────────────────────────────────────
+
+export const GREETINGS = {
+  morning: [
+    'Good morning.',
+    'How are you feeling today?',
+    "What's on your mind?",
+    'Ready to reflect?',
+    'A new day, a new page.',
+    'Take a breath. Begin.',
+    'What will today hold?',
+    'Morning. Start here.',
+  ],
+  afternoon: [
+    'Good afternoon.',
+    'How has your day been?',
+    'A quiet moment for you.',
+    'A moment for yourself.',
+    'How are you holding up?',
+    'Pause. What\'s on your mind?',
+    'What needs to be said?',
+    'Afternoon. How are you?',
+  ],
+  evening: [
+    'Good evening.',
+    'How was today?',
+    'Time to decompress.',
+    'End the day with honesty.',
+    'What stood out today?',
+    'Evening. Let it out.',
+    'Reflect before you rest.',
+    'How are you feeling now?',
+  ],
+} as const;
+
+/**
+ * Returns a time-of-day greeting that:
+ * - Stays the same all day (stable for a given date)
+ * - Rotates across days via day-of-year index
+ * - Formula: pool[dayOfYear % pool.length]
+ */
+export function getGreeting(hour: number, date: Date = new Date()): string {
+  const startOfYear = new Date(date.getFullYear(), 0, 0);
+  const dayOfYear = Math.floor((date.getTime() - startOfYear.getTime()) / 86_400_000);
+  const period = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening';
+  const pool = GREETINGS[period];
+  // Safety guard — pools are statically non-empty but keeps TS happy on edge cases
+  if (!pool) return 'Hello.';
+  return pool[dayOfYear % pool.length];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 /**
  * Get relative date label (Today, Yesterday, X days ago)
  * Compares calendar days, not timestamps (so 11pm yesterday is still "Yesterday" at 1am today)

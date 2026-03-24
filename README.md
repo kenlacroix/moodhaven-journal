@@ -96,6 +96,18 @@ MoodBloom combines structured mood tracking with free-form encrypted journaling.
 - **Encrypted local export** — Password-protected `.moodbloom` files for offline archival
 - **Sync details modal** — Shows storage type, entry count, last sync time, and upload/download controls
 
+### Wear OS Companion *(beta)*
+
+A voice-first companion app for Wear OS that lets you capture a voice reflection on your wrist before the thought fades, then have it waiting in MoodBloom when you sit down to write.
+
+- **Record on your wrist** — Tap to record, tap to stop; up to 10 minutes of 16 kHz mono audio
+- **Quick mood tag** — Tap an emoji mood before or after recording
+- **Automatic transfer** — Audio transfers to your phone via Wear OS ChannelAPI; queued and retried if the phone is out of range
+- **Local transcription** — Whisper.cpp on the desktop transcribes the memo; no audio leaves your devices
+- **Breathe screen** *(Phase 2)* — Guided breathing before a reflection
+
+See [docs/watch-companion.md](docs/watch-companion.md) for setup and architecture.
+
 ### Customisation
 
 - **Dark / Light / System** theme
@@ -338,51 +350,15 @@ When AI features are enabled, MoodBloom **never** sends journal text to any exte
 
 ---
 
-## What's New in v0.7.4
+## Recent Changes
 
-- **Sidebar icon consistency** — Header icons (settings gear, cloud sync) now match the 20px size of all sidebar nav icons
+**v0.7.4** — Sidebar header icon size consistency
+**v0.7.3** — SetupScreen decomposition, CI security audits (`cargo deny` + `cargo audit`), four STT hardening fixes, 450 tests
+**v0.7.2** — 3-layer transcript formatting pipeline (L1 local rules / L2 Ollama / L3 OpenAI BYOK), transcript preview overlay, mic permission modals
+**v0.7.1** — STT foundation: whisper sidecar commands, timestamped transcription, formatting settings
+**v0.7.0** — Encrypted peer sync engine (TCP manifest-diff, AES-GCM, LWW conflict resolution)
 
-## v0.7.3
-
-- **SetupScreen decomposition** — First-run wizard refactored into 10 focused step components; replaces the former 1200-line monolith
-- **CI security audits** — `cargo deny check` and `cargo audit` added to CI and available locally via `npm run check:all`
-- **STT hardening** — Four adversarial-review fixes: mic stream cleanup on unmount, cancelled-ref race in async chains, TipTap XSS guard completed (typed `insertHtml`/`insertText` props), `isAvailable` now reads from ref to avoid stale closures
-- **28 new tests** — `useSpeechToText` hook coverage, L2/L3 formatting paths; 450 tests total
-
-## v0.7.2
-
-- **3-layer transcript formatting** — L1 (local rules: filler removal, false-start collapse, pause-based paragraph breaks), L2 (Ollama local LLM), L3 (OpenAI BYOK with explicit cloud consent)
-- **Transcript preview overlay** — See formatted text before it lands in the editor; choose Use this / Edit first / Use raw text
-- **Microphone permission modals** — Consent dialog before OS prompt; platform-specific unblock instructions if access is denied
-- **Quick-capture toggle** — Bolt icon bypasses formatting for immediate raw insertion
-- **CI whisper.cpp sidecar build** — Compiled per platform in GitHub Actions
-
-## v0.7.0
-
-- **Encrypted peer sync engine** — Full TCP sync between trusted LAN devices; manifest-diff protocol with AES-256-GCM transport and last-write-wins conflict resolution
-- **Auto-sync** — Triggers automatically when a trusted peer is discovered (30s cooldown); also syncs after pairing
-- **Non-obtrusive pairing notifications** — Pairing requests surface as a quiet in-app notification rather than a blocking dialog
-
-## v0.6.x
-
-- **Local peer sync foundation** — Ed25519 device identity, mDNS/DNS-SD discovery, QR/PIN pairing, trusted devices store
-- **Settings → Devices tab** — Full UI for managing nearby and paired devices; LAN sync badge in sidebar footer
-- **Deterministic sync ports** — Each device gets a stable port in the 44000–44999 range
-
-## v0.5.0 — Major Polish Sprint
-
-- **Timeline polish** — Mood rings, date groups, auto-scroll, search integration
-- **Calendar 24-hour timeline** — Hourly mood distribution within each day
-- **Writing view** — Ambient gradient background, focus fade, streak line, improved mood auto-detection UX
-- **Journal Overview page** — Per-book stats, description, settings
-- **Insights page redesign** — Section headers, AI CTA card, book filter, MoodWeatherCard, GratitudeStreakCard, WeeklyReflectionCard
-- **Settings deep-linking** — Scroll-to-section, temperature unit toggle, auto-title toggle
-- **Hashtag auto-extraction** — Tags indexed on save
-- **Pinned entries** — Pin entries to surface them first
-
-## v0.4.0
-
-- Multiple journals (Books), merged Insights + Analytics, Sync Details Modal, sidebar redesign, template blockquotes, weather fixes, toolbar improvements
+Full history: [CHANGELOG.md](CHANGELOG.md)
 
 ---
 

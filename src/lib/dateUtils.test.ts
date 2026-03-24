@@ -18,6 +18,8 @@ import {
   getCalendarDates,
   formatDisplayDate,
   getRelativeDateLabel,
+  getGreeting,
+  GREETINGS,
 } from './dateUtils';
 
 describe('dateUtils', () => {
@@ -358,6 +360,46 @@ describe('dateUtils', () => {
       const result = getRelativeDateLabel('2024-04-15');
       expect(result).toContain('Apr');
       expect(result).toContain('15');
+    });
+  });
+
+  describe('getGreeting', () => {
+    // dayOfYear for Jan 1 = 1 (startOfYear = Jan 0 = Dec 31 of prev year)
+    const jan1 = new Date(2024, 0, 1); // day 1 → pool[1 % 8] = pool[1]
+    const jan2 = new Date(2024, 0, 2); // day 2 → pool[2 % 8] = pool[2]
+    const jan9 = new Date(2024, 0, 9); // day 9 → pool[9 % 8] = pool[1] (wraps)
+
+    it('morning: hour 8 returns a morning greeting', () => {
+      const result = getGreeting(8, jan1);
+      expect(GREETINGS.morning).toContain(result);
+    });
+
+    it('morning: rotates by day — jan2 differs from jan1 at same hour', () => {
+      expect(getGreeting(8, jan1)).not.toBe(getGreeting(8, jan2));
+    });
+
+    it('afternoon boundary: hour 12 → afternoon pool', () => {
+      const result = getGreeting(12, jan1);
+      expect(GREETINGS.afternoon).toContain(result);
+    });
+
+    it('morning boundary: hour 11 → morning pool', () => {
+      const result = getGreeting(11, jan1);
+      expect(GREETINGS.morning).toContain(result);
+    });
+
+    it('evening boundary: hour 17 → evening pool', () => {
+      const result = getGreeting(17, jan1);
+      expect(GREETINGS.evening).toContain(result);
+    });
+
+    it('afternoon boundary: hour 16 → afternoon pool', () => {
+      const result = getGreeting(16, jan1);
+      expect(GREETINGS.afternoon).toContain(result);
+    });
+
+    it('wrap-around: day 9 gives same greeting as day 1 (9 % 8 === 1 % 8)', () => {
+      expect(getGreeting(8, jan9)).toBe(getGreeting(8, jan1));
     });
   });
 });

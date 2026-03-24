@@ -23,9 +23,12 @@
  * - Rich text (HTML) is preserved; plain text is derived for mood scoring only
  */
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { saveEntry, getEntryById, patchEntryLocationWeather, deleteEntry, getBookTags } from '../lib/journalService';
 import { captureLocationWeather, getWeatherEmoji, displayTemp } from '../lib/locationWeatherService';
+import { getGreeting } from '../lib/dateUtils';
+import { getReadingTime, didHitMilestone } from '../lib/writingUtils';
+import { extractHashtags } from '../lib/markdownUtils';
 import { pickAndAttachMedia, listEntryMedia, openMedia, deleteMedia, getMediaThumbnail } from '../lib/mediaService';
 import { RichTextEditor } from '../components/editor';
 import type { Editor } from '@tiptap/react';
@@ -61,12 +64,6 @@ interface WritingViewProps {
 /** Strip HTML tags to plain text for mood scoring and word counting */
 function stripHtml(html: string): string {
   return html.replace(/<[^>]*>/g, ' ').replace(/&[a-z]+;/gi, ' ').replace(/\s+/g, ' ').trim();
-}
-
-function getGreeting(hour: number): string {
-  if (hour < 12) return 'Good morning.';
-  if (hour < 17) return 'Good afternoon.';
-  return 'Good evening.';
 }
 
 function getFormattedDate(d: Date): string {
@@ -159,6 +156,7 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
   const [privacyMode, setPrivacyMode] = useState<PrivacyMode>(0);
   const [isSaving, setIsSaving] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
+  const [lastSaveOk, setLastSaveOk] = useState(false);
 
   // Mirror local save state into global store so Sidebar can show the indicator
   useEffect(() => {
@@ -212,9 +210,17 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
   const [moodPickerOpen, setMoodPickerOpen] = useState(!entryId);
   /** Streak badge animation flag — fires once on mount when streak >= 3 */
   const [streakAnimated, setStreakAnimated] = useState(false);
-  /** Word-count milestone flash */
+  /** Word-count milestone flash (Android) / glow (desktop) */
   const [wcFlash, setWcFlash] = useState(false);
+  const [wcGlow, setWcGlow] = useState(false);
   const prevWcRef = useRef(0);
+
+  /** Save micro-animation — fires when isSaving flips true→false */
+  const [saveJustCompleted, setSaveJustCompleted] = useState(false);
+  const prevIsSavingRef = useRef(false);
+
+  /** Focus exit hint — shown for 3s when distraction-free mode activates */
+  const [showFocusHint, setShowFocusHint] = useState(false);
 
   const [savedEntry, setSavedEntry] = useState<JournalEntry | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -257,12 +263,16 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
   const isEditorEmpty = !contentText.trim();
   const wordCount = contentText.trim() ? contentText.trim().split(/\s+/).length : 0;
   const charCount = contentText.length;
+  /** Reading time shown at ≥200 words; null below that threshold */
+  const readingTime = getReadingTime(wordCount);
   /** Heading + subtle UI dims once user is in writing flow */
   const inFlow = wordCount >= 20;
   /** Scanning state: user has started writing but not enough words for mood detection */
   const isScanning = moodIsAuto && mood === null && wordCount > 0 && wordCount < 5;
+  /** Inline tag chips — memoized to avoid re-running 6 regexes on every keystroke */
+  const entryTags = useMemo(() => extractHashtags(content), [content]);
 
-  const greeting = getGreeting(now.getHours());
+  const greeting = getGreeting(now.getHours(), now);
   const formattedDate = getFormattedDate(now);
   const headerBorderColor = mood ? MOOD_BORDER[mood] : 'border-slate-100 dark:border-slate-800';
 
@@ -321,6 +331,10 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'f') {
         e.preventDefault();
         setDistractionFree(!distractionFree);
+      }
+      if (e.key === 'Escape' && distractionFree) {
+        e.preventDefault();
+        setDistractionFree(false);
       }
     };
     window.addEventListener('keydown', onKey);
@@ -450,13 +464,16 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
         bookId: !savedEntryIdRef.current ? (activeBookId ?? undefined) : undefined,
       })
         .then((saved) => {
-          // Capture the created ID so the next auto-save updates instead of inserts
           savedEntryIdRef.current = saved.id;
           setSavedEntry(saved);
           setLastSavedAt(new Date());
+          setLastSaveOk(true);
           onEntrySaved?.();
         })
-        .catch((err) => { console.error('Auto-save failed:', err); })
+        .catch((err) => {
+          console.error('Auto-save failed:', err);
+          setLastSaveOk(false);
+        })
         .finally(() => { setIsSaving(false); });
     }, 2000);
   // `mood` and `content` are intentionally included: a mood auto-detection or
@@ -600,18 +617,44 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
     return () => clearTimeout(t);
   }, [isAndroid, currentStreak]);
 
-  // ── Android: word count milestone flash ─────────────────────────────────────
+  // ── Word count milestone — flash (Android) / violet glow (desktop) ──────────
   useEffect(() => {
-    if (!isAndroid) return;
-    const milestones = [50, 100, 200];
-    if (milestones.some((m) => prevWcRef.current < m && wordCount >= m)) {
+    const hit = didHitMilestone(prevWcRef.current, wordCount);
+    prevWcRef.current = wordCount;
+    if (!hit) return;
+    if (isAndroid) {
       setWcFlash(true);
-      const t = setTimeout(() => setWcFlash(false), 600);
-      prevWcRef.current = wordCount;
+      try { navigator.vibrate?.(30); } catch { /* ignore */ }
+      const t = setTimeout(() => setWcFlash(false), 800);
+      return () => clearTimeout(t);
+    } else {
+      setWcGlow(true);
+      const t = setTimeout(() => setWcGlow(false), 900);
       return () => clearTimeout(t);
     }
-    prevWcRef.current = wordCount;
   }, [wordCount, isAndroid]);
+
+  // ── Save micro-animation — fires when isSaving flips true → false ────────────
+  useEffect(() => {
+    if (prevIsSavingRef.current && !isSaving && lastSavedAt && lastSaveOk) {
+      setSaveJustCompleted(true);
+      const t = setTimeout(() => setSaveJustCompleted(false), 400);
+      prevIsSavingRef.current = isSaving;
+      return () => clearTimeout(t);
+    }
+    prevIsSavingRef.current = isSaving;
+  }, [isSaving, lastSavedAt, lastSaveOk]);
+
+  // ── Focus mode exit hint — shown 3s when distraction-free activates ──────────
+  useEffect(() => {
+    if (!distractionFree) {
+      setShowFocusHint(false);
+      return;
+    }
+    setShowFocusHint(true);
+    const t = setTimeout(() => setShowFocusHint(false), 3000);
+    return () => clearTimeout(t);
+  }, [distractionFree]);
 
   // ── Android: haptic feedback helper ─────────────────────────────────────────
   const haptic = useCallback((ms: number) => {
@@ -1055,12 +1098,11 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
                 {formattedDate}
               </p>
 
-              {/* Weather + location chip */}
+              {/* Weather + location chip — shimmer while loading */}
               {locationLoading && !locationWeather && (
-                <p className="flex items-center gap-1 mt-0.5 text-xs text-slate-400 dark:text-slate-500 animate-pulse">
-                  <span className="w-2.5 h-2.5 border border-slate-300 dark:border-slate-600 border-t-slate-400 rounded-full animate-spin" />
-                  <span>Getting location…</span>
-                </p>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <div className="weather-shimmer h-3 w-32 rounded-full" />
+                </div>
               )}
               {locationWeather && (
                 <p className="flex items-center gap-1 mt-0.5 text-xs text-slate-400 dark:text-slate-500">
@@ -1235,6 +1277,26 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
                   />
                 </div>
               </div>
+              {/* Inline tag chips — shown when entry has tags or after first save */}
+              {(entryTags.length > 0 || !isNewEntry) && !distractionFree && (
+                <div className="flex items-center flex-wrap gap-1.5 mt-2 pt-2 border-t border-slate-100 dark:border-slate-800 max-h-[52px] overflow-hidden">
+                  {entryTags.map((tag) => (
+                    <span
+                      key={tag}
+                      className="inline-flex items-center text-[11px] px-2 py-0.5 rounded-full bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400"
+                    >
+                      #{tag}
+                    </span>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setTagManagerOpen(true)}
+                    className="inline-flex items-center text-[11px] px-2 py-0.5 rounded-full border border-dashed border-slate-300 dark:border-slate-600 text-slate-400 hover:text-violet-500 hover:border-violet-400 dark:hover:text-violet-400 dark:hover:border-violet-600 transition-colors"
+                  >
+                    + tag
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Title input — collapses in distraction-free mode */}
@@ -1302,30 +1364,22 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
               />
             )}
 
-            {/* ── Blank-page prompts CTA — fades away as user writes ── */}
+            {/* ── Prompts CTA — flow element below editor, fades when user writes ── */}
             {isNewEntry && showPrompts && !distractionFree && (
               <div
-                className={`absolute inset-0 flex items-end justify-center pb-16 rounded-2xl transition-all duration-500 pointer-events-none ${
-                  isEditorEmpty ? 'opacity-100' : 'opacity-0'
+                className={`flex-shrink-0 transition-opacity duration-300 pt-3 pb-1 border-t border-slate-100 dark:border-slate-800 ${
+                  isEditorEmpty ? 'opacity-100' : 'opacity-0 pointer-events-none'
                 }`}
               >
-                <div className="pointer-events-auto flex flex-col items-center gap-3 text-center">
-                  <div className="w-10 h-10 rounded-xl bg-violet-50 dark:bg-violet-900/20 flex items-center justify-center text-violet-400 dark:text-violet-500">
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 18v-5.25m0 0a6.01 6.01 0 001.5-.189m-1.5.189a6.01 6.01 0 01-1.5-.189m3.75 7.478a12.06 12.06 0 01-4.5 0m3.75 2.383a14.406 14.406 0 01-3 0M14.25 18v-.192c0-.983.658-1.823 1.508-2.316a7.5 7.5 0 10-7.517 0c.85.493 1.509 1.333 1.509 2.316V18" />
-                    </svg>
-                  </div>
-                  <div>
-                    <p className="text-sm text-slate-400 dark:text-slate-500">Not sure what to write?</p>
-                    <button
-                      type="button"
-                      onClick={() => setDrawerOpen(true)}
-                      className="mt-1 text-sm font-medium text-violet-500 dark:text-violet-400 hover:text-violet-600 dark:hover:text-violet-300 transition-colors"
-                    >
-                      Browse writing prompts →
-                    </button>
-                  </div>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setDrawerOpen(true)}
+                  className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-violet-500 dark:text-slate-500 dark:hover:text-violet-400 transition-colors"
+                >
+                  <span>💡</span>
+                  <span>Not sure what to write?</span>
+                  <span className="opacity-60">Browse writing prompts →</span>
+                </button>
               </div>
             )}
           </div>
@@ -1340,19 +1394,66 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
             />
           )}
 
-          {/* ── Bottom status bar — centered E2E badge only ── */}
+          {/* ── Bottom status bar: word count · reading time · E2E badge · save ── */}
           <div
-            className={`flex items-center justify-center mt-2 sm:mt-3 px-1 text-xs text-slate-400 dark:text-slate-500 transition-all duration-700 ${
+            className={`flex items-center mt-2 sm:mt-3 px-1 text-xs text-slate-400 dark:text-slate-500 transition-all duration-700 ${
               distractionFree ? 'opacity-0 pointer-events-none' : inFlow ? 'opacity-25' : 'opacity-100'
             }`}
           >
-            <svg className="w-3.5 h-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
-            </svg>
-            <span>🔒 End-to-End Encrypted</span>
+            {/* Left: word count + reading time */}
+            <div className="flex items-center gap-1.5 flex-1">
+              {wordCount > 0 && (
+                <>
+                  <span className={`inline-block${wcGlow ? ' animate-wc-glow' : ''}`}>
+                    {wordCount} {wordCount === 1 ? 'word' : 'words'}
+                  </span>
+                  {readingTime && (
+                    <>
+                      <span className="opacity-40">·</span>
+                      <span>{readingTime}</span>
+                    </>
+                  )}
+                </>
+              )}
+            </div>
+
+            {/* Center: E2E badge */}
+            <div className="flex items-center gap-1">
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
+              </svg>
+              <span>🔒 End-to-End Encrypted</span>
+            </div>
+
+            {/* Right: save status */}
+            <div className="flex items-center justify-end flex-1">
+              {isSaving && (
+                <span className="text-violet-400 dark:text-violet-500">Saving…</span>
+              )}
+              {!isSaving && lastSavedAt && lastSaveOk && (
+                <span
+                  className={`inline-block text-emerald-500 dark:text-emerald-400${saveJustCompleted ? ' animate-save-bloom' : ''}`}
+                >
+                  ✓ Saved
+                </span>
+              )}
+            </div>
           </div>
         </div>
       </div>
+
+      {/* Focus mode exit hint — fades in for 3s then disappears */}
+      {distractionFree && (
+        <div
+          className={`fixed bottom-4 right-4 z-50 transition-opacity duration-500 ${
+            showFocusHint ? 'opacity-60' : 'opacity-0 pointer-events-none'
+          }`}
+        >
+          <span className="text-[11px] text-slate-500 dark:text-slate-400 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm px-3 py-1.5 rounded-full shadow-sm border border-slate-200/50 dark:border-slate-700/50">
+            Press <kbd className="focus-hint-kbd">Esc</kbd> to exit focus
+          </span>
+        </div>
+      )}
 
       {/* Prompt drawer — slide-up panel, only for new entries */}
       {isNewEntry && showPrompts && (

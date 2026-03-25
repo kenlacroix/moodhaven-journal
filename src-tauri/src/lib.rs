@@ -253,6 +253,11 @@ pub fn run() {
             // Full DB restore (setup-time, new device ← existing device)
             commands::peer_full_restore,
             commands::peer_apply_and_restart,
+            // Time capsule (seal / reveal / mood delta)
+            commands::seal_entry,
+            commands::get_due_capsules,
+            commands::unseal_entry,
+            commands::get_mood_delta,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

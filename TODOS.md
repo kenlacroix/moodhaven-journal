@@ -92,3 +92,16 @@
 **Effort:** human ~2h / CC+gstack ~15min
 
 ---
+
+## Time Layer (feat/time-layer)
+
+### TL-003: Accessibility spec for TimeCapsuleRevealModal
+**What:** Focus trap (focus enters modal on open, returns to trigger element on close), ESC key handler (triggers Close path, not Write a response), `aria-modal="true"`, `aria-labelledby` pointing to the "Something from your past self" header text.
+**Why:** Without a focus trap, keyboard users can tab behind the modal while it's open. ESC is the standard dismiss gesture for any modal. Without `aria-labelledby`, screen readers have no label for the dialog.
+**Pros:** Makes the modal keyboard-accessible and screen-reader-legible at zero design cost. SyncDetailsModal has the same gap — fixing here sets a precedent.
+**Cons:** ~30 min implementation. Needs `useEffect` for focus management.
+**Context:** Identified during Time Layer design review (2026-03-25). The plan specifies interaction states but never mentions focus management or keyboard nav.
+**Depends on:** Time Layer PR (feat/time-layer).
+**Effort:** human ~30min / CC+gstack ~5min
+
+---

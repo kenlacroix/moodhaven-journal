@@ -23,7 +23,8 @@ pub struct EncryptedContent {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct JournalEntryRow {
     pub id: String,
-    pub encrypted_content: EncryptedContent,
+    /// None for currently-sealed entries (content withheld until unlock date)
+    pub encrypted_content: Option<EncryptedContent>,
     pub mood: i32,
     /// Privacy mode: 0 = Open, 1 = Mindful (local analysis only), 2 = Private (no analysis)
     pub privacy_mode: i32,
@@ -37,6 +38,14 @@ pub struct JournalEntryRow {
     pub updated_at: String,
     /// Tag names for this entry (fetched via GROUP_CONCAT join)
     pub tags: Vec<String>,
+    /// ISO timestamp until which this entry is sealed (None = not sealed)
+    pub sealed_until: Option<String>,
+    /// 'letter' | 'vault' | 'anniversary' — set on seal; 'anniversary' on auto-reveal
+    pub capsule_type: Option<String>,
+    /// ID of the original capsule entry this response was written for
+    pub linked_original_id: Option<String>,
+    /// ISO timestamp when this entry was revealed (None = not yet revealed)
+    pub unsealed_at: Option<String>,
 }
 
 /// Journal entry metadata (without content, for list views)
@@ -109,12 +118,62 @@ pub struct Book {
 }
 
 /// Parse a GROUP_CONCAT tag string into a Vec of tag names.
-fn parse_tags(tags_str: Option<String>) -> Vec<String> {
+pub fn parse_tags(tags_str: Option<String>) -> Vec<String> {
     match tags_str {
         Some(s) if !s.is_empty() => s.split(',').map(|t| t.to_string()).collect(),
         _ => vec![],
     }
 }
+
+/// Map a rusqlite row to a `JournalEntryRow`.
+///
+/// Expected column order (0-indexed):
+/// 0  id, 1  encrypted_content, 2  mood, 3  privacy_mode,
+/// 4  location_weather, 5  book_id, 6  pinned, 7  created_at,
+/// 8  updated_at, 9  sealed_until, 10 capsule_type,
+/// 11 linked_original_id, 12 unsealed_at, 13 tags (GROUP_CONCAT)
+pub fn map_entry_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<JournalEntryRow> {
+    let content_json_opt: Option<String> = row.get(1)?;
+    let sealed_until: Option<String> = row.get(9)?;
+    let capsule_type: Option<String> = row.get(10)?;
+    let linked_original_id: Option<String> = row.get(11)?;
+    let unsealed_at: Option<String> = row.get(12)?;
+    let tags_str: Option<String> = row.get(13)?;
+
+    // Withhold content for entries that are sealed but not yet revealed.
+    let is_sealed = sealed_until.is_some() && unsealed_at.is_none();
+    let encrypted_content = if is_sealed {
+        None
+    } else {
+        content_json_opt
+            .as_deref()
+            .map(|json| {
+                serde_json::from_str::<EncryptedContent>(json)
+                    .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))
+            })
+            .transpose()?
+    };
+
+    Ok(JournalEntryRow {
+        id: row.get(0)?,
+        encrypted_content,
+        mood: row.get(2)?,
+        privacy_mode: row.get(3)?,
+        location_weather: row.get(4)?,
+        book_id: row
+            .get::<_, Option<String>>(5)?
+            .unwrap_or_else(|| "default".to_string()),
+        pinned: row.get::<_, i32>(6)? != 0,
+        created_at: row.get(7)?,
+        updated_at: row.get(8)?,
+        sealed_until,
+        capsule_type,
+        linked_original_id,
+        unsealed_at,
+        tags: parse_tags(tags_str),
+    })
+}
+
 
 /// Database state managed by Tauri
 pub struct Database {
@@ -184,6 +243,15 @@ impl Database {
             "ALTER TABLE journal_entries ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0",
             [],
         );
+
+        // Runtime migrations: time capsule columns
+        let _ = conn.execute("ALTER TABLE journal_entries ADD COLUMN sealed_until TEXT", []);
+        let _ = conn.execute("ALTER TABLE journal_entries ADD COLUMN capsule_type TEXT", []);
+        let _ = conn.execute(
+            "ALTER TABLE journal_entries ADD COLUMN linked_original_id TEXT",
+            [],
+        );
+        let _ = conn.execute("ALTER TABLE journal_entries ADD COLUMN unsealed_at TEXT", []);
 
         // Runtime migration: media attachments table
         conn.execute_batch(
@@ -482,6 +550,7 @@ pub fn create_entry(
     // Fetch the created entry using the same connection (avoid deadlock)
     conn.query_row(
         "SELECT je.id, je.encrypted_content, je.mood, je.privacy_mode, je.location_weather, je.book_id, je.pinned, je.created_at, je.updated_at,
+                je.sealed_until, je.capsule_type, je.linked_original_id, je.unsealed_at,
                 COALESCE(GROUP_CONCAT(t.name, ','), '') as tags
          FROM journal_entries je
          LEFT JOIN entry_tags et ON je.id = et.entry_id
@@ -489,24 +558,7 @@ pub fn create_entry(
          WHERE je.id = ?1
          GROUP BY je.id",
         params![id],
-        |row| {
-            let content_json: String = row.get(1)?;
-            let ec: EncryptedContent = serde_json::from_str(&content_json)
-                .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
-
-            Ok(JournalEntryRow {
-                id: row.get(0)?,
-                encrypted_content: ec,
-                mood: row.get(2)?,
-                privacy_mode: row.get(3)?,
-                location_weather: row.get(4)?,
-                book_id: row.get::<_, Option<String>>(5)?.unwrap_or_else(|| "default".to_string()),
-                pinned: row.get::<_, i32>(6)? != 0,
-                created_at: row.get(7)?,
-                updated_at: row.get(8)?,
-                tags: parse_tags(row.get(9)?),
-            })
-        },
+        map_entry_row,
     )
     .map_err(|e| format!("Failed to fetch created entry: {}", e))
 }
@@ -612,6 +664,7 @@ pub fn get_entry(db: &Database, id: &str) -> Result<Option<JournalEntryRow>, Str
 
     let result = conn.query_row(
         "SELECT je.id, je.encrypted_content, je.mood, je.privacy_mode, je.location_weather, je.book_id, je.pinned, je.created_at, je.updated_at,
+                je.sealed_until, je.capsule_type, je.linked_original_id, je.unsealed_at,
                 COALESCE(GROUP_CONCAT(t.name, ','), '') as tags
          FROM journal_entries je
          LEFT JOIN entry_tags et ON je.id = et.entry_id
@@ -619,24 +672,7 @@ pub fn get_entry(db: &Database, id: &str) -> Result<Option<JournalEntryRow>, Str
          WHERE je.id = ?1
          GROUP BY je.id",
         params![id],
-        |row| {
-            let content_json: String = row.get(1)?;
-            let encrypted_content: EncryptedContent = serde_json::from_str(&content_json)
-                .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
-
-            Ok(JournalEntryRow {
-                id: row.get(0)?,
-                encrypted_content,
-                mood: row.get(2)?,
-                privacy_mode: row.get(3)?,
-                location_weather: row.get(4)?,
-                book_id: row.get::<_, Option<String>>(5)?.unwrap_or_else(|| "default".to_string()),
-                pinned: row.get::<_, i32>(6)? != 0,
-                created_at: row.get(7)?,
-                updated_at: row.get(8)?,
-                tags: parse_tags(row.get(9)?),
-            })
-        },
+        map_entry_row,
     );
 
     match result {
@@ -655,6 +691,7 @@ pub fn get_all_entries(db: &Database, limit: Option<i32>) -> Result<Vec<JournalE
     let mut stmt = conn
         .prepare(&format!(
             "SELECT je.id, je.encrypted_content, je.mood, je.privacy_mode, je.location_weather, je.book_id, je.pinned, je.created_at, je.updated_at,
+                    je.sealed_until, je.capsule_type, je.linked_original_id, je.unsealed_at,
                     COALESCE(GROUP_CONCAT(t.name, ','), '') as tags
              FROM journal_entries je
              LEFT JOIN entry_tags et ON je.id = et.entry_id
@@ -666,26 +703,7 @@ pub fn get_all_entries(db: &Database, limit: Option<i32>) -> Result<Vec<JournalE
         .map_err(|e| format!("Prepare failed: {}", e))?;
 
     let entries = stmt
-        .query_map([], |row| {
-            let content_json: String = row.get(1)?;
-            let encrypted_content: EncryptedContent = serde_json::from_str(&content_json)
-                .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
-
-            Ok(JournalEntryRow {
-                id: row.get(0)?,
-                encrypted_content,
-                mood: row.get(2)?,
-                privacy_mode: row.get(3)?,
-                location_weather: row.get(4)?,
-                book_id: row
-                    .get::<_, Option<String>>(5)?
-                    .unwrap_or_else(|| "default".to_string()),
-                pinned: row.get::<_, i32>(6)? != 0,
-                created_at: row.get(7)?,
-                updated_at: row.get(8)?,
-                tags: parse_tags(row.get(9)?),
-            })
-        })
+        .query_map([], map_entry_row)
         .map_err(|e| format!("Query failed: {}", e))?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| format!("Row parsing failed: {}", e))?;
@@ -704,6 +722,7 @@ pub fn get_entries_by_date_range(
     let mut stmt = conn
         .prepare(
             "SELECT je.id, je.encrypted_content, je.mood, je.privacy_mode, je.location_weather, je.book_id, je.pinned, je.created_at, je.updated_at,
+                    je.sealed_until, je.capsule_type, je.linked_original_id, je.unsealed_at,
                     COALESCE(GROUP_CONCAT(t.name, ','), '') as tags
              FROM journal_entries je
              LEFT JOIN entry_tags et ON je.id = et.entry_id
@@ -715,26 +734,7 @@ pub fn get_entries_by_date_range(
         .map_err(|e| format!("Prepare failed: {}", e))?;
 
     let entries = stmt
-        .query_map(params![start_date, end_date], |row| {
-            let content_json: String = row.get(1)?;
-            let encrypted_content: EncryptedContent = serde_json::from_str(&content_json)
-                .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
-
-            Ok(JournalEntryRow {
-                id: row.get(0)?,
-                encrypted_content,
-                mood: row.get(2)?,
-                privacy_mode: row.get(3)?,
-                location_weather: row.get(4)?,
-                book_id: row
-                    .get::<_, Option<String>>(5)?
-                    .unwrap_or_else(|| "default".to_string()),
-                pinned: row.get::<_, i32>(6)? != 0,
-                created_at: row.get(7)?,
-                updated_at: row.get(8)?,
-                tags: parse_tags(row.get(9)?),
-            })
-        })
+        .query_map(params![start_date, end_date], map_entry_row)
         .map_err(|e| format!("Query failed: {}", e))?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| format!("Row parsing failed: {}", e))?;
@@ -771,6 +771,7 @@ pub fn update_entry(
     // Fetch the updated entry using the same connection (avoid deadlock/race)
     conn.query_row(
         "SELECT je.id, je.encrypted_content, je.mood, je.privacy_mode, je.location_weather, je.book_id, je.pinned, je.created_at, je.updated_at,
+                je.sealed_until, je.capsule_type, je.linked_original_id, je.unsealed_at,
                 COALESCE(GROUP_CONCAT(t.name, ','), '') as tags
          FROM journal_entries je
          LEFT JOIN entry_tags et ON je.id = et.entry_id
@@ -778,24 +779,7 @@ pub fn update_entry(
          WHERE je.id = ?1
          GROUP BY je.id",
         params![id],
-        |row| {
-            let content_json: String = row.get(1)?;
-            let ec: EncryptedContent = serde_json::from_str(&content_json)
-                .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
-
-            Ok(JournalEntryRow {
-                id: row.get(0)?,
-                encrypted_content: ec,
-                mood: row.get(2)?,
-                privacy_mode: row.get(3)?,
-                location_weather: row.get(4)?,
-                book_id: row.get::<_, Option<String>>(5)?.unwrap_or_else(|| "default".to_string()),
-                pinned: row.get::<_, i32>(6)? != 0,
-                created_at: row.get(7)?,
-                updated_at: row.get(8)?,
-                tags: parse_tags(row.get(9)?),
-            })
-        },
+        map_entry_row,
     )
     .map_err(|e| format!("Failed to fetch updated entry: {}", e))
 }

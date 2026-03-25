@@ -540,15 +540,17 @@ export function TimelineView({ onSelectEntry, onNewEntry }: TimelineViewProps) {
                 const hasMood = entry.mood !== null && entry.mood > 0;
                 const moodColor = hasMood ? getMoodColor(entry.mood!) : null;
                 return (
-                  <button
+                  <div
                     key={entry.id}
-                    type="button"
+                    role="button"
+                    tabIndex={0}
                     onClick={() => onSelectEntry(entry.id)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelectEntry(entry.id); } }}
                     style={{
                       animationDelay: `${i * 50}ms`,
                       ...(moodColor ? { borderLeftColor: moodColor } : {}),
                     }}
-                    className="relative w-full text-left p-4 rounded-xl bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-900/30 border-l-4 hover:shadow-md hover:-translate-y-0.5 transition-all duration-150 group animate-entry-in"
+                    className="relative w-full text-left p-4 rounded-xl bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-900/30 border-l-4 hover:shadow-md hover:-translate-y-0.5 transition-all duration-150 group animate-entry-in cursor-pointer"
                   >
                     <EntryActionsMenu
                       entry={entry}
@@ -591,7 +593,7 @@ export function TimelineView({ onSelectEntry, onNewEntry }: TimelineViewProps) {
                         })()}
                       </div>
                     </div>
-                  </button>
+                  </div>
                 );
               })}
             </div>
@@ -617,15 +619,17 @@ export function TimelineView({ onSelectEntry, onNewEntry }: TimelineViewProps) {
                 const hasMood = entry.mood !== null && entry.mood > 0;
                 const moodColor = hasMood ? getMoodColor(entry.mood!) : null;
                 return (
-                  <button
+                  <div
                     key={entry.id}
-                    type="button"
+                    role="button"
+                    tabIndex={0}
                     onClick={() => onSelectEntry(entry.id)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelectEntry(entry.id); } }}
                     style={{
                       animationDelay: `${i * 50}ms`,
                       ...(moodColor ? { borderLeftColor: moodColor } : {}),
                     }}
-                    className={`relative w-full text-left p-4 bg-white dark:bg-slate-900 border-l-4 border-slate-100 dark:border-slate-800 transition-all duration-150 group animate-entry-in ${
+                    className={`relative w-full text-left p-4 bg-white dark:bg-slate-900 border-l-4 border-slate-100 dark:border-slate-800 transition-all duration-150 group animate-entry-in cursor-pointer ${
                       isAndroid
                         ? 'border-b active:bg-slate-50 dark:active:bg-slate-800/50 active:scale-[0.99] pl-3'
                         : 'rounded-xl border shadow-sm hover:border-slate-200 dark:hover:border-slate-700 hover:shadow-md hover:-translate-y-0.5'
@@ -784,7 +788,7 @@ export function TimelineView({ onSelectEntry, onNewEntry }: TimelineViewProps) {
                         <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                       </svg>
                     </div>
-                  </button>
+                  </div>
                 );
               })}
             </div>

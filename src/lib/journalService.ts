@@ -29,7 +29,7 @@ import type {
 
 interface EncryptedJournalEntryRow {
   id: string;
-  encrypted_content: EncryptedData;
+  encrypted_content: EncryptedData | null; // null for sealed entries not yet due
   mood: number;
   privacy_mode: number;
   location_weather?: string; // JSON-encoded LocationWeather, not encrypted
@@ -38,6 +38,10 @@ interface EncryptedJournalEntryRow {
   created_at: string;
   updated_at: string;
   tags: string[]; // Populated by GROUP_CONCAT join in Rust
+  sealed_until?: string | null;
+  capsule_type?: string | null;
+  linked_original_id?: string | null;
+  unsealed_at?: string | null;
 }
 
 interface UserSettings {
@@ -366,6 +370,9 @@ async function decryptEntry(
   row: EncryptedJournalEntryRow,
   password: string
 ): Promise<JournalEntry> {
+  if (!row.encrypted_content) {
+    throw new Error('Entry is sealed — content not available');
+  }
   const result = await decrypt(row.encrypted_content, password);
 
   if (!result.success || result.data === undefined) {

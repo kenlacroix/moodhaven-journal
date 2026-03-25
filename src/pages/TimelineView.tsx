@@ -26,9 +26,10 @@ const getCurrentDateStr = () => formatDate(new Date());
 interface TimelineViewProps {
   onSelectEntry: (entryId: string) => void;
   onNewEntry: () => void;
+  onSealEntry?: (id: string) => void;
 }
 
-export function TimelineView({ onSelectEntry, onNewEntry }: TimelineViewProps) {
+export function TimelineView({ onSelectEntry, onNewEntry, onSealEntry }: TimelineViewProps) {
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [moodFilter, setMoodFilter] = useState<number | null>(null);
@@ -555,6 +556,7 @@ export function TimelineView({ onSelectEntry, onNewEntry }: TimelineViewProps) {
                     <EntryActionsMenu
                       entry={entry}
                       onDelete={handleDelete}
+                      onSealEntry={onSealEntry}
                       onPinToggle={async (pinned) => {
                         handlePinToggle(entry.id, pinned);
                         try { await patchEntryPinned(entry.id, pinned); }
@@ -639,6 +641,7 @@ export function TimelineView({ onSelectEntry, onNewEntry }: TimelineViewProps) {
                     <EntryActionsMenu
                       entry={entry}
                       onDelete={handleDelete}
+                      onSealEntry={onSealEntry}
                       onPinToggle={async (pinned) => {
                         handlePinToggle(entry.id, pinned);
                         try { await patchEntryPinned(entry.id, pinned); }

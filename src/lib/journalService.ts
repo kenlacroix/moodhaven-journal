@@ -393,6 +393,10 @@ async function decryptEntry(
     pinned: row.pinned ?? false,
     created_at: row.created_at,
     updated_at: row.updated_at,
+    sealedUntil: row.sealed_until ?? null,
+    capsuleType: (row.capsule_type ?? null) as 'letter' | 'vault' | 'anniversary' | null,
+    linkedOriginalId: row.linked_original_id ?? null,
+    unsealedAt: row.unsealed_at ?? null,
   };
 }
 

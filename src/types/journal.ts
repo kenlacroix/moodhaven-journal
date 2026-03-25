@@ -125,6 +125,11 @@ export interface JournalEntry {
   pinned?: boolean; // Whether this entry is pinned/favourited
   created_at: string; // ISO string for easy serialization
   updated_at: string;
+  // Time capsule fields
+  sealedUntil?: string | null;
+  capsuleType?: 'letter' | 'vault' | 'anniversary' | null;
+  linkedOriginalId?: string | null;
+  unsealedAt?: string | null;
 }
 
 // Encrypted journal entry (stored in database)

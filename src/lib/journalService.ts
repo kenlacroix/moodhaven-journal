@@ -227,9 +227,10 @@ export async function getAllEntries(
     { limit }
   );
 
-  // Decrypt all entries in parallel
+  // Skip sealed entries (encrypted_content is null until revealed)
+  const decryptable = rows.filter((row) => row.encrypted_content !== null);
   const entries = await Promise.all(
-    rows.map((row) => decryptEntry(row, password))
+    decryptable.map((row) => decryptEntry(row, password))
   );
 
   return entries;
@@ -252,8 +253,10 @@ export async function getEntriesByDateRange(
     }
   );
 
+  // Skip sealed entries (encrypted_content is null until revealed)
+  const decryptable = rows.filter((row) => row.encrypted_content !== null);
   const entries = await Promise.all(
-    rows.map((row) => decryptEntry(row, password))
+    decryptable.map((row) => decryptEntry(row, password))
   );
 
   return entries;

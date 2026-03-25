@@ -72,3 +72,7 @@ docs/internal/
 # Internal planning and retro data — not for public repo
 ceo-plans/
 .context/
+
+# Claude Code — local settings and worktree state (machine-specific)
+.claude/settings.local.json
+.claude/worktrees/

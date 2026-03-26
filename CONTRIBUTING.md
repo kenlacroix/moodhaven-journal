@@ -47,13 +47,13 @@ Please **open an issue** to discuss significant changes before opening a pull re
 git clone https://github.com/kenlacroix/moodhaven-journal.git
 cd moodhaven-journal
 npm install
-npm run tauri:dev      # Hot-reload dev server
+npm run tauri dev      # Hot-reload dev server
 ```
 
 ### Verify the Setup
 
 ```bash
-npm test               # All 371 tests should pass
+npm test               # All 488 tests should pass
 npm run typecheck      # No TypeScript errors
 cd src-tauri && cargo check    # Rust compiles cleanly
 ```

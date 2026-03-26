@@ -6,6 +6,7 @@ vi.mock('../lib/journalService', () => ({
   setupPassword: vi.fn(),
   unlockJournal: vi.fn(),
   lockJournal: vi.fn(),
+  devBypassUnlock: vi.fn(),
 }));
 
 import {
@@ -13,12 +14,14 @@ import {
   setupPassword,
   unlockJournal,
   lockJournal,
+  devBypassUnlock,
 } from '../lib/journalService';
 
 const mockHasPassword = vi.mocked(hasPassword);
 const mockSetupPassword = vi.mocked(setupPassword);
 const mockUnlockJournal = vi.mocked(unlockJournal);
 const mockLockJournal = vi.mocked(lockJournal);
+const mockDevBypassUnlock = vi.mocked(devBypassUnlock);
 
 describe('appStore', () => {
   beforeEach(() => {
@@ -62,6 +65,17 @@ describe('appStore', () => {
       mockHasPassword.mockRejectedValue(new Error('DB error'));
       await useAppStore.getState().checkInitialization();
       expect(useAppStore.getState().isInitialized).toBe(false);
+    });
+
+    it('bypasses DB when VITE_DEV_MODE is bypass', async () => {
+      vi.stubEnv('VITE_DEV_MODE', 'bypass');
+      await useAppStore.getState().checkInitialization();
+      expect(mockDevBypassUnlock).toHaveBeenCalledWith('dev-bypass');
+      expect(useAppStore.getState().isInitialized).toBe(true);
+      expect(useAppStore.getState().isUnlocked).toBe(true);
+      expect(useAppStore.getState().sessionPassword).toBe('dev-bypass');
+      expect(mockHasPassword).not.toHaveBeenCalled();
+      vi.unstubAllEnvs();
     });
   });
 

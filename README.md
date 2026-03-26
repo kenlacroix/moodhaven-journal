@@ -7,10 +7,10 @@
 <p><strong>A calm, encrypted desktop journal with mood tracking, AI insights, and local peer sync</strong></p>
 
 <p>
-<a href="https://github.com/kenlacroix/moodhaven-journal/releases"><img src="https://img.shields.io/badge/version-0.7.4-7c3aed?style=flat-square" alt="Version"></a>
+<a href="https://github.com/kenlacroix/moodhaven-journal/releases"><img src="https://img.shields.io/badge/version-0.7.6-7c3aed?style=flat-square" alt="Version"></a>
 <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-22c55e?style=flat-square" alt="License"></a>
 <a href="#installation"><img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-0ea5e9?style=flat-square" alt="Platform"></a>
-<a href="#tech-stack"><img src="https://img.shields.io/badge/tests-450%20passing-22c55e?style=flat-square" alt="Tests"></a>
+<a href="#tech-stack"><img src="https://img.shields.io/badge/tests-488%20passing-22c55e?style=flat-square" alt="Tests"></a>
 <a href="https://tauri.app"><img src="https://img.shields.io/badge/built%20with-Tauri%202-ffd866?style=flat-square" alt="Built with Tauri"></a>
 <a href="#security--privacy"><img src="https://img.shields.io/badge/encryption-AES--256--GCM-ef4444?style=flat-square" alt="Encryption"></a>
 </p>
@@ -76,10 +76,10 @@ Grab the latest build from the [Releases](https://github.com/kenlacroix/moodhave
 
 | Platform | Installer | Minimum Version |
 |:---|:---|:---|
-| **Windows** | `MoodBloom_0.7.4_x64-setup.exe` | Windows 10 |
-| **macOS** | `MoodBloom_0.7.4_x64.dmg` | macOS 10.15 Catalina |
-| **Linux** | `moodbloom_0.7.4_amd64.AppImage` | Any modern distro |
-| **Linux (Debian)** | `moodbloom_0.7.4_amd64.deb` | Ubuntu 22.04+ |
+| **Windows** | `MoodBloom_0.7.6_x64-setup.exe` | Windows 10 |
+| **macOS** | `MoodBloom_0.7.6_x64.dmg` | macOS 10.15 Catalina |
+| **Linux** | `moodbloom_0.7.6_amd64.AppImage` | Any modern distro |
+| **Linux (Debian)** | `moodbloom_0.7.6_amd64.deb` | Ubuntu 22.04+ |
 
 ### First Launch
 
@@ -249,7 +249,7 @@ npm run tauri build
 
 ```bash
 npm install
-npm run tauri:dev    # Hot-reload dev server
+npm run tauri dev    # Hot-reload dev server
 ```
 
 ### Build with Hardware Key Support
@@ -279,7 +279,7 @@ Full cross-platform build guide: [docs/build.md](docs/build.md)
 | **Peer discovery** | mDNS/DNS-SD ([mdns-sd](https://github.com/keepsimple1/mdns-sd)) |
 | **2FA** | [totp-rs](https://github.com/constantoine/totp-rs) + native CTAP2/HID |
 | **Charts** | Custom SVG (no charting library dependency) |
-| **Testing** | [Vitest](https://vitest.dev) + Testing Library (450 tests) |
+| **Testing** | [Vitest](https://vitest.dev) + Testing Library (488 tests) |
 | **Build** | Vite 5 + `npm run tauri build` |
 
 ---
@@ -316,11 +316,11 @@ Please open an issue to discuss significant changes before opening a PR. For sec
 git clone https://github.com/kenlacroix/moodhaven-journal.git
 cd moodhaven-journal
 npm install
-npm run tauri:dev
+npm run tauri dev
 ```
 
 ```bash
-npm test                          # Run 450 tests
+npm test                          # Run 488 tests
 npm run typecheck                 # TypeScript strict check
 cd src-tauri && cargo check       # Rust compilation check
 ```
@@ -331,11 +331,11 @@ See [CLAUDE.md](CLAUDE.md) for architectural decisions, security guidelines, and
 
 ## Recent Changes
 
-**v0.7.4** — Sidebar header icon size consistency
-**v0.7.3** — SetupScreen decomposition, CI security audits (`cargo deny` + `cargo audit`), four STT hardening fixes, 450 tests
+**v0.7.6** — `VITE_DEV_MODE=bypass` dev-only unlock for QA automation (guarded by `import.meta.env.DEV`, never active in production)
+**v0.7.5** — Time Capsule feature: seal entries until a future date, anniversary auto-reveal, mood delta on reveal
+**v0.7.4** — Reading time estimate, daily-rotating greeting, focus mode exit hint, save micro-animation, 17 new tests
+**v0.7.3** — SetupScreen decomposition, CI security audits (`cargo deny` + `cargo audit`), four STT hardening fixes, 488 tests
 **v0.7.2** — 3-layer transcript formatting pipeline (L1 local rules / L2 Ollama / L3 OpenAI BYOK), transcript preview overlay, mic permission modals
-**v0.7.1** — STT foundation: whisper sidecar commands, timestamped transcription, formatting settings
-**v0.7.0** — Encrypted peer sync engine (TCP manifest-diff, AES-GCM, LWW conflict resolution)
 
 Full history: [CHANGELOG.md](CHANGELOG.md)
 

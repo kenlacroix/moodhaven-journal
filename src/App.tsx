@@ -105,7 +105,7 @@ function MainApp() {
 
   // Show tutorial on first unlock when user hasn't seen it
   useEffect(() => {
-    if (isUnlocked && hasSeenTutorial === false) {
+    if (isUnlocked && hasSeenTutorial === false && !import.meta.env.VITE_DEV_MODE) {
       setShowTutorial(true);
     }
   }, [isUnlocked, hasSeenTutorial]);

@@ -27,9 +27,10 @@ interface TimelineViewProps {
   onSelectEntry: (entryId: string) => void;
   onNewEntry: () => void;
   onSealEntry?: (id: string) => void;
+  refreshTrigger?: number;
 }
 
-export function TimelineView({ onSelectEntry, onNewEntry, onSealEntry }: TimelineViewProps) {
+export function TimelineView({ onSelectEntry, onNewEntry, onSealEntry, refreshTrigger }: TimelineViewProps) {
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [moodFilter, setMoodFilter] = useState<number | null>(null);
@@ -61,7 +62,7 @@ export function TimelineView({ onSelectEntry, onNewEntry, onSealEntry }: Timelin
   useEffect(() => {
     loadEntries();
     loadMediaCounts();
-  }, []);
+  }, [refreshTrigger]);
 
   // Auto-refresh relative dates when calendar date changes
   useEffect(() => {

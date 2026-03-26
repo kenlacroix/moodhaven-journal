@@ -65,6 +65,7 @@ function MainApp() {
    */
   const [writingKey, setWritingKey] = useState(0);
   const [sealingEntryId, setSealingEntryId] = useState<string | null>(null);
+  const [timelineRefresh, setTimelineRefresh] = useState(0);
 
   const { isAndroid } = usePlatform();
 
@@ -238,6 +239,7 @@ function MainApp() {
               onSelectEntry={handleSelectEntry}
               onNewEntry={handleNewEntry}
               onSealEntry={(id) => setSealingEntryId(id)}
+              refreshTrigger={timelineRefresh}
             />
           )}
 
@@ -274,7 +276,7 @@ function MainApp() {
         <TimeCapsuleRevealModal
           capsule={pendingCapsule}
           password={sessionPassword}
-          onReveal={revealCapsule}
+          onReveal={async (id) => { await revealCapsule(id); setTimelineRefresh((n) => n + 1); }}
           onWriteResponse={() => { dismissCapsule(); handleNewEntry(); }}
           onDismiss={dismissCapsule}
         />
@@ -283,7 +285,7 @@ function MainApp() {
         <SealEntryModal
           entryId={sealingEntryId}
           defaultDays={useSettingsStore.getState().settings.timeCapsule?.defaultSealDays ?? 30}
-          onSeal={() => setSealingEntryId(null)}
+          onSeal={() => { setSealingEntryId(null); setTimelineRefresh((n) => n + 1); }}
           onCancel={() => setSealingEntryId(null)}
         />
       )}

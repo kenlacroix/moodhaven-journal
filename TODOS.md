@@ -103,5 +103,6 @@
 **Context:** Identified during Time Layer design review (2026-03-25). The plan specifies interaction states but never mentions focus management or keyboard nav.
 **Depends on:** Time Layer PR (feat/time-layer).
 **Effort:** human ~30min / CC+gstack ~5min
+**Completed:** feat/time-layer (2026-03-25) — aria-modal, firstFocusRef on mount, ESC keydown handler all implemented in TimeCapsuleRevealModal.tsx and SealEntryModal.tsx.
 
 ---

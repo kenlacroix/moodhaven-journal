@@ -119,6 +119,11 @@ export function lockJournal(): void {
   sessionPassword = null;
 }
 
+/** Dev-only: set session password without DB verification. Never call in production. */
+export function devBypassUnlock(password: string): void {
+  sessionPassword = password;
+}
+
 /**
  * Check if journal is unlocked
  */

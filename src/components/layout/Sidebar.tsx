@@ -43,7 +43,9 @@ export function Sidebar({ currentView, onNavigate, onOpenSync, onNavigateToJourn
         localStorage.setItem('mb_first_launch_date', new Date().toISOString());
         return false;
       }
-      const daysSince = (Date.now() - new Date(firstLaunch).getTime()) / 86_400_000;
+      const parsed = new Date(firstLaunch).getTime();
+      if (isNaN(parsed)) return false;
+      const daysSince = (Date.now() - parsed) / 86_400_000;
       return daysSince >= 30;
     } catch { return false; }
   });

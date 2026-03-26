@@ -775,8 +775,9 @@ fn db_upsert_entry(conn: &Connection, row: &JournalEntryRow) -> Result<bool, Str
             conn.execute(
                 "INSERT INTO journal_entries \
                  (id, encrypted_content, mood, privacy_mode, location_weather, \
-                  book_id, pinned, created_at, updated_at) \
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                  book_id, pinned, created_at, updated_at, \
+                  sealed_until, capsule_type, linked_original_id, unsealed_at) \
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
                 rusqlite::params![
                     row.id,
                     ec_json,
@@ -786,7 +787,11 @@ fn db_upsert_entry(conn: &Connection, row: &JournalEntryRow) -> Result<bool, Str
                     row.book_id,
                     row.pinned as i32,
                     row.created_at,
-                    row.updated_at
+                    row.updated_at,
+                    row.sealed_until,
+                    row.capsule_type,
+                    row.linked_original_id,
+                    row.unsealed_at,
                 ],
             )
             .map_err(|e| format!("insert entry: {e}"))?;
@@ -798,7 +803,9 @@ fn db_upsert_entry(conn: &Connection, row: &JournalEntryRow) -> Result<bool, Str
             conn.execute(
                 "UPDATE journal_entries \
                  SET encrypted_content = ?2, mood = ?3, privacy_mode = ?4, \
-                     location_weather = ?5, book_id = ?6, pinned = ?7, updated_at = ?8 \
+                     location_weather = ?5, book_id = ?6, pinned = ?7, updated_at = ?8, \
+                     sealed_until = ?9, capsule_type = ?10, \
+                     linked_original_id = ?11, unsealed_at = ?12 \
                  WHERE id = ?1",
                 rusqlite::params![
                     row.id,
@@ -808,7 +815,11 @@ fn db_upsert_entry(conn: &Connection, row: &JournalEntryRow) -> Result<bool, Str
                     row.location_weather,
                     row.book_id,
                     row.pinned as i32,
-                    row.updated_at
+                    row.updated_at,
+                    row.sealed_until,
+                    row.capsule_type,
+                    row.linked_original_id,
+                    row.unsealed_at,
                 ],
             )
             .map_err(|e| format!("update entry: {e}"))?;

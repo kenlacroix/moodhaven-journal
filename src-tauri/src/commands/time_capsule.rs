@@ -24,6 +24,9 @@ pub fn seal_entry(
     unlock_at: String,
     capsule_type: String,
 ) -> Result<(), String> {
+    if !["letter", "vault"].contains(&capsule_type.as_str()) {
+        return Err(format!("Invalid capsule_type: {capsule_type}"));
+    }
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
     let rows = conn
@@ -47,10 +50,20 @@ pub fn seal_entry(
 /// - Excludes entries whose M/D matches today (those belong to On This Day).
 /// - Always returns encrypted content so the reveal modal can decrypt it.
 #[tauri::command]
-pub fn get_due_capsules(db: State<Database>) -> Result<Option<JournalEntryRow>, String> {
+pub fn get_due_capsules(
+    db: State<Database>,
+    include_anniversary: bool,
+) -> Result<Option<JournalEntryRow>, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
-    let result = conn.query_row(
+    let anniversary_clause = if include_anniversary {
+        "OR (je.sealed_until IS NULL AND je.capsule_type IS NULL
+             AND date(je.created_at) <= date('now', '-365 days'))"
+    } else {
+        ""
+    };
+
+    let sql = format!(
         "SELECT je.id, je.encrypted_content, je.mood, je.privacy_mode, je.location_weather,
                 je.book_id, je.pinned, je.created_at, je.updated_at,
                 je.sealed_until, je.capsule_type, je.linked_original_id, je.unsealed_at,
@@ -61,16 +74,18 @@ pub fn get_due_capsules(db: State<Database>) -> Result<Option<JournalEntryRow>, 
          WHERE je.unsealed_at IS NULL
            AND (
              (je.sealed_until IS NOT NULL AND datetime(je.sealed_until) <= datetime('now'))
-             OR
-             (je.sealed_until IS NULL AND je.capsule_type IS NULL
-              AND date(je.created_at) <= date('now', '-365 days'))
+             {anniversary_clause}
            )
            AND NOT (strftime('%m-%d', je.created_at) = strftime('%m-%d', 'now'))
          GROUP BY je.id
          ORDER BY
            CASE WHEN je.sealed_until IS NOT NULL THEN 0 ELSE 1 END,
            je.sealed_until ASC
-         LIMIT 1",
+         LIMIT 1"
+    );
+
+    let result = conn.query_row(
+        &sql,
         [],
         |row| {
             let content_json: String = row.get(1)?;
@@ -121,7 +136,7 @@ pub fn unseal_entry(db: State<Database>, id: String) -> Result<(), String> {
     let rows = conn
         .execute(
             "UPDATE journal_entries
-             SET unsealed_at = strftime('%Y-%m-%dT%H:%M:%S', 'now', 'localtime'),
+             SET unsealed_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'),
                  capsule_type = COALESCE(capsule_type, 'anniversary'),
                  sealed_until = NULL
              WHERE id = ?1",

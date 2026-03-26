@@ -16,6 +16,7 @@ import type {
   STTModel,
   STTFormattingLayer,
   OuraSettings,
+  TimeCapsuleSettings,
 } from '../types/settings';
 import { createDefaultSettings } from '../types/settings';
 import {
@@ -108,6 +109,9 @@ interface SettingsState {
   setPeerSyncLanOnly: (lanOnly: boolean) => void;
   setPeerSyncIntervalSecs: (secs: number) => void;
   setPeerSyncEnabled: (enabled: boolean) => void;
+
+  // Time Capsule
+  setTimeCapsuleSettings: (updates: Partial<TimeCapsuleSettings>) => void;
 
   // Navigation
   setScrollToSection: (section: SettingsScrollTarget) => void;
@@ -665,6 +669,17 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   setPeerSyncEnabled: (peerSyncEnabled) => {
     set((state) => ({
       settings: { ...state.settings, sync: { ...state.settings.sync, peerSyncEnabled } },
+      hasUnsavedChanges: true,
+    }));
+  },
+
+  // Time Capsule
+  setTimeCapsuleSettings: (updates) => {
+    set((state) => ({
+      settings: {
+        ...state.settings,
+        timeCapsule: { ...state.settings.timeCapsule, ...updates },
+      },
       hasUnsavedChanges: true,
     }));
   },

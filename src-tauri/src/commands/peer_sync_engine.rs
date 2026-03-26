@@ -669,6 +669,7 @@ fn db_get_entries_full(conn: &Connection, ids: &[String]) -> Result<Vec<JournalE
                 "SELECT je.id, je.encrypted_content, je.mood, je.privacy_mode,
                         je.location_weather, je.book_id, je.pinned,
                         je.created_at, je.updated_at,
+                        je.sealed_until, je.capsule_type, je.linked_original_id, je.unsealed_at,
                         COALESCE(GROUP_CONCAT(t.name, ','), '') AS tags
                  FROM journal_entries je
                  LEFT JOIN entry_tags et ON et.entry_id = je.id
@@ -678,12 +679,8 @@ fn db_get_entries_full(conn: &Connection, ids: &[String]) -> Result<Vec<JournalE
                 rusqlite::params![id],
                 |r| {
                     let ec_json: String = r.get(1)?;
-                    let tags_str: String = r.get(9)?;
-                    let tags: Vec<String> = if tags_str.is_empty() {
-                        vec![]
-                    } else {
-                        tags_str.split(',').map(|s| s.to_string()).collect()
-                    };
+                    let tags_str: Option<String> = r.get(13)?;
+                    let tags = crate::db::parse_tags(tags_str);
                     let ec: crate::db::EncryptedContent =
                         serde_json::from_str(&ec_json).map_err(|e| {
                             rusqlite::Error::FromSqlConversionFailure(
@@ -697,14 +694,18 @@ fn db_get_entries_full(conn: &Connection, ids: &[String]) -> Result<Vec<JournalE
                         })?;
                     Ok(JournalEntryRow {
                         id: r.get(0)?,
-                        encrypted_content: ec,
+                        encrypted_content: Some(ec),
                         mood: r.get(2)?,
                         privacy_mode: r.get(3)?,
                         location_weather: r.get(4)?,
-                        book_id: r.get(5)?,
+                        book_id: r.get::<_, Option<String>>(5)?.unwrap_or_else(|| "default".to_string()),
                         pinned: r.get::<_, i32>(6)? != 0,
                         created_at: r.get(7)?,
                         updated_at: r.get(8)?,
+                        sealed_until: r.get(9)?,
+                        capsule_type: r.get(10)?,
+                        linked_original_id: r.get(11)?,
+                        unsealed_at: r.get(12)?,
                         tags,
                     })
                 },
@@ -753,8 +754,11 @@ fn db_upsert_tags(conn: &Connection, entry_id: &str, tags: &[String]) -> Result<
 }
 
 fn db_upsert_entry(conn: &Connection, row: &JournalEntryRow) -> Result<bool, String> {
-    let ec_json =
-        serde_json::to_string(&row.encrypted_content).map_err(|e| format!("serialize ec: {e}"))?;
+    let ec = row
+        .encrypted_content
+        .as_ref()
+        .ok_or("encrypted_content is None — cannot sync sealed entry")?;
+    let ec_json = serde_json::to_string(ec).map_err(|e| format!("serialize ec: {e}"))?;
 
     // Check existing updated_at
     let existing: Option<String> = conn
@@ -771,8 +775,9 @@ fn db_upsert_entry(conn: &Connection, row: &JournalEntryRow) -> Result<bool, Str
             conn.execute(
                 "INSERT INTO journal_entries \
                  (id, encrypted_content, mood, privacy_mode, location_weather, \
-                  book_id, pinned, created_at, updated_at) \
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                  book_id, pinned, created_at, updated_at, \
+                  sealed_until, capsule_type, linked_original_id, unsealed_at) \
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
                 rusqlite::params![
                     row.id,
                     ec_json,
@@ -782,7 +787,11 @@ fn db_upsert_entry(conn: &Connection, row: &JournalEntryRow) -> Result<bool, Str
                     row.book_id,
                     row.pinned as i32,
                     row.created_at,
-                    row.updated_at
+                    row.updated_at,
+                    row.sealed_until,
+                    row.capsule_type,
+                    row.linked_original_id,
+                    row.unsealed_at,
                 ],
             )
             .map_err(|e| format!("insert entry: {e}"))?;
@@ -794,7 +803,9 @@ fn db_upsert_entry(conn: &Connection, row: &JournalEntryRow) -> Result<bool, Str
             conn.execute(
                 "UPDATE journal_entries \
                  SET encrypted_content = ?2, mood = ?3, privacy_mode = ?4, \
-                     location_weather = ?5, book_id = ?6, pinned = ?7, updated_at = ?8 \
+                     location_weather = ?5, book_id = ?6, pinned = ?7, updated_at = ?8, \
+                     sealed_until = ?9, capsule_type = ?10, \
+                     linked_original_id = ?11, unsealed_at = ?12 \
                  WHERE id = ?1",
                 rusqlite::params![
                     row.id,
@@ -804,7 +815,11 @@ fn db_upsert_entry(conn: &Connection, row: &JournalEntryRow) -> Result<bool, Str
                     row.location_weather,
                     row.book_id,
                     row.pinned as i32,
-                    row.updated_at
+                    row.updated_at,
+                    row.sealed_until,
+                    row.capsule_type,
+                    row.linked_original_id,
+                    row.unsealed_at,
                 ],
             )
             .map_err(|e| format!("update entry: {e}"))?;

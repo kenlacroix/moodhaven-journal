@@ -28,6 +28,9 @@ import { useUpdateCheck } from './hooks/useUpdateCheck';
 import { useWearSignals } from './hooks/useWearSignals';
 import { usePeerSync } from './hooks/usePeerSync';
 import { PeerSyncWireframes } from './pages/PeerSyncWireframes';
+import { useTimeCapsule } from './hooks/useTimeCapsule';
+import { TimeCapsuleRevealModal } from './components/timecapsule/TimeCapsuleRevealModal';
+import { SealEntryModal } from './components/timecapsule/SealEntryModal';
 
 // Detect special dev modes outside the component so hooks order is stable.
 const IS_BREAKOUT = new URLSearchParams(window.location.search).get('mode') === 'writer';
@@ -48,6 +51,7 @@ function MainApp() {
   const syncIntervalMinutes = useSettingsStore((s) => s.settings.sync?.syncIntervalMinutes ?? 0);
   const webdavConfig = useSettingsStore((s) => s.settings.storage?.webdav);
   const storageType = useSettingsStore((s) => s.settings.storage?.type);
+  const defaultSealDays = useSettingsStore((s) => s.settings.timeCapsule?.defaultSealDays ?? 30);
   const [isLoading, setIsLoading] = useState(true);
   const [currentView, setCurrentView] = useState<ViewType>('writing');
   const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
@@ -61,6 +65,8 @@ function MainApp() {
    * without needing to navigate away.
    */
   const [writingKey, setWritingKey] = useState(0);
+  const [sealingEntryId, setSealingEntryId] = useState<string | null>(null);
+  const [timelineRefresh, setTimelineRefresh] = useState(0);
 
   const { isAndroid } = usePlatform();
 
@@ -82,6 +88,11 @@ function MainApp() {
   // Peer-to-peer sync — initializes device identity and starts mDNS discovery.
   // Runs for the entire app lifetime; discovery state lives in peerSyncStore.
   usePeerSync();
+
+  // Time capsule — polls once per session on unlock for due capsules.
+  const { pendingCapsule, revealCapsule, dismissCapsule } = useTimeCapsule({
+    enabled: isUnlocked && !!sessionPassword,
+  });
 
   useEffect(() => {
     const init = async () => {
@@ -228,6 +239,8 @@ function MainApp() {
             <TimelineView
               onSelectEntry={handleSelectEntry}
               onNewEntry={handleNewEntry}
+              onSealEntry={(id) => setSealingEntryId(id)}
+              refreshTrigger={timelineRefresh}
             />
           )}
 
@@ -260,6 +273,23 @@ function MainApp() {
       {showTutorial && <TutorialWizard onComplete={handleTutorialComplete} />}
       {showSyncModal && <SyncDetailsModal onClose={() => setShowSyncModal(false)} onNavigateToSettings={() => handleNavigateToSettings()} />}
       {showSettings && <SettingsPage updateHook={updateHook} onClose={() => setShowSettings(false)} />}
+      {pendingCapsule && sessionPassword && (
+        <TimeCapsuleRevealModal
+          capsule={pendingCapsule}
+          password={sessionPassword}
+          onReveal={async (id) => { await revealCapsule(id); setTimelineRefresh((n) => n + 1); }}
+          onWriteResponse={() => { dismissCapsule(); handleNewEntry(); }}
+          onDismiss={dismissCapsule}
+        />
+      )}
+      {sealingEntryId && (
+        <SealEntryModal
+          entryId={sealingEntryId}
+          defaultDays={defaultSealDays}
+          onSeal={() => { setSealingEntryId(null); setTimelineRefresh((n) => n + 1); }}
+          onCancel={() => setSealingEntryId(null)}
+        />
+      )}
     </>
   );
 }

@@ -17,9 +17,10 @@ interface EntryActionsMenuProps {
   entry: JournalEntry;
   onDelete: (id: string) => void;
   onPinToggle?: (pinned: boolean) => void;
+  onSealEntry?: (id: string) => void;
 }
 
-export function EntryActionsMenu({ entry, onDelete, onPinToggle }: EntryActionsMenuProps) {
+export function EntryActionsMenu({ entry, onDelete, onPinToggle, onSealEntry }: EntryActionsMenuProps) {
   const [open, setOpen] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState<'markdown' | 'text' | null>(null);
@@ -166,6 +167,29 @@ export function EntryActionsMenu({ entry, onDelete, onPinToggle }: EntryActionsM
             </svg>
             {copyFeedback === 'text' ? '✓ Copied!' : 'Copy text'}
           </button>
+
+          {/* Time capsule */}
+          {!entry.sealedUntil && !entry.unsealedAt && onSealEntry && (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={(e) => { e.stopPropagation(); onSealEntry(entry.id); setOpen(false); }}
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-left text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+            >
+              <svg className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+              Seal entry…
+            </button>
+          )}
+          {entry.unsealedAt && (
+            <div className="flex items-center gap-2.5 px-3 py-2 text-slate-400 dark:text-slate-500 text-sm select-none">
+              <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" />
+              </svg>
+              Revealed {new Date(entry.unsealedAt).toLocaleDateString()}
+            </div>
+          )}
 
           {/* Divider */}
           <div className="my-1 border-t border-slate-100 dark:border-slate-800" />

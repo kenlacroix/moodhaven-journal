@@ -149,6 +149,11 @@ commands.allow = [
   # Peer-to-peer sync — setup-time full DB restore
   "peer_full_restore",
   "peer_apply_and_restart",
+  # Time capsule
+  "seal_entry",
+  "get_due_capsules",
+  "unseal_entry",
+  "get_mood_delta",
 ]
 
 [default]

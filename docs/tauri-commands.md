@@ -1514,3 +1514,61 @@ Open or focus the standalone breakout writer window (desktop only).
 ```typescript
 invoke('open_writer_window') → Promise<void>
 ```
+
+---
+
+## Time Capsule
+
+**Source:** `src-tauri/src/commands/time_capsule.rs`
+**IPC wrappers:** `src/lib/timeCapsuleService.ts`
+
+---
+
+### `seal_entry`
+
+Seal an existing journal entry until a future date. Entry content is hidden from all views until `unseal_entry` is called or the date is reached. Validates that `unlock_at` is strictly in the future and that `capsule_type` is one of the allowed values.
+
+```typescript
+invoke('seal_entry', {
+  id: string,
+  unlockAt: string,       // ISO 8601, must be > now; UI enforces today+2d minimum
+  capsuleType: 'letter' | 'vault',
+}) → Promise<void>
+```
+
+---
+
+### `get_due_capsules`
+
+Return the next capsule ready to reveal, or `null` if none are due. Prioritises scheduled capsules (`sealed_until <= now`) over automatic anniversaries. Excludes entries whose month/day matches today (those belong to On This Day).
+
+```typescript
+invoke('get_due_capsules', {
+  includeAnniversary: boolean,  // false = skip automatic anniversary entries
+}) → Promise<JournalEntryRow | null>
+```
+
+`JournalEntryRow` always has `encrypted_content` populated for due capsules (the reveal modal needs it to decrypt).
+
+---
+
+### `unseal_entry`
+
+Mark an entry as revealed. Sets `unsealed_at` to the current UTC time, defaults `capsule_type` to `'anniversary'` if unset (automatic-reveal path), and clears `sealed_until`.
+
+```typescript
+invoke('unseal_entry', { id: string }) → Promise<void>
+```
+
+---
+
+### `get_mood_delta`
+
+Return mood context for the reveal modal — average mood since the entry was written and today's most recent mood.
+
+```typescript
+invoke('get_mood_delta', {
+  entryId: string,
+  entryCreatedAt: string,   // ISO 8601 creation timestamp of the capsule
+}) → Promise<{ avg_since: number | null; mood_today: number | null }>
+```

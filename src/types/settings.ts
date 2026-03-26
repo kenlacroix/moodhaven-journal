@@ -183,6 +183,13 @@ export interface SyncSettings {
   peerSyncEnabled: boolean;
 }
 
+// Time Capsule settings
+export interface TimeCapsuleSettings {
+  enabled: boolean;
+  defaultSealDays: number;
+  anniversaryReveal: boolean;
+}
+
 // Update manager preferences
 export interface UpdateSettings {
   /** Auto-check for updates on startup (max once per 24 h). Default: true */
@@ -207,6 +214,7 @@ export interface AppSettings {
   oura: OuraSettings;
   updates: UpdateSettings;
   sync: SyncSettings;
+  timeCapsule: TimeCapsuleSettings;
 }
 
 // Default settings factory
@@ -309,6 +317,11 @@ export function createDefaultSettings(): AppSettings {
       peerSyncLanOnly: true,
       peerSyncIntervalSecs: 30,
       peerSyncEnabled: false,
+    },
+    timeCapsule: {
+      enabled: true,
+      defaultSealDays: 30,
+      anniversaryReveal: true,
     },
   };
 }

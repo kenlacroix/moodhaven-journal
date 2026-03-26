@@ -78,7 +78,7 @@ const TABS: TabConfig[] = [
     id: 'general',
     label: 'General',
     icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z',
-    keywords: ['appearance', 'theme', 'dark', 'light', 'compact', 'animations', 'journal', 'prompts', 'auto-save', 'reminders', 'notifications', 'tutorial', 'help', 'tour', 'speech', 'voice', 'dictation', 'whisper', 'microphone', 'transcription', 'location', 'weather', 'city'],
+    keywords: ['appearance', 'theme', 'dark', 'light', 'compact', 'animations', 'journal', 'prompts', 'auto-save', 'reminders', 'notifications', 'tutorial', 'help', 'tour', 'speech', 'voice', 'dictation', 'whisper', 'microphone', 'transcription', 'location', 'weather', 'city', 'time capsule', 'capsule', 'seal', 'reveal', 'anniversary'],
   },
   {
     id: 'privacy',
@@ -166,6 +166,7 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
     setAutoTitle,
     setSyncMode,
     setSyncIntervalMinutes,
+    setTimeCapsuleSettings,
   } = useSettingsStore();
 
   const scrollToSection = useSettingsStore((s) => s.scrollToSection);
@@ -1091,6 +1092,36 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
                         setCloudConsentModalOpen(false);
                       }}
                     />
+
+                    <SettingSection
+                      title="Time Capsule"
+                      description="Seal entries to reveal in the future"
+                    >
+                      <SettingToggle
+                        label="Enable time capsule reveals"
+                        description="Show a reveal prompt when sealed entries become due"
+                        checked={settings.timeCapsule?.enabled ?? true}
+                        onChange={(v) => { setTimeCapsuleSettings({ enabled: v }); void saveSettings(); }}
+                      />
+                      <SettingToggle
+                        label="Auto-surface anniversary entries"
+                        description="Highlight entries written one or more years ago"
+                        checked={settings.timeCapsule?.anniversaryReveal ?? true}
+                        onChange={(v) => { setTimeCapsuleSettings({ anniversaryReveal: v }); void saveSettings(); }}
+                      />
+                      <SettingSelect
+                        label="Default seal duration"
+                        description="How far ahead entries are sealed by default"
+                        value={String(settings.timeCapsule?.defaultSealDays ?? 30)}
+                        options={[
+                          { value: '30', label: '30 days' },
+                          { value: '90', label: '90 days' },
+                          { value: '180', label: '180 days' },
+                          { value: '365', label: '1 year' },
+                        ]}
+                        onChange={(v) => { setTimeCapsuleSettings({ defaultSealDays: Number(v) }); void saveSettings(); }}
+                      />
+                    </SettingSection>
 
                     <SettingSection
                       title="Help"

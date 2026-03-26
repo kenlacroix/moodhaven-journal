@@ -47,7 +47,7 @@ Platforms: Windows, Linux, macOS.
 | `src-tauri/tauri.conf.json` | App config, sidecar binaries |
 | `src-tauri/Cargo.toml` | Rust dependencies |
 | `src-tauri/capabilities/default.json` | Tauri ACL — permitted commands + plugins |
-| `src-tauri/src/lib.rs` | All ~96 Tauri command registrations |
+| `src-tauri/src/lib.rs` | All ~100 Tauri command registrations |
 | `src-tauri/src/db/mod.rs` | SQLite schema, migrations, Database struct |
 | `src/App.tsx` | React root |
 | `src/stores/` | 4 Zustand stores (app, settings, books, …) |
@@ -55,6 +55,10 @@ Platforms: Windows, Linux, macOS.
 | `src/lib/cloudSyncService.ts` | WebDAV sync orchestration |
 | `src/lib/peerSyncEngineService.ts` | P2P sync IPC wrappers |
 | `src/types/settings.ts` | App settings type definitions |
+| `src/lib/timeCapsuleService.ts` | Time capsule IPC wrappers |
+| `src/hooks/useTimeCapsule.ts` | Time capsule state + logic |
+| `src/components/timecapsule/SealEntryModal.tsx` | Seal entry UI |
+| `src/components/timecapsule/TimeCapsuleRevealModal.tsx` | Capsule reveal UI |
 | `vitest.config.ts` | Test runner config |
 | `src/test/setup.ts` | Global test setup + Tauri IPC mock |
 

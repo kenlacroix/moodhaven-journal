@@ -29,7 +29,7 @@ import type {
 
 interface EncryptedJournalEntryRow {
   id: string;
-  encrypted_content: EncryptedData;
+  encrypted_content: EncryptedData | null; // null for sealed entries not yet due
   mood: number;
   privacy_mode: number;
   location_weather?: string; // JSON-encoded LocationWeather, not encrypted
@@ -38,6 +38,10 @@ interface EncryptedJournalEntryRow {
   created_at: string;
   updated_at: string;
   tags: string[]; // Populated by GROUP_CONCAT join in Rust
+  sealed_until?: string | null;
+  capsule_type?: string | null;
+  linked_original_id?: string | null;
+  unsealed_at?: string | null;
 }
 
 interface UserSettings {
@@ -223,9 +227,10 @@ export async function getAllEntries(
     { limit }
   );
 
-  // Decrypt all entries in parallel
+  // Skip sealed entries (encrypted_content is null until revealed)
+  const decryptable = rows.filter((row) => row.encrypted_content !== null);
   const entries = await Promise.all(
-    rows.map((row) => decryptEntry(row, password))
+    decryptable.map((row) => decryptEntry(row, password))
   );
 
   return entries;
@@ -248,8 +253,10 @@ export async function getEntriesByDateRange(
     }
   );
 
+  // Skip sealed entries (encrypted_content is null until revealed)
+  const decryptable = rows.filter((row) => row.encrypted_content !== null);
   const entries = await Promise.all(
-    rows.map((row) => decryptEntry(row, password))
+    decryptable.map((row) => decryptEntry(row, password))
   );
 
   return entries;
@@ -366,6 +373,9 @@ async function decryptEntry(
   row: EncryptedJournalEntryRow,
   password: string
 ): Promise<JournalEntry> {
+  if (!row.encrypted_content) {
+    throw new Error('Entry is sealed — content not available');
+  }
   const result = await decrypt(row.encrypted_content, password);
 
   if (!result.success || result.data === undefined) {
@@ -383,6 +393,10 @@ async function decryptEntry(
     pinned: row.pinned ?? false,
     created_at: row.created_at,
     updated_at: row.updated_at,
+    sealedUntil: row.sealed_until ?? null,
+    capsuleType: (row.capsule_type ?? null) as 'letter' | 'vault' | 'anniversary' | null,
+    linkedOriginalId: row.linked_original_id ?? null,
+    unsealedAt: row.unsealed_at ?? null,
   };
 }
 

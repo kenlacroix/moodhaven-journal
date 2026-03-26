@@ -19,9 +19,12 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 - **Peer sync capsule columns.** `db_upsert_entry` in the sync engine now includes `sealed_until`, `capsule_type`, `linked_original_id`, and `unsealed_at` in both INSERT and UPDATE — preventing a re-reveal loop where Device B would re-surface already-revealed capsules on every unlock.
-- **UTC consistency.** `unseal_entry` previously stored `unsealed_at` in local time; it now writes UTC (matching all other timestamps in the schema).
-- **Date picker timezone.** The seal date picker no longer interprets `YYYY-MM-DD` as UTC midnight — the UTC ISO string now always uses `T00:00:00Z` so users west of UTC see the correct reveal date.
-- **`capsule_type` validation.** `seal_entry` now rejects any `capsule_type` not in `["letter", "vault"]` with an error, preventing corrupted capsule metadata.
+- **UTC consistency in SQL.** `get_mood_delta` was using `date('now', 'localtime')` for the mood-today query; all date comparisons now use bare `'now'` (UTC) to match the rest of the schema.
+- **Date picker timezone.** `seal_entry` now converts the local date picker value (`YYYY-MM-DD`) to the UTC equivalent of local midnight via `new Date(...T00:00:00).toISOString()` — previously used literal `T00:00:00Z` which was midnight UTC, causing off-by-hours errors for users east or west of Greenwich.
+- **Re-seal and double-reveal guards.** `seal_entry` now rejects if the entry is already sealed (`sealed_until IS NOT NULL`) or was previously revealed (`unsealed_at IS NOT NULL`). `unseal_entry` now only runs if `unsealed_at IS NULL`, preventing silent timestamp overwrites on double-reveal.
+- **Decrypted content sanitized.** `TimeCapsuleRevealModal` now strips `<script>`, event attributes (`on*`), and `javascript:` hrefs from decrypted HTML before rendering via `dangerouslySetInnerHTML`.
+- **Double-click guard on reveal.** A `useRef` guard in `handleReveal` prevents racing concurrent calls when "Write a response" and "I've read this" are activated in the same render cycle.
+- **`capsule_type` validation.** `seal_entry` rejects any `capsule_type` not in `["letter", "vault"]` with an error, preventing corrupted capsule metadata.
 - **"Write a response" error handling.** If marking the capsule as revealed fails, the error is now surfaced to the user instead of silently eating it.
 
 ---

@@ -7,6 +7,14 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.7.6] — 2026-03-26
+
+### Added
+- **"Buy Me a Coffee" support link.** A permanent link in the sidebar footer and the Settings → About section lets users support the project. The link opens `buymeacoffee.com/moodbloom` in the default browser.
+- **One-time support prompt.** Users who have been using the app for 30+ days see a subtle, dismissible prompt in the sidebar ("Enjoying MoodBloom? A coffee helps keep it going."). Once dismissed, it never appears again (stored in `localStorage`). Hidden when the sidebar is collapsed.
+
+---
+
 ## [0.7.5] — 2026-03-26
 
 ### Added

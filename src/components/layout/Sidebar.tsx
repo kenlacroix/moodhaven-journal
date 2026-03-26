@@ -9,7 +9,7 @@
  * - Never overlays writing space
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { SidebarItem } from './SidebarItem';
 import { useBooksStore } from '../../stores/booksStore';
 import { useSettingsStore } from '../../stores/settingsStore';
@@ -35,6 +35,23 @@ export function Sidebar({ currentView, onNavigate, onOpenSync, onNavigateToJourn
     catch { return false; }
   });
   const [showNewBookModal, setShowNewBookModal] = useState(false);
+  const [showSupportPrompt, setShowSupportPrompt] = useState(() => {
+    try {
+      if (localStorage.getItem('mb_support_prompt_shown') === 'true') return false;
+      const firstLaunch = localStorage.getItem('mb_first_launch_date');
+      if (!firstLaunch) {
+        localStorage.setItem('mb_first_launch_date', new Date().toISOString());
+        return false;
+      }
+      const daysSince = (Date.now() - new Date(firstLaunch).getTime()) / 86_400_000;
+      return daysSince >= 30;
+    } catch { return false; }
+  });
+
+  const dismissSupportPrompt = useCallback(() => {
+    setShowSupportPrompt(false);
+    try { localStorage.setItem('mb_support_prompt_shown', 'true'); } catch { /* ignore */ }
+  }, []);
 
   const { books, activeBookId, loadBooks, setActiveBook, addBook } = useBooksStore();
   const savingState = useSettingsStore((s) => s.savingState);
@@ -261,8 +278,38 @@ export function Sidebar({ currentView, onNavigate, onOpenSync, onNavigateToJourn
         />
       </div>
 
-      {/* User Guide link */}
-      <div className={`px-3 pb-3 pt-1 border-t border-slate-100 dark:border-slate-800 ${collapsed ? 'flex justify-center' : ''}`}>
+      {/* One-time 30-day support prompt */}
+      {showSupportPrompt && !collapsed && (
+        <div className="mx-3 mb-2 p-3 rounded-xl bg-violet-50 dark:bg-violet-900/20 border border-violet-100 dark:border-violet-800">
+          <div className="flex items-start justify-between gap-2">
+            <p className="text-xs text-violet-700 dark:text-violet-300 leading-snug">
+              Enjoying MoodBloom? A coffee helps keep it going.
+            </p>
+            <button
+              type="button"
+              onClick={dismissSupportPrompt}
+              aria-label="Dismiss"
+              className="flex-shrink-0 text-violet-400 hover:text-violet-600 dark:hover:text-violet-300 transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <a
+            href="https://buymeacoffee.com/moodbloom"
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={dismissSupportPrompt}
+            className="mt-2 inline-block text-xs font-medium text-violet-600 dark:text-violet-400 hover:underline"
+          >
+            Buy Me a Coffee ↗
+          </a>
+        </div>
+      )}
+
+      {/* User Guide + Support links */}
+      <div className={`px-3 pb-3 pt-1 border-t border-slate-100 dark:border-slate-800 space-y-2 ${collapsed ? 'flex flex-col items-center' : ''}`}>
         <a
           href="https://github.com/kenlacroix/moodbloom-tauri#readme"
           target="_blank"
@@ -274,6 +321,18 @@ export function Sidebar({ currentView, onNavigate, onOpenSync, onNavigateToJourn
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
           </svg>
           {!collapsed && <span>User Guide ↗</span>}
+        </a>
+        <a
+          href="https://buymeacoffee.com/moodbloom"
+          target="_blank"
+          rel="noopener noreferrer"
+          title="Support MoodBloom"
+          className="flex items-center gap-1.5 text-xs text-slate-400 dark:text-slate-500 hover:text-pink-500 dark:hover:text-pink-400 transition-colors"
+        >
+          <svg className="w-3.5 h-3.5 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M12 21.593c-.317-.139-6.75-3.756-6.75-8.543 0-2.784 2.238-5.05 5-5.05 1.174 0 2.248.414 3.087 1.098A4.986 4.986 0 0118.75 8c2.762 0 5 2.266 5 5.05 0 4.787-6.433 8.404-6.75 8.543a.75.75 0 01-.5 0z" />
+          </svg>
+          {!collapsed && <span>Support ♥</span>}
         </a>
       </div>
 

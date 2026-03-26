@@ -1818,6 +1818,9 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
                             All your data is stored locally on your device and encrypted using
                             industry-standard AES-256-GCM encryption.
                           </p>
+                          <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed mt-2">
+                            MoodBloom is built by one person. If it brings value to your life, a coffee goes a long way.
+                          </p>
                         </div>
 
                         <div className="p-4 bg-gradient-to-br from-violet-50 to-purple-50 dark:from-violet-900/20 dark:to-purple-900/20 rounded-xl border border-violet-100 dark:border-violet-800">
@@ -1853,6 +1856,14 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
                             className="flex items-center gap-1.5 px-4 py-2 text-sm text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
                           >
                             Share Feedback ↗
+                          </a>
+                          <a
+                            href="https://buymeacoffee.com/moodbloom"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1.5 px-4 py-2 text-sm text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                          >
+                            Buy Me a Coffee ↗
                           </a>
                         </div>
                       </div>

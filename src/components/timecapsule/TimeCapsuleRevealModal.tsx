@@ -2,6 +2,19 @@ import { useEffect, useRef, useState } from 'react';
 import { decrypt } from '../../lib/crypto';
 import { getMoodDelta, type CapsuleEntryRow } from '../../lib/timeCapsuleService';
 
+function sanitizeHtml(html: string): string {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  doc.querySelectorAll('script, style, iframe, object, embed').forEach((el) => el.remove());
+  doc.querySelectorAll('*').forEach((el) => {
+    Array.from(el.attributes).forEach((attr) => {
+      if (/^on/i.test(attr.name) || attr.value.trim().toLowerCase().startsWith('javascript:')) {
+        el.removeAttribute(attr.name);
+      }
+    });
+  });
+  return doc.body.innerHTML;
+}
+
 interface MoodDelta {
   avg_since: number | null;
   mood_today: number | null;
@@ -41,7 +54,7 @@ export function TimeCapsuleRevealModal({ capsule, password, onReveal, onWriteRes
       getMoodDelta(capsule.id, capsule.created_at),
     ]).then(([result, delta]) => {
       if (result.success && result.data !== undefined) {
-        setDecryptedContent(result.data);
+        setDecryptedContent(sanitizeHtml(result.data));
       } else {
         setError('Could not decrypt this entry.');
       }

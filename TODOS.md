@@ -95,6 +95,16 @@
 
 ## Time Layer (feat/time-layer)
 
+### TL-004: Export/import does not preserve capsule columns (P1)
+**What:** `import_data` calls `db::create_entry()` which only writes `(id, ec, mood, privacy_mode, location_weather, book_id)`. The four capsule columns (`sealed_until`, `capsule_type`, `linked_original_id`, `unsealed_at`) are silently dropped. A user who exports and re-imports loses all sealed/revealed capsule state.
+**Fix:** Extend `import_data` to read and write the capsule columns from the JSON export payload.
+**Priority:** P1 — time capsule feature is shipping in this PR; backup fidelity should follow in the next patch.
+**Context:** Identified in pre-landing review of feat/time-layer (2026-03-26). Deferred to follow-up.
+**Effort:** human ~1h / CC+gstack ~30min
+
+---
+
+
 ### TL-003: Accessibility spec for TimeCapsuleRevealModal
 **What:** Focus trap (focus enters modal on open, returns to trigger element on close), ESC key handler (triggers Close path, not Write a response), `aria-modal="true"`, `aria-labelledby` pointing to the "Something from your past self" header text.
 **Why:** Without a focus trap, keyboard users can tab behind the modal while it's open. ESC is the standard dismiss gesture for any modal. Without `aria-labelledby`, screen readers have no label for the dialog.

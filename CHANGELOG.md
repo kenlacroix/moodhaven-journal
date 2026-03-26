@@ -7,6 +7,25 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.7.5] — 2026-03-26
+
+### Added
+- **Time Capsule feature.** Seal any journal entry until a future date — choose a *Letter to yourself* or *Vault* type, pick the reveal date, and the entry disappears from the timeline. On the next app unlock after the date passes, a reveal modal surfaces the entry with its decrypted content and a mood delta chip comparing your mood then vs. now.
+- **Anniversary auto-reveal.** Entries older than 365 days are automatically surfaced as time capsules on unlock, separate from On This Day (which shows the same month/day). Toggle "Auto-surface anniversary entries" in Settings → Time Capsule to opt out.
+- **Seal from timeline.** The ⋯ entry actions menu now includes a "Seal entry…" option for unsealed entries. After sealing, the timeline auto-refreshes. After revealing, the timeline shows the entry again.
+- **Time Capsule settings section.** Settings → General → Time Capsule controls the master toggle, anniversary reveal toggle, and default seal duration (30 / 90 / 180 / 365 days).
+- **Mood delta on reveal.** The reveal modal shows a chip ("Your mood has improved since this was written" / "Your mood has changed") computed from average mood since the entry was written vs. today's most recent entry.
+- **"Write a response" CTA.** The reveal modal offers a primary "Write a response" button that marks the capsule as read and opens a fresh entry.
+
+### Fixed
+- **Peer sync capsule columns.** `db_upsert_entry` in the sync engine now includes `sealed_until`, `capsule_type`, `linked_original_id`, and `unsealed_at` in both INSERT and UPDATE — preventing a re-reveal loop where Device B would re-surface already-revealed capsules on every unlock.
+- **UTC consistency.** `unseal_entry` previously stored `unsealed_at` in local time; it now writes UTC (matching all other timestamps in the schema).
+- **Date picker timezone.** The seal date picker no longer interprets `YYYY-MM-DD` as UTC midnight — the UTC ISO string now always uses `T00:00:00Z` so users west of UTC see the correct reveal date.
+- **`capsule_type` validation.** `seal_entry` now rejects any `capsule_type` not in `["letter", "vault"]` with an error, preventing corrupted capsule metadata.
+- **"Write a response" error handling.** If marking the capsule as revealed fails, the error is now surfaced to the user instead of silently eating it.
+
+---
+
 ## [0.7.4] — 2026-03-24
 
 ### Added

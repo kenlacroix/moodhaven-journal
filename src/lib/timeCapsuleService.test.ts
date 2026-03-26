@@ -5,7 +5,7 @@ vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn() }));
 import { invoke } from '@tauri-apps/api/core';
 const mockInvoke = vi.mocked(invoke);
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => { vi.clearAllMocks(); });
 
 describe('timeCapsuleService', () => {
   describe('sealEntry', () => {

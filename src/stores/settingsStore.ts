@@ -111,7 +111,6 @@ interface SettingsState {
   setPeerSyncEnabled: (enabled: boolean) => void;
 
   // Time Capsule
-  setTimeCapsuleEnabled: (enabled: boolean) => void;
   setTimeCapsuleSettings: (updates: Partial<TimeCapsuleSettings>) => void;
 
   // Navigation
@@ -675,16 +674,6 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   },
 
   // Time Capsule
-  setTimeCapsuleEnabled: (enabled) => {
-    set((state) => ({
-      settings: {
-        ...state.settings,
-        timeCapsule: { ...state.settings.timeCapsule, enabled },
-      },
-      hasUnsavedChanges: true,
-    }));
-  },
-
   setTimeCapsuleSettings: (updates) => {
     set((state) => ({
       settings: {

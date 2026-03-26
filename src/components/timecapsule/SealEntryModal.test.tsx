@@ -9,7 +9,7 @@ vi.mock('../../lib/timeCapsuleService', () => ({
 import { sealEntry } from '../../lib/timeCapsuleService';
 const mockSealEntry = vi.mocked(sealEntry);
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => { vi.clearAllMocks(); });
 
 describe('SealEntryModal', () => {
   const baseProps = {

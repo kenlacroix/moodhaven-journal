@@ -51,6 +51,7 @@ function MainApp() {
   const syncIntervalMinutes = useSettingsStore((s) => s.settings.sync?.syncIntervalMinutes ?? 0);
   const webdavConfig = useSettingsStore((s) => s.settings.storage?.webdav);
   const storageType = useSettingsStore((s) => s.settings.storage?.type);
+  const defaultSealDays = useSettingsStore((s) => s.settings.timeCapsule?.defaultSealDays ?? 30);
   const [isLoading, setIsLoading] = useState(true);
   const [currentView, setCurrentView] = useState<ViewType>('writing');
   const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
@@ -284,7 +285,7 @@ function MainApp() {
       {sealingEntryId && (
         <SealEntryModal
           entryId={sealingEntryId}
-          defaultDays={useSettingsStore.getState().settings.timeCapsule?.defaultSealDays ?? 30}
+          defaultDays={defaultSealDays}
           onSeal={() => { setSealingEntryId(null); setTimelineRefresh((n) => n + 1); }}
           onCancel={() => setSealingEntryId(null)}
         />

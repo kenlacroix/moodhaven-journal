@@ -16,11 +16,11 @@ import { decrypt } from '../../lib/crypto';
 const mockGetMoodDelta = vi.mocked(getMoodDelta);
 const mockDecrypt = vi.mocked(decrypt);
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => { vi.clearAllMocks(); });
 
 const baseCapsule: CapsuleEntryRow = {
   id: 'cap-1',
-  encrypted_content: { ciphertext: 'abc', iv: 'iv1', salt: 'salt1' },
+  encrypted_content: { ciphertext: 'abc', iv: 'iv1', salt: 'salt1', version: 1 },
   mood: 4,
   privacy_mode: 0,
   book_id: 'default',

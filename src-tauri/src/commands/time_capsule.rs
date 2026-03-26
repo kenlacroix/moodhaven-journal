@@ -176,7 +176,7 @@ pub fn get_mood_delta(
     let mood_today: Option<i32> = conn
         .query_row(
             "SELECT mood FROM journal_entries
-             WHERE date(created_at) = date('now', 'localtime')
+             WHERE date(created_at) = date('now')
                AND id != ?1
                AND (unsealed_at IS NOT NULL OR sealed_until IS NULL)
              ORDER BY created_at DESC

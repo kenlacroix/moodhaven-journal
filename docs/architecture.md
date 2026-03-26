@@ -65,7 +65,7 @@ MoodBloom is a **local-first desktop application** built on Tauri v2 (Rust backe
 | Peer discovery | mDNS/DNS-SD (mdns-sd) | LAN auto-discovery |
 | 2FA | totp-rs + native CTAP2/HID | TOTP + hardware keys |
 | Charts | Custom SVG | No charting library |
-| Testing | Vitest + Testing Library | 488 tests |
+| Testing | Vitest + Testing Library | 497 tests |
 | Build | Vite 5 + Tauri CLI | |
 
 ---

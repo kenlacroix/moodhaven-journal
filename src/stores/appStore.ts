@@ -11,6 +11,7 @@ import {
   setupPassword,
   unlockJournal,
   lockJournal,
+  devBypassUnlock,
 } from '../lib/journalService';
 
 interface AppState {
@@ -40,6 +41,11 @@ export const useAppStore = create<AppState>((set) => ({
 
   // Check if user has set up password
   checkInitialization: async () => {
+    if (import.meta.env.DEV && import.meta.env.VITE_DEV_MODE === 'bypass') {
+      devBypassUnlock('dev-bypass');
+      set({ isInitialized: true, isUnlocked: true, sessionPassword: 'dev-bypass' });
+      return;
+    }
     try {
       const initialized = await hasPassword();
       set({ isInitialized: initialized });

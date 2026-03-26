@@ -131,3 +131,13 @@
 **Completed:** feat/time-layer (2026-03-25) — aria-modal, firstFocusRef on mount, ESC keydown handler all implemented in TimeCapsuleRevealModal.tsx and SealEntryModal.tsx.
 
 ---
+
+## Dev Mode / QA (feat/dev-bypass-unlock — v0.7.6)
+
+### D-DEV-001: Implement VITE_DEV_MODE=seeded (P2)
+**What:** When `VITE_DEV_MODE=seeded`, create 3–5 encrypted journal entries with realistic mood data using the dev password (`'dev-bypass'`), then call `refresh()` on journal hooks so the UI starts with populated data. Useful for testing Timeline, Insights, Calendar, and On This Day views without manual data entry.
+**Fix:** Add `src/lib/devSeed.ts` module. Call it after the bypass state is set in `checkInitialization()`, guarded by `import.meta.env.VITE_DEV_MODE === 'seeded'`.
+**Context:** Deferred from feat/dev-bypass-unlock plan (2026-03-26). "bypass" mode shipped; "seeded" needs seed data design.
+**Effort:** human ~2h / CC+gstack ~20min
+
+---

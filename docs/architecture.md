@@ -1,6 +1,6 @@
 # MoodBloom — Architecture Reference
 
-> **Version:** v0.7.0 | **Last Updated:** 2026-03-18
+> **Version:** v0.7.5 | **Last Updated:** 2026-03-26
 
 ---
 
@@ -131,8 +131,13 @@ journal_entries (
   location_weather TEXT,               -- JSON: {city, temp, weatherCode, unit}
   book_id      TEXT NOT NULL DEFAULT 'default',
   pinned       INTEGER NOT NULL DEFAULT 0,
-  created_at   TEXT NOT NULL,          -- ISO 8601
-  updated_at   TEXT NOT NULL
+  created_at   TEXT NOT NULL,          -- ISO 8601 UTC
+  updated_at   TEXT NOT NULL,          -- ISO 8601 UTC
+  -- Time capsule columns (v0.7.5, additive migration)
+  sealed_until       TEXT,             -- ISO 8601 UTC; NULL = not sealed or auto-anniversary
+  capsule_type       TEXT,             -- 'letter' | 'vault' | 'anniversary'
+  linked_original_id TEXT,             -- ID of entry this response is linked to
+  unsealed_at        TEXT              -- ISO 8601 UTC; set by unseal_entry
 )
 
 books (

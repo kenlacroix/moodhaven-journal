@@ -18,7 +18,10 @@ interface Props {
 function addDays(days: number): string {
   const d = new Date();
   d.setDate(d.getDate() + days);
-  return d.toISOString().split('T')[0];
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
 function minDate(): string {
@@ -49,7 +52,7 @@ export function SealEntryModal({ entryId, defaultDays, onSeal, onCancel }: Props
     setIsSealing(true);
     setError(null);
     try {
-      await sealEntry(entryId, new Date(unlockDate).toISOString(), capsuleType);
+      await sealEntry(entryId, `${unlockDate}T00:00:00Z`, capsuleType);
       onSeal();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to seal entry.');

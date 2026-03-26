@@ -41,8 +41,8 @@ export async function sealEntry(
  * Priority: scheduled capsules first, then automatic anniversaries.
  * Entries that are today's On-This-Day anniversary are excluded.
  */
-export async function getDueCapsules(): Promise<CapsuleEntryRow | null> {
-  return invoke('get_due_capsules');
+export async function getDueCapsules(includeAnniversary = true): Promise<CapsuleEntryRow | null> {
+  return invoke('get_due_capsules', { includeAnniversary });
 }
 
 /**

@@ -15,22 +15,23 @@ interface UseTimeCapsuleReturn {
 export function useTimeCapsule({ enabled }: UseTimeCapsuleOptions): UseTimeCapsuleReturn {
   const [pendingCapsule, setPendingCapsule] = useState<CapsuleEntryRow | null>(null);
   const timeCapsuleEnabled = useSettingsStore((s) => s.settings.timeCapsule?.enabled ?? true);
+  const anniversaryReveal = useSettingsStore((s) => s.settings.timeCapsule?.anniversaryReveal ?? true);
 
   // Poll once on unlock
   useEffect(() => {
     if (!enabled || !timeCapsuleEnabled) return;
 
-    getDueCapsules()
+    getDueCapsules(anniversaryReveal)
       .then((capsule) => setPendingCapsule(capsule))
       .catch(() => {/* non-critical */});
-  }, [enabled, timeCapsuleEnabled]);
+  }, [enabled, timeCapsuleEnabled, anniversaryReveal]);
 
   const revealCapsule = useCallback(async (id: string) => {
     await unsealEntry(id);
     // Surface next due capsule (handles multiple due at once)
-    const next = await getDueCapsules();
+    const next = await getDueCapsules(anniversaryReveal);
     setPendingCapsule(next);
-  }, []);
+  }, [anniversaryReveal]);
 
   const dismissCapsule = useCallback(() => {
     setPendingCapsule(null);

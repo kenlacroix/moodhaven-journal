@@ -139,7 +139,11 @@ export function TimeCapsuleRevealModal({ capsule, password, onReveal, onWriteRes
           </button>
           <button
             type="button"
-            onClick={() => { void handleReveal().then(onWriteResponse); }}
+            onClick={() => {
+              void handleReveal().then(onWriteResponse).catch(() => {
+                setError('Failed to mark as revealed. Please try again.');
+              });
+            }}
             disabled={isRevealing}
             className="px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 transition-colors disabled:opacity-50"
           >

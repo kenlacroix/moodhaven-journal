@@ -7,6 +7,13 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.7.6] — 2026-03-26
+
+### Added
+- **Dev bypass mode.** Set `VITE_DEV_MODE=bypass` in `.env.local` (or as an env var) when running `npm run tauri dev` to skip the setup screen, lock screen, and tutorial overlay entirely. Useful for QA automation and rapid iteration. The bypass is guarded by `import.meta.env.DEV` and cannot activate in production builds.
+
+---
+
 ## [0.7.5] — 2026-03-26
 
 ### Added

@@ -153,7 +153,13 @@ To manage paired devices, open **Settings → Devices**.
 
 ## Screenshots
 
-> Screenshots coming soon. Pull requests with screenshots are welcome!
+| Writing View | Calendar |
+|:---:|:---:|
+| ![Writing view — mood selector and rich text editor](docs/screenshots/writing-view.png) | ![Calendar — monthly mood heatmap](docs/screenshots/calendar-view.png) |
+
+| On This Day | Settings |
+|:---:|:---:|
+| ![On This Day — past entries resurface by date](docs/screenshots/on-this-day-view.png) | ![Settings — appearance, privacy, sync, AI, and more](docs/screenshots/settings-view.png) |
 
 ---
 

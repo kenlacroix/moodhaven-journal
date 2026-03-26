@@ -29,7 +29,7 @@ export function useTimeCapsule({ enabled }: UseTimeCapsuleOptions): UseTimeCapsu
   const revealCapsule = useCallback(async (id: string) => {
     await unsealEntry(id);
     // Surface next due capsule (handles multiple due at once)
-    const next = await getDueCapsules(anniversaryReveal);
+    const next = await getDueCapsules(anniversaryReveal).catch(() => null);
     setPendingCapsule(next);
   }, [anniversaryReveal]);
 

@@ -46,7 +46,7 @@ describe('SealEntryModal', () => {
     await waitFor(() => {
       expect(mockSealEntry).toHaveBeenCalledWith(
         'entry-1',
-        expect.stringMatching(/T00:00:00Z$/),
+        expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/),
         'letter',
       );
     });

@@ -43,6 +43,7 @@ export function TimeCapsuleRevealModal({ capsule, password, onReveal, onWriteRes
   const [moodDelta, setMoodDelta] = useState<MoodDelta | null>(null);
   const [isRevealing, setIsRevealing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const isRevealingRef = useRef(false);
   const firstFocusRef = useRef<HTMLButtonElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
 
@@ -77,10 +78,13 @@ export function TimeCapsuleRevealModal({ capsule, password, onReveal, onWriteRes
   }, [onDismiss]);
 
   const handleReveal = async () => {
+    if (isRevealingRef.current) return;
+    isRevealingRef.current = true;
     setIsRevealing(true);
     try {
       await onReveal(capsule.id);
     } finally {
+      isRevealingRef.current = false;
       setIsRevealing(false);
     }
   };

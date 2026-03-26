@@ -33,7 +33,10 @@ pub fn seal_entry(
         .execute(
             "UPDATE journal_entries
              SET sealed_until = ?1, capsule_type = ?2
-             WHERE id = ?3 AND datetime(?1) > datetime('now')",
+             WHERE id = ?3
+               AND datetime(?1) > datetime('now')
+               AND sealed_until IS NULL
+               AND unsealed_at IS NULL",
             rusqlite::params![unlock_at, capsule_type, id],
         )
         .map_err(|e| format!("Failed to seal entry: {}", e))?;
@@ -139,7 +142,8 @@ pub fn unseal_entry(db: State<Database>, id: String) -> Result<(), String> {
              SET unsealed_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'),
                  capsule_type = COALESCE(capsule_type, 'anniversary'),
                  sealed_until = NULL
-             WHERE id = ?1",
+             WHERE id = ?1
+               AND unsealed_at IS NULL",
             rusqlite::params![id],
         )
         .map_err(|e| format!("Failed to unseal entry: {}", e))?;

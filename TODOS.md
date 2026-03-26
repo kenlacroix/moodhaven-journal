@@ -95,6 +95,21 @@
 
 ## Time Layer (feat/time-layer)
 
+### TL-005: get_due_capsules On-This-Day exclusion uses UTC not local date (P2)
+**What:** `strftime('%m-%d', 'now')` returns today's UTC date. For users in UTC+12/UTC-12, their local calendar day differs by up to ±14 hours, causing wrong On-This-Day exclusions. Fix: pass local date from frontend as a parameter, same pattern as `get_monthly_mood_data`.
+**Context:** Adversarial review of feat/time-layer (2026-03-26).
+**Effort:** human ~1h / CC+gstack ~15min
+
+### TL-006: Anniversary entries visible in timeline before reveal (P2)
+**What:** Anniversary entries (capsule_type IS NULL, sealed_until IS NULL) have `encrypted_content` populated and appear in the timeline like normal entries — they are not hidden. Clarify product intent: should anniversary entries be hidden until the reveal modal triggers, or just highlighted?
+**Context:** Adversarial review of feat/time-layer (2026-03-26).
+**Effort:** product decision first, then ~30min CC
+
+### TL-007: Peer sync: unsealed_at LWW can re-queue already-revealed capsule (P2)
+**What:** `updated_at` drives LWW in peer sync but `unsealed_at` is not reflected in `updated_at`. If Device A reveals a capsule while offline, then syncs to Device B, Device B's LWW may overwrite its local `unsealed_at` with the older (unrevealed) row — re-queueing the capsule.
+**Context:** Adversarial review of feat/time-layer (2026-03-26).
+**Effort:** ~1h — update `upsert_entry_from_sync` to preserve `unsealed_at` if already set
+
 ### TL-004: Export/import does not preserve capsule columns (P1)
 **What:** `import_data` calls `db::create_entry()` which only writes `(id, ec, mood, privacy_mode, location_weather, book_id)`. The four capsule columns (`sealed_until`, `capsule_type`, `linked_original_id`, `unsealed_at`) are silently dropped. A user who exports and re-imports loses all sealed/revealed capsule state.
 **Fix:** Extend `import_data` to read and write the capsule columns from the JSON export payload.

@@ -52,7 +52,7 @@ export function SealEntryModal({ entryId, defaultDays, onSeal, onCancel }: Props
     setIsSealing(true);
     setError(null);
     try {
-      await sealEntry(entryId, `${unlockDate}T00:00:00Z`, capsuleType);
+      await sealEntry(entryId, new Date(`${unlockDate}T00:00:00`).toISOString(), capsuleType);
       onSeal();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));

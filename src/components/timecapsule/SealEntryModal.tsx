@@ -55,7 +55,7 @@ export function SealEntryModal({ entryId, defaultDays, onSeal, onCancel }: Props
       await sealEntry(entryId, `${unlockDate}T00:00:00Z`, capsuleType);
       onSeal();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to seal entry.');
+      setError(err instanceof Error ? err.message : String(err));
       setIsSealing(false);
     }
   };

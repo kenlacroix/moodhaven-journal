@@ -48,6 +48,7 @@ commands.allow = [
   "get_data_stats",
   "write_text_file",
   "exit_app",
+  "get_log_path",
   # Two-factor authentication
   "generate_totp_secret",
   "verify_totp_code",

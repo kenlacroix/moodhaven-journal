@@ -49,6 +49,8 @@ commands.allow = [
   "write_text_file",
   "exit_app",
   "get_log_path",
+  "open_log_folder",
+  "set_log_level",
   # Two-factor authentication
   "generate_totp_secret",
   "verify_totp_code",

@@ -19,11 +19,9 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(
             tauri_plugin_log::Builder::new()
-                .level(if cfg!(debug_assertions) {
-                    log::LevelFilter::Debug
-                } else {
-                    log::LevelFilter::Info
-                })
+                // Initialize at Debug so fern's internal filter is permissive.
+                // The user-configured level is applied via log::set_max_level() in setup().
+                .level(log::LevelFilter::Debug)
                 .targets([
                     Target::new(TargetKind::Stderr),
                     Target::new(TargetKind::LogDir {
@@ -64,6 +62,38 @@ pub fn run() {
 
             // Manage database state
             app.manage(database);
+
+            // Apply user-configured log level as early as possible.
+            // Reads the "log_level" SQL key (set by set_log_level command); defaults to Warn.
+            {
+                let db = app.state::<Database>();
+                let stored = db
+                    .conn
+                    .lock()
+                    .ok()
+                    .and_then(|conn| {
+                        conn.query_row(
+                            "SELECT value FROM settings WHERE key = 'log_level'",
+                            [],
+                            |row| row.get::<_, String>(0),
+                        )
+                        .ok()
+                    })
+                    .unwrap_or_default();
+                let filter = match stored.as_str() {
+                    "error" => log::LevelFilter::Error,
+                    "warn" => log::LevelFilter::Warn,
+                    "info" => log::LevelFilter::Info,
+                    "debug" => log::LevelFilter::Debug,
+                    other => {
+                        if !other.is_empty() {
+                            log::warn!("[startup] unknown log_level {:?}, defaulting to Warn", other);
+                        }
+                        log::LevelFilter::Warn
+                    }
+                };
+                log::set_max_level(filter);
+            }
 
             // One-shot session bridge for breakout writer password hand-off
             app.manage(SessionBridge::new());
@@ -167,6 +197,8 @@ pub fn run() {
             commands::write_text_file,
             commands::exit_app,
             commands::get_log_path,
+            commands::open_log_folder,
+            commands::set_log_level,
             // Two-factor authentication
             commands::generate_totp_secret,
             commands::verify_totp_code,

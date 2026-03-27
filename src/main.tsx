@@ -2,6 +2,11 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import './styles/globals.css';
+import { attachConsole } from '@tauri-apps/plugin-log';
+
+if (import.meta.env.DEV) {
+  void attachConsole();
+}
 
 // Disable right-click context menu for native app feel
 document.addEventListener('contextmenu', (e) => e.preventDefault());

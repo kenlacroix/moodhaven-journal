@@ -3,7 +3,7 @@
  *
  * States it handles:
  *   checking      — spinner while HTTP request is in flight
- *   up-to-date    — green badge, "MoodBloom is up to date"
+ *   up-to-date    — green badge, "MoodHaven Journal is up to date"
  *   available     — changelog card + download button
  *   downloading   — progress bar with byte counter
  *   verifying     — brief "Verifying…" state
@@ -223,7 +223,7 @@ export function UpdatePanel({ hook, currentVersion }: UpdatePanelProps) {
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
           </svg>
           <div>
-            <p className="text-sm font-medium">MoodBloom is up to date</p>
+            <p className="text-sm font-medium">MoodHaven Journal is up to date</p>
             <p className="text-xs mt-0.5 opacity-70">
               v{currentVersion}
               {updateInfo.version !== currentVersion && updateInfo.version
@@ -370,7 +370,7 @@ export function UpdatePanel({ hook, currentVersion }: UpdatePanelProps) {
               <p className="text-xs mt-0.5 opacity-80">{installMessage}</p>
               {/* macOS: needs manual restart; Linux/Windows: already restarting */}
               <p className="text-xs mt-1 opacity-70">
-                You may need to restart MoodBloom to use the new version.
+                You may need to restart MoodHaven Journal to use the new version.
               </p>
             </div>
           </StatusBadge>

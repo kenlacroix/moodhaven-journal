@@ -41,7 +41,7 @@ describe('cloudSyncService', () => {
       const result = await uploadBackup('password', mockConfig);
 
       expect(result.success).toBe(true);
-      expect(result.filename).toMatch(/^moodbloom-backup-\d{4}-\d{2}-\d{2}-\d{6}\.moodbloom$/);
+      expect(result.filename).toMatch(/^moodhaven-backup-\d{4}-\d{2}-\d{2}-\d{6}\.moodhaven$/);
       expect(result.timestamp).toBeTruthy();
     });
 
@@ -58,7 +58,7 @@ describe('cloudSyncService', () => {
       expect(encryptedExport).toHaveBeenCalledWith('password');
       expect(uploadFile).toHaveBeenCalledWith(
         mockConfig,
-        expect.stringMatching(/\.moodbloom$/),
+        expect.stringMatching(/\.moodhaven$/),
         'encrypted-data',
       );
     });
@@ -110,8 +110,8 @@ describe('cloudSyncService', () => {
       vi.mocked(listFiles).mockResolvedValue({
         success: true,
         files: [
-          'moodbloom-backup-2026-01-28-120000.moodbloom',
-          'moodbloom-backup-2026-01-30-090000.moodbloom',
+          'moodhaven-backup-2026-01-28-120000.moodhaven',
+          'moodhaven-backup-2026-01-30-090000.moodhaven',
         ],
       });
       vi.mocked(downloadFile).mockResolvedValue({ success: true, data: 'encrypted' });
@@ -123,7 +123,7 @@ describe('cloudSyncService', () => {
       expect(result.entriesCount).toBe(5);
       expect(downloadFile).toHaveBeenCalledWith(
         mockConfig,
-        'moodbloom-backup-2026-01-30-090000.moodbloom',
+        'moodhaven-backup-2026-01-30-090000.moodhaven',
       );
     });
 
@@ -131,12 +131,12 @@ describe('cloudSyncService', () => {
       vi.mocked(downloadFile).mockResolvedValue({ success: true, data: 'encrypted' });
       vi.mocked(encryptedImport).mockResolvedValue(3);
 
-      const result = await downloadBackup('password', mockConfig, 'specific.moodbloom');
+      const result = await downloadBackup('password', mockConfig, 'specific.moodhaven');
 
       expect(result.success).toBe(true);
       expect(result.entriesCount).toBe(3);
       expect(listFiles).not.toHaveBeenCalled();
-      expect(downloadFile).toHaveBeenCalledWith(mockConfig, 'specific.moodbloom');
+      expect(downloadFile).toHaveBeenCalledWith(mockConfig, 'specific.moodhaven');
     });
 
     it('returns error when no backups found', async () => {
@@ -151,7 +151,7 @@ describe('cloudSyncService', () => {
     it('returns error when download fails', async () => {
       vi.mocked(listFiles).mockResolvedValue({
         success: true,
-        files: ['backup.moodbloom'],
+        files: ['backup.moodhaven'],
       });
       vi.mocked(downloadFile).mockResolvedValue({ success: false, error: 'Not found' });
 
@@ -176,18 +176,18 @@ describe('cloudSyncService', () => {
       vi.mocked(listFiles).mockResolvedValue({
         success: true,
         files: [
-          'moodbloom-backup-2026-01-28.moodbloom',
-          'moodbloom-backup-2026-01-30.moodbloom',
-          'moodbloom-backup-2026-01-25.moodbloom',
+          'moodhaven-backup-2026-01-28.moodhaven',
+          'moodhaven-backup-2026-01-30.moodhaven',
+          'moodhaven-backup-2026-01-25.moodhaven',
         ],
       });
 
       const backups = await listBackups(mockConfig);
 
       expect(backups).toEqual([
-        'moodbloom-backup-2026-01-30.moodbloom',
-        'moodbloom-backup-2026-01-28.moodbloom',
-        'moodbloom-backup-2026-01-25.moodbloom',
+        'moodhaven-backup-2026-01-30.moodhaven',
+        'moodhaven-backup-2026-01-28.moodhaven',
+        'moodhaven-backup-2026-01-25.moodhaven',
       ]);
     });
 

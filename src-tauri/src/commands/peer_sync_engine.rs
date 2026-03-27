@@ -40,7 +40,7 @@
 //! ```
 //!
 //! ## Transport encryption
-//! Shared key = SHA-256("moodbloom-sync-v1:" || sorted(pubKeyA, pubKeyB)).
+//! Shared key = SHA-256("moodhaven-sync-v1:" || sorted(pubKeyA, pubKeyB)).
 //! Both sides derive independently — deterministic from stored public keys.
 //!
 //! Frame format: [4-byte big-endian length][12-byte nonce][AES-256-GCM ciphertext]
@@ -238,14 +238,14 @@ fn derive_sync_key_static(pub_a: &str, pub_b: &str) -> [u8; 32] {
     let mut keys = [pub_a, pub_b];
     keys.sort_unstable();
     let mut h = Sha256::new();
-    h.update(b"moodbloom-sync-v1:");
+    h.update(b"moodhaven-sync-v1:");
     h.update(keys[0].as_bytes());
     h.update(keys[1].as_bytes());
     h.finalize().into()
 }
 
 /// v2: ephemeral X25519 ECDH + static identity binding → forward-secret session key.
-/// session_key = SHA-256("moodbloom-sync-v2:" || X25519_shared || sorted(static_a, static_b))
+/// session_key = SHA-256("moodhaven-sync-v2:" || X25519_shared || sorted(static_a, static_b))
 fn derive_sync_key_ecdh(
     my_eph_secret: EphemeralSecret,
     peer_eph_pub_hex: &str,
@@ -263,7 +263,7 @@ fn derive_sync_key_ecdh(
     let mut static_keys = [my_static_pub, peer_static_pub];
     static_keys.sort_unstable();
     let mut h = Sha256::new();
-    h.update(b"moodbloom-sync-v2:");
+    h.update(b"moodhaven-sync-v2:");
     h.update(shared.as_bytes());
     h.update(static_keys[0].as_bytes());
     h.update(static_keys[1].as_bytes());
@@ -949,7 +949,7 @@ fn do_serve_restore(
 // ── Full-restore client handler ────────────────────────────────────────────────
 
 /// Connect to `host:port`, authenticate, request the server's full DB, receive
-/// it chunk-by-chunk, and write the result to `{app_data}/moodbloom_restore.pending`.
+/// it chunk-by-chunk, and write the result to `{app_data}/moodhaven_restore.pending`.
 ///
 /// Emits `peer:restore_progress` events and, on completion, `peer:restore_ready`.
 /// The caller (frontend) should then invoke `peer_apply_and_restart` to swap the
@@ -1034,8 +1034,8 @@ fn do_full_restore_client(app: &AppHandle, peer_device_id: &str, host: &str) -> 
         .app_data_dir()
         .map_err(|e| anyhow::anyhow!(e))
         .map_err(|e| format!("app_data_dir: {e}"))?;
-    let pending_path = app_data.join("moodbloom_restore.pending");
-    let tmp_path = app_data.join("moodbloom_restore.tmp");
+    let pending_path = app_data.join("moodhaven_restore.pending");
+    let tmp_path = app_data.join("moodhaven_restore.tmp");
 
     let mut file = std::fs::File::create(&tmp_path).map_err(|e| format!("create tmp file: {e}"))?;
 
@@ -2268,7 +2268,7 @@ pub fn peer_get_sync_states(app: AppHandle) -> Result<Vec<PeerSyncStateRecord>, 
 ///
 /// Spawns a background thread that connects to the peer, requests its complete
 /// SQLite database, receives it in 4 MiB chunks, and writes the reassembled file
-/// to `{app_data}/moodbloom_restore.pending`.
+/// to `{app_data}/moodhaven_restore.pending`.
 ///
 /// Progress is reported via `peer:restore_progress` events.
 /// Completion is signalled via `peer:restore_ready`.
@@ -2292,7 +2292,7 @@ pub fn peer_full_restore(app: AppHandle, device_id: String, host: String) -> Res
 
 /// Restart the app so `lib.rs` can apply the pending DB restore.
 ///
-/// The rename of `moodbloom_restore.pending` → `moodbloom.db` is intentionally
+/// The rename of `moodhaven_restore.pending` → `moodhaven.db` is intentionally
 /// left to the startup code in `lib.rs` (before `Database::new`), not done here.
 /// This keeps the pending file intact if the process exits without relaunching
 /// (e.g. in `tauri dev` mode), so the next manual restart still picks it up.
@@ -2304,7 +2304,7 @@ pub fn peer_apply_and_restart(app: AppHandle) -> Result<(), String> {
     let pending = db_path
         .parent()
         .ok_or("no parent dir")?
-        .join("moodbloom_restore.pending");
+        .join("moodhaven_restore.pending");
 
     if !pending.exists() {
         return Err("No pending restore file found".to_string());

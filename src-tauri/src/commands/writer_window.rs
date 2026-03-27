@@ -13,7 +13,7 @@ pub fn open_writer_window(app: tauri::AppHandle) -> Result<(), String> {
         "writer",
         WebviewUrl::App("index.html?mode=writer".into()),
     )
-    .title("Write — MoodBloom")
+    .title("Write — MoodHaven")
     .inner_size(680.0, 900.0)
     .min_inner_size(480.0, 600.0)
     .resizable(true)

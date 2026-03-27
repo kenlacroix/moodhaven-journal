@@ -32,7 +32,7 @@ describe('dataManagementService encryption', () => {
       const result = await encryptedExport('test-password');
       const parsed = JSON.parse(result);
 
-      expect(parsed.format).toBe('moodbloom-encrypted-v1');
+      expect(parsed.format).toBe('moodhaven-encrypted-v1');
       expect(parsed.payload).toEqual(fakeEncryptedData);
     });
 
@@ -65,7 +65,7 @@ describe('dataManagementService encryption', () => {
   describe('encryptedImport', () => {
     it('decrypts and imports encrypted export', async () => {
       const envelope = JSON.stringify({
-        format: 'moodbloom-encrypted-v1',
+        format: 'moodhaven-encrypted-v1',
         payload: fakeEncryptedData,
       });
 
@@ -87,7 +87,7 @@ describe('dataManagementService encryption', () => {
 
     it('throws when decryption fails', async () => {
       const envelope = JSON.stringify({
-        format: 'moodbloom-encrypted-v1',
+        format: 'moodhaven-encrypted-v1',
         payload: fakeEncryptedData,
       });
 

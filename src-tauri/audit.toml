@@ -1,11 +1,11 @@
-# cargo-audit configuration for MoodBloom
+# cargo-audit configuration for MoodHaven Journal
 # https://docs.rs/cargo-audit/latest/cargo_audit/config/
 #
 # The advisories below are for unmaintained GTK3/GLib transitive dependencies
 # pulled in by Tauri's Linux WebView stack (webkit2gtk → gtk3 → atk/gdk/glib/…).
 # No fix version exists — these crates are deprecated as the ecosystem moved to
 # GTK4. The security impact for a local desktop app is negligible as these
-# codepaths have no network exposure from MoodBloom's perspective.
+# codepaths have no network exposure from MoodHaven Journal's perspective.
 
 [advisories]
 ignore = [

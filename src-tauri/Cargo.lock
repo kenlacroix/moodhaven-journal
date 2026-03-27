@@ -2607,8 +2607,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "moodbloom"
-version = "0.7.5"
+name = "moodhaven-journal"
+version = "0.7.6"
 dependencies = [
  "aes-gcm",
  "anyhow",

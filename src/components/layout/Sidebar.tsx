@@ -285,7 +285,7 @@ export function Sidebar({ currentView, onNavigate, onOpenSync, onNavigateToJourn
         <div className="mx-3 mb-2 p-3 rounded-xl bg-violet-50 dark:bg-violet-900/20 border border-violet-100 dark:border-violet-800">
           <div className="flex items-start justify-between gap-2">
             <p className="text-xs text-violet-700 dark:text-violet-300 leading-snug">
-              Enjoying MoodBloom? A coffee helps keep it going.
+              Enjoying MoodHaven Journal? A coffee helps keep it going.
             </p>
             <button
               type="button"
@@ -313,7 +313,7 @@ export function Sidebar({ currentView, onNavigate, onOpenSync, onNavigateToJourn
       {/* User Guide + Support links */}
       <div className={`px-3 pb-3 pt-1 border-t border-slate-100 dark:border-slate-800 space-y-2 ${collapsed ? 'flex flex-col items-center' : ''}`}>
         <a
-          href="https://github.com/kenlacroix/moodbloom-tauri#readme"
+          href="https://github.com/kenlacroix/moodhaven-journal#readme"
           target="_blank"
           rel="noopener noreferrer"
           title="User Guide"
@@ -328,7 +328,7 @@ export function Sidebar({ currentView, onNavigate, onOpenSync, onNavigateToJourn
           href="https://buymeacoffee.com/moodbloom"
           target="_blank"
           rel="noopener noreferrer"
-          title="Support MoodBloom"
+          title="Support MoodHaven Journal"
           className="flex items-center gap-1.5 text-xs text-slate-400 dark:text-slate-500 hover:text-pink-500 dark:hover:text-pink-400 transition-colors"
         >
           <svg className="w-3.5 h-3.5 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">

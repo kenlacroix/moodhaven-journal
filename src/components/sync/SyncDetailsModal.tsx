@@ -102,7 +102,7 @@ export function SyncDetailsModal({ onClose, onNavigateToSettings }: SyncDetailsM
     appDataDir().then((dir) => {
       const sep = dir.includes('\\') ? '\\' : '/';
       const trimmed = dir.endsWith(sep) ? dir.slice(0, -1) : dir;
-      setDbPath(`${trimmed}${sep}moodbloom.db`);
+      setDbPath(`${trimmed}${sep}moodhaven.db`);
     }).catch(() => setDbPath(null));
     getDeviceName().then(setDeviceName).catch(() => {});
   }, []);

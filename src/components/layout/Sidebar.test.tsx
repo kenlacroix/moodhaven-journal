@@ -46,7 +46,7 @@ describe('Sidebar — support link', () => {
 
   it('renders the support link with correct href, target, and rel', () => {
     render(<Sidebar {...defaultProps} />);
-    const link = screen.getByTitle('Support MoodBloom');
+    const link = screen.getByTitle('Support MoodHaven Journal');
     expect(link).toHaveAttribute('href', 'https://buymeacoffee.com/moodbloom');
     expect(link).toHaveAttribute('target', '_blank');
     expect(link).toHaveAttribute('rel', 'noopener noreferrer');
@@ -64,7 +64,7 @@ describe('Sidebar — support link', () => {
     await user.click(toggleBtn);
 
     expect(screen.queryByText('Support ♥')).not.toBeInTheDocument();
-    const link = screen.getByTitle('Support MoodBloom');
+    const link = screen.getByTitle('Support MoodHaven Journal');
     expect(link.querySelector('svg')).toBeInTheDocument();
   });
 });
@@ -78,14 +78,14 @@ describe('Sidebar — one-time support prompt', () => {
   it('does not show prompt when first_launch_date is less than 30 days ago', () => {
     localStorage.setItem('mb_first_launch_date', new Date().toISOString());
     render(<Sidebar {...defaultProps} />);
-    expect(screen.queryByText(/Enjoying MoodBloom/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Enjoying MoodHaven Journal/)).not.toBeInTheDocument();
   });
 
   it('shows prompt when first_launch_date is 30+ days ago', () => {
     const old = new Date(Date.now() - 31 * 86_400_000).toISOString();
     localStorage.setItem('mb_first_launch_date', old);
     render(<Sidebar {...defaultProps} />);
-    expect(screen.getByText(/Enjoying MoodBloom/)).toBeInTheDocument();
+    expect(screen.getByText(/Enjoying MoodHaven Journal/)).toBeInTheDocument();
   });
 
   it('does not show prompt when already dismissed', () => {
@@ -93,7 +93,7 @@ describe('Sidebar — one-time support prompt', () => {
     localStorage.setItem('mb_first_launch_date', old);
     localStorage.setItem('mb_support_prompt_shown', 'true');
     render(<Sidebar {...defaultProps} />);
-    expect(screen.queryByText(/Enjoying MoodBloom/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Enjoying MoodHaven Journal/)).not.toBeInTheDocument();
   });
 
   it('dismisses prompt when X button is clicked', async () => {
@@ -103,7 +103,7 @@ describe('Sidebar — one-time support prompt', () => {
     render(<Sidebar {...defaultProps} />);
 
     await user.click(screen.getByLabelText('Dismiss'));
-    expect(screen.queryByText(/Enjoying MoodBloom/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Enjoying MoodHaven Journal/)).not.toBeInTheDocument();
     expect(localStorage.getItem('mb_support_prompt_shown')).toBe('true');
   });
 
@@ -115,13 +115,13 @@ describe('Sidebar — one-time support prompt', () => {
 
     const links = screen.getAllByText('Buy Me a Coffee ↗');
     await user.click(links[0]);
-    expect(screen.queryByText(/Enjoying MoodBloom/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Enjoying MoodHaven Journal/)).not.toBeInTheDocument();
     expect(localStorage.getItem('mb_support_prompt_shown')).toBe('true');
   });
 
   it('sets first_launch_date on first visit and does not show prompt', () => {
     render(<Sidebar {...defaultProps} />);
     expect(localStorage.getItem('mb_first_launch_date')).not.toBeNull();
-    expect(screen.queryByText(/Enjoying MoodBloom/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Enjoying MoodHaven Journal/)).not.toBeInTheDocument();
   });
 });

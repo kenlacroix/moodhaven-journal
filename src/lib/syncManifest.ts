@@ -2,7 +2,7 @@
  * syncManifest.ts
  *
  * The sync manifest is a small encrypted JSON file stored on WebDAV at
- * `MoodBloom/sync/manifest.enc`. It is the remote source of truth for which
+ * `MoodHaven/sync/manifest.enc`. It is the remote source of truth for which
  * entries and books exist across all devices, indexed by ID with their
  * last-known updated_at timestamp and originating device.
  *

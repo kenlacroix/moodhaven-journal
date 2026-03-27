@@ -1,5 +1,5 @@
 /**
- * Cloud Sync Service for MoodBloom
+ * Cloud Sync Service for MoodHaven Journal
  *
  * Orchestrates: export -> encrypt -> upload / download -> decrypt -> import
  * Uses webdavService for HTTP and dataManagementService for encryption.
@@ -30,7 +30,7 @@ function generateBackupFilename(): string {
   const now = new Date();
   const date = now.toISOString().slice(0, 10);
   const time = now.toISOString().slice(11, 19).replace(/:/g, '');
-  return `moodbloom-backup-${date}-${time}.moodbloom`;
+  return `moodhaven-backup-${date}-${time}.moodhaven`;
 }
 
 /**

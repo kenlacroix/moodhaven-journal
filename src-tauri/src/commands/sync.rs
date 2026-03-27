@@ -1,4 +1,4 @@
-//! Multi-device sync commands for MoodBloom
+//! Multi-device sync commands for MoodHaven Journal
 //!
 //! Provides lightweight entry metadata for manifest diffing, and a granular
 //! upsert command for applying entries received from a remote device.

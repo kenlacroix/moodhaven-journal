@@ -199,7 +199,7 @@ describe('reminderService', () => {
     it('sends notification with given message', async () => {
       await sendTestNotification('Hello!');
       expect(mockSendNotification).toHaveBeenCalledWith({
-        title: 'MoodBloom Reminder',
+        title: 'MoodHaven Reminder',
         body: 'Hello!',
       });
     });
@@ -207,7 +207,7 @@ describe('reminderService', () => {
     it('uses default message when empty string provided', async () => {
       await sendTestNotification('');
       expect(mockSendNotification).toHaveBeenCalledWith({
-        title: 'MoodBloom Reminder',
+        title: 'MoodHaven Reminder',
         body: 'Time to reflect on your day',
       });
     });
@@ -224,7 +224,7 @@ describe('reminderService', () => {
       const settings = createSettings({ message: 'Check in!' });
       await sendReminderNotification(settings);
       expect(mockSendNotification).toHaveBeenCalledWith({
-        title: 'MoodBloom',
+        title: 'MoodHaven',
         body: 'Check in!',
       });
     });

@@ -64,7 +64,7 @@ export async function downloadBackup(data: string, filename: string): Promise<vo
   // Verify data is encrypted before writing
   try {
     const parsed = JSON.parse(data);
-    if (parsed.format !== 'moodbloom-encrypted-v1' || !parsed.payload) {
+    if (parsed.format !== 'moodhaven-encrypted-v1' || !parsed.payload) {
       throw new Error('Export data is not encrypted. Aborting write.');
     }
   } catch (e) {
@@ -76,7 +76,7 @@ export async function downloadBackup(data: string, filename: string): Promise<vo
 
   const filePath = await save({
     defaultPath: filename,
-    filters: [{ name: 'MoodBloom Backup', extensions: ['moodbloom'] }],
+    filters: [{ name: 'MoodHaven Backup', extensions: ['moodhaven'] }],
   });
 
   if (!filePath) return; // user cancelled
@@ -108,8 +108,8 @@ export async function readBackupFile(file: File): Promise<string> {
 
 // --- Encrypted export/import ---
 
-const ENCRYPTED_EXPORT_VERSION = 'moodbloom-encrypted-v1';
-const FULL_EXPORT_VERSION = 'moodbloom-full-v2';
+const ENCRYPTED_EXPORT_VERSION = 'moodhaven-encrypted-v1';
+const FULL_EXPORT_VERSION = 'moodhaven-full-v2';
 
 interface EncryptedExportEnvelope {
   format: string;
@@ -179,8 +179,8 @@ export async function exportWithMedia(
 /**
  * Import data from an encrypted backup.
  * Auto-detects format:
- *   - moodbloom-full-v2  → full backup with media (new)
- *   - moodbloom-encrypted-v1 → entries only, encrypted (legacy)
+ *   - moodhaven-full-v2  → full backup with media (new)
+ *   - moodhaven-encrypted-v1 → entries only, encrypted (legacy)
  *   - plain base64           → entries only, unencrypted (oldest legacy)
  * @returns Number of entries imported
  */

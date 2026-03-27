@@ -1,5 +1,5 @@
 /**
- * Settings type definitions for MoodBloom
+ * Settings type definitions for MoodHaven Journal
  */
 
 // AI Provider options

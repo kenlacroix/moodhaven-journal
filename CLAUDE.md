@@ -1,6 +1,6 @@
-# MoodBloom — AI Assistant Guidelines
+# MoodHaven Journal — AI Assistant Guidelines
 
-**MoodBloom** is a cross-platform desktop journaling app with mood tracking and AI-powered insights.
+**MoodHaven Journal** is a cross-platform desktop journaling app with mood tracking and AI-powered insights.
 Stack: Tauri v2 (Rust) + React + TypeScript + TailwindCSS + SQLite (rusqlite).
 Platforms: Windows, Linux, macOS.
 

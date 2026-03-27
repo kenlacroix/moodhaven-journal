@@ -1,5 +1,5 @@
 /**
- * WebDAV Service for MoodBloom
+ * WebDAV Service for MoodHaven Journal
  *
  * Handles WebDAV HTTP operations (PUT, GET, PROPFIND, MKCOL).
  * Uses @tauri-apps/plugin-http for HTTP requests that bypass CSP restrictions.
@@ -15,7 +15,7 @@ export interface WebDAVResponse {
   data?: string;
 }
 
-const MOODBLOOM_DIR = 'MoodBloom';
+const MOODHAVEN_DIR = 'MoodHaven';
 
 /**
  * Build HTTP Basic Auth header value
@@ -36,17 +36,17 @@ export function normalizeWebDAVUrl(url: string): string {
 }
 
 /**
- * Build full path to a file within the MoodBloom directory
+ * Build full path to a file within the MoodHaven directory
  */
 export function buildFilePath(baseUrl: string, filename: string): string {
-  return `${normalizeWebDAVUrl(baseUrl)}${MOODBLOOM_DIR}/${filename}`;
+  return `${normalizeWebDAVUrl(baseUrl)}${MOODHAVEN_DIR}/${filename}`;
 }
 
 /**
- * Build path to MoodBloom directory
+ * Build path to MoodHaven directory
  */
 export function buildDirectoryPath(baseUrl: string): string {
-  return `${normalizeWebDAVUrl(baseUrl)}${MOODBLOOM_DIR}/`;
+  return `${normalizeWebDAVUrl(baseUrl)}${MOODHAVEN_DIR}/`;
 }
 
 /**
@@ -81,7 +81,7 @@ export async function testConnection(config: WebDAVConfig): Promise<WebDAVRespon
 }
 
 /**
- * Ensure the MoodBloom directory exists (MKCOL)
+ * Ensure the MoodHaven directory exists (MKCOL)
  */
 export async function ensureDirectory(config: WebDAVConfig): Promise<WebDAVResponse> {
   try {
@@ -203,11 +203,11 @@ export async function deleteFile(
 }
 
 /**
- * Create a subdirectory under MoodBloom/ using MKCOL.
+ * Create a subdirectory under MoodHaven/ using MKCOL.
  * 201 = created, 405 = already exists — both are success.
  */
 async function ensureSubdirectory(config: WebDAVConfig, subpath: string): Promise<void> {
-  const dirUrl = `${normalizeWebDAVUrl(config.url)}${MOODBLOOM_DIR}/${subpath}/`;
+  const dirUrl = `${normalizeWebDAVUrl(config.url)}${MOODHAVEN_DIR}/${subpath}/`;
   const response = await fetch(dirUrl, {
     method: 'MKCOL',
     headers: { 'Authorization': buildAuthHeader(config.username, config.password) },
@@ -220,7 +220,7 @@ async function ensureSubdirectory(config: WebDAVConfig, subpath: string): Promis
 }
 
 /**
- * Ensure the full sync directory tree exists under MoodBloom/:
+ * Ensure the full sync directory tree exists under MoodHaven/:
  *   sync/
  *   sync/entries/
  *   sync/books/
@@ -228,7 +228,7 @@ async function ensureSubdirectory(config: WebDAVConfig, subpath: string): Promis
  * Call this once before starting a sync operation.
  */
 export async function ensureSyncDirectories(config: WebDAVConfig): Promise<void> {
-  // Ensure the root MoodBloom/ dir first
+  // Ensure the root MoodHaven/ dir first
   await ensureDirectory(config);
   // Then the sync subdirs in order
   await ensureSubdirectory(config, 'sync');
@@ -238,7 +238,7 @@ export async function ensureSyncDirectories(config: WebDAVConfig): Promise<void>
 }
 
 /**
- * List files in MoodBloom directory (PROPFIND Depth:1)
+ * List files in MoodHaven directory (PROPFIND Depth:1)
  */
 export async function listFiles(config: WebDAVConfig): Promise<WebDAVResponse & { files?: string[] }> {
   try {
@@ -273,7 +273,7 @@ export async function listFiles(config: WebDAVConfig): Promise<WebDAVResponse & 
 
 /**
  * Parse filenames from WebDAV PROPFIND XML response.
- * Extracts href values and returns just the .moodbloom filenames.
+ * Extracts href values and returns just the .moodhaven filenames.
  */
 export function parseFilenamesFromPropfind(xml: string): string[] {
   const files: string[] = [];
@@ -283,7 +283,7 @@ export function parseFilenamesFromPropfind(xml: string): string[] {
     const href = decodeURIComponent(match[1]);
     const parts = href.replace(/\/$/, '').split('/');
     const name = parts[parts.length - 1];
-    if (name && name.endsWith('.moodbloom')) {
+    if (name && name.endsWith('.moodhaven')) {
       files.push(name);
     }
   }

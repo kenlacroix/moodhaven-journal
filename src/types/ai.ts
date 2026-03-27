@@ -1,5 +1,5 @@
 /**
- * AI-related type definitions for MoodBloom
+ * AI-related type definitions for MoodHaven Journal
  *
  * Privacy-first approach: Only metadata is sent to AI APIs,
  * never actual journal content.

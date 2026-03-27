@@ -25,7 +25,7 @@ You can expect an acknowledgement within 48 hours and a patch or mitigation with
 
 ## Security Model
 
-MoodBloom is built on a **zero-knowledge, local-first** architecture:
+MoodHaven Journal is built on a **zero-knowledge, local-first** architecture:
 
 - All journal content is encrypted with **AES-256-GCM** before being written to disk
 - Encryption keys are derived from your password using **PBKDF2 (600,000 iterations)** — the key is never stored
@@ -55,7 +55,7 @@ The following are **out of scope**:
 - Vulnerabilities requiring physical access to an already-unlocked device
 - Denial-of-service attacks against a local desktop application
 - Social engineering attacks against users
-- Issues in third-party dependencies that have no MoodBloom-specific exploit path (please report those upstream)
+- Issues in third-party dependencies that have no MoodHaven Journal-specific exploit path (please report those upstream)
 
 ---
 

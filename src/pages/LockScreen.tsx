@@ -699,7 +699,7 @@ export function LockScreen() {
                   Enable Fingerprint Unlock?
                 </h2>
                 <p className="text-sm text-slate-500 dark:text-slate-400">
-                  Unlock MoodBloom instantly with your fingerprint — no password needed each time.
+                  Unlock MoodHaven Journal instantly with your fingerprint — no password needed each time.
                 </p>
               </div>
 

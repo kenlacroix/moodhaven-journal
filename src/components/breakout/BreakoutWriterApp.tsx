@@ -140,7 +140,7 @@ export function BreakoutWriterApp() {
               <span className="text-white text-xl font-bold">M</span>
             </div>
             <div className="text-center">
-              <h1 className="text-lg font-semibold text-slate-800 dark:text-slate-100">MoodBloom Writer</h1>
+              <h1 className="text-lg font-semibold text-slate-800 dark:text-slate-100">MoodHaven Writer</h1>
               <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Enter your journal password to continue</p>
             </div>
           </div>

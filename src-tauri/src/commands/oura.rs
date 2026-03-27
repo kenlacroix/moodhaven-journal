@@ -1,4 +1,4 @@
-//! Oura Ring integration commands for MoodBloom
+//! Oura Ring integration commands for MoodHaven Journal
 //!
 //! Provides Personal Access Token (PAT) validation, daily health data sync,
 //! and retrieval of cached health context for journal writing enrichment.

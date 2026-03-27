@@ -51,97 +51,97 @@ describe('webdavService', () => {
   });
 
   describe('buildFilePath', () => {
-    it('constructs full path with MoodBloom directory', () => {
+    it('constructs full path with MoodHaven directory', () => {
       const path = buildFilePath(
         'https://cloud.example.com/dav/',
-        'backup.moodbloom'
+        'backup.moodhaven'
       );
       expect(path).toBe(
-        'https://cloud.example.com/dav/MoodBloom/backup.moodbloom'
+        'https://cloud.example.com/dav/MoodHaven/backup.moodhaven'
       );
     });
 
     it('handles base URL without trailing slash', () => {
       const path = buildFilePath(
         'https://cloud.example.com/dav',
-        'backup.moodbloom'
+        'backup.moodhaven'
       );
       expect(path).toBe(
-        'https://cloud.example.com/dav/MoodBloom/backup.moodbloom'
+        'https://cloud.example.com/dav/MoodHaven/backup.moodhaven'
       );
     });
   });
 
   describe('buildDirectoryPath', () => {
-    it('constructs MoodBloom directory path', () => {
+    it('constructs MoodHaven directory path', () => {
       const path = buildDirectoryPath('https://cloud.example.com/dav');
-      expect(path).toBe('https://cloud.example.com/dav/MoodBloom/');
+      expect(path).toBe('https://cloud.example.com/dav/MoodHaven/');
     });
 
     it('handles URL with trailing slash', () => {
       const path = buildDirectoryPath('https://cloud.example.com/dav/');
-      expect(path).toBe('https://cloud.example.com/dav/MoodBloom/');
+      expect(path).toBe('https://cloud.example.com/dav/MoodHaven/');
     });
   });
 
   describe('parseFilenamesFromPropfind', () => {
-    it('extracts .moodbloom filenames from WebDAV XML', () => {
+    it('extracts .moodhaven filenames from WebDAV XML', () => {
       const xml = `<?xml version="1.0"?>
         <D:multistatus xmlns:D="DAV:">
           <D:response>
-            <D:href>/dav/MoodBloom/</D:href>
+            <D:href>/dav/MoodHaven/</D:href>
           </D:response>
           <D:response>
-            <D:href>/dav/MoodBloom/moodbloom-backup-2026-01-28-120000.moodbloom</D:href>
+            <D:href>/dav/MoodHaven/moodhaven-backup-2026-01-28-120000.moodhaven</D:href>
           </D:response>
           <D:response>
-            <D:href>/dav/MoodBloom/moodbloom-backup-2026-01-30-090000.moodbloom</D:href>
+            <D:href>/dav/MoodHaven/moodhaven-backup-2026-01-30-090000.moodhaven</D:href>
           </D:response>
         </D:multistatus>`;
 
       const files = parseFilenamesFromPropfind(xml);
       expect(files).toEqual([
-        'moodbloom-backup-2026-01-28-120000.moodbloom',
-        'moodbloom-backup-2026-01-30-090000.moodbloom',
+        'moodhaven-backup-2026-01-28-120000.moodhaven',
+        'moodhaven-backup-2026-01-30-090000.moodhaven',
       ]);
     });
 
     it('handles lowercase namespace prefix', () => {
       const xml = `<d:multistatus xmlns:d="DAV:">
-        <d:response><d:href>/MoodBloom/test.moodbloom</d:href></d:response>
+        <d:response><d:href>/MoodHaven/test.moodhaven</d:href></d:response>
       </d:multistatus>`;
 
       const files = parseFilenamesFromPropfind(xml);
-      expect(files).toEqual(['test.moodbloom']);
+      expect(files).toEqual(['test.moodhaven']);
     });
 
     it('handles no namespace prefix', () => {
       const xml = `<multistatus>
-        <response><href>/MoodBloom/backup.moodbloom</href></response>
+        <response><href>/MoodHaven/backup.moodhaven</href></response>
       </multistatus>`;
 
       const files = parseFilenamesFromPropfind(xml);
-      expect(files).toEqual(['backup.moodbloom']);
+      expect(files).toEqual(['backup.moodhaven']);
     });
 
-    it('ignores non-.moodbloom files', () => {
+    it('ignores non-.moodhaven files', () => {
       const xml = `<D:multistatus xmlns:D="DAV:">
-        <D:response><D:href>/MoodBloom/</D:href></D:response>
-        <D:response><D:href>/MoodBloom/readme.txt</D:href></D:response>
-        <D:response><D:href>/MoodBloom/backup.moodbloom</D:href></D:response>
+        <D:response><D:href>/MoodHaven/</D:href></D:response>
+        <D:response><D:href>/MoodHaven/readme.txt</D:href></D:response>
+        <D:response><D:href>/MoodHaven/backup.moodhaven</D:href></D:response>
       </D:multistatus>`;
 
       const files = parseFilenamesFromPropfind(xml);
-      expect(files).toEqual(['backup.moodbloom']);
+      expect(files).toEqual(['backup.moodhaven']);
     });
 
     it('handles URL-encoded filenames', () => {
       const xml = `<D:multistatus xmlns:D="DAV:">
-        <D:response><D:href>/MoodBloom/mood%20bloom-backup.moodbloom</D:href></D:response>
+        <D:response><D:href>/MoodHaven/mood%20bloom-backup.moodhaven</D:href></D:response>
       </D:multistatus>`;
 
       const files = parseFilenamesFromPropfind(xml);
-      expect(files).toEqual(['mood bloom-backup.moodbloom']);
+      expect(files).toEqual(['mood bloom-backup.moodhaven']);
     });
 
     it('returns empty array for empty XML', () => {

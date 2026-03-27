@@ -19,7 +19,7 @@ export interface TwoFactorStatus {
 export interface TotpSetupData {
   secret: string;        // Base32 secret for manual entry
   qr_code_url: string;   // otpauth:// URL for QR code
-  issuer: string;        // "MoodBloom"
+  issuer: string;        // "MoodHaven Journal"
   account_name: string;  // User identifier
 }
 

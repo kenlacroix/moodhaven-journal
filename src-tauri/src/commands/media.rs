@@ -1,8 +1,8 @@
-//! Media attachment commands for MoodBloom
+//! Media attachment commands for MoodHaven Journal
 //!
 //! Handles encrypted file storage for images, PDFs, audio, and video.
 //! Files are stored on the filesystem under app_data_dir/media/<entry_id>/
-//! using the MBMF (MoodBloom Media File) encrypted format.
+//! using the MBMF (MoodHaven Media File) encrypted format.
 //!
 //! Format layout (on disk):
 //!   [32 bytes: PBKDF2 salt]
@@ -130,7 +130,7 @@ fn decrypt_mbmf(data: &[u8], password: &str) -> Result<Vec<u8>, String> {
     }
     let salt = &data[..SALT_LEN];
     if &data[SALT_LEN..SALT_LEN + 8] != MBMF_MAGIC {
-        return Err("Not a MoodBloom media file (bad magic)".to_string());
+        return Err("Not a MoodHaven media file (bad magic)".to_string());
     }
     let mode = data[SALT_LEN + 8];
     let orig_size = u64::from_le_bytes(data[SALT_LEN + 9..SALT_LEN + 17].try_into().unwrap());

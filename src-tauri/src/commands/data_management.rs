@@ -140,6 +140,12 @@ pub async fn factory_reset(app: AppHandle) -> Result<bool, String> {
 pub async fn export_data(app: AppHandle, _password: String) -> Result<String, String> {
     let db = app.state::<Database>();
 
+    // Flush any pending WAL frames before reading, so the export is consistent
+    {
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        let _ = conn.execute_batch("PRAGMA wal_checkpoint(FULL)");
+    }
+
     // Get all journal entries
     let entries = db::get_all_entries(&db, None)?;
 

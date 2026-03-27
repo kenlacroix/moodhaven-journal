@@ -9,6 +9,7 @@ import { invoke } from '@tauri-apps/api/core';
 import {
   encrypt,
   decrypt,
+  clearKeyCache,
   hashPassword,
   verifyPasswordHash,
   type EncryptedData,
@@ -113,10 +114,11 @@ export async function unlockJournal(password: string): Promise<boolean> {
 }
 
 /**
- * Lock the journal (clear session password)
+ * Lock the journal (clear session password and derived key cache)
  */
 export function lockJournal(): void {
   sessionPassword = null;
+  clearKeyCache();
 }
 
 /** Dev-only: set session password without DB verification. Never call in production. */

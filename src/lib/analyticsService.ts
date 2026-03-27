@@ -167,26 +167,73 @@ export async function getOverallStats(): Promise<{ averageMood: number; totalEnt
   return { averageMood, totalEntries };
 }
 
+interface FullAnalyticsBundleRow {
+  average_mood: number;
+  total_entries: number;
+  streak_stats: StreakStatsRow;
+  mood_distribution: MoodDistributionRow[];
+  day_of_week_stats: DayOfWeekStatsRow[];
+  trend_data: DailyStatsRow[];
+}
+
+export interface InsightsMetadata {
+  entries_this_week: number;
+  total_entries: number;
+  top_tags: string[];
+}
+
 /**
- * Get full analytics data (all data combined)
+ * Get all analytics data in a single IPC call (one DB mutex acquisition)
  */
 export async function getFullAnalytics(trendDays: number = 30): Promise<AnalyticsData> {
-  // Fetch all data in parallel
-  const [overallStats, streakStats, moodDistribution, dayOfWeekStats, trendData] =
-    await Promise.all([
-      getOverallStats(),
-      getStreakStats(),
-      getMoodDistribution(),
-      getDayOfWeekStats(),
-      getMoodTrend(trendDays),
-    ]);
+  const bundle = await invoke<FullAnalyticsBundleRow>('get_full_analytics_bundle', {
+    trendDays,
+  });
+
+  const total = bundle.mood_distribution.reduce((sum, row) => sum + row.count, 0);
+  const distribution: MoodDistribution[] = [];
+  for (let mood = 1; mood <= 5; mood++) {
+    const row = bundle.mood_distribution.find((r) => r.mood === mood);
+    distribution.push({
+      mood: mood as MoodLevel,
+      count: row?.count || 0,
+      percentage: total > 0 ? ((row?.count || 0) / total) * 100 : 0,
+    });
+  }
+
+  const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const dayOfWeekStats: DayOfWeekStats[] = [];
+  for (let day = 0; day < 7; day++) {
+    const row = bundle.day_of_week_stats.find((r) => r.day_of_week === day);
+    dayOfWeekStats.push({
+      dayOfWeek: day,
+      dayName: row?.day_name || dayNames[day],
+      averageMood: row?.average_mood || 0,
+      entryCount: row?.entry_count || 0,
+    });
+  }
 
   return {
-    averageMood: overallStats.averageMood,
-    totalEntries: overallStats.totalEntries,
-    streakStats,
-    moodDistribution,
+    averageMood: bundle.average_mood,
+    totalEntries: bundle.total_entries,
+    streakStats: {
+      currentStreak: bundle.streak_stats.current_streak,
+      longestStreak: bundle.streak_stats.longest_streak,
+      lastEntryDate: bundle.streak_stats.last_entry_date,
+    },
+    moodDistribution: distribution,
     dayOfWeekStats,
-    trendData,
+    trendData: bundle.trend_data.map((row) => ({
+      date: row.date,
+      averageMood: row.average_mood,
+      entryCount: row.entry_count,
+    })),
   };
+}
+
+/**
+ * Get lightweight insights metadata (no decryption required)
+ */
+export async function getInsightsMetadata(): Promise<InsightsMetadata> {
+  return invoke<InsightsMetadata>('get_insights_metadata');
 }

@@ -183,6 +183,8 @@ pub fn run() {
             commands::get_streak_stats,
             commands::get_day_of_week_stats,
             commands::get_monthly_mood_data,
+            commands::get_full_analytics_bundle,
+            commands::get_insights_metadata,
             // Settings
             commands::get_setting,
             commands::set_setting,

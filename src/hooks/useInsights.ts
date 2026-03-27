@@ -7,12 +7,18 @@
  * - Local patterns always use entries with privacyMode < 2 (Open + Mindful)
  * - LLM calls only use entries with privacyMode === 0 (Open)
  * - The actual journal text never leaves the device
+ *
+ * Performance:
+ * - get_insights_metadata provides entriesThisWeek / topTags / totalEntries immediately (no decrypt)
+ * - aggregateMetadata uses only the last 30 days of entries (not all-time)
+ * - Gratitude streak uses a localStorage cache keyed by entry count to avoid cold-session decrypt
+ * - settings.ai scoped dependency prevents non-AI settings changes from triggering reload
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { getAllEntries } from '../lib/journalService';
+import { getAllEntries, getEntriesByDateRange } from '../lib/journalService';
 import {
-  aggregateMetadata,
+  aggregateMetadataBoth,
   calculateGratitudeStreak,
 } from '../lib/metadataExtractor';
 import {
@@ -21,8 +27,38 @@ import {
   detectRecurringPatterns,
   createAIServiceConfig,
 } from '../lib/aiService';
+import { getInsightsMetadata } from '../lib/analyticsService';
 import { useSettingsStore } from '../stores/settingsStore';
+import { getDaysAgo } from '../lib/dateUtils';
 import type { AggregatedMetadata, WellnessInsight, RecurringPattern, WeeklyReflection } from '../types/ai';
+
+const STREAK_CACHE_KEY = 'mb_gratitude_streak_cache';
+
+interface StreakCache {
+  streak: number;
+  longestStreak: number;
+  entryCount: number;
+}
+
+function loadStreakCache(): StreakCache | null {
+  try {
+    const raw = localStorage.getItem(STREAK_CACHE_KEY);
+    return raw ? (JSON.parse(raw) as StreakCache) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveStreakCache(streak: number, longestStreak: number, entryCount: number): void {
+  try {
+    localStorage.setItem(
+      STREAK_CACHE_KEY,
+      JSON.stringify({ streak, longestStreak, entryCount })
+    );
+  } catch {
+    // localStorage unavailable — non-fatal
+  }
+}
 
 function getWeekBounds(): { weekStart: string; weekEnd: string } {
   const now = new Date();
@@ -40,7 +76,7 @@ function getWeekBounds(): { weekStart: string; weekEnd: string } {
 }
 
 export function useInsights() {
-  const settings = useSettingsStore((s) => s.settings);
+  const settingsAi = useSettingsStore((s) => s.settings.ai);
 
   const [localMetadata, setLocalMetadata] = useState<AggregatedMetadata | null>(null);
   const [insights, setInsights] = useState<WellnessInsight[]>([]);
@@ -49,6 +85,7 @@ export function useInsights() {
   const [gratitudeStreak, setGratitudeStreak] = useState(0);
   const [gratitudeLongestStreak, setGratitudeLongestStreak] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
+  const [isMetadataReady, setIsMetadataReady] = useState(false);
   const [hasData, setHasData] = useState(false);
   const [entriesThisWeek, setEntriesThisWeek] = useState(0);
   const [topTags, setTopTags] = useState<string[]>([]);
@@ -56,84 +93,79 @@ export function useInsights() {
   const load = useCallback(async () => {
     setIsLoading(true);
     try {
-      const entries = await getAllEntries();
+      // Tier A: lightweight metadata — no decryption, renders immediately
+      const meta = await getInsightsMetadata();
 
-      if (entries.length === 0) {
+      if (meta.total_entries === 0) {
         setHasData(false);
+        setIsMetadataReady(true);
         return;
       }
 
       setHasData(true);
+      setEntriesThisWeek(meta.entries_this_week);
+      setTopTags(meta.top_tags);
+      setIsMetadataReady(true);
 
-      // Entries this week
-      const now = new Date();
-      const weekStart = new Date(now);
-      weekStart.setDate(now.getDate() - now.getDay()); // Sunday
-      weekStart.setHours(0, 0, 0, 0);
-      setEntriesThisWeek(
-        entries.filter((e) => new Date(e.created_at) >= weekStart).length
-      );
+      // Gratitude streak: use localStorage cache if entry count hasn't changed
+      const cached = loadStreakCache();
+      if (cached && cached.entryCount === meta.total_entries) {
+        setGratitudeStreak(cached.streak);
+        setGratitudeLongestStreak(cached.longestStreak);
+      }
 
-      // Top tags across all entries
-      const tagCounts = new Map<string, number>();
-      for (const e of entries) {
-        for (const t of e.tags) {
-          tagCounts.set(t, (tagCounts.get(t) ?? 0) + 1);
+      // Tier B: decrypt last 30 days only for aggregateMetadata
+      const startDate = getDaysAgo(30);
+      const recentEntries = await getEntriesByDateRange(startDate, new Date());
+
+      if (recentEntries.length > 0) {
+        const { localMeta, aiMeta } = aggregateMetadataBoth(recentEntries);
+        setLocalMetadata(localMeta);
+        setPatterns(detectRecurringPatterns(localMeta));
+
+        if (settingsAi.enabled) {
+          const config = createAIServiceConfig(useSettingsStore.getState().settings);
+          const insightPromises: Promise<void>[] = [];
+
+          if (settingsAi.features.wellnessInsights) {
+            insightPromises.push(
+              generateInsights(config, aiMeta).then((result) => {
+                if (result.success && result.data) {
+                  setInsights(result.data);
+                }
+              })
+            );
+          }
+
+          if (settingsAi.features.weeklyReflections) {
+            const { weekStart, weekEnd } = getWeekBounds();
+            insightPromises.push(
+              generateWeeklyReflection(config, aiMeta, weekStart, weekEnd).then((result) => {
+                if (result.success && result.data) {
+                  setWeeklyReflection(result.data);
+                }
+              })
+            );
+          }
+
+          await Promise.allSettled(insightPromises);
         }
       }
-      setTopTags(
-        Array.from(tagCounts.entries())
-          .sort((a, b) => b[1] - a[1])
-          .slice(0, 5)
-          .map(([t]) => t)
-      );
 
-      // Local analysis: Open + Mindful entries
-      const meta = aggregateMetadata(entries, 30, false);
-      setLocalMetadata(meta);
-      setPatterns(detectRecurringPatterns(meta));
-
-      // Gratitude streak (local)
-      const gs = calculateGratitudeStreak(entries);
-      setGratitudeStreak(gs.currentStreak);
-      setGratitudeLongestStreak(gs.longestStreak);
-
-      // AI features: Open entries only
-      if (settings.ai.enabled) {
-        const llmMeta = aggregateMetadata(entries, 30, true);
-        const config = createAIServiceConfig(settings);
-
-        const insightPromises: Promise<void>[] = [];
-
-        if (settings.ai.features.wellnessInsights) {
-          insightPromises.push(
-            generateInsights(config, llmMeta).then((result) => {
-              if (result.success && result.data) {
-                setInsights(result.data);
-              }
-            })
-          );
-        }
-
-        if (settings.ai.features.weeklyReflections) {
-          const { weekStart, weekEnd } = getWeekBounds();
-          insightPromises.push(
-            generateWeeklyReflection(config, llmMeta, weekStart, weekEnd).then((result) => {
-              if (result.success && result.data) {
-                setWeeklyReflection(result.data);
-              }
-            })
-          );
-        }
-
-        await Promise.allSettled(insightPromises);
+      // Gratitude streak: recompute if cache is stale (new entries since last visit)
+      if (!cached || cached.entryCount !== meta.total_entries) {
+        const allEntries = await getAllEntries();
+        const gs = calculateGratitudeStreak(allEntries);
+        setGratitudeStreak(gs.currentStreak);
+        setGratitudeLongestStreak(gs.longestStreak);
+        saveStreakCache(gs.currentStreak, gs.longestStreak, meta.total_entries);
       }
     } catch {
       // Silently fall back — local patterns are still shown
     } finally {
       setIsLoading(false);
     }
-  }, [settings]);
+  }, [settingsAi]);
 
   useEffect(() => {
     void load();
@@ -153,8 +185,9 @@ export function useInsights() {
     entriesThisWeek,
     topTags,
     isLoading,
+    isMetadataReady,
     hasData,
-    isAIEnabled: settings.ai.enabled,
+    isAIEnabled: settingsAi.enabled,
     dismissInsight,
     refresh: load,
   };

@@ -61,13 +61,27 @@ function generateRandomBytes(length: number): Uint8Array {
   return crypto.getRandomValues(new Uint8Array(length));
 }
 
+// Session-scoped key cache: salt (base64) → derived CryptoKey
+// Avoids re-running 600k PBKDF2 iterations for the same entry within a session.
+// Cleared on lockJournal() via clearKeyCache().
+const sessionKeyCache = new Map<string, CryptoKey>();
+
+export function clearKeyCache(): void {
+  sessionKeyCache.clear();
+}
+
 /**
  * Derive an AES-256 key from password using PBKDF2
+ * Returns cached key if the same salt was used earlier this session.
  */
 async function deriveKey(
   password: string,
   salt: Uint8Array
 ): Promise<CryptoKey> {
+  const saltKey = `${bufferToBase64(salt.buffer as ArrayBuffer)}:${password}`;
+  const cached = sessionKeyCache.get(saltKey);
+  if (cached) return cached;
+
   // Import password as raw key material
   const passwordKey = await crypto.subtle.importKey(
     'raw',
@@ -78,7 +92,7 @@ async function deriveKey(
   );
 
   // Derive AES-256 key using PBKDF2
-  return crypto.subtle.deriveKey(
+  const key = await crypto.subtle.deriveKey(
     {
       name: 'PBKDF2',
       salt: salt as BufferSource,
@@ -93,6 +107,9 @@ async function deriveKey(
     false, // Not extractable
     ['encrypt', 'decrypt']
   );
+
+  sessionKeyCache.set(saltKey, key);
+  return key;
 }
 
 /**

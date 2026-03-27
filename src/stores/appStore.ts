@@ -6,6 +6,7 @@
  */
 
 import { create } from 'zustand';
+import { logger } from '../lib/logger';
 import {
   hasPassword,
   setupPassword,
@@ -50,7 +51,7 @@ export const useAppStore = create<AppState>((set) => ({
       const initialized = await hasPassword();
       set({ isInitialized: initialized });
     } catch (error) {
-      console.error('Failed to check initialization:', error);
+      logger.error('Failed to check initialization:', { error: String(error) });
       set({ isInitialized: false });
     }
   },
@@ -64,7 +65,7 @@ export const useAppStore = create<AppState>((set) => ({
       set({ isInitialized: true, isUnlocked: unlocked, sessionPassword: unlocked ? password : null });
       return true;
     } catch (error) {
-      console.error('Failed to initialize:', error);
+      logger.error('Failed to initialize:', { error: String(error) });
       return false;
     }
   },
@@ -78,7 +79,7 @@ export const useAppStore = create<AppState>((set) => ({
       }
       return success;
     } catch (error) {
-      console.error('Failed to unlock:', error);
+      logger.error('Failed to unlock:', { error: String(error) });
       return false;
     }
   },

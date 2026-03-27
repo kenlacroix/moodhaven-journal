@@ -5,6 +5,7 @@
   "windows": ["main", "writer"],
   "permissions": [
     "core:default",
+    "log:default",
     "shell:allow-open",
     "notification:default",
     {

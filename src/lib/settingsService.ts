@@ -8,6 +8,7 @@ import { invoke } from '@tauri-apps/api/core';
 import type { AppSettings } from '../types/settings';
 import { createDefaultSettings } from '../types/settings';
 import { encrypt, decrypt } from './crypto';
+import { logger } from '../lib/logger';
 
 const SETTINGS_KEY = 'app_settings';
 
@@ -109,7 +110,7 @@ export async function loadSettings(password?: string): Promise<AppSettings> {
     }
     return createDefaultSettings();
   } catch (error) {
-    console.error('Failed to load settings:', error);
+    logger.error('Failed to load settings:', { error: String(error) });
     return createDefaultSettings();
   }
 }
@@ -131,7 +132,7 @@ export async function saveSettings(settings: AppSettings, password?: string): Pr
       value: JSON.stringify(blob),
     });
   } catch (error) {
-    console.error('Failed to save settings:', error);
+    logger.error('Failed to save settings:', { error: String(error) });
     throw error;
   }
 }
@@ -170,7 +171,7 @@ export async function getAppVersion(): Promise<string> {
   try {
     return await invoke<string>('get_app_version');
   } catch (error) {
-    console.error('Failed to get app version:', error);
+    logger.error('Failed to get app version:', { error: String(error) });
     return '0.0.0';
   }
 }

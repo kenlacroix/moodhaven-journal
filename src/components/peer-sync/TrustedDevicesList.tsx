@@ -6,6 +6,7 @@ import { useState, useCallback } from 'react';
 import type { TrustedDevice } from '../../types/peerSync';
 import { revokeDevice } from '../../lib/peerPairingService';
 import { usePeerSyncStore } from '../../stores/peerSyncStore';
+import { logger } from '../../lib/logger';
 
 function DeviceIcon({ type, className = 'w-4 h-4' }: { type: string; className?: string }) {
   if (type === 'phone')
@@ -60,7 +61,7 @@ function TrustedDeviceRow({ device }: { device: TrustedDevice }) {
       removeTrusted(device.deviceId);
       markPeerUntrusted(device.deviceId);
     } catch (e) {
-      console.error('[TrustedDevicesList] Revoke failed:', e);
+      logger.error('[TrustedDevicesList] Revoke failed:', { error: String(e) });
     } finally {
       setRemoving(false);
       setConfirming(false);

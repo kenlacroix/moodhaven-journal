@@ -9,6 +9,7 @@
 import { create } from 'zustand';
 import type { Book, BookSettings } from '../types/journal';
 import { listBooks, createBook, updateBook, deleteBook } from '../lib/booksService';
+import { logger } from '../lib/logger';
 
 interface BooksState {
   books: Book[];
@@ -36,7 +37,7 @@ export const useBooksStore = create<BooksState>((set, get) => ({
       const books = await listBooks();
       set({ books, isLoading: false });
     } catch (err) {
-      console.error('Failed to load books:', err);
+      logger.error('Failed to load books:', { error: String(err) });
       set({ isLoading: false });
     }
   },

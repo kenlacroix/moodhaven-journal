@@ -892,7 +892,7 @@ fn do_serve_restore(
     let total_bytes = db_bytes.len() as u64;
     let total_chunks = db_bytes.len().div_ceil(RESTORE_CHUNK_BYTES);
 
-    eprintln!(
+    log::info!(
         "[restore] Serving DB ({} bytes, {} chunks) to {}",
         total_bytes, total_chunks, client_name
     );
@@ -924,7 +924,7 @@ fn do_serve_restore(
         // Raw binary data for the chunk (DB content is already encrypted at rest).
         write_binary_frame(stream, chunk)?;
 
-        eprintln!(
+        log::debug!(
             "[restore] Sent chunk {}/{} ({} bytes)",
             seq + 1,
             total_chunks,
@@ -942,7 +942,7 @@ fn do_serve_restore(
         },
     )?;
 
-    eprintln!("[restore] Done serving DB to {}", client_name);
+    log::info!("[restore] Done serving DB to {}", client_name);
     Ok(())
 }
 
@@ -960,7 +960,7 @@ fn do_full_restore_client(app: &AppHandle, peer_device_id: &str, host: &str) -> 
     let port = sync_port_for_device(peer_device_id);
     let addr = format!("{host}:{port}");
 
-    eprintln!("[restore] Connecting to {addr} for full restore");
+    log::info!("[restore] Connecting to {addr} for full restore");
 
     let addrs: Vec<_> = addr
         .to_socket_addrs()
@@ -1023,7 +1023,7 @@ fn do_full_restore_client(app: &AppHandle, peer_device_id: &str, host: &str) -> 
         None => derive_sync_key_static(&my_identity.public_key, &peer_device.public_key),
     };
 
-    eprintln!("[restore] Connected to {server_name}, requesting full DB");
+    log::info!("[restore] Connected to {server_name}, requesting full DB");
 
     // ── Send RestoreRequest ───────────────────────────────────────────────────
     write_msg_enc(&mut stream, &key, &Msg::RestoreRequest)?;
@@ -1062,7 +1062,7 @@ fn do_full_restore_client(app: &AppHandle, peer_device_id: &str, host: &str) -> 
                 } else {
                     0.0
                 };
-                eprintln!(
+                log::debug!(
                     "[restore] Received chunk {}/{} ({:.1}%)",
                     chunks_received, total_chunks, pct
                 );
@@ -1082,7 +1082,7 @@ fn do_full_restore_client(app: &AppHandle, peer_device_id: &str, host: &str) -> 
                 total_bytes,
                 chunks,
             } => {
-                eprintln!(
+                log::info!(
                     "[restore] Transfer complete: {} bytes in {} chunks",
                     total_bytes, chunks
                 );
@@ -1112,7 +1112,7 @@ fn do_full_restore_client(app: &AppHandle, peer_device_id: &str, host: &str) -> 
         }),
     );
 
-    eprintln!("[restore] Pending file written to {:?}", pending_path);
+    log::info!("[restore] Pending file written to {:?}", pending_path);
     Ok(())
 }
 
@@ -1145,7 +1145,7 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
     let client_device = match client_device {
         Some(d) => d,
         None => {
-            eprintln!(
+            log::warn!(
                 "[sync] Server: rejecting unknown device {client_device_id} — sending NotTrusted"
             );
             let _ = write_msg(
@@ -1185,7 +1185,7 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
             derive_sync_key_ecdh(my_eph_secret, hex, &my_identity.public_key, &client_pubkey)?
         }
         None => {
-            eprintln!("[sync] Server: peer sent no eph_pub — using legacy static key");
+            log::warn!("[sync] Server: peer sent no eph_pub — using legacy static key");
             derive_sync_key_static(&my_identity.public_key, &client_pubkey)
         }
     };
@@ -1382,7 +1382,7 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
                 }
             }
             Msg::Done { sent } => {
-                eprintln!(
+                log::info!(
                     "[sync] Server: client sent {sent} entries, we received {entries_received} new"
                 );
                 break;
@@ -1430,7 +1430,7 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
                 }
             }
             Msg::BooksDone { sent } => {
-                eprintln!("[sync] Server: client sent {sent} books, we received {books_received} new/updated");
+                log::info!("[sync] Server: client sent {sent} books, we received {books_received} new/updated");
                 break;
             }
             other => return Err(format!("Unexpected msg in books recv: {other:?}")),
@@ -1475,7 +1475,7 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
                 }
             }
             Msg::SignalsDone { sent } => {
-                eprintln!(
+                log::info!(
                     "[sync] Server: client sent {sent} signals, we received {signals_received} new"
                 );
                 break;
@@ -1546,7 +1546,7 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
                 }
             }
             Msg::SettingsDone { sent } => {
-                eprintln!("[sync] Server: client sent {sent} settings, we received {settings_received} updated");
+                log::info!("[sync] Server: client sent {sent} settings, we received {settings_received} updated");
                 break;
             }
             other => return Err(format!("Unexpected msg in settings recv: {other:?}")),
@@ -1599,7 +1599,7 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
         }),
     );
 
-    eprintln!(
+    log::info!(
         "[sync] Server: sync with {client_device_id} complete — \
          entries {entries_sent}/{entries_received}, books {books_sent}/{books_received}, \
          signals {signals_sent}/{signals_received}, settings {settings_sent}/{settings_received}"
@@ -1609,24 +1609,24 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
 
 fn handle_sync_connection(app: AppHandle, stream: TcpStream) {
     if let Err(e) = do_handle_sync_connection(&app, stream) {
-        eprintln!("[sync] Server connection error: {e}");
+        log::error!("[sync] Server connection error: {e}");
     }
 }
 
 // ── Server loop ───────────────────────────────────────────────────────────────
 
 fn run_sync_server_loop(app: AppHandle, listener: TcpListener, stop_rx: mpsc::Receiver<()>) {
-    eprintln!("[sync] Server loop started");
+    log::info!("[sync] Server loop started");
     loop {
         // Poll stop channel
         if stop_rx.try_recv().is_ok() {
-            eprintln!("[sync] Server received stop signal");
+            log::info!("[sync] Server received stop signal");
             break;
         }
 
         match listener.accept() {
             Ok((stream, addr)) => {
-                eprintln!("[sync] Incoming connection from {addr}");
+                log::debug!("[sync] Incoming connection from {addr}");
                 let app_clone = app.clone();
                 thread::spawn(move || handle_sync_connection(app_clone, stream));
             }
@@ -1635,12 +1635,12 @@ fn run_sync_server_loop(app: AppHandle, listener: TcpListener, stop_rx: mpsc::Re
                 thread::sleep(Duration::from_millis(200));
             }
             Err(e) => {
-                eprintln!("[sync] Server accept error: {e}");
+                log::error!("[sync] Server accept error: {e}");
                 thread::sleep(Duration::from_millis(200));
             }
         }
     }
-    eprintln!("[sync] Server loop stopped");
+    log::info!("[sync] Server loop stopped");
 }
 
 // ── Client (initiator) ────────────────────────────────────────────────────────
@@ -1671,7 +1671,7 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
         .next()
         .ok_or_else(|| format!("No address for {addr_str}"))?;
 
-    eprintln!("[sync] Client connecting to {addr}");
+    log::info!("[sync] Client connecting to {addr}");
     let mut stream = TcpStream::connect_timeout(&addr, Duration::from_secs(10))
         .map_err(|e| format!("connect to {addr}: {e}"))?;
     stream
@@ -1696,7 +1696,7 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
         Msg::NotTrusted { server_device_id } => {
             // The server no longer has us in its trusted list — auto-revoke it
             // from our side so both devices are in sync without manual intervention.
-            eprintln!("[sync] Client: server {server_device_id} does not trust us — auto-revoking");
+            log::warn!("[sync] Client: server {server_device_id} does not trust us — auto-revoking");
             let _ = remove_trusted_device(app, peer_device_id);
             let _ = app.emit(
                 "peer:peer_revoked_us",
@@ -1710,7 +1710,7 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
         Msg::Err { msg } => return Err(format!("Server rejected: {msg}")),
         other => return Err(format!("Expected OK, got: {other:?}")),
     };
-    eprintln!("[sync] Client: connected to '{server_name}'");
+    log::info!("[sync] Client: connected to '{server_name}'");
 
     // Derive session key: ECDH if server supports v2, else legacy static key
     let key = match server_eph_pub {
@@ -1718,7 +1718,7 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
             derive_sync_key_ecdh(my_eph_secret, hex, &my_identity.public_key, &peer_pubkey)?
         }
         None => {
-            eprintln!("[sync] Client: server sent no eph_pub — using legacy static key");
+            log::warn!("[sync] Client: server sent no eph_pub — using legacy static key");
             derive_sync_key_static(&my_identity.public_key, &peer_pubkey)
         }
     };
@@ -1895,7 +1895,7 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
                 }
             }
             Msg::Done { sent } => {
-                eprintln!(
+                log::info!(
                     "[sync] Client: server sent {sent} entries, we received {entries_received} new"
                 );
                 break;
@@ -1924,7 +1924,7 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
     // Step 8: Read DONE_ACK for entries
     match read_msg_enc(&mut stream, &key)? {
         Msg::DoneAck { recv } => {
-            eprintln!("[sync] Client: server confirmed receipt of {recv} entries");
+            log::info!("[sync] Client: server confirmed receipt of {recv} entries");
         }
         other => return Err(format!("Expected DONE_ACK for entries, got: {other:?}")),
     }
@@ -1945,7 +1945,7 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
                 }
             }
             Msg::BooksDone { sent } => {
-                eprintln!("[sync] Client: server sent {sent} books, we received {books_received} new/updated");
+                log::info!("[sync] Client: server sent {sent} books, we received {books_received} new/updated");
                 break;
             }
             other => return Err(format!("Unexpected msg in books recv: {other:?}")),
@@ -1971,7 +1971,7 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
 
     match read_msg_enc(&mut stream, &key)? {
         Msg::BooksAck { recv } => {
-            eprintln!("[sync] Client: server confirmed receipt of {recv} books");
+            log::info!("[sync] Client: server confirmed receipt of {recv} books");
         }
         other => return Err(format!("Expected BOOKS_ACK, got: {other:?}")),
     }
@@ -1992,7 +1992,7 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
                 }
             }
             Msg::SignalsDone { sent } => {
-                eprintln!(
+                log::info!(
                     "[sync] Client: server sent {sent} signals, we received {signals_received} new"
                 );
                 break;
@@ -2020,7 +2020,7 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
 
     match read_msg_enc(&mut stream, &key)? {
         Msg::SignalsAck { recv } => {
-            eprintln!("[sync] Client: server confirmed receipt of {recv} signals");
+            log::info!("[sync] Client: server confirmed receipt of {recv} signals");
         }
         other => return Err(format!("Expected SIGNALS_ACK, got: {other:?}")),
     }
@@ -2045,7 +2045,7 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
                 }
             }
             Msg::SettingsDone { sent } => {
-                eprintln!("[sync] Client: server sent {sent} settings, we received {settings_received} updated");
+                log::info!("[sync] Client: server sent {sent} settings, we received {settings_received} updated");
                 break;
             }
             other => return Err(format!("Unexpected msg in settings recv: {other:?}")),
@@ -2092,14 +2092,14 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
     // Read SETTINGS_ACK (tolerate EOF/reset — server closes write-half after this)
     match read_msg_enc(&mut stream, &key) {
         Ok(Msg::SettingsAck { recv }) => {
-            eprintln!("[sync] Client: server confirmed receipt of {recv} settings");
+            log::info!("[sync] Client: server confirmed receipt of {recv} settings");
         }
         Ok(other) => {
-            eprintln!("[sync] Client: unexpected message after SETTINGS_DONE: {other:?}");
+            log::info!("[sync] Client: unexpected message after SETTINGS_DONE: {other:?}");
         }
         Err(e) => {
             // Server closed the connection after sending SETTINGS_ACK — expected.
-            eprintln!(
+            log::info!(
                 "[sync] Client: SETTINGS_ACK read ended early ({}), treating as success",
                 e
             );
@@ -2142,7 +2142,7 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
         }),
     );
 
-    eprintln!(
+    log::info!(
         "[sync] Client: sync with {peer_device_id} complete — \
          entries {entries_sent}/{entries_received}, books {books_sent}/{books_received}, \
          signals {signals_sent}/{signals_received}, settings {settings_sent}/{settings_received}"
@@ -2152,7 +2152,7 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
 
 fn run_sync_client(app: AppHandle, peer_device_id: String, host: String) {
     if let Err(e) = do_sync_client(&app, &peer_device_id, &host) {
-        eprintln!("[sync] Client error with {peer_device_id}: {e}");
+        log::info!("[sync] Client error with {peer_device_id}: {e}");
         let _ = app.emit(
             "peer:sync_error",
             serde_json::json!({
@@ -2198,7 +2198,7 @@ pub fn peer_start_sync_server(
         .set_nonblocking(true)
         .map_err(|e| format!("set nonblocking: {e}"))?;
 
-    eprintln!("[sync] Server bound on port {port}");
+    log::info!("[sync] Server bound on port {port}");
 
     let (stop_tx, stop_rx) = mpsc::sync_channel(1);
     let app_clone = app.clone();
@@ -2283,7 +2283,7 @@ pub fn peer_full_restore(app: AppHandle, device_id: String, host: String) -> Res
 
     thread::spawn(move || {
         if let Err(e) = do_full_restore_client(&app, &device_id, &host) {
-            eprintln!("[restore] Client error: {e}");
+            log::error!("[restore] Client error: {e}");
             let _ = app.emit("peer:restore_error", serde_json::json!({ "message": e }));
         }
     });
@@ -2310,6 +2310,6 @@ pub fn peer_apply_and_restart(app: AppHandle) -> Result<(), String> {
         return Err("No pending restore file found".to_string());
     }
 
-    eprintln!("[restore] Triggering restart to apply pending DB restore");
+    log::info!("[restore] Triggering restart to apply pending DB restore");
     app.restart();
 }

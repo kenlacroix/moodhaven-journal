@@ -7,6 +7,7 @@
 
 import { fetch } from '@tauri-apps/plugin-http';
 import type { WebDAVConfig } from '../types/settings';
+import { logger } from '../lib/logger';
 
 export interface WebDAVResponse {
   success: boolean;
@@ -215,7 +216,7 @@ async function ensureSubdirectory(config: WebDAVConfig, subpath: string): Promis
   // 201 = created, 405 = already exists, 301/302 redirects — all acceptable
   if (response.status !== 201 && response.status !== 405 && !response.ok) {
     // Non-fatal: log but don't throw; some WebDAV servers return 200 for MKCOL
-    console.warn(`ensureSubdirectory ${subpath}: unexpected status ${response.status}`);
+    logger.warn(`ensureSubdirectory ${subpath}: unexpected status ${response.status}`);
   }
 }
 

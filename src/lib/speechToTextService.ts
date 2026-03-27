@@ -15,6 +15,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { STTModel } from '../types/settings';
 import type { WhisperOutput } from './transcriptFormatter';
+import { logger } from '../lib/logger';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -68,7 +69,7 @@ export async function checkModelStatus(model: STTModel): Promise<ModelStatus> {
       modelName: MODEL_FILENAMES[model],
     });
   } catch (error) {
-    console.error('Failed to check model status:', error);
+    logger.error('Failed to check model status:', { error: String(error) });
     return { downloaded: false, path: null, size: null };
   }
 }
@@ -93,7 +94,7 @@ export async function downloadModel(
     // In a full implementation, we'd use Tauri events for progress updates
     onProgress?.({ downloaded: 100, total: 100, percentage: 100 });
   } catch (error) {
-    console.error('Failed to download model:', error);
+    logger.error('Failed to download model:', { error: String(error) });
     throw new Error(`Failed to download model: ${error}`);
   }
 }
@@ -107,7 +108,7 @@ export async function deleteModel(model: STTModel): Promise<void> {
   try {
     await invoke('stt_delete_model', { filename });
   } catch (error) {
-    console.error('Failed to delete model:', error);
+    logger.error('Failed to delete model:', { error: String(error) });
     throw new Error(`Failed to delete model: ${error}`);
   }
 }
@@ -143,7 +144,7 @@ export async function transcribeAudio(
       duration,
     };
   } catch (error) {
-    console.error('Transcription failed:', error);
+    logger.error('Transcription failed:', { error: String(error) });
     throw new Error(`Transcription failed: ${error}`);
   }
 }
@@ -197,7 +198,7 @@ export async function transcribeAudioTimestamped(
       })),
     };
   } catch (error) {
-    console.error('Timestamped transcription failed:', error);
+    logger.error('Timestamped transcription failed:', { error: String(error) });
     throw new Error(`Timestamped transcription failed: ${error}`);
   }
 }

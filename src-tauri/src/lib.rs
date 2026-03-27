@@ -11,11 +11,28 @@ use commands::peer_sync_engine::SyncEngineState;
 use commands::session_bridge::SessionBridge;
 use db::{get_db_path, Database};
 use tauri::Manager;
+use tauri_plugin_log::{Target, TargetKind};
 
 /// Initialize and run the Tauri application
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(
+            tauri_plugin_log::Builder::new()
+                .level(if cfg!(debug_assertions) {
+                    log::LevelFilter::Debug
+                } else {
+                    log::LevelFilter::Info
+                })
+                .targets([
+                    Target::new(TargetKind::Stderr),
+                    Target::new(TargetKind::LogDir {
+                        file_name: Some("moodhaven".to_string()),
+                    }),
+                ])
+                .max_file_size(5_000_000)
+                .build(),
+        )
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_http::init())
@@ -31,12 +48,12 @@ pub fn run() {
             if let Some(parent) = db_path.parent() {
                 let pending = parent.join("moodhaven_restore.pending");
                 if pending.exists() {
-                    eprintln!(
+                    log::info!(
                         "[restore] Applying pending DB restore: {:?} → {:?}",
                         pending, db_path
                     );
                     if let Err(e) = std::fs::rename(&pending, &db_path) {
-                        eprintln!("[restore] WARNING: failed to apply pending DB: {e}");
+                        log::error!("[restore] WARNING: failed to apply pending DB: {e}");
                     }
                 }
             }
@@ -68,7 +85,7 @@ pub fn run() {
                 app.handle().clone(),
                 app.state::<SyncEngineState>(),
             ) {
-                eprintln!("[sync] Auto-start failed: {e}");
+                log::error!("[sync] Auto-start failed: {e}");
             }
 
             // Sweep leftover preview temp files from previous sessions
@@ -149,6 +166,7 @@ pub fn run() {
             commands::get_data_stats,
             commands::write_text_file,
             commands::exit_app,
+            commands::get_log_path,
             // Two-factor authentication
             commands::generate_totp_secret,
             commands::verify_totp_code,

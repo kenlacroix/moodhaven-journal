@@ -17,6 +17,7 @@ import { peerSyncNow } from '../../lib/peerSyncEngineService';
 import { PairingModal } from './PairingModal';
 import { TrustedDevicesList } from './TrustedDevicesList';
 import type { DeviceIdentity, DiscoveredPeer, SyncStatus } from '../../types/peerSync';
+import { logger } from '../../lib/logger';
 
 // ── Device type icon ──────────────────────────────────────────────────────────
 
@@ -241,7 +242,7 @@ function NearbyPeerRow({
     try {
       await peerSyncNow(peer.deviceId, peer.host);
     } catch (e) {
-      console.warn('[DevicesTab] Manual sync failed:', e);
+      logger.warn('[DevicesTab] Manual sync failed:', { error: String(e) });
     } finally {
       setSyncing(false);
     }
@@ -361,7 +362,7 @@ export function DevicesTab() {
         setDiscovering(true);
       }
     } catch (e) {
-      console.error('[DevicesTab] Toggle discovery failed:', e);
+      logger.error('[DevicesTab] Toggle discovery failed:', { error: String(e) });
     } finally {
       setTogglingDiscovery(false);
     }

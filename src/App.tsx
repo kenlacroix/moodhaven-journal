@@ -31,6 +31,7 @@ import { PeerSyncWireframes } from './pages/PeerSyncWireframes';
 import { useTimeCapsule } from './hooks/useTimeCapsule';
 import { TimeCapsuleRevealModal } from './components/timecapsule/TimeCapsuleRevealModal';
 import { SealEntryModal } from './components/timecapsule/SealEntryModal';
+import { logger } from './lib/logger';
 
 // Detect special dev modes outside the component so hooks order is stable.
 const IS_BREAKOUT = new URLSearchParams(window.location.search).get('mode') === 'writer';
@@ -115,7 +116,7 @@ function MainApp() {
     if (!isUnlocked || storageType !== 'webdav' || !webdavConfig?.url || !sessionPassword) return;
     import('./lib/syncEngine').then(({ syncWithWebDAV }) => {
       syncWithWebDAV(webdavConfig, sessionPassword).catch((err) =>
-        console.warn('Background sync failed:', err)
+        logger.warn('Background sync failed:', { error: String(err) })
       );
     });
   }, [isUnlocked, storageType, webdavConfig, sessionPassword]);

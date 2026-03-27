@@ -47,6 +47,7 @@ import { MOOD_OPTIONS, PRIVACY_MODE_LABELS, PRIVACY_MODE_DESCRIPTIONS } from '..
 import type { JournalTemplate } from '../lib/journalTemplates';
 import { formatTemplateContent } from '../lib/journalTemplates';
 import { usePlatform } from '../hooks/usePlatform';
+import { logger } from '../lib/logger';
 
 interface WritingViewProps {
   entryId?: string | null;
@@ -307,7 +308,7 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
       // If entry was already saved before weather resolved, patch it now
       if (savedEntryIdRef.current) {
         patchEntryLocationWeather(savedEntryIdRef.current, w).catch((err) => {
-          console.error('Failed to patch location weather:', err);
+          logger.error('Failed to patch location weather:', { error: String(err) });
         });
       }
     });
@@ -471,7 +472,7 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
           onEntrySaved?.();
         })
         .catch((err) => {
-          console.error('Auto-save failed:', err);
+          logger.error('Auto-save failed:', { error: String(err) });
           setLastSaveOk(false);
         })
         .finally(() => { setIsSaving(false); });
@@ -520,9 +521,9 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
     try {
       const { attached, skipped } = await pickAndAttachMedia(savedEntryIdRef.current, sessionPassword);
       if (attached.length > 0) setAttachments((prev) => [...prev, ...attached]);
-      if (skipped.length > 0) console.warn('Skipped attachments:', skipped);
+      if (skipped.length > 0) logger.warn('Skipped attachments:');
     } catch (err) {
-      console.error('Attach failed:', err);
+      logger.error('Attach failed:', { error: String(err) });
     } finally {
       setIsAttaching(false);
     }
@@ -533,7 +534,7 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
     try {
       await openMedia(mediaId, sessionPassword);
     } catch (err) {
-      console.error('Open media failed:', err);
+      logger.error('Open media failed:', { error: String(err) });
     }
   }, [sessionPassword]);
 
@@ -547,7 +548,7 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
         return next;
       });
     } catch (err) {
-      console.error('Delete media failed:', err);
+      logger.error('Delete media failed:', { error: String(err) });
     }
   }, []);
 

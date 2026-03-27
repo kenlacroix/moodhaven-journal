@@ -8,6 +8,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { getFullAnalytics, getMoodTrend } from '../lib/analyticsService';
 import type { AnalyticsData, TrendDataPoint, AnalyticsPeriod } from '../types/analytics';
 import { ANALYTICS_PERIODS } from '../types/analytics';
+import { logger } from '../lib/logger';
 
 interface UseAnalyticsReturn {
   // Analytics data
@@ -60,7 +61,7 @@ export function useAnalytics(): UseAnalyticsReturn {
       setTrendData(newTrendData);
     } catch (err) {
       // Don't set error for trend data - just log
-      console.error('Failed to load trend data:', err);
+      logger.error('Failed to load trend data:', { error: String(err) });
     } finally {
       setIsTrendLoading(false);
     }

@@ -7,6 +7,15 @@ use tauri::{AppHandle, Manager};
 
 use crate::db::{self, Database};
 
+/// Return the path to the rotating log file, or None if not yet created.
+#[tauri::command]
+pub fn get_log_path(app: AppHandle) -> Option<String> {
+    app.path()
+        .app_log_dir()
+        .ok()
+        .map(|dir| dir.join("moodhaven.log").to_string_lossy().into_owned())
+}
+
 /// Exit the application (used after factory reset)
 #[tauri::command]
 pub fn exit_app() {

@@ -25,6 +25,7 @@ import {
   type SyncErrorEvent,
   type PeerRevokedUsEvent,
 } from '../lib/peerSyncEngineService';
+import { logger } from '../lib/logger';
 
 /** Returns true if host is an RFC-1918 private address (LAN-local). */
 function isLanAddress(host: string): boolean {
@@ -93,7 +94,7 @@ export function usePeerSync() {
           myDeviceIdRef.current = identity.deviceId;
         }
       } catch (e) {
-        console.warn('[peerSync] Failed to load identity:', e);
+        logger.warn('[peerSync] Failed to load identity:', { error: String(e) });
       } finally {
         if (!cancelled) setIdentityLoading(false);
       }
@@ -103,7 +104,7 @@ export function usePeerSync() {
         const trusted = await getTrustedDevices();
         if (!cancelled) setTrustedDevices(trusted);
       } catch (e) {
-        console.warn('[peerSync] Failed to load trusted devices:', e);
+        logger.warn('[peerSync] Failed to load trusted devices:', { error: String(e) });
       }
 
       // Wire up event listeners before starting discovery
@@ -114,12 +115,12 @@ export function usePeerSync() {
           if (peer.isTrusted && peer.isOnline) {
             // LAN-only mode: skip if peer host is not a private (RFC-1918) address
             if (lanOnlyRef.current && !isLanAddress(peer.host)) {
-              console.info('[sync] Skipping auto-sync — LAN-only mode and peer is not on LAN:', peer.host);
+              logger.info('[sync] Skipping auto-sync — LAN-only mode and peer is not on LAN:');
             } else if (peer.deviceId < myDeviceIdRef.current) {
               // Initiator convention: the device with the lower device_id always connects.
               // This prevents both devices from opening sessions to each other simultaneously,
               // which wastes a round-trip and causes DB mutex contention on the same machine.
-              console.info('[sync] Skipping auto-sync — peer has lower device_id, they will initiate');
+              logger.info('[sync] Skipping auto-sync — peer has lower device_id, they will initiate');
             } else {
               const now = Date.now();
               const last = syncCooldownsRef.current.get(peer.deviceId) ?? 0;
@@ -127,7 +128,7 @@ export function usePeerSync() {
               if (now - last > cooldownMs) {
                 syncCooldownsRef.current.set(peer.deviceId, now);
                 peerSyncNow(peer.deviceId, peer.host).catch((e) =>
-                  console.warn('[sync] Auto-sync failed:', e)
+                  logger.warn('[sync] Auto-sync failed:', { error: String(e) })
                 );
               }
             }
@@ -151,7 +152,7 @@ export function usePeerSync() {
           const peer = nearbyPeers.find((p) => p.deviceId === device.deviceId);
           if (peer?.host) {
             peerSyncNow(device.deviceId, peer.host).catch((e) =>
-              console.warn('[sync] Post-pairing auto-sync failed:', e)
+              logger.warn('[sync] Post-pairing auto-sync failed:', { error: String(e) })
             );
           }
         }
@@ -216,7 +217,7 @@ export function usePeerSync() {
         const peers = await getNearbyPeers();
         if (!cancelled) setNearbyPeers(peers);
       } catch (e) {
-        console.warn('[peerSync] Failed to start discovery:', e);
+        logger.warn('[peerSync] Failed to start discovery:', { error: String(e) });
       }
     }
 

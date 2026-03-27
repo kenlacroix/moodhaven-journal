@@ -132,6 +132,20 @@
 
 ---
 
+## Logging (feat/logging-debug — v0.7.8)
+
+### LOG-001: Per-module log level configuration (P3)
+**What:** Allow setting different verbosity per logical module (e.g., `[sync]` at `debug`, `[ai]` at `warn`). Currently a global level applies to all log output.
+**Why:** Debug-level sync logs are extremely verbose and would bury unrelated debug output from other modules.
+**Effort:** human ~4h / CC+gstack ~30min
+
+### LOG-002: Log level badge / indicator (P4)
+**What:** Show a small indicator in the About tab (or sidebar footer) when the log level is set to `debug` or `error` so users don't forget they changed it.
+**Why:** A user who left `debug` on for a troubleshooting session has no reminder that verbose logging is still active.
+**Effort:** human ~30min / CC+gstack ~5min
+
+---
+
 ## Dev Mode / QA (feat/dev-bypass-unlock — v0.7.6)
 
 ### D-DEV-001: Implement VITE_DEV_MODE=seeded (P2)

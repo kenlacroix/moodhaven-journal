@@ -7,6 +7,25 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.7.8] — 2026-03-27
+
+### Added
+- **Structured logger with log level filtering.** New `src/lib/logger.ts` wraps `@tauri-apps/plugin-log` with a unified `logger.{debug,info,warn,error}(msg, ctx?)` API. Optional structured context is serialized as `key=value` pairs appended to the message. Messages longer than 2000 characters are truncated. The module default level is `warn`.
+- **Log level selector in Settings → About.** A dropdown lets users choose between Error, Warn, Info, and Debug verbosity. The selection applies immediately to both the frontend filter and the Rust-side `log::set_max_level()` via the new `set_log_level` command. Default is `warn`. Includes a "Debug is verbose" warning label.
+- **Log level persistence.** The selected log level is stored in both `AppSettings` (JSON) and the `settings` SQL table (`log_level` key). On startup, the Rust backend reads the SQL key before any other initialization — `tauri-plugin-log` is initialized at `LevelFilter::Debug` so `set_max_level()` is the sole runtime gate.
+- **Open Log Folder button.** Settings → About now shows an "Open Log Folder" button (enabled only when the log file exists). Uses platform-native launchers (`open`, `explorer`, `xdg-open`) to bypass the Tauri shell URL allowlist.
+- **Dev console bridge.** `attachConsole()` is called in dev builds so frontend log calls routed through `logger.ts` appear in the Chromium DevTools console.
+- **New Tauri commands:** `get_log_path`, `open_log_folder`, `set_log_level`.
+
+### Fixed
+- **Log file excluded from factory reset.** `factory_reset` now also deletes `moodhaven.log` from `app_log_dir` (previously only the `logs` directory inside `app_data_dir` was cleaned, which is a different path on macOS and Linux).
+- **`log_level` skipped during import.** Restoring a backup no longer silently sets the Rust log level to whatever was stored in the source device's backup.
+- **`resetSettings` now resets log level.** Resetting settings via the store now calls `setLevel()` and `set_log_level` so the in-memory and Rust filters match the default `warn` level immediately.
+- **Level change handler awaits both writes.** `handleLogLevelChange` now uses `Promise.all` to await `saveSettings()` and `invoke('set_log_level')` in parallel, preventing silent level divergence if either write fails.
+- **`get_log_path` returns `None` until log file exists.** The "Open Log Folder" button is disabled on first launch before any logs have been written.
+
+---
+
 ## [0.7.7] — 2026-03-26
 
 ### Changed

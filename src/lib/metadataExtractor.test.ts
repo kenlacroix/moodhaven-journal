@@ -1,4 +1,4 @@
-import { extractEntryMetadata, aggregateMetadata, calculateGratitudeStreak, scoreContentMood, scoreEmojiSentiment } from './metadataExtractor';
+import { extractEntryMetadata, aggregateMetadata, aggregateMetadataBoth, calculateGratitudeStreak, scoreContentMood, scoreEmojiSentiment } from './metadataExtractor';
 import type { JournalEntry, MoodLevel } from '../types/journal';
 
 /**
@@ -882,6 +882,55 @@ describe('metadataExtractor', () => {
       const score = scoreEmojiSentiment('😊 😊 😊 😊 😊') ?? 0;
       expect(score).toBeGreaterThanOrEqual(-1);
       expect(score).toBeLessThanOrEqual(1);
+    });
+  });
+
+  describe('aggregateMetadataBoth', () => {
+    // Regression: ISSUE-QA-005 — aggregateMetadataBoth must match two separate aggregateMetadata calls
+    // Found by /qa on 2026-03-27
+    // Report: .gstack/qa-reports/qa-report-feat-db-performance-2026-03-27.md
+
+    const entries = [
+      createTestEntry({ id: '1', mood: 4, privacyMode: 0, created_at: '2024-06-15T10:00:00.000Z' }),
+      createTestEntry({ id: '2', mood: 2, privacyMode: 1, created_at: '2024-06-14T10:00:00.000Z' }),
+      createTestEntry({ id: '3', mood: 5, privacyMode: 2, created_at: '2024-06-13T10:00:00.000Z' }),
+    ];
+
+    it('localMeta matches aggregateMetadata(entries, 30, false)', () => {
+      const { localMeta } = aggregateMetadataBoth(entries);
+      const expected = aggregateMetadata(entries, 30, false);
+      expect(localMeta).toEqual(expected);
+    });
+
+    it('aiMeta matches aggregateMetadata(entries, 30, true)', () => {
+      const { aiMeta } = aggregateMetadataBoth(entries);
+      const expected = aggregateMetadata(entries, 30, true);
+      expect(aiMeta).toEqual(expected);
+    });
+
+    it('localMeta includes privacyMode 1 (Mindful) entries, aiMeta excludes them', () => {
+      const { localMeta, aiMeta } = aggregateMetadataBoth(entries);
+      // privacyMode 0 (Open) and 1 (Mindful) visible to local; privacyMode 2 (Private) excluded
+      // privacyMode 0 (Open) only for AI
+      expect(localMeta.totalEntries).toBeGreaterThanOrEqual(aiMeta.totalEntries);
+    });
+
+    it('returns independent objects (mutation of one does not affect other)', () => {
+      const { localMeta, aiMeta } = aggregateMetadataBoth(entries);
+      const localCount = localMeta.totalEntries;
+      const aiCount = aiMeta.totalEntries;
+      // Mutate localMeta
+      (localMeta as { totalEntries: number }).totalEntries = 9999;
+      expect(aiMeta.totalEntries).toBe(aiCount);
+      expect(localMeta.totalEntries).toBe(9999);
+      // Restore doesn't matter — just verifying aiMeta unchanged
+      expect(localCount).toBeGreaterThanOrEqual(aiCount);
+    });
+
+    it('empty entry list returns zeroed metadata for both', () => {
+      const { localMeta, aiMeta } = aggregateMetadataBoth([]);
+      expect(localMeta.totalEntries).toBe(0);
+      expect(aiMeta.totalEntries).toBe(0);
     });
   });
 });

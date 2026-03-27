@@ -1,4 +1,4 @@
-//! MoodBloom Desktop Application
+//! MoodHaven Journal Desktop Application
 //!
 //! Entry point for the Tauri desktop application.
 
@@ -9,5 +9,5 @@
 )]
 
 fn main() {
-    moodbloom_lib::run()
+    moodhaven_journal_lib::run()
 }

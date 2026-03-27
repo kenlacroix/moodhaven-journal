@@ -1,9 +1,9 @@
 /**
  * syncEngine.ts
  *
- * Multi-device sync engine for MoodBloom.
+ * Multi-device sync engine for MoodHaven Journal.
  *
- * WebDAV directory layout (under MoodBloom/):
+ * WebDAV directory layout (under MoodHaven/):
  *   sync/manifest.enc          — encrypted SyncManifest (source of truth)
  *   sync/entries/<uuid>.enc    — per-entry encrypted JournalEntryRow JSON
  *   sync/books/<uuid>.enc      — per-book encrypted Book JSON
@@ -43,7 +43,7 @@ import {
   type SyncManifest,
 } from './syncManifest';
 
-// ── WebDAV paths (relative to MoodBloom/ root) ────────────────────────────────
+// ── WebDAV paths (relative to MoodHaven/ root) ────────────────────────────────
 
 const MANIFEST_FILE = 'sync/manifest.enc';
 const entryFile = (id: string) => `sync/entries/${id}.enc`;

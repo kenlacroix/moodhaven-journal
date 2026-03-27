@@ -1,6 +1,6 @@
-# Contributing to MoodBloom
+# Contributing to MoodHaven Journal
 
-Thank you for considering a contribution. MoodBloom is a privacy-first journaling app — please keep that principle front-of-mind whenever you add or change code.
+Thank you for considering a contribution. MoodHaven Journal is a privacy-first journaling app — please keep that principle front-of-mind whenever you add or change code.
 
 ---
 

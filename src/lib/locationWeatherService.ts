@@ -152,7 +152,7 @@ async function fetchReverseGeocode(
     `?format=json&lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}&zoom=10`;
   const resp = await fetch(url, {
     headers: {
-      'User-Agent': 'MoodBloom/1.0 (personal journal app)',
+      'User-Agent': 'MoodHaven/1.0 (personal journal app)',
       'Accept-Language': 'en',
     },
   });

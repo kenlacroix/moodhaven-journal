@@ -111,7 +111,7 @@ export async function disable2FA(): Promise<boolean> {
  */
 export async function downloadBackupCodes(codes: string[]): Promise<void> {
   const content = [
-    'MoodBloom Backup Codes',
+    'MoodHaven Journal Backup Codes',
     '=====================',
     '',
     'Keep these codes in a safe place.',
@@ -123,7 +123,7 @@ export async function downloadBackupCodes(codes: string[]): Promise<void> {
   ].join('\n');
 
   const filePath = await save({
-    defaultPath: 'moodbloom-backup-codes.txt',
+    defaultPath: 'moodhaven-backup-codes.txt',
     filters: [{ name: 'Text Files', extensions: ['txt'] }],
   });
 

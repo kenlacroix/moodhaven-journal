@@ -35,7 +35,7 @@ const GITHUB_API_BASE: &str = "https://api.github.com";
 const GITHUB_RAW_BASE: &str = "https://raw.githubusercontent.com";
 
 // User-Agent required by GitHub API (arbitrary string identifying the app)
-const USER_AGENT_STRING: &str = concat!("MoodBloom/", env!("CARGO_PKG_VERSION"));
+const USER_AGENT_STRING: &str = concat!("MoodHaven/", env!("CARGO_PKG_VERSION"));
 
 // ── Platform detection ─────────────────────────────────────────────────────────
 
@@ -58,12 +58,12 @@ const CURRENT_ARCH: &str = "unknown";
 // ── Asset filename patterns ────────────────────────────────────────────────────
 // CI must name release assets following these patterns exactly.
 //
-//   Linux   x86_64  → moodbloom_VERSION_amd64.AppImage
-//   Linux   aarch64 → moodbloom_VERSION_arm64.AppImage
-//   Windows x86_64  → moodbloom_VERSION_x64-setup.exe
-//   Windows aarch64 → moodbloom_VERSION_arm64-setup.exe
-//   macOS   x86_64  → MoodBloom_VERSION_x64.dmg
-//   macOS   aarch64 → MoodBloom_VERSION_aarch64.dmg
+//   Linux   x86_64  → moodhaven-journal_VERSION_amd64.AppImage
+//   Linux   aarch64 → moodhaven-journal_VERSION_arm64.AppImage
+//   Windows x86_64  → moodhaven-journal_VERSION_x64-setup.exe
+//   Windows aarch64 → moodhaven-journal_VERSION_arm64-setup.exe
+//   macOS   x86_64  → MoodHaven_VERSION_x64.dmg
+//   macOS   aarch64 → MoodHaven_VERSION_aarch64.dmg
 
 fn expected_asset_suffix() -> Option<&'static str> {
     match (CURRENT_OS, CURRENT_ARCH) {

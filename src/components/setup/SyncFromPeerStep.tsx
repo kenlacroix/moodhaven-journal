@@ -68,7 +68,7 @@ export function SyncFromPeerStep({
                     Scanning your network…
                   </span>
                 )
-                : 'Open MoodBloom on your other device — it must be on the same network.'}
+                : 'Open MoodHaven Journal on your other device — it must be on the same network.'}
         </p>
       </div>
 

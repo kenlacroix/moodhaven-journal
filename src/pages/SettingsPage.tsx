@@ -114,7 +114,7 @@ const TABS: TabConfig[] = [
     id: 'about',
     label: 'About',
     icon: 'M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
-    keywords: ['version', 'info', 'app', 'moodbloom', 'update', 'updates', 'upgrade', 'release'],
+    keywords: ['version', 'info', 'app', 'moodhaven', 'update', 'updates', 'upgrade', 'release'],
   },
 ];
 
@@ -498,7 +498,7 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
       });
       setExportProgress(null);
       const date = new Date().toISOString().split('T')[0];
-      await downloadBackupFile(data, `moodbloom-backup-${date}.moodbloom`);
+      await downloadBackupFile(data, `moodhaven-backup-${date}.moodhaven`);
       setIsExporting(false);
 
       setShowPasswordModal(null);
@@ -697,7 +697,7 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
                   <div id="panel-general" role="tabpanel" className="space-y-6">
                     <SettingSection
                       title="Appearance"
-                      description="Customize how MoodBloom looks"
+                      description="Customize how MoodHaven Journal looks"
                     >
                       <SettingSelect
                         label="Theme"
@@ -1125,7 +1125,7 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
 
                     <SettingSection
                       title="Help"
-                      description="Learn how to use MoodBloom"
+                      description="Learn how to use MoodHaven Journal"
                     >
                       <div className="flex items-center justify-between">
                         <div>
@@ -1133,7 +1133,7 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
                             App Tutorial
                           </p>
                           <p className="text-xs text-slate-500 dark:text-slate-400">
-                            Replay the introductory tour of MoodBloom
+                            Replay the introductory tour of MoodHaven Journal
                           </p>
                         </div>
                         <button
@@ -1184,7 +1184,7 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
                     {isAndroid && biometricAvailable && (
                       <SettingSection
                         title="Biometric Unlock"
-                        description="Use fingerprint or face to unlock MoodBloom instead of typing your password"
+                        description="Use fingerprint or face to unlock MoodHaven Journal instead of typing your password"
                       >
                         {biometricEnrolled ? (
                           <div className="flex items-center justify-between py-2">
@@ -1781,13 +1781,13 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
                     {/* Updates section */}
                     <SettingSection
                       title="Updates"
-                      description="Keep MoodBloom up to date"
+                      description="Keep MoodHaven Journal up to date"
                     >
                       <UpdatePanel hook={updateHook} currentVersion={appVersion} />
                     </SettingSection>
 
                     <SettingSection
-                      title="About MoodBloom"
+                      title="About MoodHaven Journal"
                       description="App information and credits"
                     >
                       <div className="space-y-4">
@@ -1814,12 +1814,12 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
 
                         <div className="pt-4">
                           <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
-                            MoodBloom is a privacy-focused mood tracking and journaling application.
+                            MoodHaven Journal is a privacy-focused mood tracking and journaling application.
                             All your data is stored locally on your device and encrypted using
                             industry-standard AES-256-GCM encryption.
                           </p>
                           <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed mt-2">
-                            MoodBloom is built by one person. If it brings value to your life, a coffee goes a long way.
+                            MoodHaven Journal is built by one person. If it brings value to your life, a coffee goes a long way.
                           </p>
                         </div>
 
@@ -1842,7 +1842,7 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
                         {/* Links */}
                         <div className="flex flex-wrap gap-3 pt-2">
                           <a
-                            href="https://github.com/kenlacroix/moodbloom-tauri#readme"
+                            href="https://github.com/kenlacroix/moodhaven-journal#readme"
                             target="_blank"
                             rel="noopener noreferrer"
                             className="flex items-center gap-1.5 px-4 py-2 text-sm text-violet-600 dark:text-violet-400 border border-violet-200 dark:border-violet-800 rounded-xl hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-colors"
@@ -1850,7 +1850,7 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
                             User Guide ↗
                           </a>
                           <a
-                            href="https://github.com/kenlacroix/moodbloom-tauri/issues"
+                            href="https://github.com/kenlacroix/moodhaven-journal/issues"
                             target="_blank"
                             rel="noopener noreferrer"
                             className="flex items-center gap-1.5 px-4 py-2 text-sm text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"

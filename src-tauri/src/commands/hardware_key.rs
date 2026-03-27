@@ -186,8 +186,8 @@ mod implementation {
     }
 
     // Relying Party ID (use app name since we're not in a browser)
-    pub const RP_ID: &str = "moodbloom.local";
-    pub const RP_NAME: &str = "MoodBloom";
+    pub const RP_ID: &str = "moodhaven.local";
+    pub const RP_NAME: &str = "MoodHaven Journal";
 
     /// Generate a random 32-byte challenge
     pub fn generate_challenge() -> Vec<u8> {
@@ -355,8 +355,8 @@ mod implementation {
         let args = MakeCredentialArgsBuilder::new(RP_ID, &challenge)
             .rp_name(RP_NAME)
             .user_id(&user_id)
-            .user_name("MoodBloom User")
-            .user_display_name("MoodBloom User")
+            .user_name("MoodHaven User")
+            .user_display_name("MoodHaven User")
             .build();
 
         let result = device

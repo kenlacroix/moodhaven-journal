@@ -1,9 +1,25 @@
 # Changelog
 
-All notable changes to MoodBloom are documented in this file.
+All notable changes to MoodHaven Journal are documented in this file.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions follow [Semantic Versioning](https://semver.org/).
+
+---
+
+## [0.7.7] — 2026-03-26
+
+### Changed
+- **Full rebrand: MoodBloom → MoodHaven Journal.** The product is now named MoodHaven Journal (by Moodbloom). All user-facing strings, metadata, and technical identifiers updated across the entire codebase.
+  - App identifier: `com.moodbloom.app` → `com.moodhaven.app`
+  - Database filename: `moodbloom.db` → `moodhaven.db`
+  - mDNS service type: `_moodbloom._tcp.local` → `_moodhaven._tcp.local`
+  - Peer sync transport key prefix: `moodbloom-sync-v1/v2` → `moodhaven-sync-v1/v2`
+  - WebDAV directory: `MoodBloom/` → `MoodHaven/`; file extension: `.moodbloom` → `.moodhaven`
+  - Export format version strings: `moodbloom-encrypted-v1` → `moodhaven-encrypted-v1`, `moodbloom-full-v2` → `moodhaven-full-v2`
+  - FIDO2 relying party ID: `moodbloom.local` → `moodhaven.local`
+  - npm package name: `moodbloom` → `moodhaven-journal`; Rust crate: `moodbloom_lib` → `moodhaven_journal_lib`
+  - OS window title and productName use short form `MoodHaven`; in-app headings use `MoodHaven Journal`
 
 ---
 

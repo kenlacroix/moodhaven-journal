@@ -1,4 +1,4 @@
-//! Tauri commands for MoodBloom
+//! Tauri commands for MoodHaven Journal
 //!
 //! These commands are invoked from the React frontend via IPC.
 

@@ -1,6 +1,6 @@
 //! Peer discovery via mDNS/DNS-SD for local network sync
 //!
-//! Advertises this MoodBloom instance on the LAN and discovers other instances.
+//! Advertises this MoodHaven Journal instance on the LAN and discovers other instances.
 //! Uses mdns-sd for cross-platform mDNS support (Linux/macOS/Windows).
 //!
 //! ## Event flow
@@ -23,7 +23,7 @@ use std::sync::{
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager, State};
 
-const SERVICE_TYPE: &str = "_moodbloom._tcp.local.";
+const SERVICE_TYPE: &str = "_moodhaven._tcp.local.";
 const UDP_DISCOVERY_PORT: u16 = 4243;
 const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -414,7 +414,7 @@ fn run_discovery(
     } else {
         &public_key
     };
-    let instance_name = sanitize_instance_name(&format!("moodbloom-{}", &device_id[..8]));
+    let instance_name = sanitize_instance_name(&format!("moodhaven-{}", &device_id[..8]));
 
     let mut properties: HashMap<String, String> = HashMap::new();
     properties.insert("device_id".to_string(), device_id.clone());
@@ -451,7 +451,7 @@ fn run_discovery(
         }
     }
 
-    // Browse for other MoodBloom instances
+    // Browse for other MoodHaven Journal instances
     let receiver = match daemon.browse(SERVICE_TYPE) {
         Ok(r) => r,
         Err(e) => {

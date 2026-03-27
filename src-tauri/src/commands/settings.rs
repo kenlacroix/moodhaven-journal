@@ -1,4 +1,4 @@
-//! Settings commands for MoodBloom
+//! Settings commands for MoodHaven Journal
 //!
 //! Handles persisting and loading user settings using the database.
 

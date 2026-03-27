@@ -1,8 +1,8 @@
 # Tauri Command Reference
 
-> **Version:** v0.7.0 | **Total commands:** ~96
+> **Version:** v0.7.7 | **Total commands:** ~96
 >
-> This document lists all `#[tauri::command]` functions exposed by MoodBloom's Rust backend.
+> This document lists all `#[tauri::command]` functions exposed by MoodHaven Journal's Rust backend.
 > Commands are registered in `src-tauri/src/lib.rs` and permitted in `src-tauri/capabilities/default.json`.
 
 All commands are called from TypeScript via:
@@ -434,7 +434,7 @@ invoke('factory_reset') → Promise<boolean>
 
 ### `export_data`
 
-Export all data as an encrypted `.moodbloom` file. The frontend provides the file path via a save dialog.
+Export all data as an encrypted `.moodhaven` file. The frontend provides the file path via a save dialog.
 
 ```typescript
 invoke('export_data', {

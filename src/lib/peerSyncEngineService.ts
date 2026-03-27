@@ -122,7 +122,7 @@ export async function peerFullRestore(deviceId: string, host: string): Promise<v
   return invoke('peer_full_restore', { deviceId, host });
 }
 
-/** Rename the pending restore file to moodbloom.db and restart the app. */
+/** Rename the pending restore file to moodhaven.db and restart the app. */
 export async function peerApplyAndRestart(): Promise<void> {
   return invoke('peer_apply_and_restart');
 }

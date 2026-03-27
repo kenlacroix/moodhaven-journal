@@ -1,5 +1,5 @@
 /**
- * Oura Ring service for MoodBloom
+ * Oura Ring service for MoodHaven Journal
  *
  * Wraps Tauri IPC calls to the Oura commands in Rust.
  *

@@ -1,4 +1,4 @@
-//! Two-Factor Authentication commands for MoodBloom
+//! Two-Factor Authentication commands for MoodHaven Journal
 //!
 //! Supports TOTP (Time-based One-Time Password) and backup codes.
 //! WebAuthn registration/verification happens on the frontend.
@@ -15,7 +15,7 @@ use totp_rs::{Algorithm, Secret, TOTP};
 pub struct TotpSetupData {
     pub secret: String,       // Base32 secret for manual entry
     pub qr_code_url: String,  // otpauth:// URL for QR code generation
-    pub issuer: String,       // "MoodBloom"
+    pub issuer: String,       // "MoodHaven Journal"
     pub account_name: String, // User identifier
 }
 
@@ -65,8 +65,8 @@ fn create_totp(secret: &str) -> Result<TOTP, String> {
         1,  // 1 step (30 seconds)
         30, // 30 second period
         secret_bytes,
-        Some("MoodBloom".to_string()),
-        "user@moodbloom".to_string(),
+        Some("MoodHaven Journal".to_string()),
+        "user@moodhaven".to_string(),
     )
     .map_err(|e| format!("Failed to create TOTP: {}", e))
 }
@@ -275,8 +275,8 @@ pub fn generate_totp_secret(db: State<Database>) -> Result<TotpSetupData, String
     Ok(TotpSetupData {
         secret: secret.clone(),
         qr_code_url: totp.get_url(),
-        issuer: "MoodBloom".to_string(),
-        account_name: "user@moodbloom".to_string(),
+        issuer: "MoodHaven Journal".to_string(),
+        account_name: "user@moodhaven".to_string(),
     })
 }
 

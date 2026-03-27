@@ -1,4 +1,4 @@
-//! Data management commands for MoodBloom
+//! Data management commands for MoodHaven Journal
 //!
 //! Provides factory reset, export, and import functionality.
 

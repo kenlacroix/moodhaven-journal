@@ -791,7 +791,7 @@ mod tests {
     #[test]
     fn unknown_model_rejected() {
         assert!(model_url("evil.sh").is_err());
-        assert!(model_url("../../moodbloom.db").is_err());
+        assert!(model_url("../../moodhaven.db").is_err());
         assert!(model_url("ggml-base.en.bin.malicious").is_err());
     }
 }

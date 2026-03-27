@@ -6,7 +6,7 @@
 
 ## Overview
 
-MoodBloom's speech-to-text (STT) feature lets you **dictate journal entries using your microphone**. All audio processing happens on your device — no cloud speech APIs, no audio ever leaves your machine.
+MoodHaven Journal's speech-to-text (STT) feature lets you **dictate journal entries using your microphone**. All audio processing happens on your device — no cloud speech APIs, no audio ever leaves your machine.
 
 The engine is [whisper.cpp](https://github.com/ggerganov/whisper.cpp) — a C/C++ port of OpenAI's Whisper model that runs fully offline.
 
@@ -78,7 +78,7 @@ Get the absolute path to the directory where models are stored.
 
 ```typescript
 invoke('stt_get_models_dir') → Promise<string>
-// e.g. "/home/user/.local/share/com.moodbloom/models"
+// e.g. "/home/user/.local/share/com.moodhaven.app/models"
 ```
 
 ---
@@ -221,7 +221,7 @@ cd whisper.cpp
 make whisper-cli
 
 # Copy to project sidecar directory
-cp whisper-cli /path/to/moodbloom/sidecar/whisper-cli-{platform}-{arch}
+cp whisper-cli /path/to/moodhaven-journal/sidecar/whisper-cli-{platform}-{arch}
 ```
 
 Platform suffixes follow Tauri's sidecar naming convention:

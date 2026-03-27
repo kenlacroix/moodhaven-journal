@@ -1,5 +1,5 @@
 /**
- * AI Service for MoodBloom
+ * AI Service for MoodHaven Journal
  *
  * PRIVACY-FIRST ARCHITECTURE:
  * - Only sends aggregated metadata to AI APIs

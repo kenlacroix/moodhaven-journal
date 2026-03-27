@@ -20,7 +20,7 @@ export function WelcomeStep({ onNext }: WelcomeStepProps) {
       </div>
       <div>
         <h1 className="text-3xl font-bold text-slate-800 dark:text-white mb-2">
-          Welcome to MoodBloom
+          Welcome to MoodHaven Journal
         </h1>
         <p className="text-slate-500 dark:text-slate-400">
           Your private, secure mood tracking and journaling companion.

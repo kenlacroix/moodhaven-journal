@@ -1,4 +1,4 @@
-//! Database module for MoodBloom
+//! Database module for MoodHaven Journal
 //!
 //! Handles SQLite connection, migrations, and CRUD operations
 //! for encrypted journal entries.
@@ -465,7 +465,7 @@ pub fn get_db_path(app: &AppHandle) -> Result<PathBuf, String> {
     std::fs::create_dir_all(&app_data)
         .map_err(|e| format!("Failed to create app data dir: {}", e))?;
 
-    Ok(app_data.join("moodbloom.db"))
+    Ok(app_data.join("moodhaven.db"))
 }
 
 // ============================================================================

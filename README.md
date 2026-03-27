@@ -1,13 +1,13 @@
 <div align="center">
 
-<img src="src-tauri/icons/128x128.png" alt="MoodBloom" width="96" height="96">
+<img src="src-tauri/icons/128x128.png" alt="MoodHaven Journal" width="96" height="96">
 
-<h1>MoodBloom</h1>
+<h1>MoodHaven Journal</h1>
 
 <p><strong>A calm, encrypted desktop journal with mood tracking, AI insights, and local peer sync</strong></p>
 
 <p>
-<a href="https://github.com/kenlacroix/moodhaven-journal/releases"><img src="https://img.shields.io/badge/version-0.7.6-7c3aed?style=flat-square" alt="Version"></a>
+<a href="https://github.com/kenlacroix/moodhaven-journal/releases"><img src="https://img.shields.io/badge/version-0.7.7-7c3aed?style=flat-square" alt="Version"></a>
 <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-22c55e?style=flat-square" alt="License"></a>
 <a href="#installation"><img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-0ea5e9?style=flat-square" alt="Platform"></a>
 <a href="#tech-stack"><img src="https://img.shields.io/badge/tests-488%20passing-22c55e?style=flat-square" alt="Tests"></a>
@@ -15,7 +15,7 @@
 <a href="#security--privacy"><img src="https://img.shields.io/badge/encryption-AES--256--GCM-ef4444?style=flat-square" alt="Encryption"></a>
 </p>
 
-<p>MoodBloom is a local-first desktop journaling app built on a zero-knowledge security model. Your entries are encrypted on your device with a key only you hold — no accounts, no cloud, no backdoors.</p>
+<p>MoodHaven Journal is a local-first desktop journaling app built on a zero-knowledge security model. Your entries are encrypted on your device with a key only you hold — no accounts, no cloud, no backdoors.</p>
 
 <p><a href="#installation">Download</a> · <a href="#building-from-source">Build from Source</a> · <a href="#security--privacy">Security Model</a> · <a href="#contributing">Contributing</a></p>
 
@@ -23,9 +23,9 @@
 
 ---
 
-## What is MoodBloom?
+## What is MoodHaven Journal?
 
-MoodBloom combines structured mood tracking with free-form encrypted journaling. It stays out of your way while you write, surfaces patterns in your mood over time, and optionally enriches your reflection with AI-generated prompts — all while keeping your data entirely under your control.
+MoodHaven Journal combines structured mood tracking with free-form encrypted journaling. It stays out of your way while you write, surfaces patterns in your mood over time, and optionally enriches your reflection with AI-generated prompts — all while keeping your data entirely under your control.
 
 **Core beliefs:**
 
@@ -63,7 +63,7 @@ MoodBloom combines structured mood tracking with free-form encrypted journaling.
 |:---|:---|
 | AES-256-GCM encryption, PBKDF2 key derivation | Local peer sync over LAN — no cloud server needed |
 | Zero-knowledge: app never sees your plaintext | Encrypted WebDAV backup (Nextcloud, etc.) |
-| TOTP 2FA and native FIDO2 hardware key support | Encrypted `.moodbloom` export for offline archival |
+| TOTP 2FA and native FIDO2 hardware key support | Encrypted `.moodhaven` export for offline archival |
 | Optional 24-character offline recovery key | Wear OS companion for wrist voice capture *(beta)* |
 
 ---
@@ -76,10 +76,10 @@ Grab the latest build from the [Releases](https://github.com/kenlacroix/moodhave
 
 | Platform | Installer | Minimum Version |
 |:---|:---|:---|
-| **Windows** | `MoodBloom_0.7.6_x64-setup.exe` | Windows 10 |
-| **macOS** | `MoodBloom_0.7.6_x64.dmg` | macOS 10.15 Catalina |
-| **Linux** | `moodbloom_0.7.6_amd64.AppImage` | Any modern distro |
-| **Linux (Debian)** | `moodbloom_0.7.6_amd64.deb` | Ubuntu 22.04+ |
+| **Windows** | `MoodHaven_0.7.7_x64-setup.exe` | Windows 10 |
+| **macOS** | `MoodHaven_0.7.7_x64.dmg` | macOS 10.15 Catalina |
+| **Linux** | `moodhaven_0.7.7_amd64.AppImage` | Any modern distro |
+| **Linux (Debian)** | `moodhaven_0.7.7_amd64.deb` | Ubuntu 22.04+ |
 
 ### First Launch
 
@@ -95,7 +95,7 @@ Grab the latest build from the [Releases](https://github.com/kenlacroix/moodhave
 
 ### Creating Entries
 
-Open MoodBloom and start typing — a new entry begins automatically. The mood indicator updates as you write after 5 words. To override, click any mood dot and it locks.
+Open MoodHaven Journal and start typing — a new entry begins automatically. The mood indicator updates as you write after 5 words. To override, click any mood dot and it locks.
 
 **Quick entry tips:**
 
@@ -138,7 +138,7 @@ Books are named journals — think Work, Personal, Travel, Therapy. Each has an 
 
 ### Zero-Knowledge Architecture
 
-MoodBloom uses a zero-knowledge security model: all encryption happens in your browser context before any data touches the filesystem or network. The app itself has no master key and cannot decrypt your entries without your password.
+MoodHaven Journal uses a zero-knowledge security model: all encryption happens in your browser context before any data touches the filesystem or network. The app itself has no master key and cannot decrypt your entries without your password.
 
 ```
 Your Password
@@ -149,7 +149,7 @@ Encryption Key (256-bit, never stored)
     │
     ├──▶  Journal entry content  ──▶  AES-256-GCM  ──▶  SQLite (ciphertext only)
     │
-    ├──▶  Export file payload   ──▶  AES-256-GCM  ──▶  .moodbloom file (ciphertext only)
+    ├──▶  Export file payload   ──▶  AES-256-GCM  ──▶  .moodhaven file (ciphertext only)
     │
     └──▶  Peer sync payload     ──▶  AES-256-GCM  ──▶  LAN transport (ciphertext only)
 ```
@@ -168,7 +168,7 @@ Encryption Key (256-bit, never stored)
 
 ### AI Privacy
 
-When AI features are enabled, MoodBloom **never** sends journal text to any external service — only aggregated, anonymised metadata (mood scores, entry frequency, time-of-day patterns, sentiment classification).
+When AI features are enabled, MoodHaven Journal **never** sends journal text to any external service — only aggregated, anonymised metadata (mood scores, entry frequency, time-of-day patterns, sentiment classification).
 
 Full security model: [.claude/docs/security.md](.claude/docs/security.md)
 
@@ -176,7 +176,7 @@ Full security model: [.claude/docs/security.md](.claude/docs/security.md)
 
 ## Local Peer Sync
 
-MoodBloom can sync directly between your devices on a local network — no cloud accounts, no configuration, no third-party servers.
+MoodHaven Journal can sync directly between your devices on a local network — no cloud accounts, no configuration, no third-party servers.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -187,7 +187,7 @@ MoodBloom can sync directly between your devices on a local network — no cloud
 │  QR code or PIN exchange → trusted_devices.json             │
 ├─────────────────────────────────────────────────────────────┤
 │  Layer 2: Peer Discovery                                    │
-│  mDNS/DNS-SD (_moodbloom._tcp.local) · zero config          │
+│  mDNS/DNS-SD (_moodhaven._tcp.local) · zero config           │
 ├─────────────────────────────────────────────────────────────┤
 │  Layer 1: Device Identity                                   │
 │  Ed25519 key pair · stable deviceId per device              │
@@ -286,7 +286,7 @@ Full cross-platform build guide: [docs/build.md](docs/build.md)
 
 ## Beta Testing
 
-MoodBloom is in public beta. The core feature set is complete and stable — the app is used daily in production. What beta testers can help with:
+MoodHaven Journal is in public beta. The core feature set is complete and stable — the app is used daily in production. What beta testers can help with:
 
 - **Try the full setup flow** — First-run wizard, password, 2FA, recovery key
 - **Write entries and use Books** — Does auto-save, mood detection, and templates behave as expected?
@@ -331,6 +331,7 @@ See [CLAUDE.md](CLAUDE.md) for architectural decisions, security guidelines, and
 
 ## Recent Changes
 
+**v0.7.7** — Rebrand from MoodBloom to MoodHaven Journal: updated app identifier, database filename, mDNS service type, sync protocol keys, WebDAV directory, export format, and FIDO2 RP_ID
 **v0.7.6** — `VITE_DEV_MODE=bypass` dev-only unlock for QA automation (guarded by `import.meta.env.DEV`, never active in production)
 **v0.7.5** — Time Capsule feature: seal entries until a future date, anniversary auto-reveal, mood delta on reveal
 **v0.7.4** — Reading time estimate, daily-rotating greeting, focus mode exit hint, save micro-animation, 17 new tests
@@ -343,7 +344,7 @@ Full history: [CHANGELOG.md](CHANGELOG.md)
 
 ## License
 
-[MIT](LICENSE) — © MoodBloom contributors
+[MIT](LICENSE) — © MoodHaven Journal contributors
 
 ---
 

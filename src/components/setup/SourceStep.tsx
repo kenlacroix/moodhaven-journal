@@ -32,7 +32,7 @@ export function SourceStep({ onBack, onChooseFresh, onChooseSync }: SourceStepPr
             <div>
               <p className="font-semibold text-slate-800 dark:text-white">Start fresh</p>
               <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-                New to MoodBloom — create a new journal from scratch.
+                New to MoodHaven Journal — create a new journal from scratch.
               </p>
             </div>
             <svg className="w-5 h-5 text-slate-300 dark:text-slate-600 ml-auto flex-shrink-0 self-center group-hover:text-violet-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -56,7 +56,7 @@ export function SourceStep({ onBack, onChooseFresh, onChooseSync }: SourceStepPr
             <div>
               <p className="font-semibold text-slate-800 dark:text-white">Restore from another device</p>
               <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-                Pull your journals, settings and data from a device already running MoodBloom on this network.
+                Pull your journals, settings and data from a device already running MoodHaven Journal on this network.
               </p>
             </div>
             <svg className="w-5 h-5 text-slate-300 dark:text-slate-600 ml-auto flex-shrink-0 self-center group-hover:text-emerald-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

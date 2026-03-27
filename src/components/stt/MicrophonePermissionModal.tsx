@@ -91,7 +91,7 @@ export function MicrophonePermissionModal({
             id="mic-permission-body"
             className="text-sm text-slate-600 dark:text-slate-400 text-center leading-relaxed mb-6"
           >
-            MoodBloom needs microphone access for speech-to-text dictation. All audio is processed
+            MoodHaven Journal needs microphone access for speech-to-text dictation. All audio is processed
             locally on your device — nothing ever leaves your computer.
           </p>
 

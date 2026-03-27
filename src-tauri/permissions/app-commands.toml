@@ -1,4 +1,4 @@
-# MoodBloom app-level command permissions
+# MoodHaven Journal app-level command permissions
 # Grants the frontend access to all commands registered via invoke_handler! in lib.rs.
 #
 # Background: once any custom permission TOML exists in src-tauri/permissions/, Tauri v2
@@ -10,7 +10,7 @@
 
 [[permission]]
 identifier = "allow-all-app-commands"
-description = "Allow all MoodBloom app-level commands registered in invoke_handler!."
+description = "Allow all MoodHaven Journal app-level commands registered in invoke_handler!."
 commands.allow = [
   # Password management
   "check_password_exists",

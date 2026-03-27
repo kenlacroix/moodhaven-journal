@@ -73,12 +73,12 @@ export function ImportStep({
               <input
                 id="importFile"
                 type="file"
-                accept=".moodbloom,.json"
+                accept=".moodhaven,.json"
                 onChange={(e) => onImportFileChange(e.target.files?.[0] || null)}
                 className="sr-only"
               />
             </div>
-            <p className="text-xs text-slate-400">.moodbloom or .json backup files</p>
+            <p className="text-xs text-slate-400">.moodhaven or .json backup files</p>
           </div>
         )}
       </div>

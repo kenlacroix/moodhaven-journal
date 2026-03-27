@@ -30,7 +30,7 @@ const PLATFORM_INSTRUCTIONS: Record<Platform, { steps: string[]; settingsUrl: st
     steps: [
       'Open System Settings (Apple menu → System Settings)',
       'Go to Privacy & Security → Microphone',
-      'Enable the toggle next to MoodBloom',
+      'Enable the toggle next to MoodHaven Journal',
     ],
     settingsUrl: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone',
   },
@@ -38,14 +38,14 @@ const PLATFORM_INSTRUCTIONS: Record<Platform, { steps: string[]; settingsUrl: st
     steps: [
       'Open Windows Settings (Start → Settings)',
       'Go to Privacy & security → Microphone',
-      'Turn on "Let apps access your microphone" and enable MoodBloom',
+      'Turn on "Let apps access your microphone" and enable MoodHaven Journal',
     ],
     settingsUrl: 'ms-settings:privacy-microphone',
   },
   linux: {
     steps: [
       'Open your system settings and search for "Privacy" or "Sound"',
-      'Ensure MoodBloom has permission to access the microphone',
+      'Ensure MoodHaven Journal has permission to access the microphone',
       'Some desktop environments require re-launching the app after granting permission',
     ],
     settingsUrl: null,
@@ -136,7 +136,7 @@ export function MicrophoneBlockedModal({ isOpen, onDismiss }: MicrophoneBlockedM
             id="mic-blocked-body"
             className="text-sm text-slate-600 dark:text-slate-400 text-center leading-relaxed mb-4"
           >
-            MoodBloom doesn't have permission to use your microphone. To enable dictation:
+            MoodHaven Journal doesn't have permission to use your microphone. To enable dictation:
           </p>
 
           {/* Platform-specific steps */}

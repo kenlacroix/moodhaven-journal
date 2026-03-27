@@ -1,5 +1,5 @@
 /**
- * Media attachment service for MoodBloom
+ * Media attachment service for MoodHaven Journal
  *
  * IPC wrappers around the Rust media commands.
  * All crypto (encrypt/decrypt) happens Rust-side; this module

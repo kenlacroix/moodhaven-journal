@@ -1,6 +1,6 @@
-//! MoodBloom Library
+//! MoodHaven Journal Library
 //!
-//! Core functionality for the MoodBloom Tauri application.
+//! Core functionality for the MoodHaven Journal Tauri application.
 
 pub mod commands;
 pub mod db;
@@ -29,7 +29,7 @@ pub fn run() {
             // This is written by `peer_full_restore` during setup and applied on next startup.
             let db_path = get_db_path(app.handle())?;
             if let Some(parent) = db_path.parent() {
-                let pending = parent.join("moodbloom_restore.pending");
+                let pending = parent.join("moodhaven_restore.pending");
                 if pending.exists() {
                     eprintln!(
                         "[restore] Applying pending DB restore: {:?} → {:?}",

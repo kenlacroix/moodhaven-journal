@@ -39,7 +39,7 @@ export async function sendTestNotification(message: string): Promise<void> {
   }
 
   sendNotification({
-    title: 'MoodBloom Reminder',
+    title: 'MoodHaven Reminder',
     body: message || 'Time to reflect on your day',
   });
 }
@@ -56,7 +56,7 @@ export async function sendReminderNotification(settings: ReminderSettings): Prom
   }
 
   sendNotification({
-    title: 'MoodBloom',
+    title: 'MoodHaven',
     body: settings.message || 'Time to reflect on your day',
   });
 }

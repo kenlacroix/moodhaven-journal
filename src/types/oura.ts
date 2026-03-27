@@ -1,5 +1,5 @@
 /**
- * Oura Ring integration types for MoodBloom
+ * Oura Ring integration types for MoodHaven Journal
  */
 
 // Connection status

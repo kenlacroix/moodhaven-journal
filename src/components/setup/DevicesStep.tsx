@@ -39,7 +39,7 @@ export function DevicesStep({
               Scanning your network…
             </span>
           ) : (
-            'Nearby devices running MoodBloom will appear below'
+            'Nearby devices running MoodHaven Journal will appear below'
           )}
         </p>
       </div>

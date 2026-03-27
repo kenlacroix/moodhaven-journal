@@ -4,6 +4,7 @@
  * Zustand store for managing application settings.
  */
 
+import { invoke } from '@tauri-apps/api/core';
 import { create } from 'zustand';
 import type {
   AppSettings,
@@ -19,6 +20,7 @@ import type {
   TimeCapsuleSettings,
 } from '../types/settings';
 import { createDefaultSettings } from '../types/settings';
+import { setLevel } from '../lib/logger';
 import {
   loadSettings,
   saveSettings,
@@ -148,8 +150,9 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       ]);
       set({ settings, appVersion: version, isLoading: false, hasUnsavedChanges: false });
 
-      // Apply theme immediately
+      // Apply theme and log level immediately
       applyTheme(settings.appearance.theme);
+      setLevel(settings.logLevel ?? 'warn');
     } catch (error) {
       set({
         error: error instanceof Error ? error.message : 'Failed to load settings',
@@ -178,6 +181,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       const defaults = await resetSettingsService();
       set({ settings: defaults, isLoading: false, hasUnsavedChanges: false });
       applyTheme(defaults.appearance.theme);
+      setLevel(defaults.logLevel ?? 'warn');
+      void invoke('set_log_level', { level: defaults.logLevel ?? 'warn' }).catch(() => undefined);
     } catch (error) {
       set({
         error: error instanceof Error ? error.message : 'Failed to reset settings',

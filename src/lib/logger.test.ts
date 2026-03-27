@@ -1,12 +1,13 @@
 import { debug, info, warn, error } from '@tauri-apps/plugin-log';
-import { logger } from './logger';
+import { logger, setLevel } from './logger';
 
 const mockDebug = vi.mocked(debug);
 const mockInfo = vi.mocked(info);
 const mockWarn = vi.mocked(warn);
 const mockError = vi.mocked(error);
 
-beforeEach(() => { vi.clearAllMocks(); });
+beforeEach(() => { vi.clearAllMocks(); setLevel('debug'); });
+afterEach(() => { setLevel('warn'); });
 
 describe('logger', () => {
   it('info calls plugin info with msg', () => {
@@ -58,5 +59,49 @@ describe('logger', () => {
   it('no context: no pipe appended', () => {
     logger.warn('no ctx');
     expect(mockWarn).toHaveBeenCalledWith('no ctx');
+  });
+});
+
+describe('setLevel', () => {
+  it('warn level: debug and info are suppressed, warn and error call through', () => {
+    setLevel('warn');
+    logger.debug('d'); logger.info('i'); logger.warn('w'); logger.error('e');
+    expect(mockDebug).not.toHaveBeenCalled();
+    expect(mockInfo).not.toHaveBeenCalled();
+    expect(mockWarn).toHaveBeenCalledWith('w');
+    expect(mockError).toHaveBeenCalledWith('e');
+  });
+
+  it('error level: only error calls through', () => {
+    setLevel('error');
+    logger.debug('d'); logger.info('i'); logger.warn('w'); logger.error('e');
+    expect(mockDebug).not.toHaveBeenCalled();
+    expect(mockInfo).not.toHaveBeenCalled();
+    expect(mockWarn).not.toHaveBeenCalled();
+    expect(mockError).toHaveBeenCalledWith('e');
+  });
+
+  it('info level: debug suppressed, info/warn/error call through', () => {
+    setLevel('info');
+    logger.debug('d'); logger.info('i'); logger.warn('w'); logger.error('e');
+    expect(mockDebug).not.toHaveBeenCalled();
+    expect(mockInfo).toHaveBeenCalledWith('i');
+    expect(mockWarn).toHaveBeenCalledWith('w');
+    expect(mockError).toHaveBeenCalledWith('e');
+  });
+
+  it('debug level: all four call through', () => {
+    setLevel('debug');
+    logger.debug('d'); logger.info('i'); logger.warn('w'); logger.error('e');
+    expect(mockDebug).toHaveBeenCalledWith('d');
+    expect(mockInfo).toHaveBeenCalledWith('i');
+    expect(mockWarn).toHaveBeenCalledWith('w');
+    expect(mockError).toHaveBeenCalledWith('e');
+  });
+
+  it('error always calls through regardless of level', () => {
+    setLevel('error');
+    logger.error('always');
+    expect(mockError).toHaveBeenCalledWith('always');
   });
 });

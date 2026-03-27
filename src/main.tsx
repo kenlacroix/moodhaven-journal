@@ -5,7 +5,7 @@ import './styles/globals.css';
 import { attachConsole } from '@tauri-apps/plugin-log';
 
 if (import.meta.env.DEV) {
-  void attachConsole();
+  attachConsole().catch(console.error);
 }
 
 // Disable right-click context menu for native app feel

@@ -215,6 +215,7 @@ export interface AppSettings {
   updates: UpdateSettings;
   sync: SyncSettings;
   timeCapsule: TimeCapsuleSettings;
+  logLevel: 'error' | 'warn' | 'info' | 'debug';
 }
 
 // Default settings factory
@@ -323,5 +324,6 @@ export function createDefaultSettings(): AppSettings {
       defaultSealDays: 30,
       anniversaryReveal: true,
     },
+    logLevel: 'warn',
   };
 }

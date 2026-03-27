@@ -51,6 +51,7 @@ Platforms: Windows, Linux, macOS.
 | `src-tauri/src/db/mod.rs` | SQLite schema, migrations, Database struct |
 | `src/App.tsx` | React root |
 | `src/stores/` | 4 Zustand stores (app, settings, books, …) |
+| `src/lib/logger.ts` | Structured logger wrapper around @tauri-apps/plugin-log |
 | `src/lib/crypto.ts` | AES-256-GCM encryption (PBKDF2 key derivation) |
 | `src/lib/cloudSyncService.ts` | WebDAV sync orchestration |
 | `src/lib/peerSyncEngineService.ts` | P2P sync IPC wrappers |

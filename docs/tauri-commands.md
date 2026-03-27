@@ -1,6 +1,6 @@
 # Tauri Command Reference
 
-> **Version:** v0.7.7 | **Total commands:** ~96
+> **Version:** v0.7.9 | **Total commands:** ~99
 >
 > This document lists all `#[tauri::command]` functions exposed by MoodHaven Journal's Rust backend.
 > Commands are registered in `src-tauri/src/lib.rs` and permitted in `src-tauri/capabilities/default.json`.
@@ -37,6 +37,7 @@ Parameter names in TypeScript use **camelCase**; Rust receives them as **snake_c
 - [Update Manager](#update-manager)
 - [Session Bridge](#session-bridge)
 - [Writer Window](#writer-window)
+- [Logging](#logging)
 
 ---
 
@@ -1571,4 +1572,46 @@ invoke('get_mood_delta', {
   entryId: string,
   entryCreatedAt: string,   // ISO 8601 creation timestamp of the capsule
 }) → Promise<{ avg_since: number | null; mood_today: number | null }>
+```
+
+---
+
+## Logging
+
+**Source:** `src-tauri/src/commands/logging.rs`
+**IPC wrappers:** `src/lib/logger.ts`
+
+Logging is powered by `tauri-plugin-log`. In dev builds, logs are written to stderr. In production builds, logs are written to a rotating file in the platform log directory. The frontend uses `logger.ts` — a structured wrapper around `@tauri-apps/plugin-log` — instead of `console.*` calls.
+
+---
+
+### `get_log_path`
+
+Get the absolute path to the current log file.
+
+```typescript
+invoke('get_log_path') → Promise<string>
+// e.g. "/home/user/.local/share/com.moodhaven.app/logs/moodhaven.log"
+```
+
+---
+
+### `open_log_folder`
+
+Open the log file's parent directory in the OS file manager. Used by the "Open Log Folder" button in Settings → About.
+
+```typescript
+invoke('open_log_folder') → Promise<void>
+```
+
+---
+
+### `set_log_level`
+
+Set the active log level at runtime. Changes take effect immediately without restarting the app.
+
+```typescript
+invoke('set_log_level', {
+  level: 'trace' | 'debug' | 'info' | 'warn' | 'error',
+}) → Promise<void>
 ```

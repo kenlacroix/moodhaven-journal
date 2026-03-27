@@ -216,7 +216,7 @@ async function ensureSubdirectory(config: WebDAVConfig, subpath: string): Promis
   // 201 = created, 405 = already exists, 301/302 redirects — all acceptable
   if (response.status !== 201 && response.status !== 405 && !response.ok) {
     // Non-fatal: log but don't throw; some WebDAV servers return 200 for MKCOL
-    logger.warn(`ensureSubdirectory ${subpath}: unexpected status ${response.status}`);
+    logger.warn('ensureSubdirectory: unexpected status', { subpath, status: response.status });
   }
 }
 

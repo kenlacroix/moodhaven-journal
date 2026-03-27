@@ -1,5 +1,3 @@
-import { invoke } from '@tauri-apps/api/core';
-
 // Mock crypto module so we can spy on clearKeyCache
 vi.mock('./crypto', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./crypto')>();

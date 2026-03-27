@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { encrypt, decrypt, verifyPassword, hashPassword, verifyPasswordHash } from './crypto';
+import { encrypt, decrypt, verifyPassword, hashPassword, verifyPasswordHash, clearKeyCache } from './crypto';
 
 describe('crypto', () => {
   // Note: These tests use real WebCrypto with PBKDF2 (600K iterations).
@@ -137,6 +137,66 @@ describe('crypto', () => {
     it('returns false for near-miss password', async () => {
       const { hash, salt } = await hashPassword('password123');
       expect(await verifyPasswordHash('password124', hash, salt)).toBe(false);
+    });
+  });
+
+  describe('session key cache', () => {
+    beforeEach(() => {
+      clearKeyCache();
+    });
+
+    it('cache hit: multiple encrypts with same password all decrypt correctly', async () => {
+      // Regression: ISSUE-QA-001 — session key cache must return a functionally valid key on hit
+      // Found by /qa on 2026-03-27
+      // Report: .gstack/qa-reports/qa-report-feat-db-performance-2026-03-27.md
+      const enc1 = await encrypt('entry one', 'mypassword');
+      const enc2 = await encrypt('entry two', 'mypassword');
+      const enc3 = await encrypt('entry three', 'mypassword');
+
+      // All three must decrypt — verifies cache returns a valid key each time
+      const d1 = await decrypt(enc1.data!, 'mypassword');
+      const d2 = await decrypt(enc2.data!, 'mypassword');
+      const d3 = await decrypt(enc3.data!, 'mypassword');
+
+      expect(d1.data).toBe('entry one');
+      expect(d2.data).toBe('entry two');
+      expect(d3.data).toBe('entry three');
+    });
+
+    it('cache miss: different passwords derive independently', async () => {
+      // Regression: ISSUE-QA-002 — different passwords must not share cache entries
+      // Found by /qa on 2026-03-27
+      const enc = await encrypt('secret text', 'password-A');
+      const result = await decrypt(enc.data!, 'password-B');
+      expect(result.success).toBe(false);
+    });
+
+    it('clearKeyCache forces re-derivation on next decrypt', async () => {
+      // Regression: ISSUE-QA-003 — clearKeyCache must actually bust the cache
+      // Found by /qa on 2026-03-27
+      const enc = await encrypt('text', 'pass');
+      // Warm up the cache
+      await decrypt(enc.data!, 'pass');
+      // Clear it
+      clearKeyCache();
+      // Must still decrypt correctly — re-derives from scratch
+      const result = await decrypt(enc.data!, 'pass');
+      expect(result.success).toBe(true);
+      expect(result.data).toBe('text');
+    });
+
+    it('clearKeyCache prevents stale key from decrypting after password change', async () => {
+      // Regression: ISSUE-QA-004 — lock (clearKeyCache) means old session key cannot decrypt new data
+      // Found by /qa on 2026-03-27
+      const enc = await encrypt('private journal entry', 'old-password');
+      // Warm the cache with old-password
+      await decrypt(enc.data!, 'old-password');
+      // Simulate lock
+      clearKeyCache();
+      // New entry encrypted with new password — old key must not decrypt it
+      const enc2 = await encrypt('new private entry', 'new-password');
+      const result = await decrypt(enc2.data!, 'old-password');
+      expect(result.success).toBe(false);
     });
   });
 });

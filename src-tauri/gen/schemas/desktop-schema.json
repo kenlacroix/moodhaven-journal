@@ -2331,10 +2331,10 @@
           "markdownDescription": "Default plugin permissions.\n#### This default permission set includes:\n\n- `allow-all-app-commands`"
         },
         {
-          "description": "Allow all MoodBloom app-level commands registered in invoke_handler!.",
+          "description": "Allow all MoodHaven Journal app-level commands registered in invoke_handler!.",
           "type": "string",
           "const": "allow-all-app-commands",
-          "markdownDescription": "Allow all MoodBloom app-level commands registered in invoke_handler!."
+          "markdownDescription": "Allow all MoodHaven Journal app-level commands registered in invoke_handler!."
         },
         {
           "description": "Default core plugins set.\n#### This default permission set includes:\n\n- `core:path:default`\n- `core:event:default`\n- `core:window:default`\n- `core:webview:default`\n- `core:app:default`\n- `core:image:default`\n- `core:resources:default`\n- `core:menu:default`\n- `core:tray:default`",

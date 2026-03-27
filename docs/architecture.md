@@ -1,6 +1,6 @@
-# MoodBloom — Architecture Reference
+# MoodHaven Journal — Architecture Reference
 
-> **Version:** v0.7.6 | **Last Updated:** 2026-03-26
+> **Version:** v0.7.7 | **Last Updated:** 2026-03-26
 
 ---
 
@@ -21,7 +21,7 @@
 
 ## 1. High-Level Overview
 
-MoodBloom is a **local-first desktop application** built on Tauri v2 (Rust backend) with a React/TypeScript frontend. All user data lives on-device in an encrypted SQLite database. No accounts, no mandatory cloud services.
+MoodHaven Journal is a **local-first desktop application** built on Tauri v2 (Rust backend) with a React/TypeScript frontend. All user data lives on-device in an encrypted SQLite database. No accounts, no mandatory cloud services.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -41,7 +41,7 @@ MoodBloom is a **local-first desktop application** built on Tauri v2 (Rust backe
                             │
 ┌───────────────────────────▼─────────────────────────────────────────┐
 │                       Filesystem / OS                                │
-│  moodbloom.db (SQLite, encrypted content)                            │
+│  moodhaven.db (SQLite, encrypted content)                            │
 │  device.json · peer_key.bin · trusted_devices.json                  │
 │  models/ (whisper.cpp model files)                                   │
 │  voice_memos_incoming/ · media/                                      │
@@ -118,7 +118,7 @@ moodbloom-tauri/
 
 ## 4. Data Model (SQLite Schema)
 
-The database lives at `{app_data_dir}/moodbloom.db`. Schema is created/migrated in `Database::new()` using `CREATE TABLE IF NOT EXISTS` and `ALTER TABLE … ADD COLUMN` for additive migrations.
+The database lives at `{app_data_dir}/moodhaven.db`. Schema is created/migrated in `Database::new()` using `CREATE TABLE IF NOT EXISTS` and `ALTER TABLE … ADD COLUMN` for additive migrations.
 
 ### Core Tables
 
@@ -275,8 +275,8 @@ User Password
     │
     ├──▶  Media file bytes    ──▶  AES-256-GCM  ──▶  {app_data}/media/ (encrypted file)
     │
-    └──▶  Export file         ──▶  AES-256-GCM  ──▶  .moodbloom file
-              (envelope: { format: 'moodbloom-encrypted-v1', payload: EncryptedData })
+    └──▶  Export file         ──▶  AES-256-GCM  ──▶  .moodhaven file
+              (envelope: { format: 'moodhaven-encrypted-v1', payload: EncryptedData })
 ```
 
 **Key properties:**
@@ -422,7 +422,7 @@ Full details: [`docs/peer-sync-security.md`](peer-sync-security.md)
 │  trusted_devices.json persists accepted peers               │
 ├─────────────────────────────────────────────────────────────┤
 │  Layer 2: Peer Discovery (background thread)                │
-│  mDNS/DNS-SD: _moodbloom._tcp.local                         │
+│  mDNS/DNS-SD: _moodhaven._tcp.local                          │
 │  Tauri events: peer:discovered, peer:lost                   │
 ├─────────────────────────────────────────────────────────────┤
 │  Layer 1: Device Identity                                   │
@@ -434,7 +434,7 @@ Full details: [`docs/peer-sync-security.md`](peer-sync-security.md)
 **Sync protocol (simplified):**
 1. Device A connects to Device B's TCP port.
 2. Plain `HELLO` exchange (device IDs, not trusted yet — aborted if unknown).
-3. Transport key derived: `SHA-256("moodbloom-sync-v1:" + sorted(pubKeyA, pubKeyB))`.
+3. Transport key derived: `SHA-256("moodhaven-sync-v1:" + sorted(pubKeyA, pubKeyB))`.
 4. Encrypted `MANIFEST` exchange — each side lists entry IDs + `updated_at`.
 5. Entries the peer is missing are sent as encrypted delta.
 6. `DONE` / `DONE_ACK` closes the session.

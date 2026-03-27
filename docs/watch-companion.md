@@ -1,4 +1,4 @@
-# MoodBloom Watch Companion
+# MoodHaven Journal Watch Companion
 
 > **Status:** Phase 1 (core recording pipeline) complete. Phase 2 (UX polish) in progress.
 > **Platform:** Wear OS (Android)
@@ -7,7 +7,7 @@
 
 ## What Is the Watch Companion?
 
-The MoodBloom watch companion is a Wear OS app that acts as a **voice journaling assistant on your wrist**. Its primary purpose is to let you capture a voice reflection quickly — before the thought fades — and have it waiting in MoodBloom on your desktop when you sit down to write.
+The MoodHaven Journal watch companion is a Wear OS app that acts as a **voice journaling assistant on your wrist**. Its primary purpose is to let you capture a voice reflection quickly — before the thought fades — and have it waiting in MoodHaven Journal on your desktop when you sit down to write.
 
 **What the watch does:**
 - Records voice memos (up to 10 minutes, 16 kHz mono AAC-LC)
@@ -42,7 +42,7 @@ Android Phone (WearListenerService)
     │  9. Intent broadcast to Tauri WebView
     │
     ▼
-MoodBloom Desktop App (or Tauri on Android, future)
+MoodHaven Journal Desktop App (or Tauri on Android, future)
     │
     │  10. useWearVoiceMemos hook picks up incoming file
     │  11. store_voice_memo command: moves file to permanent storage,
@@ -70,7 +70,7 @@ The main screen. Tap the large button to start recording, tap again to stop.
 
 ### Mood Tap Screen
 
-Four emoji mood options. Tapping one sends a mood signal to MoodBloom via MessageAPI. The signal is stored in the `signals` table and can be linked to a journal entry later.
+Four emoji mood options. Tapping one sends a mood signal to MoodHaven Journal via MessageAPI. The signal is stored in the `signals` table and can be linked to a journal entry later.
 
 ### Breathe Screen *(Phase 2)*
 
@@ -168,15 +168,15 @@ At the time of recording, the watch can capture a health snapshot — heart rate
 
 ## Setup
 
-> The watch companion requires a paired Android phone with the MoodBloom bridge app installed. Full setup instructions will be published when the Phase 2 release is available.
+> The watch companion requires a paired Android phone with the MoodHaven Journal bridge app installed. Full setup instructions will be published when the Phase 2 release is available.
 
 **Requirements:**
 - Wear OS 3.0+ watch
 - Android 11+ phone with Bluetooth pairing to the watch
-- MoodBloom desktop app v0.7.0+
+- MoodHaven Journal desktop app v0.7.0+
 
 **To set up:**
-1. Install the MoodBloom companion APK on your phone.
-2. Install the MoodBloom watch APK on your watch.
-3. Open MoodBloom on your desktop and connect via Settings → Devices.
+1. Install the MoodHaven Journal companion APK on your phone.
+2. Install the MoodHaven Journal watch APK on your watch.
+3. Open MoodHaven Journal on your desktop and connect via Settings → Devices.
 4. On the watch, tap the record button to begin.

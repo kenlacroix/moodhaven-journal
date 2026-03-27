@@ -2,13 +2,13 @@
 
 > **Feature version:** v0.7.0 | **Status:** Complete
 
-This document explains the security design of MoodBloom's local peer sync feature. It is intended for security reviewers and contributors modifying the sync engine.
+This document explains the security design of MoodHaven Journal's local peer sync feature. It is intended for security reviewers and contributors modifying the sync engine.
 
 ---
 
 ## Overview
 
-Local peer sync allows two MoodBloom desktop instances on the same LAN to exchange encrypted journal entries directly, without any cloud server or relay. Every security decision prioritises one rule: **a passive observer on the network, or a compromised peer, must not be able to read journal content.**
+Local peer sync allows two MoodHaven Journal desktop instances on the same LAN to exchange encrypted journal entries directly, without any cloud server or relay. Every security decision prioritises one rule: **a passive observer on the network, or a compromised peer, must not be able to read journal content.**
 
 ---
 
@@ -48,10 +48,10 @@ deviceId = hex(SHA-256(public_key))[0..16]        (first 16 chars, displayed in 
 
 ## Layer 2 — Peer Discovery (mDNS)
 
-Discovery uses mDNS/DNS-SD (`_moodbloom._tcp.local`). The broadcast announces:
+Discovery uses mDNS/DNS-SD (`_moodhaven._tcp.local`). The broadcast announces:
 
 ```
-service type : _moodbloom._tcp.local
+service type : _moodhaven._tcp.local
 port         : {sync_port}
 TXT records  : device_id={deviceId}, device_name={name}
 ```
@@ -150,7 +150,7 @@ The transport key is derived independently by both sides — no key exchange nee
 
 ```
 transport_key = SHA-256(
-    "moodbloom-sync-v1:" +
+    "moodhaven-sync-v1:" +
     sort_lexicographic([base64(pubKeyA), base64(pubKeyB)])
 )
 ```

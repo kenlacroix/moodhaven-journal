@@ -19,6 +19,7 @@ import type { JournalEntry } from '../types/journal';
 import { MOOD_OPTIONS } from '../types/journal';
 import { useBooksStore } from '../stores/booksStore';
 import { usePlatform } from '../hooks/usePlatform';
+import { logger } from '../lib/logger';
 
 // Get current date string for change detection
 const getCurrentDateStr = () => formatDate(new Date());
@@ -84,7 +85,7 @@ export function TimelineView({ onSelectEntry, onNewEntry, onSealEntry, refreshTr
       const data = await getAllEntries();
       setEntries(data);
     } catch (err) {
-      console.error('Failed to load entries:', err);
+      logger.error('Failed to load entries:', { error: String(err) });
     } finally {
       setIsLoading(false);
     }
@@ -241,7 +242,7 @@ export function TimelineView({ onSelectEntry, onNewEntry, onSealEntry, refreshTr
     try {
       await deleteEntry(id);
     } catch (err) {
-      console.error('Failed to delete entry:', err);
+      logger.error('Failed to delete entry:', { error: String(err) });
       loadEntries(); // Re-fetch on failure
     }
   }, []);

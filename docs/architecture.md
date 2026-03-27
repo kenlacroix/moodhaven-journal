@@ -1,6 +1,6 @@
 # MoodHaven Journal — Architecture Reference
 
-> **Version:** v0.7.7 | **Last Updated:** 2026-03-26
+> **Version:** v0.7.9 | **Last Updated:** 2026-03-27
 
 ---
 
@@ -65,7 +65,8 @@ MoodHaven Journal is a **local-first desktop application** built on Tauri v2 (Ru
 | Peer discovery | mDNS/DNS-SD (mdns-sd) | LAN auto-discovery |
 | 2FA | totp-rs + native CTAP2/HID | TOTP + hardware keys |
 | Charts | Custom SVG | No charting library |
-| Testing | Vitest + Testing Library | 497 tests |
+| Logging | tauri-plugin-log + `src/lib/logger.ts` | Rotating file (prod), stderr (dev); `set_log_level` at runtime |
+| Testing | Vitest + Testing Library | 512 tests |
 | Build | Vite 5 + Tauri CLI | |
 
 ---

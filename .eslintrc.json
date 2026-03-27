@@ -26,7 +26,19 @@
     "security/detect-possible-timing-attacks": "error",
     "security/detect-eval-with-expression": "error",
     "security/detect-new-buffer": "error",
-    "security/detect-no-csrf-before-method-override": "warn"
+    "security/detect-no-csrf-before-method-override": "warn",
+
+    "no-restricted-syntax": [
+      "error",
+      {
+        "selector": "CallExpression[callee.object.name='logger'] > TemplateLiteral",
+        "message": "Use logger.*(msg, ctx) — never template literals (prevents content interpolation)"
+      },
+      {
+        "selector": "CallExpression[callee.object.name='logger'] > BinaryExpression[operator='+']",
+        "message": "Use logger.*(msg, ctx) — never string concatenation (prevents content interpolation)"
+      }
+    ]
   },
   "ignorePatterns": ["dist/", "node_modules/", "src-tauri/"]
 }

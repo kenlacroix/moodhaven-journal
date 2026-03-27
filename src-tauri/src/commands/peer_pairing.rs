@@ -305,7 +305,7 @@ fn run_pairing_server(
 ) {
     listener.set_nonblocking(true).ok();
     let deadline = std::time::Instant::now() + Duration::from_secs(TOKEN_TTL_SECS as u64 + 10);
-    eprintln!("[pairing] Server started");
+    log::info!("[pairing] Server started");
 
     let mut failed_attempts: u32 = 0;
 
@@ -317,7 +317,7 @@ fn run_pairing_server(
 
         match listener.accept() {
             Ok((mut stream, addr)) => {
-                eprintln!("[pairing] Incoming connection from {addr}");
+                log::debug!("[pairing] Incoming connection from {addr}");
 
                 // Validate the active token hasn't expired
                 let expected_pin = {
@@ -375,7 +375,7 @@ fn run_pairing_server(
                 if req.pin != expected_pin {
                     failed_attempts += 1;
                     let remaining = MAX_PIN_ATTEMPTS.saturating_sub(failed_attempts);
-                    eprintln!(
+                    log::warn!(
                         "[pairing] Invalid PIN from {addr} ({failed_attempts}/{MAX_PIN_ATTEMPTS} attempts, {remaining} remaining)"
                     );
 
@@ -393,7 +393,7 @@ fn run_pairing_server(
                             "peer:pairing_locked",
                             serde_json::json!({ "reason": "too_many_attempts" }),
                         );
-                        eprintln!(
+                        log::warn!(
                             "[pairing] Session locked after {MAX_PIN_ATTEMPTS} failed attempts — stopping server"
                         );
                         break;
@@ -427,7 +427,7 @@ fn run_pairing_server(
                 };
 
                 if let Err(e) = save_trusted_device(&app, trusted.clone()) {
-                    eprintln!("[pairing] Failed to save trusted device: {e}");
+                    log::error!("[pairing] Failed to save trusted device: {e}");
                     write_http_error(&mut stream, 500, "Failed to save pairing");
                     break;
                 }
@@ -455,7 +455,7 @@ fn run_pairing_server(
 
                 // Emit event so the frontend can react
                 let _ = app.emit("peer:paired", &trusted);
-                eprintln!(
+                log::info!(
                     "[pairing] Paired with {} ({})",
                     trusted.device_name, trusted.device_id
                 );
@@ -475,13 +475,13 @@ fn run_pairing_server(
             }
 
             Err(e) => {
-                eprintln!("[pairing] Accept error: {e}");
+                log::error!("[pairing] Accept error: {e}");
                 break;
             }
         }
     }
 
-    eprintln!("[pairing] Server stopped");
+    log::info!("[pairing] Server stopped");
     if let Some(s) = app.try_state::<PairingServerState>() {
         s.is_serving.store(false, Ordering::SeqCst);
         if let Ok(mut g) = s.active_token.lock() {
@@ -562,7 +562,7 @@ pub fn peer_generate_pairing_token(
     // Bind TCP listener before spawning thread (fail fast on port conflict)
     let listener = TcpListener::bind(format!("0.0.0.0:{pairing_port}"))
         .map_err(|e| format!("Failed to bind pairing port {pairing_port}: {e}"))?;
-    eprintln!("[pairing] Listening on port {pairing_port}");
+    log::info!("[pairing] Listening on port {pairing_port}");
 
     let (stop_tx, stop_rx) = std::sync::mpsc::sync_channel::<()>(1);
     {
@@ -602,7 +602,7 @@ pub async fn peer_accept_pairing(
     // Derive the initiator's pairing port from their device_id (same formula as the server side)
     let pairing_port = pairing_port_for_device(&peer_device_id);
     let url = format!("http://{}:{}/pair", target_host, pairing_port);
-    eprintln!("[pairing] Connecting to {url}");
+    log::debug!("[pairing] Connecting to {url}");
 
     let body = serde_json::json!({
         "device_id": identity.device_id,
@@ -665,7 +665,7 @@ pub async fn peer_accept_pairing(
 
     // Emit so the frontend updates its trusted device list
     let _ = app.emit("peer:paired", &trusted);
-    eprintln!(
+    log::info!(
         "[pairing] Accepted pairing with {} ({})",
         trusted.device_name, trusted.device_id
     );

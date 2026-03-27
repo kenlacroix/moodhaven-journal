@@ -39,6 +39,16 @@ vi.mock('@tauri-apps/plugin-fs', () => ({
   readTextFile: vi.fn().mockResolvedValue(''),
 }));
 
+// Mock @tauri-apps/plugin-log
+vi.mock('@tauri-apps/plugin-log', () => ({
+  trace: vi.fn(),
+  debug: vi.fn(),
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
+  attachConsole: vi.fn().mockResolvedValue(() => {}),
+}));
+
 // Mock window.matchMedia for theme-related tests (only in jsdom environment)
 if (typeof window !== 'undefined') {
   Object.defineProperty(window, 'matchMedia', {

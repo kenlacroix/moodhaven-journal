@@ -230,7 +230,7 @@ async fn fetch_checksum(
 fn verify_sha256(path: &std::path::Path, expected: &str) -> Result<bool, String> {
     if expected.is_empty() {
         // No checksum available — skip verification but signal the caller.
-        eprintln!(
+        log::warn!(
             "[updater] WARNING: no checksums.txt found for this release; \
                    SHA-256 verification was skipped. The update may be unverified."
         );

@@ -11,11 +11,26 @@ use commands::peer_sync_engine::SyncEngineState;
 use commands::session_bridge::SessionBridge;
 use db::{get_db_path, Database};
 use tauri::Manager;
+use tauri_plugin_log::{Target, TargetKind};
 
 /// Initialize and run the Tauri application
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(
+            tauri_plugin_log::Builder::new()
+                // Initialize at Debug so fern's internal filter is permissive.
+                // The user-configured level is applied via log::set_max_level() in setup().
+                .level(log::LevelFilter::Debug)
+                .targets([
+                    Target::new(TargetKind::Stderr),
+                    Target::new(TargetKind::LogDir {
+                        file_name: Some("moodhaven".to_string()),
+                    }),
+                ])
+                .max_file_size(5_000_000)
+                .build(),
+        )
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_http::init())
@@ -31,12 +46,12 @@ pub fn run() {
             if let Some(parent) = db_path.parent() {
                 let pending = parent.join("moodhaven_restore.pending");
                 if pending.exists() {
-                    eprintln!(
+                    log::info!(
                         "[restore] Applying pending DB restore: {:?} → {:?}",
                         pending, db_path
                     );
                     if let Err(e) = std::fs::rename(&pending, &db_path) {
-                        eprintln!("[restore] WARNING: failed to apply pending DB: {e}");
+                        log::error!("[restore] WARNING: failed to apply pending DB: {e}");
                     }
                 }
             }
@@ -47,6 +62,38 @@ pub fn run() {
 
             // Manage database state
             app.manage(database);
+
+            // Apply user-configured log level as early as possible.
+            // Reads the "log_level" SQL key (set by set_log_level command); defaults to Warn.
+            {
+                let db = app.state::<Database>();
+                let stored = db
+                    .conn
+                    .lock()
+                    .ok()
+                    .and_then(|conn| {
+                        conn.query_row(
+                            "SELECT value FROM settings WHERE key = 'log_level'",
+                            [],
+                            |row| row.get::<_, String>(0),
+                        )
+                        .ok()
+                    })
+                    .unwrap_or_default();
+                let filter = match stored.as_str() {
+                    "error" => log::LevelFilter::Error,
+                    "warn" => log::LevelFilter::Warn,
+                    "info" => log::LevelFilter::Info,
+                    "debug" => log::LevelFilter::Debug,
+                    other => {
+                        if !other.is_empty() {
+                            log::warn!("[startup] unknown log_level {:?}, defaulting to Warn", other);
+                        }
+                        log::LevelFilter::Warn
+                    }
+                };
+                log::set_max_level(filter);
+            }
 
             // One-shot session bridge for breakout writer password hand-off
             app.manage(SessionBridge::new());
@@ -68,7 +115,7 @@ pub fn run() {
                 app.handle().clone(),
                 app.state::<SyncEngineState>(),
             ) {
-                eprintln!("[sync] Auto-start failed: {e}");
+                log::error!("[sync] Auto-start failed: {e}");
             }
 
             // Sweep leftover preview temp files from previous sessions
@@ -149,6 +196,9 @@ pub fn run() {
             commands::get_data_stats,
             commands::write_text_file,
             commands::exit_app,
+            commands::get_log_path,
+            commands::open_log_folder,
+            commands::set_log_level,
             // Two-factor authentication
             commands::generate_totp_secret,
             commands::verify_totp_code,

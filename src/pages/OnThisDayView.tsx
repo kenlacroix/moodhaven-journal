@@ -11,6 +11,7 @@
 import { useState, useEffect } from 'react';
 import { getEntriesOnThisDay } from '../lib/journalService';
 import type { JournalEntry } from '../types/journal';
+import { logger } from '../lib/logger';
 
 interface OnThisDayViewProps {
   onSelectEntry: (entryId: string) => void;
@@ -41,7 +42,7 @@ export function OnThisDayView({ onSelectEntry }: OnThisDayViewProps) {
       const data = await getEntriesOnThisDay();
       setEntries(data);
     } catch (err) {
-      console.error('Failed to load on this day entries:', err);
+      logger.error('Failed to load on this day entries:', { error: String(err) });
     } finally {
       setIsLoading(false);
     }

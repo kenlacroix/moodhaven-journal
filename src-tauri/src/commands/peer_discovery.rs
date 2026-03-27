@@ -188,7 +188,7 @@ pub fn get_local_ipv4() -> Option<std::net::Ipv4Addr> {
     if !candidates.is_empty() {
         // Highest preference first; stable sort keeps deterministic order within a tier.
         candidates.sort_by(|a, b| b.0.cmp(&a.0));
-        eprintln!(
+        log::debug!(
             "[peer] LAN IP candidates: {:?}",
             candidates
                 .iter()
@@ -199,7 +199,7 @@ pub fn get_local_ipv4() -> Option<std::net::Ipv4Addr> {
     }
 
     // Fallback: routing table trick. Works on simple setups without a VPN.
-    eprintln!("[peer] Interface enumeration yielded nothing — falling back to routing trick");
+    log::debug!("[peer] Interface enumeration yielded nothing — falling back to routing trick");
     use std::net::UdpSocket;
     let socket = UdpSocket::bind("0.0.0.0:0").ok()?;
     socket.connect("8.8.8.8:80").ok()?;
@@ -233,15 +233,15 @@ fn run_udp_discovery(
     let socket = match UdpSocket::bind(format!("0.0.0.0:{UDP_DISCOVERY_PORT}")) {
         Ok(s) => s,
         Err(e) => {
-            eprintln!("[peer/udp] Failed to bind UDP port {UDP_DISCOVERY_PORT}: {e}");
+            log::error!("[peer/udp] Failed to bind UDP port {UDP_DISCOVERY_PORT}: {e}");
             return;
         }
     };
     if let Err(e) = socket.set_read_timeout(Some(Duration::from_millis(500))) {
-        eprintln!("[peer/udp] set_read_timeout failed: {e}");
+        log::warn!("[peer/udp] set_read_timeout failed: {e}");
     }
     if let Err(e) = socket.set_broadcast(true) {
-        eprintln!("[peer/udp] set_broadcast failed: {e}");
+        log::warn!("[peer/udp] set_broadcast failed: {e}");
     }
 
     let pubkey_hint = if my_public_key.len() >= 8 {
@@ -341,7 +341,7 @@ fn run_udp_discovery(
                         if !peers.contains_key(&peer_id) {
                             peers.insert(peer_id.clone(), peer.clone());
                             let _ = app.emit("peer:discovered", &peer);
-                            eprintln!("[peer/udp] Discovered via UDP: {peer_name} ({peer_id})");
+                            log::info!("[peer/udp] Discovered via UDP: {peer_name} ({peer_id})");
                         }
                     }
                 }
@@ -353,11 +353,11 @@ fn run_udp_discovery(
                 // Timeout — normal, check stop flag and loop
             }
             Err(e) => {
-                eprintln!("[peer/udp] Receive error: {e}");
+                log::error!("[peer/udp] Receive error: {e}");
             }
         }
     }
-    eprintln!("[peer/udp] UDP discovery thread exiting");
+    log::debug!("[peer/udp] UDP discovery thread exiting");
 }
 
 // ── Background discovery thread ───────────────────────────────────────────────
@@ -397,7 +397,7 @@ fn run_discovery(
     let daemon = match ServiceDaemon::new() {
         Ok(d) => d,
         Err(e) => {
-            eprintln!("[peer] Failed to create mDNS daemon: {e}");
+            log::error!("[peer] Failed to create mDNS daemon: {e}");
             return;
         }
     };
@@ -406,7 +406,7 @@ fn run_discovery(
     // to put in the DNS A record, so the announcement is never sent.
     let local_ip = get_local_ipv4();
     let local_ip_str = local_ip.map(|ip| ip.to_string()).unwrap_or_default();
-    eprintln!("[peer] Local IP detected: {local_ip_str:?}");
+    log::debug!("[peer] Local IP detected: {local_ip_str:?}");
 
     // Build TXT record properties
     let pubkey_hint = if public_key.len() >= 8 {
@@ -427,7 +427,7 @@ fn run_discovery(
     // host_name is the DNS hostname (.local); host_ipv4 is the A-record IP.
     let my_host = format!("{}.local.", instance_name);
     let sync_port = sync_port_for_device(&device_id);
-    eprintln!(
+    log::info!(
         "[peer] Registering service: {instance_name}.{SERVICE_TYPE} @ {local_ip_str}:{sync_port}"
     );
     match ServiceInfo::new(
@@ -440,14 +440,14 @@ fn run_discovery(
     ) {
         Ok(service) => {
             if let Err(e) = daemon.register(service) {
-                eprintln!("[peer] Failed to register mDNS service: {e}");
+                log::error!("[peer] Failed to register mDNS service: {e}");
                 // Non-fatal — we can still browse without registering
             } else {
-                eprintln!("[peer] Service registered successfully");
+                log::info!("[peer] Service registered successfully");
             }
         }
         Err(e) => {
-            eprintln!("[peer] Failed to create ServiceInfo: {e}");
+            log::error!("[peer] Failed to create ServiceInfo: {e}");
         }
     }
 
@@ -455,13 +455,13 @@ fn run_discovery(
     let receiver = match daemon.browse(SERVICE_TYPE) {
         Ok(r) => r,
         Err(e) => {
-            eprintln!("[peer] Failed to start mDNS browse: {e}");
+            log::error!("[peer] Failed to start mDNS browse: {e}");
             let _ = daemon.shutdown();
             return;
         }
     };
 
-    eprintln!("[peer] Discovery started — advertising and browsing {SERVICE_TYPE}");
+    log::info!("[peer] Discovery started — advertising and browsing {SERVICE_TYPE}");
 
     loop {
         // Non-blocking check for stop signal
@@ -543,7 +543,7 @@ fn run_discovery(
 
                 // Emit event so the frontend store can react immediately
                 let _ = app.emit("peer:discovered", &peer);
-                eprintln!(
+                log::info!(
                     "[peer] Discovered: {} ({})",
                     peer.device_name, peer.device_id
                 );
@@ -581,7 +581,7 @@ fn run_discovery(
                             device_id: gone_id.clone(),
                         },
                     );
-                    eprintln!("[peer] Lost: {gone_id}");
+                    log::info!("[peer] Lost: {gone_id}");
                 }
             }
 
@@ -589,7 +589,7 @@ fn run_discovery(
                 // Fires every ~60 s per interface — expected, not worth logging
             }
             Ok(mdns_sd::ServiceEvent::ServiceFound(_, fullname)) => {
-                eprintln!("[peer] Found (resolving): {fullname}");
+                log::debug!("[peer] Found (resolving): {fullname}");
             }
             Ok(_) => {
                 // Other daemon events (cache expiry, etc.) — ignore
@@ -606,7 +606,7 @@ fn run_discovery(
         }
     }
 
-    eprintln!("[peer] Discovery thread exiting — shutting down mDNS daemon");
+    log::info!("[peer] Discovery thread exiting — shutting down mDNS daemon");
     let _ = daemon.stop_browse(SERVICE_TYPE);
     let _ = daemon.shutdown();
 

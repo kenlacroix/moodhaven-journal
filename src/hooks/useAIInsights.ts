@@ -24,6 +24,7 @@ import type {
   WeeklyReflection,
   RecurringPattern,
 } from '../types/ai';
+import { logger } from '../lib/logger';
 
 interface UseAIInsightsReturn {
   // Metadata (always available, computed locally)
@@ -105,7 +106,7 @@ export function useAIInsights(): UseAIInsightsReturn {
           // Fall back to static prompts
           setPrompts(getFallbackPrompts(3));
           if (result.error) {
-            console.warn('AI prompt generation failed, using fallbacks:', result.error);
+            logger.warn('AI prompt generation failed, using fallbacks:', { error: String(result.error) });
           }
         }
       } else {

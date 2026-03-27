@@ -7,6 +7,72 @@ use tauri::{AppHandle, Manager};
 
 use crate::db::{self, Database};
 
+/// Return the path to the rotating log file, or None if the file has not been created yet.
+#[tauri::command]
+pub fn get_log_path(app: AppHandle) -> Option<String> {
+    let log_file = app.path().app_log_dir().ok()?.join("moodhaven.log");
+    if log_file.exists() {
+        Some(log_file.to_string_lossy().into_owned())
+    } else {
+        None
+    }
+}
+
+/// Open the log directory in the platform file manager.
+///
+/// Uses platform-native launchers (same pattern as open_media_attachment) to
+/// bypass the tauri-plugin-shell open-regex, which only allows http/mailto/tel URLs.
+#[tauri::command]
+pub fn open_log_folder(app: AppHandle) -> Result<(), String> {
+    let dir = app
+        .path()
+        .app_log_dir()
+        .map_err(|e| format!("app_log_dir: {e}"))?;
+
+    let dir_str = dir.to_str().ok_or("Non-UTF8 log dir path")?.to_string();
+
+    #[cfg(target_os = "macos")]
+    std::process::Command::new("open")
+        .arg(&dir_str)
+        .spawn()
+        .map_err(|e| format!("open: {e}"))?;
+
+    #[cfg(target_os = "windows")]
+    std::process::Command::new("explorer")
+        .arg(&dir_str)
+        .spawn()
+        .map_err(|e| format!("explorer: {e}"))?;
+
+    #[cfg(target_os = "linux")]
+    std::process::Command::new("xdg-open")
+        .arg(&dir_str)
+        .spawn()
+        .map_err(|e| format!("xdg-open: {e}"))?;
+
+    Ok(())
+}
+
+/// Set the runtime log level and persist it so it is restored on next startup.
+/// Accepted values: "error", "warn", "info", "debug". Returns Err on unknown input.
+#[tauri::command]
+pub fn set_log_level(db: tauri::State<'_, Database>, level: String) -> Result<(), String> {
+    let filter = match level.as_str() {
+        "error" => log::LevelFilter::Error,
+        "warn" => log::LevelFilter::Warn,
+        "info" => log::LevelFilter::Info,
+        "debug" => log::LevelFilter::Debug,
+        other => return Err(format!("unknown log level: {other}")),
+    };
+    log::set_max_level(filter);
+    let conn = db.conn.lock().map_err(|e| format!("db lock: {e}"))?;
+    conn.execute(
+        "INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('log_level', ?1, CURRENT_TIMESTAMP)",
+        [&level],
+    )
+    .map_err(|e| format!("set_log_level db: {e}"))?;
+    Ok(())
+}
+
 /// Exit the application (used after factory reset)
 #[tauri::command]
 pub fn exit_app() {
@@ -55,6 +121,14 @@ pub async fn factory_reset(app: AppHandle) -> Result<bool, String> {
             } else {
                 fs::remove_file(&path).ok();
             }
+        }
+    }
+
+    // Delete the rotating log file from app_log_dir (may differ from app_data_dir on macOS/Linux)
+    if let Ok(log_dir) = app.path().app_log_dir() {
+        let log_file = log_dir.join("moodhaven.log");
+        if log_file.exists() {
+            fs::remove_file(&log_file).ok();
         }
     }
 
@@ -266,8 +340,10 @@ pub async fn import_data(app: AppHandle, data: String, _password: String) -> Res
                 setting.get("key").and_then(|v| v.as_str()),
                 setting.get("value").and_then(|v| v.as_str()),
             ) {
-                // Skip rate_limit_state — don't import lockout state
-                if key == "rate_limit_state" {
+                // Skip keys that must not be restored from backup
+                // rate_limit_state: don't import lockout state from another device
+                // log_level: don't silently restore a debug-level setting on import
+                if key == "rate_limit_state" || key == "log_level" {
                     continue;
                 }
                 conn.execute(

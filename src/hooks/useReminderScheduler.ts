@@ -13,6 +13,7 @@ import {
   getMillisecondsUntilReminder,
   shouldFireToday,
 } from '../lib/reminderService';
+import { logger } from '../lib/logger';
 
 const CHECK_INTERVAL_MS = 60_000; // Check every 60 seconds
 
@@ -47,7 +48,7 @@ export function useReminderScheduler() {
           await sendReminderNotification(reminders);
           lastFiredDate.current = today;
         } catch (error) {
-          console.error('Failed to send reminder notification:', error);
+          logger.error('Failed to send reminder notification:', { error: String(error) });
         }
       }
     };

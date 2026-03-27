@@ -64,8 +64,8 @@ import { DevicesTab } from '../components/peer-sync';
 import { CloudConsentModal } from '../components/transcript/CloudConsentModal';
 import type { STTFormattingLayer } from '../types/settings';
 import { invoke } from '@tauri-apps/api/core';
-import { open as shellOpen } from '@tauri-apps/plugin-shell';
-import { logger } from '../lib/logger';
+import { logger, setLevel } from '../lib/logger';
+import type { LogLevel } from '../lib/logger';
 
 type SettingsTab = 'general' | 'privacy' | 'sync' | 'ai' | 'health' | 'devices' | 'about';
 
@@ -170,6 +170,7 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
     setSyncMode,
     setSyncIntervalMinutes,
     setTimeCapsuleSettings,
+    updateSettings,
   } = useSettingsStore();
 
   const scrollToSection = useSettingsStore((s) => s.scrollToSection);
@@ -214,6 +215,19 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
 
   // Log path state (About tab)
   const [logPath, setLogPath] = useState<string | null>(null);
+
+  function handleLogLevelChange(level: LogLevel): void {
+    setLevel(level);
+    updateSettings({ logLevel: level });
+    void Promise.all([
+      saveSettings().catch((e: unknown) => {
+        logger.error('saveSettings failed in level change', { err: String(e) });
+      }),
+      invoke('set_log_level', { level }).catch((e: unknown) => {
+        logger.error('set_log_level failed', { err: String(e) });
+      }),
+    ]);
+  }
 
   // Speech-to-Text state
   const [sttDownloading, setSTTDownloading] = useState(false);
@@ -1822,12 +1836,31 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
                         </div>
 
                         <div className="flex items-center justify-between py-3 border-b border-slate-100 dark:border-slate-700">
+                          <div>
+                            <p className="text-slate-700 dark:text-slate-200">Log Level</p>
+                            <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Debug is verbose — use only for troubleshooting</p>
+                          </div>
+                          <select
+                            aria-label="Log level"
+                            value={settings.logLevel ?? 'warn'}
+                            onChange={(e) => handleLogLevelChange(e.target.value as LogLevel)}
+                            className="px-3 py-1 text-sm rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 border-0 cursor-pointer"
+                          >
+                            <option value="error">Error</option>
+                            <option value="warn">Warn</option>
+                            <option value="info">Info</option>
+                            <option value="debug">Debug</option>
+                          </select>
+                        </div>
+
+                        <div className="flex items-center justify-between py-3 border-b border-slate-100 dark:border-slate-700">
                           <p className="text-slate-700 dark:text-slate-200">Log File</p>
                           <button
                             onClick={() => {
                               if (logPath) {
-                                const dir = logPath.substring(0, logPath.lastIndexOf('/') + 1) || logPath.substring(0, logPath.lastIndexOf('\\') + 1);
-                                void shellOpen(dir || logPath);
+                                invoke('open_log_folder').catch((e: unknown) => {
+                                  logger.error('open_log_folder failed', { err: String(e) });
+                                });
                               }
                             }}
                             disabled={!logPath}

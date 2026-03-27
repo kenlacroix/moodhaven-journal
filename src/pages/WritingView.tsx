@@ -521,7 +521,7 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
     try {
       const { attached, skipped } = await pickAndAttachMedia(savedEntryIdRef.current, sessionPassword);
       if (attached.length > 0) setAttachments((prev) => [...prev, ...attached]);
-      if (skipped.length > 0) logger.warn('Skipped attachments:');
+      if (skipped.length > 0) logger.warn('Skipped attachments', { count: skipped.length });
     } catch (err) {
       logger.error('Attach failed:', { error: String(err) });
     } finally {

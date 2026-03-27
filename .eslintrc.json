@@ -33,6 +33,10 @@
       {
         "selector": "CallExpression[callee.object.name='logger'] > TemplateLiteral",
         "message": "Use logger.*(msg, ctx) — never template literals (prevents content interpolation)"
+      },
+      {
+        "selector": "CallExpression[callee.object.name='logger'] > BinaryExpression[operator='+']",
+        "message": "Use logger.*(msg, ctx) — never string concatenation (prevents content interpolation)"
       }
     ]
   },

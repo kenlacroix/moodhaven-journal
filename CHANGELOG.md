@@ -7,7 +7,7 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [0.7.8] — 2026-03-27
+## [0.7.9] — 2026-03-27
 
 ### Added
 - **Structured logger with log level filtering.** New `src/lib/logger.ts` wraps `@tauri-apps/plugin-log` with a unified `logger.{debug,info,warn,error}(msg, ctx?)` API. Optional structured context is serialized as `key=value` pairs appended to the message. Messages longer than 2000 characters are truncated. The module default level is `warn`.
@@ -23,6 +23,12 @@ Versions follow [Semantic Versioning](https://semver.org/).
 - **`resetSettings` now resets log level.** Resetting settings via the store now calls `setLevel()` and `set_log_level` so the in-memory and Rust filters match the default `warn` level immediately.
 - **Level change handler awaits both writes.** `handleLogLevelChange` now uses `Promise.all` to await `saveSettings()` and `invoke('set_log_level')` in parallel, preventing silent level divergence if either write fails.
 - **`get_log_path` returns `None` until log file exists.** The "Open Log Folder" button is disabled on first launch before any logs have been written.
+- **QA: `attachConsole()` wired up correctly.** Console bridge was scaffolded but never called on app startup; frontend log output was invisible in DevTools during development. Fixed by calling `attachConsole()` in the Tauri plugin init sequence.
+- **QA: `get_log_path` added to ACL.** The command was registered in `lib.rs` but missing from `app-commands.toml`; "Open Log Folder" was permanently disabled at the capability layer. Fixed.
+- **QA: `logger.warn` template literal fixed.** A call in `webdavService.ts` used string concatenation (`+`) inside a `logger.warn()` call, triggering the `no-restricted-syntax` ESLint rule. Replaced with a structured context argument.
+
+### Changed
+- **ESLint rule tightened.** `BinaryExpression` inside Tauri logger call arguments is now blocked by a custom `no-restricted-syntax` rule, preventing accidental string interpolation that bypasses structured logging.
 
 ---
 

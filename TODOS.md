@@ -132,7 +132,7 @@
 
 ---
 
-## Logging (feat/logging-debug — v0.7.8)
+## Logging (feat/logging-debug — v0.7.9)
 
 ### LOG-001: Per-module log level configuration (P3)
 **What:** Allow setting different verbosity per logical module (e.g., `[sync]` at `debug`, `[ai]` at `warn`). Currently a global level applies to all log output.

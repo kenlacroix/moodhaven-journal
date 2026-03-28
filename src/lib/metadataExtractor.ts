@@ -269,6 +269,21 @@ export function aggregateMetadata(
   };
 }
 
+/**
+ * Aggregate metadata for both local (Open+Mindful) and AI (Open-only) consumers.
+ * Equivalent to calling aggregateMetadata(entries, 30, false) + aggregateMetadata(entries, 30, true)
+ * as a single convenience call.
+ */
+export function aggregateMetadataBoth(entries: JournalEntry[]): {
+  localMeta: AggregatedMetadata;
+  aiMeta: AggregatedMetadata;
+} {
+  return {
+    localMeta: aggregateMetadata(entries, 30, false),
+    aiMeta: aggregateMetadata(entries, 30, true),
+  };
+}
+
 // ============================================
 // SENTIMENT ANALYSIS (Local)
 // ============================================

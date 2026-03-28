@@ -7,6 +7,27 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.7.10] — 2026-03-28
+
+### Added
+- **SQLite WAL mode + cache pragmas.** `PRAGMA journal_mode = WAL`, `cache_size = -8000` (8 MB), and `synchronous = NORMAL` applied at startup. WAL mode enables concurrent reads during writes; 8 MB page cache reduces repeated I/O on analytics queries.
+- **`get_full_analytics_bundle` command.** Replaces five parallel `invoke()` calls from the Insights page with a single Rust command that acquires the DB mutex once and returns all analytics data (overall stats, streaks, mood distribution, day-of-week stats, 30-day trend) in one round trip.
+- **`get_insights_metadata` command.** New lightweight command that reads entry counts, weekly totals, and top tags from plaintext columns — no decryption required. Used by Tier A loading in the Insights page to show stats immediately before the decrypt phase completes.
+- **`mood_daily_stats` cache table.** SQLite trigger-maintained cache of `(date, average_mood, entry_count)`. Calendar view now reads from this index rather than running a full table scan with `strftime()` grouping. Includes automatic backfill for historical data on first access.
+- **`idx_entries_book_id` index.** Runtime migration adds an index on `journal_entries(book_id)` to accelerate timeline filtering by journal.
+- **WAL checkpoint before export.** `PRAGMA wal_checkpoint(FULL)` is called before `export_data` to flush pending WAL frames into the main DB file so the export captures a complete snapshot.
+
+### Changed
+- **Insights page tiered loading.** Tier A (metadata, no decrypt) renders the stats grid immediately. Tier B (30-day decrypt) fills in mood and streak cards with a skeleton placeholder until ready. Gratitude streak uses a `localStorage` cache keyed on entry count + last entry date to skip `getAllEntries()` on repeat visits when nothing has changed.
+- **`useInsights` dep array tightened.** Hook now subscribes only to `settings.ai` rather than the full `settings` object, preventing non-AI settings changes (theme, privacy mode, etc.) from triggering a full Insights reload.
+- **`aggregateMetadataBoth` replaces two `aggregateMetadata` calls.** Single convenience wrapper returns both `localMeta` and `aiMeta` in one call, replacing the previous pattern of calling `aggregateMetadata` twice per load.
+
+### Fixed
+- **Streak cache invalidation on delete-and-re-add.** The gratitude streak cache is now keyed on both total entry count and last entry date, preventing stale streak display when a user deletes N entries and adds N new ones in the same session (previously the count-only key would incorrectly hit the old cache).
+- **Insights stats grid on IPC error.** `isMetadataReady` is now set to `true` in the error path so the stats grid renders with zero values rather than staying hidden indefinitely when `get_insights_metadata` fails.
+
+---
+
 ## [0.7.9] — 2026-03-27
 
 ### Added

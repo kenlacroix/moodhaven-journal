@@ -138,6 +138,7 @@ export function InsightsView({ onNavigateToSettings }: InsightsViewProps) {
     isAIEnabled,
     dismissInsight,
     refresh,
+    isMetadataReady,
   } = useInsights();
 
   const analytics = useAnalytics();
@@ -304,8 +305,9 @@ export function InsightsView({ onNavigateToSettings }: InsightsViewProps) {
         </div>
       )}
 
-      {/* ── Quick stats grid — bottom line up front ── */}
-      {localMetadata && (
+      {/* ── Quick stats grid — Tier A cards render immediately from DB metadata,
+              Tier B cards (7-day mood, streak) show skeletons until decrypt completes ── */}
+      {isMetadataReady && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
           <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm p-4">
             <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-1">This week</p>
@@ -314,21 +316,37 @@ export function InsightsView({ onNavigateToSettings }: InsightsViewProps) {
           </div>
           <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm p-4">
             <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-1">7-day mood</p>
-            <p className="text-2xl font-bold text-emerald-500">
-              {localMetadata.moodStats.recentAverage > 0
-                ? localMetadata.moodStats.recentAverage.toFixed(1)
-                : '—'}
-            </p>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 capitalize">{localMetadata.moodStats.trend}</p>
+            {localMetadata ? (
+              <>
+                <p className="text-2xl font-bold text-emerald-500">
+                  {localMetadata.moodStats.recentAverage > 0
+                    ? localMetadata.moodStats.recentAverage.toFixed(1)
+                    : '—'}
+                </p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 capitalize">{localMetadata.moodStats.trend}</p>
+              </>
+            ) : (
+              <div className="h-8 w-10 rounded bg-slate-100 dark:bg-slate-700 animate-pulse mt-1" />
+            )}
           </div>
           <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm p-4">
             <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-1">Streak</p>
-            <p className="text-2xl font-bold text-amber-500">{localMetadata.patterns.currentStreak}</p>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">days</p>
+            {localMetadata ? (
+              <>
+                <p className="text-2xl font-bold text-amber-500">{localMetadata.patterns.currentStreak}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">days</p>
+              </>
+            ) : (
+              <div className="h-8 w-10 rounded bg-slate-100 dark:bg-slate-700 animate-pulse mt-1" />
+            )}
           </div>
           <div className="rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-sm p-4">
             <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-1">Best time</p>
-            <p className="text-lg font-bold text-blue-500 capitalize">{localMetadata.patterns.bestTimeOfDay || '—'}</p>
+            {localMetadata ? (
+              <p className="text-lg font-bold text-blue-500 capitalize">{localMetadata.patterns.bestTimeOfDay || '—'}</p>
+            ) : (
+              <div className="h-6 w-14 rounded bg-slate-100 dark:bg-slate-700 animate-pulse mt-1" />
+            )}
             {topTags.length > 0 && (
               <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5 truncate">
                 #{topTags[0]}{topTags[1] ? `, #${topTags[1]}` : ''}

@@ -2,7 +2,10 @@
 //!
 //! Commands for calendar view and analytics dashboard features.
 
-use crate::db::{self, CalendarDayData, Database, DayOfWeekStats, MoodDistribution, StreakStats};
+use crate::db::{
+    self, CalendarDayData, Database, DayOfWeekStats, FullAnalyticsBundle, InsightsMetadata,
+    MoodDistribution, StreakStats,
+};
 use tauri::State;
 
 /// Get mood distribution (count per mood level 1-5)
@@ -36,4 +39,19 @@ pub fn get_monthly_mood_data(
     }
 
     db::get_monthly_mood_data(&db, year, month)
+}
+
+/// Get all analytics data in a single DB session (replaces 5 parallel IPC calls)
+#[tauri::command]
+pub fn get_full_analytics_bundle(
+    db: State<Database>,
+    trend_days: i64,
+) -> Result<FullAnalyticsBundle, String> {
+    db::get_full_analytics_bundle(&db, trend_days)
+}
+
+/// Get lightweight insights metadata (no decryption required)
+#[tauri::command]
+pub fn get_insights_metadata(db: State<Database>) -> Result<InsightsMetadata, String> {
+    db::get_insights_metadata(&db)
 }

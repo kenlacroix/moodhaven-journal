@@ -2743,7 +2743,7 @@ dependencies = [
 
 [[package]]
 name = "moodhaven-journal"
-version = "0.7.9"
+version = "0.7.10"
 dependencies = [
  "aes-gcm",
  "anyhow",

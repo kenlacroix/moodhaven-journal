@@ -1,4 +1,4 @@
-import { TotpSetup, HardwareKeySetup } from '../twoFactor';
+import { TotpSetup, HardwareKeySetup } from '../two-factor';
 
 interface SecurityStepProps {
   onBack: () => void;

@@ -17,7 +17,7 @@ import {
   biometricAuthenticate,
   biometricEnroll,
 } from '../lib/biometricService';
-import { TwoFactorVerify } from '../components/twoFactor';
+import { TwoFactorVerify } from '../components/two-factor';
 import type { TwoFactorStatus } from '../types/twoFactor';
 import {
   loadRateLimitState,

@@ -32,7 +32,7 @@ import {
   disable2FA,
   getBackupCodesCount,
 } from '../lib/twoFactorService';
-import { TotpSetup, HardwareKeySetup, BackupCodesDisplay } from '../components/twoFactor';
+import { TotpSetup, HardwareKeySetup, BackupCodesDisplay } from '../components/two-factor';
 import type { TwoFactorStatus, BackupCodes } from '../types/twoFactor';
 import type { ReminderFrequency, StorageBackend, STTModel } from '../types/settings';
 import { STT_MODELS } from '../types/settings';

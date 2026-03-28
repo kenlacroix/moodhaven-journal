@@ -7,6 +7,24 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.7.11] — 2026-03-28
+
+### Added
+- **Bar-grow animation on Mood Distribution chart.** Bars animate from `scaleX(0)` to `scaleX(1)` on mount via a new `animate-bar-grow` Tailwind utility (custom `barGrow` keyframe, compositor-only, no layout shift). `origin-left` ensures bars grow left-to-right.
+- **Slide-up animation on modals and drawers.** `SealEntryModal`, `TimeCapsuleRevealModal`, `NewBookModal`, and the bottom tray in `BottomTabBar` now use `animate-slide-up` instead of inline `motion-safe:animate-[fadeIn…]` expressions.
+- **Slide-up on SearchModal inner panel.** The Ctrl+K search panel slides up on open.
+- **Scale micro-interactions on tap targets.** `active:scale-95` added to inactive `SidebarItem`, `Navigation` tab buttons, and `TopBar` icon buttons. `CalendarDay` cells gain `hover:scale-[1.08] active:scale-[1.04]` when not selected (selected state keeps ring highlight only).
+- **Staggered entry-card animation.** Timeline and On This Day entry cards use a 30 ms per-card `animationDelay` (capped at first 10 items) so cards cascade in rather than appearing all at once.
+- **Filter-change re-stagger on Timeline.** Date-group container key includes `activeBookId` so switching journals remounts groups and re-fires the stagger animation.
+- **Staggered Insights cards.** `MoodWeatherCard`, `GratitudeStreakCard`, `InsightsPanel`, and `WeeklyReflectionCard` animate in with 60 ms inter-card stagger via `animate-entry-in`.
+- **`MoodDistributionChart.test.tsx`.** 3 tests: bar width style, `animate-bar-grow origin-left` class presence, and empty-state text.
+- **`CalendarDay.test.tsx`.** 3 tests: scale classes present when not selected, absent when selected, entry-count badge visibility.
+
+### Changed
+- **All `prefers-reduced-motion` coverage is implicit.** The existing blanket rule in `globals.css` (`:root` media query that sets all `animation` and `transition` to `none`) covers every new animation class without per-class overrides.
+
+---
+
 ## [0.7.10] — 2026-03-28
 
 ### Added

@@ -44,7 +44,7 @@ export function CalendarDay({
         ${
           isSelected
             ? 'bg-violet-100 dark:bg-violet-900/40 ring-2 ring-violet-500'
-            : 'hover:bg-slate-100 dark:hover:bg-slate-800'
+            : 'hover:bg-slate-100 dark:hover:bg-slate-800 hover:scale-[1.08] active:scale-[1.04]'
         }
         ${dayIsToday && !isSelected ? 'ring-1 ring-violet-300 dark:ring-violet-700' : ''}
       `}

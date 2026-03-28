@@ -114,7 +114,7 @@ export function OnThisDayView({ onSelectEntry }: OnThisDayViewProps) {
                   key={entry.id}
                   type="button"
                   onClick={() => onSelectEntry(entry.id)}
-                  style={{ animationDelay: `${i * 50}ms` }}
+                  style={{ animationDelay: i < 10 ? `${i * 30}ms` : '0ms' }}
                   className="w-full text-left p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700 shadow-sm hover:shadow-md hover:-translate-y-px transition-all duration-200 group animate-entry-in"
                 >
                   <div className="flex items-start gap-3">

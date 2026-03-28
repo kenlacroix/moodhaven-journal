@@ -101,7 +101,7 @@ export function BottomTabBar({ currentView, onNavigate, onLock, onOpenSync }: Bo
             onClick={() => setShowMore(false)}
           />
           {/* Sheet */}
-          <div className="fixed bottom-[64px] left-0 right-0 z-50 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 rounded-t-2xl shadow-xl animate-view-enter">
+          <div className="fixed bottom-[64px] left-0 right-0 z-50 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 rounded-t-2xl shadow-xl animate-slide-up">
             <div className="px-4 pt-3 pb-2">
               <div className="w-8 h-1 bg-slate-300 dark:bg-slate-600 rounded-full mx-auto mb-4" />
               <div className="space-y-1">

@@ -198,7 +198,7 @@ export function SearchModal({ onClose, onSelectEntry }: SearchModalProps) {
         aria-label="Search entries"
         aria-modal="true"
       >
-        <div className="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-2xl shadow-2xl flex flex-col pointer-events-auto overflow-hidden"
+        <div className="w-full max-w-2xl bg-white dark:bg-slate-900 rounded-2xl shadow-2xl flex flex-col pointer-events-auto overflow-hidden animate-slide-up"
           style={{ maxHeight: '70vh' }}
         >
           {/* Search input */}

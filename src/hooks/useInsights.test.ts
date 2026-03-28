@@ -59,7 +59,7 @@ const mockCreateAIServiceConfig = vi.mocked(createAIServiceConfig);
 
 // ── Defaults ─────────────────────────────────────────────────────────────────
 
-const defaultMeta = { entries_this_week: 3, total_entries: 10, top_tags: ['work', 'health'] };
+const defaultMeta = { entries_this_week: 3, total_entries: 10, top_tags: ['work', 'health'], last_entry_date: '2024-06-15' };
 const defaultLocalMeta = { totalEntries: 8, averageMood: 3.5, topEmotions: [], entryFrequency: 'daily' as const, preferredTime: 'morning' as const, moodTrend: 'stable' as const, recentMoodAverage: 3.5, dominantEmotions: [] };
 const defaultAiMeta = { ...defaultLocalMeta, totalEntries: 5 };
 
@@ -91,7 +91,7 @@ describe('useInsights', () => {
     it('sets hasData=false and isMetadataReady=true when total_entries=0', async () => {
       // Regression: ISSUE-QA-009 — empty DB must set hasData=false, not stall
       // Found by /qa (coverage audit) on 2026-03-27
-      mockGetInsightsMetadata.mockResolvedValue({ entries_this_week: 0, total_entries: 0, top_tags: [] });
+      mockGetInsightsMetadata.mockResolvedValue({ entries_this_week: 0, total_entries: 0, top_tags: [], last_entry_date: null });
 
       const { result } = renderHook(() => useInsights());
 
@@ -117,7 +117,7 @@ describe('useInsights', () => {
       // Regression: ISSUE-QA-011 — cache hit must prevent full getAllEntries decrypt
       // Found by /qa (coverage audit) on 2026-03-27
       localStorage.setItem('mb_gratitude_streak_cache', JSON.stringify({
-        streak: 7, longestStreak: 21, entryCount: 10,
+        streak: 7, longestStreak: 21, entryCount: 10, lastEntryDate: '2024-06-15',
       }));
 
       const { result } = renderHook(() => useInsights());

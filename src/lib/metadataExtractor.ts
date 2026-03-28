@@ -270,9 +270,9 @@ export function aggregateMetadata(
 }
 
 /**
- * Aggregate metadata in a single pass for both local (Open+Mindful) and AI (Open-only) consumers.
+ * Aggregate metadata for both local (Open+Mindful) and AI (Open-only) consumers.
  * Equivalent to calling aggregateMetadata(entries, 30, false) + aggregateMetadata(entries, 30, true)
- * but avoids iterating the entries array twice.
+ * as a single convenience call.
  */
 export function aggregateMetadataBoth(entries: JournalEntry[]): {
   localMeta: AggregatedMetadata;

@@ -112,6 +112,7 @@ pub struct InsightsMetadata {
     pub entries_this_week: i32,
     pub total_entries: i32,
     pub top_tags: Vec<String>,
+    pub last_entry_date: Option<String>,
 }
 
 /// Calendar day data for monthly view
@@ -1204,10 +1205,20 @@ pub fn get_insights_metadata(db: &Database) -> Result<InsightsMetadata, String> 
         .filter_map(|r| r.ok())
         .collect();
 
+    // Most recent entry date for streak cache invalidation
+    let last_entry_date: Option<String> = conn
+        .query_row(
+            "SELECT date(created_at) FROM journal_entries ORDER BY created_at DESC LIMIT 1",
+            [],
+            |row| row.get(0),
+        )
+        .ok();
+
     Ok(InsightsMetadata {
         entries_this_week,
         total_entries,
         top_tags,
+        last_entry_date,
     })
 }
 

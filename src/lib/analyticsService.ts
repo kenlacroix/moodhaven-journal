@@ -180,6 +180,7 @@ export interface InsightsMetadata {
   entries_this_week: number;
   total_entries: number;
   top_tags: string[];
+  last_entry_date: string | null;
 }
 
 /**

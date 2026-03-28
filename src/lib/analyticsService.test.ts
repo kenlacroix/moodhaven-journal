@@ -14,13 +14,13 @@ describe('analyticsService', () => {
     // Report: .gstack/qa-reports/qa-report-feat-db-performance-2026-03-27.md
 
     it('calls get_insights_metadata with no extra args', async () => {
-      mockInvoke.mockResolvedValue({ entries_this_week: 3, total_entries: 42, top_tags: ['work', 'health'] });
+      mockInvoke.mockResolvedValue({ entries_this_week: 3, total_entries: 42, top_tags: ['work', 'health'], last_entry_date: '2024-06-15' });
       await getInsightsMetadata();
       expect(mockInvoke).toHaveBeenCalledWith('get_insights_metadata');
     });
 
     it('returns entries_this_week, total_entries, top_tags as-is', async () => {
-      const payload = { entries_this_week: 5, total_entries: 100, top_tags: ['gratitude', 'sleep'] };
+      const payload = { entries_this_week: 5, total_entries: 100, top_tags: ['gratitude', 'sleep'], last_entry_date: '2024-06-15' };
       mockInvoke.mockResolvedValue(payload);
       const result = await getInsightsMetadata();
       expect(result.entries_this_week).toBe(5);
@@ -29,7 +29,7 @@ describe('analyticsService', () => {
     });
 
     it('returns zero counts for empty DB', async () => {
-      mockInvoke.mockResolvedValue({ entries_this_week: 0, total_entries: 0, top_tags: [] });
+      mockInvoke.mockResolvedValue({ entries_this_week: 0, total_entries: 0, top_tags: [], last_entry_date: null });
       const result = await getInsightsMetadata();
       expect(result.total_entries).toBe(0);
       expect(result.top_tags).toHaveLength(0);

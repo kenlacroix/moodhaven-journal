@@ -38,6 +38,7 @@ interface StreakCache {
   streak: number;
   longestStreak: number;
   entryCount: number;
+  lastEntryDate: string | null;
 }
 
 function loadStreakCache(): StreakCache | null {
@@ -49,11 +50,11 @@ function loadStreakCache(): StreakCache | null {
   }
 }
 
-function saveStreakCache(streak: number, longestStreak: number, entryCount: number): void {
+function saveStreakCache(streak: number, longestStreak: number, entryCount: number, lastEntryDate: string | null): void {
   try {
     localStorage.setItem(
       STREAK_CACHE_KEY,
-      JSON.stringify({ streak, longestStreak, entryCount })
+      JSON.stringify({ streak, longestStreak, entryCount, lastEntryDate })
     );
   } catch {
     // localStorage unavailable — non-fatal
@@ -92,6 +93,7 @@ export function useInsights() {
 
   const load = useCallback(async () => {
     setIsLoading(true);
+    setIsMetadataReady(false);
     try {
       // Tier A: lightweight metadata — no decryption, renders immediately
       const meta = await getInsightsMetadata();
@@ -107,9 +109,9 @@ export function useInsights() {
       setTopTags(meta.top_tags);
       setIsMetadataReady(true);
 
-      // Gratitude streak: use localStorage cache if entry count hasn't changed
+      // Gratitude streak: use localStorage cache if entry count AND last entry date match
       const cached = loadStreakCache();
-      if (cached && cached.entryCount === meta.total_entries) {
+      if (cached && cached.entryCount === meta.total_entries && cached.lastEntryDate === meta.last_entry_date) {
         setGratitudeStreak(cached.streak);
         setGratitudeLongestStreak(cached.longestStreak);
       }
@@ -152,16 +154,17 @@ export function useInsights() {
         }
       }
 
-      // Gratitude streak: recompute if cache is stale (new entries since last visit)
-      if (!cached || cached.entryCount !== meta.total_entries) {
+      // Gratitude streak: recompute if cache is stale
+      if (!cached || cached.entryCount !== meta.total_entries || cached.lastEntryDate !== meta.last_entry_date) {
         const allEntries = await getAllEntries();
         const gs = calculateGratitudeStreak(allEntries);
         setGratitudeStreak(gs.currentStreak);
         setGratitudeLongestStreak(gs.longestStreak);
-        saveStreakCache(gs.currentStreak, gs.longestStreak, meta.total_entries);
+        saveStreakCache(gs.currentStreak, gs.longestStreak, meta.total_entries, meta.last_entry_date);
       }
     } catch {
       // Silently fall back — local patterns are still shown
+      setIsMetadataReady(true);
     } finally {
       setIsLoading(false);
     }

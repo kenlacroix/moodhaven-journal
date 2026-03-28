@@ -91,7 +91,7 @@ function IconBtn({
       className={`p-2 rounded-lg transition-all duration-200 ${
         active
           ? 'text-violet-500 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/20'
-          : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+          : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 active:scale-95'
       }`}
     >
       {children}

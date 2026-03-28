@@ -31,7 +31,7 @@ function NavItem({ view, currentView, icon, label, onClick }: NavItemProps) {
         ${
           isActive
             ? 'text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/30'
-            : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
+            : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 active:scale-95'
         }
       `}
       aria-current={isActive ? 'page' : undefined}

@@ -55,6 +55,7 @@ export default {
         'shimmer': 'shimmer 1.4s ease-in-out infinite',
         'save-bloom': 'saveBloom 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)',
         'wc-glow': 'wcGlow 0.9s cubic-bezier(0.34, 1.56, 0.64, 1)',
+        'bar-grow': 'barGrow 0.5s ease-out both',
       },
       keyframes: {
         fadeIn: {
@@ -111,6 +112,10 @@ export default {
           '40%':  { color: '#8b5cf6', transform: 'scale(1.18)' },
           '70%':  { color: '#a78bfa', transform: 'scale(1.05)' },
           '100%': { color: 'currentColor', transform: 'scale(1)' },
+        },
+        barGrow: {
+          '0%':   { transform: 'scaleX(0)' },
+          '100%': { transform: 'scaleX(1)' },
         },
       },
     },

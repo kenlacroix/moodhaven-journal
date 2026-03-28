@@ -67,7 +67,7 @@ export function MoodDistributionChart({ data, isLoading = false }: MoodDistribut
                 {/* Bar */}
                 <div className="flex-1 h-6 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                   <div
-                    className={`h-full ${option.color} transition-all duration-500 ease-out rounded-full`}
+                    className={`h-full ${option.color} transition-all duration-500 ease-out rounded-full animate-bar-grow origin-left`}
                     style={{ width: `${barWidth}%` }}
                   />
                 </div>

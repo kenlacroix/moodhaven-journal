@@ -209,7 +209,7 @@ export function InsightsView({ onNavigateToSettings }: InsightsViewProps) {
         <>
           {/* Mood Weather */}
           {localMetadata && !isLoading && (
-            <div className="mb-4">
+            <div className="mb-4 animate-entry-in" style={{ animationDelay: '0ms' }}>
               <MoodWeatherCard metadata={localMetadata} />
             </div>
           )}
@@ -219,7 +219,7 @@ export function InsightsView({ onNavigateToSettings }: InsightsViewProps) {
 
           {/* Gratitude Streak */}
           {gratitudeStreak > 0 && (
-            <div className="mb-4">
+            <div className="mb-4 animate-entry-in" style={{ animationDelay: '60ms' }}>
               <GratitudeStreakCard
                 currentStreak={gratitudeStreak}
                 longestStreak={gratitudeLongestStreak}
@@ -228,7 +228,7 @@ export function InsightsView({ onNavigateToSettings }: InsightsViewProps) {
           )}
 
           {/* Insights & Patterns */}
-          <div className="mb-4">
+          <div className="mb-4 animate-entry-in" style={{ animationDelay: '120ms' }}>
             <InsightsPanel
               insights={insights}
               patterns={patterns}
@@ -240,7 +240,7 @@ export function InsightsView({ onNavigateToSettings }: InsightsViewProps) {
           </div>
 
           {/* Weekly Reflection */}
-          <div className="mb-4">
+          <div className="mb-4 animate-entry-in" style={{ animationDelay: '180ms' }}>
             <WeeklyReflectionCard
               reflection={weeklyReflection}
               isLoading={isLoading}

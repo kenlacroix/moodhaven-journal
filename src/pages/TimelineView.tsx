@@ -550,7 +550,7 @@ export function TimelineView({ onSelectEntry, onNewEntry, onSealEntry, refreshTr
                     onClick={() => onSelectEntry(entry.id)}
                     onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelectEntry(entry.id); } }}
                     style={{
-                      animationDelay: `${i * 50}ms`,
+                      animationDelay: i < 10 ? `${i * 30}ms` : '0ms',
                       ...(moodColor ? { borderLeftColor: moodColor } : {}),
                     }}
                     className="relative w-full text-left p-4 rounded-xl bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-900/30 border-l-4 hover:shadow-md hover:-translate-y-0.5 transition-all duration-150 group animate-entry-in cursor-pointer"
@@ -608,7 +608,7 @@ export function TimelineView({ onSelectEntry, onNewEntry, onSealEntry, refreshTr
       {/* Entry list grouped by date */}
       <div className={isAndroid ? '' : 'space-y-8'}>
         {Object.entries(groupedEntries).map(([date, dateEntries]) => (
-          <div key={date} className={isAndroid ? 'mb-6' : ''}>
+          <div key={`${date}-${activeBookId ?? 'all'}`} className={isAndroid ? 'mb-6' : ''}>
             {/* Date group header with pill badge */}
             <div className={`flex items-center gap-2 mb-3 ${isAndroid ? 'px-4' : ''}`}>
               <h2 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
@@ -630,7 +630,7 @@ export function TimelineView({ onSelectEntry, onNewEntry, onSealEntry, refreshTr
                     onClick={() => onSelectEntry(entry.id)}
                     onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelectEntry(entry.id); } }}
                     style={{
-                      animationDelay: `${i * 50}ms`,
+                      animationDelay: i < 10 ? `${i * 30}ms` : '0ms',
                       ...(moodColor ? { borderLeftColor: moodColor } : {}),
                     }}
                     className={`relative w-full text-left p-4 bg-white dark:bg-slate-900 border-l-4 border-slate-100 dark:border-slate-800 transition-all duration-150 group animate-entry-in cursor-pointer ${

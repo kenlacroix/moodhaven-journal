@@ -116,7 +116,7 @@ export function TimeCapsuleRevealModal({ capsule, password, onReveal, onWriteRes
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
       onClick={(e) => { if (e.target === overlayRef.current) onDismiss(); }}
     >
-      <div className="w-full max-w-lg bg-white dark:bg-slate-900 rounded-2xl shadow-2xl flex flex-col overflow-hidden motion-safe:animate-[fadeIn_0.2s_ease]">
+      <div className="w-full max-w-lg bg-white dark:bg-slate-900 rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-slide-up">
         {/* Header */}
         <div className="px-6 pt-6 pb-4 border-b border-slate-100 dark:border-slate-800">
           <p className="text-xs font-semibold uppercase tracking-widest text-violet-500 dark:text-violet-400 mb-1">

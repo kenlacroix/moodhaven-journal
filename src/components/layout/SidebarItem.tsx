@@ -27,7 +27,7 @@ export function SidebarItem({ icon, label, isActive, onClick, collapsed = false 
         ${
           isActive
             ? 'text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/20'
-            : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/50'
+            : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/50 active:scale-95'
         }
       `}
       aria-current={isActive ? 'page' : undefined}

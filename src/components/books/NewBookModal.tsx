@@ -77,7 +77,7 @@ export function NewBookModal({ onClose, onCreate }: NewBookModalProps) {
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl shadow-xl overflow-hidden">
+      <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl shadow-xl overflow-hidden animate-slide-up">
         {/* Header */}
         <div className="px-6 pt-5 pb-4 border-b border-slate-100 dark:border-slate-800">
           <div className="flex items-center justify-between">

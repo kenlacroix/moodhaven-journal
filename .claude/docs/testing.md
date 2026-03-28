@@ -72,24 +72,41 @@ For heavy crypto files, use Node environment: `// @vitest-environment node` at t
 - E2E, visual regression (future work)
 - React hooks in isolation — test through components
 
-## Current Coverage (as of v0.7.9)
+## Current Coverage (as of v0.7.11)
 | Test File | Tests |
 |-----------|-------|
-| `lib/dateUtils.test.ts` | 54 |
-| `lib/chartUtils.test.ts` | 27 |
-| `lib/journalTemplates.test.ts` | 10 |
-| `lib/metadataExtractor.test.ts` | 79 |
-| `lib/crypto.test.ts` | 20 |
-| `lib/recoveryKeyService.test.ts` | 7 |
-| `lib/aiService.test.ts` | 17 |
-| `stores/appStore.test.ts` | 17 |
-| `stores/settingsStore.test.ts` | 18 |
+| `components/analytics/MoodDistributionChart.test.tsx` | 3 |
+| `components/calendar/CalendarDay.test.tsx` | 3 |
 | `components/journal/MoodSelector.test.tsx` | 9 |
 | `components/journal/TemplateSelector.test.tsx` | 9 |
-| `lib/writingUtils.test.ts` | 10 |
-| `lib/timeCapsuleService.test.ts` | 6 |
+| `components/layout/Sidebar.test.tsx` | 9 |
+| `components/stt/MicrophoneBlockedModal.test.tsx` | 9 |
+| `components/stt/MicrophonePermissionModal.test.tsx` | 8 |
 | `components/timecapsule/SealEntryModal.test.tsx` | 6 |
 | `components/timecapsule/TimeCapsuleRevealModal.test.tsx` | 9 |
-| `components/layout/Sidebar.test.tsx` | 9 |
+| `components/transcript/CloudConsentModal.test.tsx` | 7 |
+| `components/transcript/TranscriptPreviewOverlay.test.tsx` | 11 |
+| `hooks/useInsights.test.ts` | 7 |
+| `hooks/useSpeechToText.test.ts` | 7 |
+| `lib/aiService.test.ts` | 26 |
+| `lib/analyticsService.test.ts` | 12 |
+| `lib/chartUtils.test.ts` | 27 |
+| `lib/cloudSyncService.test.ts` | 13 |
+| `lib/crypto.test.ts` | 24 |
+| `lib/dataManagementService.test.ts` | 8 |
+| `lib/dateUtils.test.ts` | 61 |
+| `lib/journalService.test.ts` | 3 |
+| `lib/journalTemplates.test.ts` | 10 |
 | `lib/logger.test.ts` | 15 |
-| **Total** | **~513** |
+| `lib/metadataExtractor.test.ts` | 84 |
+| `lib/rateLimitService.test.ts` | 41 |
+| `lib/recoveryKeyService.test.ts` | 7 |
+| `lib/reminderService.test.ts` | 25 |
+| `lib/secureStorage.test.ts` | 10 |
+| `lib/timeCapsuleService.test.ts` | 6 |
+| `lib/transcriptFormatter.test.ts` | 18 |
+| `lib/webdavService.test.ts` | 17 |
+| `lib/writingUtils.test.ts` | 10 |
+| `stores/appStore.test.ts` | 18 |
+| `stores/settingsStore.test.ts` | 18 |
+| **Total** | **550** |

@@ -17,11 +17,13 @@ Versions follow [Semantic Versioning](https://semver.org/).
 - **Staggered entry-card animation.** Timeline and On This Day entry cards use a 30 ms per-card `animationDelay` (capped at first 10 items) so cards cascade in rather than appearing all at once.
 - **Filter-change re-stagger on Timeline.** Date-group container key includes `activeBookId` so switching journals remounts groups and re-fires the stagger animation.
 - **Staggered Insights cards.** `MoodWeatherCard`, `GratitudeStreakCard`, `InsightsPanel`, and `WeeklyReflectionCard` animate in with 60 ms inter-card stagger via `animate-entry-in`.
-- **`MoodDistributionChart.test.tsx`.** 3 tests: bar width style, `animate-bar-grow origin-left` class presence, and empty-state text.
-- **`CalendarDay.test.tsx`.** 3 tests: scale classes present when not selected, absent when selected, entry-count badge visibility.
 
 ### Changed
 - **All `prefers-reduced-motion` coverage is implicit.** The existing blanket rule in `globals.css` (`:root` media query that sets all `animation` and `transition` to `none`) covers every new animation class without per-class overrides.
+
+### For contributors
+- **`MoodDistributionChart.test.tsx`.** 3 tests: bar width style, `animate-bar-grow origin-left` class presence, and empty-state text.
+- **`CalendarDay.test.tsx`.** 3 tests: scale classes present when not selected, absent when selected, entry-count badge visibility.
 
 ---
 

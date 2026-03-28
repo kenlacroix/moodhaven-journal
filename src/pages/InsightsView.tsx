@@ -138,7 +138,7 @@ export function InsightsView({ onNavigateToSettings }: InsightsViewProps) {
     isAIEnabled,
     dismissInsight,
     refresh,
-  isMetadataReady,
+    isMetadataReady,
   } = useInsights();
 
   const analytics = useAnalytics();

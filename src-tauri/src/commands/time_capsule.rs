@@ -118,6 +118,7 @@ pub fn get_due_capsules(
                 linked_original_id,
                 unsealed_at,
                 tags: parse_tags(tags_str),
+                status: None,
             })
         },
     );

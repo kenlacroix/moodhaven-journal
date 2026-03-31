@@ -9,17 +9,17 @@
  */
 
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { getAllEntries, deleteEntry, patchEntryPinned } from '../lib/journalService';
-import { getMoodColor } from '../lib/chartUtils';
-import { getRelativeDateLabel, formatDate, parseEntryTimestamp } from '../lib/dateUtils';
-import { getWeatherEmoji } from '../lib/locationWeatherService';
-import { listAllMedia } from '../lib/mediaService';
+import { getAllEntries, deleteEntry, patchEntryPinned } from '../lib/services/journalService';
+import { getMoodColor } from '../lib/utils/chartUtils';
+import { getRelativeDateLabel, formatDate, parseEntryTimestamp } from '../lib/utils/dateUtils';
+import { getWeatherEmoji } from '../lib/services/locationWeatherService';
+import { listAllMedia } from '../lib/services/mediaService';
 import { EntryActionsMenu } from '../components/journal/EntryActionsMenu';
 import type { JournalEntry } from '../types/journal';
 import { MOOD_OPTIONS } from '../types/journal';
 import { useBooksStore } from '../stores/booksStore';
 import { usePlatform } from '../hooks/usePlatform';
-import { logger } from '../lib/logger';
+import { logger } from '../lib/services/logger';
 
 // Get current date string for change detection
 const getCurrentDateStr = () => formatDate(new Date());

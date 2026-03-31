@@ -1,18 +1,18 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TimeCapsuleRevealModal } from './TimeCapsuleRevealModal';
-import type { CapsuleEntryRow } from '../../lib/timeCapsuleService';
+import type { CapsuleEntryRow } from '../../lib/services/timeCapsuleService';
 
-vi.mock('../../lib/timeCapsuleService', () => ({
+vi.mock('../../lib/services/timeCapsuleService', () => ({
   getMoodDelta: vi.fn(),
 }));
 
-vi.mock('../../lib/crypto', () => ({
+vi.mock('../../lib/services/crypto', () => ({
   decrypt: vi.fn(),
 }));
 
-import { getMoodDelta } from '../../lib/timeCapsuleService';
-import { decrypt } from '../../lib/crypto';
+import { getMoodDelta } from '../../lib/services/timeCapsuleService';
+import { decrypt } from '../../lib/services/crypto';
 const mockGetMoodDelta = vi.mocked(getMoodDelta);
 const mockDecrypt = vi.mocked(decrypt);
 

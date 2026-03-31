@@ -10,12 +10,12 @@ import { appDataDir } from '@tauri-apps/api/path';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useAppStore } from '../../stores/appStore';
 import { usePeerSyncStore } from '../../stores/peerSyncStore';
-import { getAllEntries } from '../../lib/journalService';
-import { syncWithWebDAV, type SyncProgress } from '../../lib/syncEngine';
-import { getDeviceName, setDeviceName as persistDeviceName } from '../../lib/deviceIdentity';
-import { startDiscovery } from '../../lib/peerDiscoveryService';
-import { peerSyncNow } from '../../lib/peerSyncEngineService';
-import { revokeDevice } from '../../lib/peerPairingService';
+import { getAllEntries } from '../../lib/services/journalService';
+import { syncWithWebDAV, type SyncProgress } from '../../lib/services/syncEngine';
+import { getDeviceName, setDeviceName as persistDeviceName } from '../../lib/services/deviceIdentity';
+import { startDiscovery } from '../../lib/services/peerDiscoveryService';
+import { peerSyncNow } from '../../lib/services/peerSyncEngineService';
+import { revokeDevice } from '../../lib/services/peerPairingService';
 import { PairingModal } from '../peer-sync/PairingModal';
 import type { DiscoveredPeer } from '../../types/peerSync';
 

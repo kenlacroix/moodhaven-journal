@@ -7,8 +7,8 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { htmlToMarkdown, htmlToPlainText } from '../../lib/markdownUtils';
-import { patchEntryPinned } from '../../lib/journalService';
+import { htmlToMarkdown, htmlToPlainText } from '../../lib/utils/markdownUtils';
+import { patchEntryPinned } from '../../lib/services/journalService';
 import type { JournalEntry } from '../../types/journal';
 
 interface EntryOptionsMenuProps {

@@ -7,6 +7,20 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.7.12] — 2026-03-31
+
+### Changed
+- Restructured `src/lib/` from a flat ~40-file directory into `services/` (IPC wrappers, crypto, sync, peer, storage) and `utils/` (pure utilities: dateUtils, chartUtils, markdownUtils, metadataExtractor, transcriptFormatter, writingUtils, journalTemplates). No behavior changes — imports only.
+- Renamed `plans/` → `active-plans/` to distinguish in-flight tracked plans from completed plans archived in `docs/internal/plans/`.
+- Renamed `src/components/twoFactor/` → `two-factor/` for kebab-case consistency with all other component directories.
+
+### Removed
+- Deleted stale `PLAN-animations.md` from repo root (feature shipped in v0.7.11).
+- Removed `scripts/docs/aifeedback/` context bundle directory (moved to `docs/internal/`).
+- Removed `scripts/.env` containing a plain-text credential (file was gitignored; rotate the key if not already done).
+
+---
+
 ## [0.7.11] — 2026-03-28
 
 ### Added

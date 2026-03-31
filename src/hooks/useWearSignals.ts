@@ -17,7 +17,7 @@
 import { useEffect, useCallback, useRef } from 'react';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
-import { createSignal } from '../lib/signalService';
+import { createSignal } from '../lib/services/signalService';
 import type {
   SignalType,
   SignalSource,
@@ -25,7 +25,7 @@ import type {
   Signal,
   WatchSignalMessage,
 } from '../types/signals';
-import type { VoiceMemo } from '../lib/voiceMemoService';
+import type { VoiceMemo } from '../lib/services/voiceMemoService';
 
 // ── Event payload shapes ──────────────────────────────────────────────────────
 

@@ -12,12 +12,12 @@
 import { useState, useCallback } from 'react';
 import { usePeerSyncStore } from '../../stores/peerSyncStore';
 import { useSettingsStore } from '../../stores/settingsStore';
-import { renameDevice, startDiscovery, stopDiscovery } from '../../lib/peerDiscoveryService';
-import { peerSyncNow } from '../../lib/peerSyncEngineService';
+import { renameDevice, startDiscovery, stopDiscovery } from '../../lib/services/peerDiscoveryService';
+import { peerSyncNow } from '../../lib/services/peerSyncEngineService';
 import { PairingModal } from './PairingModal';
 import { TrustedDevicesList } from './TrustedDevicesList';
 import type { DeviceIdentity, DiscoveredPeer, SyncStatus } from '../../types/peerSync';
-import { logger } from '../../lib/logger';
+import { logger } from '../../lib/services/logger';
 
 // ── Device type icon ──────────────────────────────────────────────────────────
 

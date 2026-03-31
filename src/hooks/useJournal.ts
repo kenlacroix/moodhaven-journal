@@ -12,7 +12,7 @@ import {
   updateEntry,
   deleteEntry,
   isUnlocked,
-} from '../lib/journalService';
+} from '../lib/services/journalService';
 import type { JournalEntry, JournalEntryFormData } from '../types/journal';
 
 interface UseJournalReturn {

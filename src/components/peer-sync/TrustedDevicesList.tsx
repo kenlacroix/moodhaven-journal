@@ -4,9 +4,9 @@
 
 import { useState, useCallback } from 'react';
 import type { TrustedDevice } from '../../types/peerSync';
-import { revokeDevice } from '../../lib/peerPairingService';
+import { revokeDevice } from '../../lib/services/peerPairingService';
 import { usePeerSyncStore } from '../../stores/peerSyncStore';
-import { logger } from '../../lib/logger';
+import { logger } from '../../lib/services/logger';
 
 function DeviceIcon({ type, className = 'w-4 h-4' }: { type: string; className?: string }) {
   if (type === 'phone')

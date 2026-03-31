@@ -2,7 +2,7 @@
  * CalendarView - Monthly calendar grid with mood indicators
  */
 
-import { formatDate, getShortDayName } from '../../lib/dateUtils';
+import { formatDate, getShortDayName } from '../../lib/utils/dateUtils';
 import { CalendarHeader } from './CalendarHeader';
 import { CalendarDay } from './CalendarDay';
 import type { CalendarDayData } from '../../types/analytics';

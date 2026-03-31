@@ -17,35 +17,35 @@ import { createDefaultSettings } from '../types/settings';
 
 // ── Mocks ────────────────────────────────────────────────────────────────────
 
-vi.mock('../lib/journalService', () => ({
+vi.mock('../lib/services/journalService', () => ({
   getAllEntries: vi.fn(),
   getEntriesByDateRange: vi.fn(),
 }));
 
-vi.mock('../lib/metadataExtractor', () => ({
+vi.mock('../lib/utils/metadataExtractor', () => ({
   aggregateMetadataBoth: vi.fn(),
   calculateGratitudeStreak: vi.fn(),
 }));
 
-vi.mock('../lib/aiService', () => ({
+vi.mock('../lib/services/aiService', () => ({
   generateInsights: vi.fn(),
   generateWeeklyReflection: vi.fn(),
   detectRecurringPatterns: vi.fn(),
   createAIServiceConfig: vi.fn(),
 }));
 
-vi.mock('../lib/analyticsService', () => ({
+vi.mock('../lib/services/analyticsService', () => ({
   getInsightsMetadata: vi.fn(),
 }));
 
-vi.mock('../lib/dateUtils', () => ({
+vi.mock('../lib/utils/dateUtils', () => ({
   getDaysAgo: vi.fn(() => new Date('2024-05-15')),
 }));
 
-import { getAllEntries, getEntriesByDateRange } from '../lib/journalService';
-import { aggregateMetadataBoth, calculateGratitudeStreak } from '../lib/metadataExtractor';
-import { generateInsights, generateWeeklyReflection, detectRecurringPatterns, createAIServiceConfig } from '../lib/aiService';
-import { getInsightsMetadata } from '../lib/analyticsService';
+import { getAllEntries, getEntriesByDateRange } from '../lib/services/journalService';
+import { aggregateMetadataBoth, calculateGratitudeStreak } from '../lib/utils/metadataExtractor';
+import { generateInsights, generateWeeklyReflection, detectRecurringPatterns, createAIServiceConfig } from '../lib/services/aiService';
+import { getInsightsMetadata } from '../lib/services/analyticsService';
 
 const mockGetInsightsMetadata = vi.mocked(getInsightsMetadata);
 const mockGetEntriesByDateRange = vi.mocked(getEntriesByDateRange);

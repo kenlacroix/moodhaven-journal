@@ -302,7 +302,7 @@ File issues at [GitHub Issues](https://github.com/kenlacroix/moodhaven-journal/i
 
 Contributions are welcome. Areas where help is especially appreciated:
 
-- **Security audit** — Review the encryption implementation in `src/lib/crypto.ts` and `src-tauri/src/db/`
+- **Security audit** — Review the encryption implementation in `src/lib/services/crypto.ts` and `src-tauri/src/db/`
 - **Accessibility** — WCAG 2.1 AA compliance improvements
 - **Internationalisation** — Translation support
 - **UI/UX** — Designs, mockups, and screenshots

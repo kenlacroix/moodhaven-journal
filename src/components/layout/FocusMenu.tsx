@@ -15,7 +15,7 @@
 import { useRef, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useSettingsStore } from '../../stores/settingsStore';
-import { toggleFullscreen } from '../../lib/windowUtils';
+import { toggleFullscreen } from '../../lib/services/windowUtils';
 
 interface FocusMenuProps {
   onOpenBreakout: () => void;

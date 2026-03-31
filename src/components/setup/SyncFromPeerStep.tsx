@@ -1,7 +1,7 @@
 import { PairingModal } from '../peer-sync/PairingModal';
-import { peerFullRestore, peerApplyAndRestart } from '../../lib/peerSyncEngineService';
+import { peerFullRestore, peerApplyAndRestart } from '../../lib/services/peerSyncEngineService';
 import type { DiscoveredPeer, TrustedDevice } from '../../types/peerSync';
-import type { RestoreProgressEvent } from '../../lib/peerSyncEngineService';
+import type { RestoreProgressEvent } from '../../lib/services/peerSyncEngineService';
 
 interface SyncFromPeerStepProps {
   onBack: () => void;

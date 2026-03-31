@@ -1,5 +1,5 @@
 import { PairingModal } from '../peer-sync/PairingModal';
-import { peerSyncNow } from '../../lib/peerSyncEngineService';
+import { peerSyncNow } from '../../lib/services/peerSyncEngineService';
 import type { DiscoveredPeer, TrustedDevice } from '../../types/peerSync';
 
 interface DevicesStepProps {

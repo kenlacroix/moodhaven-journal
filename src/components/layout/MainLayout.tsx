@@ -12,7 +12,7 @@
 import { Sidebar, type ViewType } from './Sidebar';
 import { TopBar } from './TopBar';
 import { useSettingsStore } from '../../stores/settingsStore';
-import { openBreakoutWriter } from '../../lib/windowUtils';
+import { openBreakoutWriter } from '../../lib/services/windowUtils';
 import type { UseUpdateCheckReturn } from '../../hooks/useUpdateCheck';
 
 interface MainLayoutProps {

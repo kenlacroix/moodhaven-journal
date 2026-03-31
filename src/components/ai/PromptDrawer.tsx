@@ -16,7 +16,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { AIPrompt } from '../../types/ai';
 import { TemplateSelector } from '../journal/TemplateSelector';
-import type { JournalTemplate } from '../../lib/journalTemplates';
+import type { JournalTemplate } from '../../lib/utils/journalTemplates';
 
 // ============================================================================
 // Category colours (shared with PromptCard)

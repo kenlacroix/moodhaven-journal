@@ -8,7 +8,7 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useJournal } from './useJournal';
 import { useSettingsStore } from '../stores/settingsStore';
-import { aggregateMetadata } from '../lib/metadataExtractor';
+import { aggregateMetadata } from '../lib/utils/metadataExtractor';
 import {
   createAIServiceConfig,
   generatePrompts,
@@ -16,7 +16,7 @@ import {
   generateWeeklyReflection,
   detectRecurringPatterns,
   getFallbackPrompts,
-} from '../lib/aiService';
+} from '../lib/services/aiService';
 import type {
   AggregatedMetadata,
   AIPrompt,
@@ -24,7 +24,7 @@ import type {
   WeeklyReflection,
   RecurringPattern,
 } from '../types/ai';
-import { logger } from '../lib/logger';
+import { logger } from '../lib/services/logger';
 
 interface UseAIInsightsReturn {
   // Metadata (always available, computed locally)

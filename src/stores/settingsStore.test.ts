@@ -2,7 +2,7 @@ import { useSettingsStore } from './settingsStore';
 import { createDefaultSettings } from '../types/settings';
 
 // Mock settingsService
-vi.mock('../lib/settingsService', () => ({
+vi.mock('../lib/services/settingsService', () => ({
   loadSettings: vi.fn(),
   saveSettings: vi.fn(),
   getAppVersion: vi.fn(),
@@ -14,7 +14,7 @@ import {
   saveSettings,
   getAppVersion,
   resetSettings as resetSettingsService,
-} from '../lib/settingsService';
+} from '../lib/services/settingsService';
 
 const mockLoadSettings = vi.mocked(loadSettings);
 const mockSaveSettings = vi.mocked(saveSettings);

@@ -7,7 +7,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useBooksStore } from '../stores/booksStore';
-import { getAllEntries } from '../lib/journalService';
+import { getAllEntries } from '../lib/services/journalService';
 import type { BookSettings, JournalEntry } from '../types/journal';
 import { MOOD_OPTIONS } from '../types/journal';
 

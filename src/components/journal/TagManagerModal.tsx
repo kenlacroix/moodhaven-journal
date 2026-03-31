@@ -10,7 +10,7 @@
  */
 
 import { useMemo } from 'react';
-import { extractHashtags } from '../../lib/markdownUtils';
+import { extractHashtags } from '../../lib/utils/markdownUtils';
 
 interface TagManagerModalProps {
   content: string;          // Current HTML content (for extracting existing tags)

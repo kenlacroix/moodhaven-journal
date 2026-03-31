@@ -16,20 +16,20 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { getAllEntries, getEntriesByDateRange } from '../lib/journalService';
+import { getAllEntries, getEntriesByDateRange } from '../lib/services/journalService';
 import {
   aggregateMetadataBoth,
   calculateGratitudeStreak,
-} from '../lib/metadataExtractor';
+} from '../lib/utils/metadataExtractor';
 import {
   generateInsights,
   generateWeeklyReflection,
   detectRecurringPatterns,
   createAIServiceConfig,
-} from '../lib/aiService';
-import { getInsightsMetadata } from '../lib/analyticsService';
+} from '../lib/services/aiService';
+import { getInsightsMetadata } from '../lib/services/analyticsService';
 import { useSettingsStore } from '../stores/settingsStore';
-import { getDaysAgo } from '../lib/dateUtils';
+import { getDaysAgo } from '../lib/utils/dateUtils';
 import type { AggregatedMetadata, WellnessInsight, RecurringPattern, WeeklyReflection } from '../types/ai';
 
 const STREAK_CACHE_KEY = 'mb_gratitude_streak_cache';

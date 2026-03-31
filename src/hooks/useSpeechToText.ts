@@ -7,8 +7,8 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useAudioRecorder, type RecordingState, type MicPermissionModal } from './useAudioRecorder';
-import { transcribeAudio, checkModelStatus } from '../lib/speechToTextService';
-import { formatTranscript } from '../lib/aiService';
+import { transcribeAudio, checkModelStatus } from '../lib/services/speechToTextService';
+import { formatTranscript } from '../lib/services/aiService';
 import { useSettingsStore } from '../stores/settingsStore';
 
 export type STTState = RecordingState | 'transcribing' | 'formatting';

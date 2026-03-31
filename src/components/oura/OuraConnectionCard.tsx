@@ -6,7 +6,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { savePAT, disconnect, getStatus, syncToday, backfill } from '../../lib/ouraService';
+import { savePAT, disconnect, getStatus, syncToday, backfill } from '../../lib/services/ouraService';
 import type { OuraStatusResponse } from '../../types/oura';
 import { useAppStore } from '../../stores/appStore';
 

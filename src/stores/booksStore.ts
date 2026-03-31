@@ -8,8 +8,8 @@
 
 import { create } from 'zustand';
 import type { Book, BookSettings } from '../types/journal';
-import { listBooks, createBook, updateBook, deleteBook } from '../lib/booksService';
-import { logger } from '../lib/logger';
+import { listBooks, createBook, updateBook, deleteBook } from '../lib/services/booksService';
+import { logger } from '../lib/services/logger';
 
 interface BooksState {
   books: Book[];

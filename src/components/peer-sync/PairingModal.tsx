@@ -19,7 +19,7 @@ import {
   onPeerPaired,
   onPairingAttemptFailed,
   onPairingLocked,
-} from '../../lib/peerPairingService';
+} from '../../lib/services/peerPairingService';
 
 // ── QR image generator (uses qrcode npm package) ──────────────────────────────
 

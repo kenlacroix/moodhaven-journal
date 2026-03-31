@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { decrypt } from '../../lib/crypto';
-import { getMoodDelta, type CapsuleEntryRow } from '../../lib/timeCapsuleService';
+import { decrypt } from '../../lib/services/crypto';
+import { getMoodDelta, type CapsuleEntryRow } from '../../lib/services/timeCapsuleService';
 
 function sanitizeHtml(html: string): string {
   const doc = new DOMParser().parseFromString(html, 'text/html');

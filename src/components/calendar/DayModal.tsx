@@ -3,8 +3,8 @@
  */
 
 import { useState, useEffect } from 'react';
-import { getEntriesByDateRange } from '../../lib/journalService';
-import { parseDate, formatDisplayDate } from '../../lib/dateUtils';
+import { getEntriesByDateRange } from '../../lib/services/journalService';
+import { parseDate, formatDisplayDate } from '../../lib/utils/dateUtils';
 import { MOOD_OPTIONS } from '../../types/journal';
 import type { JournalEntry } from '../../types/journal';
 

@@ -8,15 +8,15 @@
 import { renderHook, act } from '@testing-library/react';
 import { useSpeechToText } from './useSpeechToText';
 import { useAudioRecorder } from './useAudioRecorder';
-import { transcribeAudio, checkModelStatus } from '../lib/speechToTextService';
-import { formatTranscript } from '../lib/aiService';
+import { transcribeAudio, checkModelStatus } from '../lib/services/speechToTextService';
+import { formatTranscript } from '../lib/services/aiService';
 import { useSettingsStore } from '../stores/settingsStore';
 import type { SpeechToTextSettings } from '../types/settings';
 
 vi.mock('./useAudioRecorder');
 vi.mock('../stores/settingsStore');
-vi.mock('../lib/speechToTextService');
-vi.mock('../lib/aiService');
+vi.mock('../lib/services/speechToTextService');
+vi.mock('../lib/services/aiService');
 
 // ── Shared mock state ─────────────────────────────────────────────────────────
 

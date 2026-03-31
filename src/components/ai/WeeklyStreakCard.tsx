@@ -39,7 +39,7 @@ export function WeeklyStreakCard({ entriesThisWeek, weeklyGoal = 3 }: WeeklyStre
               </p>
             ) : (
               <div
-                className={`flex items-baseline gap-1.5 mt-0.5 ${goalJustReached ? 'animate-mood-pop' : ''}`}
+                className={`flex items-baseline gap-1.5 mt-0.5 ${goalJustReached ? 'motion-safe:animate-mood-pop' : ''}`}
                 aria-label={`${entriesThisWeek} of ${weeklyGoal} this week`}
               >
                 <span className="text-2xl font-semibold text-slate-800 dark:text-slate-100">

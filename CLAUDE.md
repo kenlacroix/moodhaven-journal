@@ -52,12 +52,12 @@ Platforms: Windows, Linux, macOS.
 | `src-tauri/src/db/mod.rs` | SQLite schema, migrations, Database struct |
 | `src/App.tsx` | React root |
 | `src/stores/` | 4 Zustand stores (app, settings, books, …) |
-| `src/lib/logger.ts` | Structured logger wrapper around @tauri-apps/plugin-log |
-| `src/lib/crypto.ts` | AES-256-GCM encryption (PBKDF2 key derivation) |
-| `src/lib/cloudSyncService.ts` | WebDAV sync orchestration |
-| `src/lib/peerSyncEngineService.ts` | P2P sync IPC wrappers |
+| `src/lib/services/logger.ts` | Structured logger wrapper around @tauri-apps/plugin-log |
+| `src/lib/services/crypto.ts` | AES-256-GCM encryption (PBKDF2 key derivation) |
+| `src/lib/services/cloudSyncService.ts` | WebDAV sync orchestration |
+| `src/lib/services/peerSyncEngineService.ts` | P2P sync IPC wrappers |
 | `src/types/settings.ts` | App settings type definitions |
-| `src/lib/timeCapsuleService.ts` | Time capsule IPC wrappers |
+| `src/lib/services/timeCapsuleService.ts` | Time capsule IPC wrappers |
 | `src/hooks/useTimeCapsule.ts` | Time capsule state + logic |
 | `src/components/timecapsule/SealEntryModal.tsx` | Seal entry UI |
 | `src/components/timecapsule/TimeCapsuleRevealModal.tsx` | Capsule reveal UI |

@@ -207,7 +207,7 @@ Key files to read before making changes:
 |:---|:---|
 | `CLAUDE.md` | AI assistant context — also the best single-file project reference |
 | `docs/architecture.md` | Data model, command registry, component map |
-| `src/lib/crypto.ts` | AES-256-GCM + PBKDF2 — the encryption core |
+| `src/lib/services/crypto.ts` | AES-256-GCM + PBKDF2 — the encryption core |
 | `src-tauri/src/db/mod.rs` | SQLite schema and migrations |
 | `src-tauri/src/lib.rs` | Tauri command registration |
 | `src/test/setup.ts` | Global test mocks |

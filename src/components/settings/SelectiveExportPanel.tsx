@@ -112,8 +112,9 @@ export function SelectiveExportPanel({
       {/* Date range */}
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">From</label>
+          <label htmlFor="export-date-from" className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">From</label>
           <input
+            id="export-date-from"
             type="date"
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
@@ -121,8 +122,9 @@ export function SelectiveExportPanel({
           />
         </div>
         <div>
-          <label className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">To</label>
+          <label htmlFor="export-date-to" className="text-xs text-slate-500 dark:text-slate-400 mb-1 block">To</label>
           <input
+            id="export-date-to"
             type="date"
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}

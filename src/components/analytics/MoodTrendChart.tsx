@@ -3,7 +3,7 @@
  */
 
 import { useMemo } from 'react';
-import { generateLinePath, generateAreaPath, mapToChartCoordinates, getMoodColor } from '../../lib/chartUtils';
+import { generateLinePath, generateAreaPath, mapToChartCoordinates, getMoodColor } from '../../lib/utils/chartUtils';
 import type { TrendDataPoint, AnalyticsPeriod } from '../../types/analytics';
 import { ANALYTICS_PERIODS } from '../../types/analytics';
 

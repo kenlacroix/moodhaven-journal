@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TemplateSelector } from './TemplateSelector';
-import { JOURNAL_TEMPLATES } from '../../lib/journalTemplates';
+import { JOURNAL_TEMPLATES } from '../../lib/utils/journalTemplates';
 
 describe('TemplateSelector', () => {
   const mockOnSelect = vi.fn();

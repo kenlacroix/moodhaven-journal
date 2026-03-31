@@ -12,11 +12,11 @@ import {
   verify2FATotp,
   verifyBackupCode,
   getBackupCodesCount,
-} from '../../lib/twoFactorService';
+} from '../../lib/services/twoFactorService';
 import {
   verifyHardwareKey,
   getHardwareKeyErrorMessage,
-} from '../../lib/hardwareKeyService';
+} from '../../lib/services/hardwareKeyService';
 import type { TwoFactorMethod, TwoFactorVerifyMode } from '../../types/twoFactor';
 
 interface TwoFactorVerifyProps {

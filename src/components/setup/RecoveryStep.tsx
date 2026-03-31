@@ -1,4 +1,4 @@
-import { generateRecoveryKey, storeRecoveryKey } from '../../lib/recoveryKeyService';
+import { generateRecoveryKey, storeRecoveryKey } from '../../lib/services/recoveryKeyService';
 
 interface RecoveryStepProps {
   onBack: () => void;

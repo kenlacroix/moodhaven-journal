@@ -11,8 +11,8 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSettingsStore } from '../stores/settingsStore';
-import { checkForUpdate } from '../lib/updaterService';
-import type { UpdateInfo } from '../lib/updaterService';
+import { checkForUpdate } from '../lib/services/updaterService';
+import type { UpdateInfo } from '../lib/services/updaterService';
 
 const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
 

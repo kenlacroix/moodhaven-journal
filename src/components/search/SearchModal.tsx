@@ -10,8 +10,8 @@
  */
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { getAllEntries } from '../../lib/journalService';
-import { getMoodColor } from '../../lib/chartUtils';
+import { getAllEntries } from '../../lib/services/journalService';
+import { getMoodColor } from '../../lib/utils/chartUtils';
 import { MOOD_OPTIONS } from '../../types/journal';
 import type { JournalEntry } from '../../types/journal';
 

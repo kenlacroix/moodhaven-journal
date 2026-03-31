@@ -16,7 +16,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { open } from '@tauri-apps/plugin-shell';
-import { downloadAndInstallUpdate } from '../../lib/updaterService';
+import { downloadAndInstallUpdate } from '../../lib/services/updaterService';
 import { useSettingsStore } from '../../stores/settingsStore';
 import type { UseUpdateCheckReturn } from '../../hooks/useUpdateCheck';
 

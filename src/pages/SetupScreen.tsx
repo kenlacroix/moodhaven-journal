@@ -13,9 +13,9 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { useAppStore } from '../stores/appStore';
 import { useSettingsStore } from '../stores/settingsStore';
 import { usePeerSyncStore } from '../stores/peerSyncStore';
-import { readBackupFile, encryptedImport } from '../lib/dataManagementService';
-import { startDiscovery, stopDiscovery } from '../lib/peerDiscoveryService';
-import { onRestoreProgress, onRestoreReady, onRestoreError, type RestoreProgressEvent } from '../lib/peerSyncEngineService';
+import { readBackupFile, encryptedImport } from '../lib/services/dataManagementService';
+import { startDiscovery, stopDiscovery } from '../lib/services/peerDiscoveryService';
+import { onRestoreProgress, onRestoreReady, onRestoreError, type RestoreProgressEvent } from '../lib/services/peerSyncEngineService';
 import type { StorageBackend } from '../types/settings';
 import type { DiscoveredPeer } from '../types/peerSync';
 

@@ -2,7 +2,7 @@
  * StatsSummary - Overview cards showing key statistics
  */
 
-import { getMoodEmoji } from '../../lib/chartUtils';
+import { getMoodEmoji } from '../../lib/utils/chartUtils';
 
 interface StatsSummaryProps {
   averageMood: number;

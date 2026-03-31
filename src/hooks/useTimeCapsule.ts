@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { getDueCapsules, unsealEntry, type CapsuleEntryRow } from '../lib/timeCapsuleService';
+import { getDueCapsules, unsealEntry, type CapsuleEntryRow } from '../lib/services/timeCapsuleService';
 import { useSettingsStore } from '../stores/settingsStore';
 
 interface UseTimeCapsuleOptions {

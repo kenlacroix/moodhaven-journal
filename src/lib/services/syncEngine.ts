@@ -26,8 +26,8 @@
 import { invoke } from '@tauri-apps/api/core';
 import { encrypt, decrypt } from './crypto';
 import type { EncryptedData } from './crypto';
-import type { WebDAVConfig } from '../types/settings';
-import type { Book, MediaAttachment } from '../types/journal';
+import type { WebDAVConfig } from '../../types/settings';
+import type { Book, MediaAttachment } from '../../types/journal';
 import {
   testConnection,
   ensureSyncDirectories,

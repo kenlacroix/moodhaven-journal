@@ -6,7 +6,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
-import { formatDate, getDaysAgo } from './dateUtils';
+import { formatDate, getDaysAgo } from '../utils/dateUtils';
 import type {
   CalendarDayData,
   MoodDistribution,
@@ -14,8 +14,8 @@ import type {
   DayOfWeekStats,
   TrendDataPoint,
   AnalyticsData,
-} from '../types/analytics';
-import type { MoodLevel } from '../types/journal';
+} from '../../types/analytics';
+import type { MoodLevel } from '../../types/journal';
 
 // ============================================================================
 // Types matching Rust backend (snake_case)

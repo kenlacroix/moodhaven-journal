@@ -1,5 +1,5 @@
 import { extractEntryMetadata, aggregateMetadata, aggregateMetadataBoth, calculateGratitudeStreak, scoreContentMood, scoreEmojiSentiment } from './metadataExtractor';
-import type { JournalEntry, MoodLevel } from '../types/journal';
+import type { JournalEntry, MoodLevel } from '../../types/journal';
 
 /**
  * Helper to create test journal entries with sensible defaults

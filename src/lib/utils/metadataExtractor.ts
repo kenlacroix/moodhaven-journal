@@ -6,7 +6,7 @@
  * without exposing actual content to external services.
  */
 
-import type { JournalEntry, MoodLevel } from '../types/journal';
+import type { JournalEntry, MoodLevel } from '../../types/journal';
 import type {
   EntryMetadata,
   AggregatedMetadata,
@@ -14,13 +14,13 @@ import type {
   EmotionalIndicator,
   TimeOfDay,
   FrequencyPattern,
-} from '../types/ai';
+} from '../../types/ai';
 import {
   EMOTION_KEYWORDS,
   GRATITUDE_KEYWORDS,
   GOALS_KEYWORDS,
   QUESTION_PATTERNS,
-} from '../types/ai';
+} from '../../types/ai';
 
 // ============================================
 // MOOD AUTO-SCORING (Local, runs on-device)

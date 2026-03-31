@@ -11,7 +11,7 @@ import type {
   TwoFactorStatus,
   TotpSetupData,
   BackupCodes,
-} from '../types/twoFactor';
+} from '../../types/twoFactor';
 
 // ============================================================================
 // Status & Info

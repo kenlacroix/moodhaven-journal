@@ -4,7 +4,7 @@
  * Displays available templates as cards with descriptions.
  */
 
-import { JOURNAL_TEMPLATES, type JournalTemplate } from '../../lib/journalTemplates';
+import { JOURNAL_TEMPLATES, type JournalTemplate } from '../../lib/utils/journalTemplates';
 
 interface TemplateSelectorProps {
   onSelect: (template: JournalTemplate) => void;

@@ -2,11 +2,11 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { SealEntryModal } from './SealEntryModal';
 
-vi.mock('../../lib/timeCapsuleService', () => ({
+vi.mock('../../lib/services/timeCapsuleService', () => ({
   sealEntry: vi.fn(),
 }));
 
-import { sealEntry } from '../../lib/timeCapsuleService';
+import { sealEntry } from '../../lib/services/timeCapsuleService';
 const mockSealEntry = vi.mocked(sealEntry);
 
 beforeEach(() => { vi.clearAllMocks(); });

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { sealEntry } from '../../lib/timeCapsuleService';
+import { sealEntry } from '../../lib/services/timeCapsuleService';
 
 type CapsuleType = 'letter' | 'vault';
 

@@ -3,7 +3,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
-import type { Book, BookSettings } from '../types/journal';
+import type { Book, BookSettings } from '../../types/journal';
 
 /** Raw book shape returned from Rust (settings is JSON string, not parsed object) */
 interface RawBook {

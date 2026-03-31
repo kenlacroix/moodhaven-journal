@@ -14,9 +14,9 @@ import type {
   WeeklyReflection,
   RecurringPattern,
   AIResponse,
-} from '../types/ai';
-import type { AppSettings } from '../types/settings';
-import { cleanTranscript } from './transcriptFormatter';
+} from '../../types/ai';
+import type { AppSettings } from '../../types/settings';
+import { cleanTranscript } from '../utils/transcriptFormatter';
 
 // ============================================
 // AI SERVICE CONFIGURATION

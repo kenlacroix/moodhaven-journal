@@ -6,8 +6,8 @@
  */
 
 import { fetch } from '@tauri-apps/plugin-http';
-import type { WebDAVConfig } from '../types/settings';
-import { logger } from '../lib/logger';
+import type { WebDAVConfig } from '../../types/settings';
+import { logger } from './logger';
 
 export interface WebDAVResponse {
   success: boolean;

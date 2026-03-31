@@ -18,7 +18,7 @@ import {
   isFeatureNotAvailableError,
   type HardwareKeyDevice,
   type HardwareKeyFeatureInfo,
-} from '../../lib/hardwareKeyService';
+} from '../../lib/services/hardwareKeyService';
 
 interface HardwareKeySetupProps {
   onComplete: () => void;

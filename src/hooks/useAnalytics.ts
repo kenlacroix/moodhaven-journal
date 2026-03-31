@@ -5,10 +5,10 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { getFullAnalytics, getMoodTrend } from '../lib/analyticsService';
+import { getFullAnalytics, getMoodTrend } from '../lib/services/analyticsService';
 import type { AnalyticsData, TrendDataPoint, AnalyticsPeriod } from '../types/analytics';
 import { ANALYTICS_PERIODS } from '../types/analytics';
-import { logger } from '../lib/logger';
+import { logger } from '../lib/services/logger';
 
 interface UseAnalyticsReturn {
   // Analytics data

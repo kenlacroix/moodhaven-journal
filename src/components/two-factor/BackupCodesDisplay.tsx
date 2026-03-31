@@ -9,7 +9,7 @@
  */
 
 import { useState } from 'react';
-import { downloadBackupCodes, copyBackupCodesToClipboard } from '../../lib/twoFactorService';
+import { downloadBackupCodes, copyBackupCodesToClipboard } from '../../lib/services/twoFactorService';
 
 interface BackupCodesDisplayProps {
   codes: string[];

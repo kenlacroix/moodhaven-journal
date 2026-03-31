@@ -70,9 +70,11 @@ docs/internal/
 .gstack/
 
 # Internal planning and retro data — not for public repo
+# active-plans/ is git-tracked (in-flight plans); docs/internal/plans/ holds completed/archived
 ceo-plans/
 .context/
 
 # Claude Code — local settings and worktree state (machine-specific)
 .claude/settings.local.json
 .claude/worktrees/
+/.agents

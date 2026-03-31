@@ -4,8 +4,8 @@ import {
   getFallbackPrompts,
   formatTranscript,
 } from './aiService';
-import { createDefaultSettings } from '../types/settings';
-import type { AggregatedMetadata, TimeOfDay } from '../types/ai';
+import { createDefaultSettings } from '../../types/settings';
+import type { AggregatedMetadata, TimeOfDay } from '../../types/ai';
 
 function createTestMetadata(
   overrides: Partial<AggregatedMetadata> = {}

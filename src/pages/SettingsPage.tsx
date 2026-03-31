@@ -17,34 +17,34 @@ import {
   SettingInput,
   DaySelector,
 } from '../components/settings';
-import { testOpenAIKey, testLocalAIConnection } from '../lib/settingsService';
+import { testOpenAIKey, testLocalAIConnection } from '../lib/services/settingsService';
 import {
   factoryReset,
   exitApp,
   getDataStats,
   downloadBackup as downloadBackupFile,
   exportWithMedia,
-} from '../lib/dataManagementService';
-import { testConnection as testWebDAVConnection } from '../lib/webdavService';
+} from '../lib/services/dataManagementService';
+import { testConnection as testWebDAVConnection } from '../lib/services/webdavService';
 import {
   get2FAStatus,
   regenerateBackupCodes,
   disable2FA,
   getBackupCodesCount,
-} from '../lib/twoFactorService';
+} from '../lib/services/twoFactorService';
 import { TotpSetup, HardwareKeySetup, BackupCodesDisplay } from '../components/two-factor';
 import type { TwoFactorStatus, BackupCodes } from '../types/twoFactor';
 import type { ReminderFrequency, StorageBackend, STTModel } from '../types/settings';
 import { STT_MODELS } from '../types/settings';
-import { sendTestNotification } from '../lib/reminderService';
+import { sendTestNotification } from '../lib/services/reminderService';
 import {
   checkModelStatus,
   downloadModel,
   deleteModel,
   checkSidecarAvailable,
-} from '../lib/speechToTextService';
-import { verifyUserPassword } from '../lib/journalService';
-import { biometricIsAvailable, biometricIsEnrolled, biometricUnenroll } from '../lib/biometricService';
+} from '../lib/services/speechToTextService';
+import { verifyUserPassword } from '../lib/services/journalService';
+import { biometricIsAvailable, biometricIsEnrolled, biometricUnenroll } from '../lib/services/biometricService';
 import { usePlatform } from '../hooks/usePlatform';
 import { OuraConnectionCard } from '../components/oura/OuraConnectionCard';
 import { UpdatePanel } from '../components/updater/UpdatePanel';
@@ -59,13 +59,13 @@ import {
   getNextLockoutDuration,
   formatDuration,
   type RateLimitState,
-} from '../lib/rateLimitService';
+} from '../lib/services/rateLimitService';
 import { DevicesTab } from '../components/peer-sync';
 import { CloudConsentModal } from '../components/transcript/CloudConsentModal';
 import type { STTFormattingLayer } from '../types/settings';
 import { invoke } from '@tauri-apps/api/core';
-import { logger, setLevel } from '../lib/logger';
-import type { LogLevel } from '../lib/logger';
+import { logger, setLevel } from '../lib/services/logger';
+import type { LogLevel } from '../lib/services/logger';
 
 type SettingsTab = 'general' | 'privacy' | 'sync' | 'ai' | 'health' | 'devices' | 'about';
 

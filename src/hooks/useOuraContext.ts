@@ -27,7 +27,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useSettingsStore } from '../stores/settingsStore';
 import { useAppStore } from '../stores/appStore';
-import { syncToday, getHistory } from '../lib/ouraService';
+import { syncToday, getHistory } from '../lib/services/ouraService';
 import type { OuraHealthContext, OuraHealthSummary, OuraHealthBadge } from '../types/oura';
 
 // ============================================================================

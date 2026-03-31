@@ -15,17 +15,17 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { getAllEntries } from '../lib/journalService';
-import { aggregateMetadata } from '../lib/metadataExtractor';
+import { getAllEntries } from '../lib/services/journalService';
+import { aggregateMetadata } from '../lib/utils/metadataExtractor';
 import {
   generatePrompts,
   getFallbackPrompts,
   buildHealthContextPrompts,
   detectRecurringPatterns,
   createAIServiceConfig,
-} from '../lib/aiService';
+} from '../lib/services/aiService';
 import { useSettingsStore } from '../stores/settingsStore';
-import { getHistory } from '../lib/ouraService';
+import { getHistory } from '../lib/services/ouraService';
 import { buildMergedContext } from './useOuraContext';
 import type { AIPrompt, RecurringPattern } from '../types/ai';
 

@@ -13,9 +13,9 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
-import type { STTModel } from '../types/settings';
-import type { WhisperOutput } from './transcriptFormatter';
-import { logger } from '../lib/logger';
+import type { STTModel } from '../../types/settings';
+import type { WhisperOutput } from '../utils/transcriptFormatter';
+import { logger } from './logger';
 
 // ---------------------------------------------------------------------------
 // Helpers

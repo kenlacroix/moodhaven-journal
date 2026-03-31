@@ -24,12 +24,12 @@
  */
 
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
-import { saveEntry, getEntryById, patchEntryLocationWeather, deleteEntry, getBookTags } from '../lib/journalService';
-import { captureLocationWeather, getWeatherEmoji, displayTemp } from '../lib/locationWeatherService';
-import { getGreeting } from '../lib/dateUtils';
-import { getReadingTime, didHitMilestone } from '../lib/writingUtils';
-import { extractHashtags } from '../lib/markdownUtils';
-import { pickAndAttachMedia, listEntryMedia, openMedia, deleteMedia, getMediaThumbnail } from '../lib/mediaService';
+import { saveEntry, getEntryById, patchEntryLocationWeather, deleteEntry, getBookTags } from '../lib/services/journalService';
+import { captureLocationWeather, getWeatherEmoji, displayTemp } from '../lib/services/locationWeatherService';
+import { getGreeting } from '../lib/utils/dateUtils';
+import { getReadingTime, didHitMilestone } from '../lib/utils/writingUtils';
+import { extractHashtags } from '../lib/utils/markdownUtils';
+import { pickAndAttachMedia, listEntryMedia, openMedia, deleteMedia, getMediaThumbnail } from '../lib/services/mediaService';
 import { RichTextEditor } from '../components/editor';
 import type { Editor } from '@tiptap/react';
 import { PromptDrawer } from '../components/ai/PromptDrawer';
@@ -40,14 +40,14 @@ import { useJournalPrompts } from '../hooks/useJournalPrompts';
 import { useSettingsStore } from '../stores/settingsStore';
 import { useAppStore } from '../stores/appStore';
 import { useBooksStore } from '../stores/booksStore';
-import { scoreContentMood } from '../lib/metadataExtractor';
-import { getStreakStats, getOverallStats } from '../lib/analyticsService';
+import { scoreContentMood } from '../lib/utils/metadataExtractor';
+import { getStreakStats, getOverallStats } from '../lib/services/analyticsService';
 import type { JournalEntry, LocationWeather, MoodLevel, PrivacyMode, MediaAttachment } from '../types/journal';
 import { MOOD_OPTIONS, PRIVACY_MODE_LABELS, PRIVACY_MODE_DESCRIPTIONS } from '../types/journal';
-import type { JournalTemplate } from '../lib/journalTemplates';
-import { formatTemplateContent } from '../lib/journalTemplates';
+import type { JournalTemplate } from '../lib/utils/journalTemplates';
+import { formatTemplateContent } from '../lib/utils/journalTemplates';
 import { usePlatform } from '../hooks/usePlatform';
-import { logger } from '../lib/logger';
+import { logger } from '../lib/services/logger';
 
 interface WritingViewProps {
   entryId?: string | null;

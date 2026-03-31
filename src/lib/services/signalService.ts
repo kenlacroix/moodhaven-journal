@@ -17,7 +17,7 @@ import type {
   SignalSource,
   SignalPayload,
   SyncLogRow,
-} from '../types/signals';
+} from '../../types/signals';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Internal helpers

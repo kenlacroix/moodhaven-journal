@@ -9,7 +9,7 @@
 
 import { useState, useCallback } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
-import { generateTotpSecret, enableTotp } from '../../lib/twoFactorService';
+import { generateTotpSecret, enableTotp } from '../../lib/services/twoFactorService';
 import { BackupCodesDisplay } from './BackupCodesDisplay';
 import type { TotpSetupData, BackupCodes } from '../../types/twoFactor';
 

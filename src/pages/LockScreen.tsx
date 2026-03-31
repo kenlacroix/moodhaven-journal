@@ -7,16 +7,16 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useAppStore } from '../stores/appStore';
-import { get2FAStatus } from '../lib/twoFactorService';
-import { verifyUserPassword } from '../lib/journalService';
-import { factoryReset, exitApp } from '../lib/dataManagementService';
-import { recoverPassword, isRecoveryKeyEnabled } from '../lib/recoveryKeyService';
+import { get2FAStatus } from '../lib/services/twoFactorService';
+import { verifyUserPassword } from '../lib/services/journalService';
+import { factoryReset, exitApp } from '../lib/services/dataManagementService';
+import { recoverPassword, isRecoveryKeyEnabled } from '../lib/services/recoveryKeyService';
 import {
   biometricIsAvailable,
   biometricIsEnrolled,
   biometricAuthenticate,
   biometricEnroll,
-} from '../lib/biometricService';
+} from '../lib/services/biometricService';
 import { TwoFactorVerify } from '../components/two-factor';
 import type { TwoFactorStatus } from '../types/twoFactor';
 import {
@@ -29,7 +29,7 @@ import {
   getNextLockoutDuration,
   formatDuration,
   type RateLimitState,
-} from '../lib/rateLimitService';
+} from '../lib/services/rateLimitService';
 
 type LockScreenStep = 'password' | '2fa' | 'erase-confirm' | 'recovery-key' | 'biometric-enroll-offer';
 

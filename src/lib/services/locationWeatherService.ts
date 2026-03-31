@@ -10,7 +10,7 @@
  */
 
 import { fetch } from '@tauri-apps/plugin-http';
-import type { LocationWeather } from '../types/journal';
+import type { LocationWeather } from '../../types/journal';
 
 // WMO weather interpretation codes → human-readable label
 const WMO_CONDITIONS: Record<number, string> = {

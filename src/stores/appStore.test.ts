@@ -1,7 +1,7 @@
 import { useAppStore } from './appStore';
 
 // Mock journalService functions
-vi.mock('../lib/journalService', () => ({
+vi.mock('../lib/services/journalService', () => ({
   hasPassword: vi.fn(),
   setupPassword: vi.fn(),
   unlockJournal: vi.fn(),
@@ -15,7 +15,7 @@ import {
   unlockJournal,
   lockJournal,
   devBypassUnlock,
-} from '../lib/journalService';
+} from '../lib/services/journalService';
 
 const mockHasPassword = vi.mocked(hasPassword);
 const mockSetupPassword = vi.mocked(setupPassword);

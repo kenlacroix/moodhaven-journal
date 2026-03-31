@@ -20,13 +20,13 @@ import type {
   TimeCapsuleSettings,
 } from '../types/settings';
 import { createDefaultSettings } from '../types/settings';
-import { setLevel } from '../lib/logger';
+import { setLevel } from '../lib/services/logger';
 import {
   loadSettings,
   saveSettings,
   getAppVersion,
   resetSettings as resetSettingsService,
-} from '../lib/settingsService';
+} from '../lib/services/settingsService';
 import { useAppStore } from './appStore';
 
 // Section to scroll to when settings page opens

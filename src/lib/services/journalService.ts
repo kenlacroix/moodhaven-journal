@@ -14,7 +14,7 @@ import {
   verifyPasswordHash,
   type EncryptedData,
 } from './crypto';
-import { extractHashtags } from './markdownUtils';
+import { extractHashtags } from '../utils/markdownUtils';
 import type {
   JournalEntry,
   JournalEntryFormData,
@@ -22,7 +22,7 @@ import type {
   MoodLevel,
   MoodStatistics,
   PrivacyMode,
-} from '../types/journal';
+} from '../../types/journal';
 
 // ============================================================================
 // Types matching Rust backend

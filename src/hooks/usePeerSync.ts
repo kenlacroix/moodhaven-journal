@@ -12,8 +12,8 @@ import {
   getNearbyPeers,
   onPeerDiscovered,
   onPeerLost,
-} from '../lib/peerDiscoveryService';
-import { getTrustedDevices, onPeerPaired, onPairingIncoming } from '../lib/peerPairingService';
+} from '../lib/services/peerDiscoveryService';
+import { getTrustedDevices, onPeerPaired, onPairingIncoming } from '../lib/services/peerPairingService';
 import {
   peerSyncNow,
   onSyncStarted,
@@ -24,8 +24,8 @@ import {
   type SyncCompleteEvent,
   type SyncErrorEvent,
   type PeerRevokedUsEvent,
-} from '../lib/peerSyncEngineService';
-import { logger } from '../lib/logger';
+} from '../lib/services/peerSyncEngineService';
+import { logger } from '../lib/services/logger';
 
 /** Returns true if host is an RFC-1918 private address (LAN-local). */
 function isLanAddress(host: string): boolean {

@@ -24,7 +24,7 @@ import {
   listVoiceMemos,
   transcribeVoiceMemo,
   type VoiceMemo,
-} from '../lib/voiceMemoService';
+} from '../lib/services/voiceMemoService';
 
 // ── Hook options ───────────────────────────────────────────────────────────────
 

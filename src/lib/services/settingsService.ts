@@ -5,10 +5,10 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
-import type { AppSettings } from '../types/settings';
-import { createDefaultSettings } from '../types/settings';
+import type { AppSettings } from '../../types/settings';
+import { createDefaultSettings } from '../../types/settings';
 import { encrypt, decrypt } from './crypto';
-import { logger } from '../lib/logger';
+import { logger } from './logger';
 
 const SETTINGS_KEY = 'app_settings';
 

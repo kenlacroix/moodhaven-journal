@@ -11,7 +11,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { MoodSelector } from './MoodSelector';
 import { TemplateSelector } from './TemplateSelector';
-import { formatTemplateContent, type JournalTemplate } from '../../lib/journalTemplates';
+import { formatTemplateContent, type JournalTemplate } from '../../lib/utils/journalTemplates';
 import type { MoodLevel, JournalEntryFormData } from '../../types/journal';
 
 interface JournalEditorProps {

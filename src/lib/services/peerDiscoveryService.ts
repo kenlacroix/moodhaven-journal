@@ -8,7 +8,7 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-import type { DeviceIdentity, DiscoveredPeer } from '../types/peerSync';
+import type { DeviceIdentity, DiscoveredPeer } from '../../types/peerSync';
 
 // ── Identity commands ──────────────────────────────────────────────────────────
 

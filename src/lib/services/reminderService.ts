@@ -10,7 +10,7 @@ import {
   requestPermission,
   sendNotification,
 } from '@tauri-apps/plugin-notification';
-import type { ReminderSettings, DayOfWeek } from '../types/settings';
+import type { ReminderSettings, DayOfWeek } from '../../types/settings';
 
 /**
  * Check and request notification permission if needed.

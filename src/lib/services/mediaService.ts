@@ -8,7 +8,7 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import { open as openFilePicker } from '@tauri-apps/plugin-dialog';
-import type { MediaAttachment } from '../types/journal';
+import type { MediaAttachment } from '../../types/journal';
 
 // Dialog filter groups
 const MEDIA_FILTERS = [

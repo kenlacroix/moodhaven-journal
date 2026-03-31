@@ -4,7 +4,7 @@
  * Shows date number with mood color indicator based on average mood.
  */
 
-import { formatDate, isToday } from '../../lib/dateUtils';
+import { formatDate, isToday } from '../../lib/utils/dateUtils';
 import { MOOD_OPTIONS } from '../../types/journal';
 import type { CalendarDayData } from '../../types/analytics';
 

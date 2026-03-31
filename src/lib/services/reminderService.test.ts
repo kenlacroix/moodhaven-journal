@@ -10,7 +10,7 @@ import {
   requestPermission,
   sendNotification,
 } from '@tauri-apps/plugin-notification';
-import type { ReminderSettings } from '../types/settings';
+import type { ReminderSettings } from '../../types/settings';
 
 const mockIsPermissionGranted = vi.mocked(isPermissionGranted);
 const mockRequestPermission = vi.mocked(requestPermission);

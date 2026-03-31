@@ -16,7 +16,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { hasPassword, unlockJournal } from '../../lib/journalService';
+import { hasPassword, unlockJournal } from '../../lib/services/journalService';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { WritingView } from '../../pages/WritingView';
 

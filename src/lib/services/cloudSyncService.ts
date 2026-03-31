@@ -5,7 +5,7 @@
  * Uses webdavService for HTTP and dataManagementService for encryption.
  */
 
-import type { WebDAVConfig } from '../types/settings';
+import type { WebDAVConfig } from '../../types/settings';
 import { encryptedExport, encryptedImport } from './dataManagementService';
 import {
   testConnection,

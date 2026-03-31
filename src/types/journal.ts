@@ -2,7 +2,7 @@
  * Journal and Mood entry type definitions
  */
 
-import type { EncryptedData } from '../lib/crypto';
+import type { EncryptedData } from '../lib/services/crypto';
 
 // Mood scale from 1-5 with semantic labels
 export type MoodLevel = 1 | 2 | 3 | 4 | 5;

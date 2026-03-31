@@ -2,7 +2,7 @@
  * Chart utility functions for lightweight SVG-based charts
  */
 
-import { MOOD_OPTIONS } from '../types/journal';
+import { MOOD_OPTIONS } from '../../types/journal';
 
 /**
  * Get mood color from mood level (1-5)

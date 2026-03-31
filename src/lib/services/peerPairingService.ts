@@ -7,7 +7,7 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-import type { TrustedDevice, PairingTokenInfo } from '../types/peerSync';
+import type { TrustedDevice, PairingTokenInfo } from '../../types/peerSync';
 
 // ── Pairing commands ───────────────────────────────────────────────────────────
 

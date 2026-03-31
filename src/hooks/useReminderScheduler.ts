@@ -12,8 +12,8 @@ import {
   sendReminderNotification,
   getMillisecondsUntilReminder,
   shouldFireToday,
-} from '../lib/reminderService';
-import { logger } from '../lib/logger';
+} from '../lib/services/reminderService';
+import { logger } from '../lib/services/logger';
 
 const CHECK_INTERVAL_MS = 60_000; // Check every 60 seconds
 

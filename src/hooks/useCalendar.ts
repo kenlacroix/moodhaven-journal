@@ -5,14 +5,14 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { getMonthlyMoodData } from '../lib/analyticsService';
+import { getMonthlyMoodData } from '../lib/services/analyticsService';
 import {
   getCalendarDates,
   formatDate,
   getMonthName,
   getPreviousMonth,
   getNextMonth,
-} from '../lib/dateUtils';
+} from '../lib/utils/dateUtils';
 import type { CalendarDayData } from '../types/analytics';
 
 interface UseCalendarReturn {

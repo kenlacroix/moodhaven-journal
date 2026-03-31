@@ -17,6 +17,7 @@ Platforms: Windows, Linux, macOS.
 
 **Frontend**
 - Tauri IPC wrappers live in `src/lib/*.ts`; hooks live in `src/hooks/`
+- In-flight feature plans live in `active-plans/` (git-tracked); completed plans archived in `docs/internal/plans/` (gitignored)
 - Settings storage: `settings.json` (frontend Zustand) + SQLite `settings` table (`set_setting`)
 - `tokio::join!` requires explicit tokio dep — prefer sequential `.await` instead
 - `reqwest` is in Cargo.toml with `json + stream` features for Rust-side HTTP

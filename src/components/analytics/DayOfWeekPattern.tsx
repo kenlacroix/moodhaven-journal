@@ -2,7 +2,7 @@
  * DayOfWeekPattern - Bar chart showing mood patterns by day of week
  */
 
-import { getMoodColor } from '../../lib/chartUtils';
+import { getMoodColor } from '../../lib/utils/chartUtils';
 import type { DayOfWeekStats } from '../../types/analytics';
 
 interface DayOfWeekPatternProps {

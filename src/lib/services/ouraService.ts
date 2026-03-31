@@ -9,7 +9,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
-import type { OuraHealthContext, OuraStatusResponse } from '../types/oura';
+import type { OuraHealthContext, OuraStatusResponse } from '../../types/oura';
 import { secureSet, secureGet } from './secureStorage';
 
 const OURA_PAT_KEY = 'oura_pat';

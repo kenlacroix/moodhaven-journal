@@ -6,14 +6,14 @@
  */
 
 import { create } from 'zustand';
-import { logger } from '../lib/logger';
+import { logger } from '../lib/services/logger';
 import {
   hasPassword,
   setupPassword,
   unlockJournal,
   lockJournal,
   devBypassUnlock,
-} from '../lib/journalService';
+} from '../lib/services/journalService';
 
 interface AppState {
   // Authentication

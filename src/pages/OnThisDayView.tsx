@@ -9,9 +9,9 @@
  */
 
 import { useState, useEffect } from 'react';
-import { getEntriesOnThisDay } from '../lib/journalService';
+import { getEntriesOnThisDay } from '../lib/services/journalService';
 import type { JournalEntry } from '../types/journal';
-import { logger } from '../lib/logger';
+import { logger } from '../lib/services/logger';
 
 interface OnThisDayViewProps {
   onSelectEntry: (entryId: string) => void;

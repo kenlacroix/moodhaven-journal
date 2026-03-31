@@ -10,7 +10,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { htmlToMarkdown, htmlToPlainText } from '../../lib/markdownUtils';
+import { htmlToMarkdown, htmlToPlainText } from '../../lib/utils/markdownUtils';
 import type { JournalEntry } from '../../types/journal';
 
 interface EntryActionsMenuProps {

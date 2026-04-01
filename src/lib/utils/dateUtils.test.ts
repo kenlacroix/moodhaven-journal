@@ -20,6 +20,8 @@ import {
   getRelativeDateLabel,
   getGreeting,
   GREETINGS,
+  getISOWeekStart,
+  countEntriesThisWeek,
 } from './dateUtils';
 
 describe('dateUtils', () => {
@@ -400,6 +402,73 @@ describe('dateUtils', () => {
 
     it('wrap-around: day 9 gives same greeting as day 1 (9 % 8 === 1 % 8)', () => {
       expect(getGreeting(8, jan9)).toBe(getGreeting(8, jan1));
+    });
+  });
+
+  describe('getISOWeekStart', () => {
+    it('Monday stays on same day', () => {
+      const mon = new Date(2024, 0, 1); // Jan 1 2024 = Monday
+      const result = getISOWeekStart(mon);
+      expect(result.getFullYear()).toBe(2024);
+      expect(result.getMonth()).toBe(0);
+      expect(result.getDate()).toBe(1);
+    });
+
+    it('Wednesday rolls back to Monday', () => {
+      const wed = new Date(2024, 0, 3); // Jan 3 2024 = Wednesday
+      const result = getISOWeekStart(wed);
+      expect(result.getDate()).toBe(1); // Monday Jan 1
+    });
+
+    it('Sunday rolls back to Monday of that week', () => {
+      const sun = new Date(2024, 0, 7); // Jan 7 2024 = Sunday
+      const result = getISOWeekStart(sun);
+      expect(result.getDate()).toBe(1); // Monday Jan 1
+    });
+
+    it('result time is midnight', () => {
+      const wed = new Date(2024, 0, 3, 15, 30, 0);
+      const result = getISOWeekStart(wed);
+      expect(result.getHours()).toBe(0);
+      expect(result.getMinutes()).toBe(0);
+      expect(result.getSeconds()).toBe(0);
+    });
+
+    it('does not mutate input', () => {
+      const d = new Date(2024, 0, 3, 15, 0, 0);
+      const original = d.getTime();
+      getISOWeekStart(d);
+      expect(d.getTime()).toBe(original);
+    });
+  });
+
+  describe('countEntriesThisWeek', () => {
+    it('returns 0 for empty entries', () => {
+      expect(countEntriesThisWeek([])).toBe(0);
+    });
+
+    it('counts entries within the current ISO week', () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date(2024, 0, 3)); // Wednesday Jan 3 2024
+      const entries = [
+        { created_at: new Date(2024, 0, 1).toISOString() }, // Monday — in week
+        { created_at: new Date(2024, 0, 2).toISOString() }, // Tuesday — in week
+        { created_at: new Date(2024, 0, 3).toISOString() }, // Wednesday — in week (today)
+        { created_at: new Date(2023, 11, 31).toISOString() }, // Dec 31 2023 — out of week
+      ];
+      expect(countEntriesThisWeek(entries)).toBe(3);
+      vi.useRealTimers();
+    });
+
+    it('excludes entries from previous week', () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date(2024, 0, 8)); // Monday Jan 8 2024 (new week)
+      const entries = [
+        { created_at: new Date(2024, 0, 1).toISOString() }, // previous week
+        { created_at: new Date(2024, 0, 8).toISOString() }, // this week
+      ];
+      expect(countEntriesThisWeek(entries)).toBe(1);
+      vi.useRealTimers();
     });
   });
 });

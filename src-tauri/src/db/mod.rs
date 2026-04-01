@@ -46,6 +46,8 @@ pub struct JournalEntryRow {
     pub linked_original_id: Option<String>,
     /// ISO timestamp when this entry was revealed (None = not yet revealed)
     pub unsealed_at: Option<String>,
+    /// Entry state: 'thinking' | 'complete' | 'revisit' (default: 'complete')
+    pub status: Option<String>,
 }
 
 /// Journal entry metadata (without content, for list views)
@@ -151,7 +153,8 @@ pub fn parse_tags(tags_str: Option<String>) -> Vec<String> {
 /// 0  id, 1  encrypted_content, 2  mood, 3  privacy_mode,
 /// 4  location_weather, 5  book_id, 6  pinned, 7  created_at,
 /// 8  updated_at, 9  sealed_until, 10 capsule_type,
-/// 11 linked_original_id, 12 unsealed_at, 13 tags (GROUP_CONCAT)
+/// 11 linked_original_id, 12 unsealed_at, 13 tags (GROUP_CONCAT),
+/// 14 status
 pub fn map_entry_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<JournalEntryRow> {
     let content_json_opt: Option<String> = row.get(1)?;
     let sealed_until: Option<String> = row.get(9)?;
@@ -159,6 +162,7 @@ pub fn map_entry_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<JournalEntryRo
     let linked_original_id: Option<String> = row.get(11)?;
     let unsealed_at: Option<String> = row.get(12)?;
     let tags_str: Option<String> = row.get(13)?;
+    let status: Option<String> = row.get(14).ok().flatten();
 
     // Withhold content for entries that are sealed but not yet revealed.
     let is_sealed = sealed_until.is_some() && unsealed_at.is_none();
@@ -191,6 +195,7 @@ pub fn map_entry_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<JournalEntryRo
         linked_original_id,
         unsealed_at,
         tags: parse_tags(tags_str),
+        status,
     })
 }
 
@@ -286,6 +291,12 @@ impl Database {
         );
         let _ = conn.execute(
             "ALTER TABLE journal_entries ADD COLUMN unsealed_at TEXT",
+            [],
+        );
+
+        // Runtime migration: entry status column (J2)
+        let _ = conn.execute(
+            "ALTER TABLE journal_entries ADD COLUMN status TEXT DEFAULT 'complete'",
             [],
         );
 
@@ -592,7 +603,7 @@ pub fn create_entry(
     // Fetch the created entry using the same connection (avoid deadlock)
     conn.query_row(
         "SELECT je.id, je.encrypted_content, je.mood, je.privacy_mode, je.location_weather, je.book_id, je.pinned, je.created_at, je.updated_at,
-                je.sealed_until, je.capsule_type, je.linked_original_id, je.unsealed_at,
+                je.sealed_until, je.capsule_type, je.linked_original_id, je.unsealed_at, je.status,
                 COALESCE(GROUP_CONCAT(t.name, ','), '') as tags
          FROM journal_entries je
          LEFT JOIN entry_tags et ON je.id = et.entry_id
@@ -614,6 +625,21 @@ pub fn patch_entry_pinned(db: &Database, id: &str, pinned: bool) -> Result<(), S
         params![pinned_val, id],
     )
     .map_err(|e| format!("Failed to patch pinned: {}", e))?;
+    Ok(())
+}
+
+/// Set the status of an entry ('thinking' | 'complete' | 'revisit').
+pub fn patch_entry_status(db: &Database, id: &str, status: &str) -> Result<(), String> {
+    let valid = matches!(status, "thinking" | "complete" | "revisit");
+    if !valid {
+        return Err(format!("Invalid entry status: {}", status));
+    }
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    conn.execute(
+        "UPDATE journal_entries SET status = ?1 WHERE id = ?2",
+        params![status, id],
+    )
+    .map_err(|e| format!("Failed to patch status: {}", e))?;
     Ok(())
 }
 
@@ -706,7 +732,7 @@ pub fn get_entry(db: &Database, id: &str) -> Result<Option<JournalEntryRow>, Str
 
     let result = conn.query_row(
         "SELECT je.id, je.encrypted_content, je.mood, je.privacy_mode, je.location_weather, je.book_id, je.pinned, je.created_at, je.updated_at,
-                je.sealed_until, je.capsule_type, je.linked_original_id, je.unsealed_at,
+                je.sealed_until, je.capsule_type, je.linked_original_id, je.unsealed_at, je.status,
                 COALESCE(GROUP_CONCAT(t.name, ','), '') as tags
          FROM journal_entries je
          LEFT JOIN entry_tags et ON je.id = et.entry_id
@@ -733,7 +759,7 @@ pub fn get_all_entries(db: &Database, limit: Option<i32>) -> Result<Vec<JournalE
     let mut stmt = conn
         .prepare(&format!(
             "SELECT je.id, je.encrypted_content, je.mood, je.privacy_mode, je.location_weather, je.book_id, je.pinned, je.created_at, je.updated_at,
-                    je.sealed_until, je.capsule_type, je.linked_original_id, je.unsealed_at,
+                    je.sealed_until, je.capsule_type, je.linked_original_id, je.unsealed_at, je.status,
                     COALESCE(GROUP_CONCAT(t.name, ','), '') as tags
              FROM journal_entries je
              LEFT JOIN entry_tags et ON je.id = et.entry_id
@@ -764,7 +790,7 @@ pub fn get_entries_by_date_range(
     let mut stmt = conn
         .prepare(
             "SELECT je.id, je.encrypted_content, je.mood, je.privacy_mode, je.location_weather, je.book_id, je.pinned, je.created_at, je.updated_at,
-                    je.sealed_until, je.capsule_type, je.linked_original_id, je.unsealed_at,
+                    je.sealed_until, je.capsule_type, je.linked_original_id, je.unsealed_at, je.status,
                     COALESCE(GROUP_CONCAT(t.name, ','), '') as tags
              FROM journal_entries je
              LEFT JOIN entry_tags et ON je.id = et.entry_id
@@ -813,7 +839,7 @@ pub fn update_entry(
     // Fetch the updated entry using the same connection (avoid deadlock/race)
     conn.query_row(
         "SELECT je.id, je.encrypted_content, je.mood, je.privacy_mode, je.location_weather, je.book_id, je.pinned, je.created_at, je.updated_at,
-                je.sealed_until, je.capsule_type, je.linked_original_id, je.unsealed_at,
+                je.sealed_until, je.capsule_type, je.linked_original_id, je.unsealed_at, je.status,
                 COALESCE(GROUP_CONCAT(t.name, ','), '') as tags
          FROM journal_entries je
          LEFT JOIN entry_tags et ON je.id = et.entry_id

@@ -26,6 +26,7 @@ import { useAIInsights } from '../hooks/useAIInsights';
 import { useBooksStore } from '../stores/booksStore';
 import { MoodWeatherCard } from '../components/ai/MoodWeatherCard';
 import { GratitudeStreakCard } from '../components/ai/GratitudeStreakCard';
+import { WeeklyStreakCard } from '../components/ai/WeeklyStreakCard';
 import { InsightsPanel } from '../components/ai/InsightsPanel';
 import { WeeklyReflectionCard } from '../components/ai/WeeklyReflectionCard';
 import {
@@ -217,9 +218,14 @@ export function InsightsView({ onNavigateToSettings }: InsightsViewProps) {
             <div className="rounded-2xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 p-6 animate-pulse h-44 mb-4" />
           )}
 
+          {/* Weekly Streak */}
+          <div className="mb-4 animate-entry-in" style={{ animationDelay: '60ms' }}>
+            <WeeklyStreakCard entriesThisWeek={entriesThisWeek} weeklyGoal={3} />
+          </div>
+
           {/* Gratitude Streak */}
           {gratitudeStreak > 0 && (
-            <div className="mb-4 animate-entry-in" style={{ animationDelay: '60ms' }}>
+            <div className="mb-4 animate-entry-in" style={{ animationDelay: '90ms' }}>
               <GratitudeStreakCard
                 currentStreak={gratitudeStreak}
                 longestStreak={gratitudeLongestStreak}

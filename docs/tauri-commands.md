@@ -1,6 +1,6 @@
 # Tauri Command Reference
 
-> **Version:** v0.7.9 | **Total commands:** ~99
+> **Version:** v0.7.12 | **Total commands:** ~100
 >
 > This document lists all `#[tauri::command]` functions exposed by MoodHaven Journal's Rust backend.
 > Commands are registered in `src-tauri/src/lib.rs` and permitted in `src-tauri/capabilities/default.json`.
@@ -181,6 +181,19 @@ Toggle the pinned/favourite state of an entry.
 invoke('patch_entry_pinned', {
   id: string,
   pinned: boolean,
+}) → Promise<void>
+```
+
+---
+
+### `patch_entry_status`
+
+Set the thinking/completion state of an entry. Used by `EntryStateBadge` to cycle between states.
+
+```typescript
+invoke('patch_entry_status', {
+  id: string,
+  status: 'thinking' | 'complete' | 'revisit',
 }) → Promise<void>
 ```
 
@@ -435,12 +448,19 @@ invoke('factory_reset') → Promise<boolean>
 
 ### `export_data`
 
-Export all data as an encrypted `.moodhaven` file. The frontend provides the file path via a save dialog.
+Export data as an encrypted `.moodhaven` file. Accepts optional filters for selective export; when no filters are provided all entries are exported.
 
 ```typescript
 invoke('export_data', {
-  _password: string,   // used for encryption envelope
-}) → Promise<string>   // exported JSON (encrypted envelope)
+  _password: string,        // used for encryption envelope
+  filter?: {
+    tags?: string[],        // include only entries with any of these tags
+    moodMin?: number,       // inclusive lower bound (1–5)
+    moodMax?: number,       // inclusive upper bound (1–5)
+    startDate?: string,     // ISO 8601, inclusive
+    endDate?: string,       // ISO 8601, inclusive
+  },
+}) → Promise<string>        // exported JSON (encrypted envelope)
 ```
 
 ---

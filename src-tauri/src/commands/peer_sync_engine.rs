@@ -709,6 +709,7 @@ fn db_get_entries_full(conn: &Connection, ids: &[String]) -> Result<Vec<JournalE
                         linked_original_id: r.get(11)?,
                         unsealed_at: r.get(12)?,
                         tags,
+                        status: None,
                     })
                 },
             )

@@ -87,40 +87,36 @@ pub fn get_due_capsules(
          LIMIT 1"
     );
 
-    let result = conn.query_row(
-        &sql,
-        [],
-        |row| {
-            let content_json: String = row.get(1)?;
-            let sealed_until: Option<String> = row.get(9)?;
-            let capsule_type: Option<String> = row.get(10)?;
-            let linked_original_id: Option<String> = row.get(11)?;
-            let unsealed_at: Option<String> = row.get(12)?;
-            let tags_str: Option<String> = row.get(13)?;
+    let result = conn.query_row(&sql, [], |row| {
+        let content_json: String = row.get(1)?;
+        let sealed_until: Option<String> = row.get(9)?;
+        let capsule_type: Option<String> = row.get(10)?;
+        let linked_original_id: Option<String> = row.get(11)?;
+        let unsealed_at: Option<String> = row.get(12)?;
+        let tags_str: Option<String> = row.get(13)?;
 
-            let encrypted_content: EncryptedContent = serde_json::from_str(&content_json)
-                .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+        let encrypted_content: EncryptedContent = serde_json::from_str(&content_json)
+            .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
 
-            Ok(JournalEntryRow {
-                id: row.get(0)?,
-                encrypted_content: Some(encrypted_content),
-                mood: row.get(2)?,
-                privacy_mode: row.get(3)?,
-                location_weather: row.get(4)?,
-                book_id: row
-                    .get::<_, Option<String>>(5)?
-                    .unwrap_or_else(|| "default".to_string()),
-                pinned: row.get::<_, i32>(6)? != 0,
-                created_at: row.get(7)?,
-                updated_at: row.get(8)?,
-                sealed_until,
-                capsule_type,
-                linked_original_id,
-                unsealed_at,
-                tags: parse_tags(tags_str),
-            })
-        },
-    );
+        Ok(JournalEntryRow {
+            id: row.get(0)?,
+            encrypted_content: Some(encrypted_content),
+            mood: row.get(2)?,
+            privacy_mode: row.get(3)?,
+            location_weather: row.get(4)?,
+            book_id: row
+                .get::<_, Option<String>>(5)?
+                .unwrap_or_else(|| "default".to_string()),
+            pinned: row.get::<_, i32>(6)? != 0,
+            created_at: row.get(7)?,
+            updated_at: row.get(8)?,
+            sealed_until,
+            capsule_type,
+            linked_original_id,
+            unsealed_at,
+            tags: parse_tags(tags_str),
+        })
+    });
 
     match result {
         Ok(entry) => Ok(Some(entry)),
@@ -190,5 +186,8 @@ pub fn get_mood_delta(
         )
         .unwrap_or(None);
 
-    Ok(MoodDelta { avg_since, mood_today })
+    Ok(MoodDelta {
+        avg_since,
+        mood_today,
+    })
 }

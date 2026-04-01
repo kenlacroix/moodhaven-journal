@@ -48,7 +48,8 @@ pub fn run() {
                 if pending.exists() {
                     log::info!(
                         "[restore] Applying pending DB restore: {:?} → {:?}",
-                        pending, db_path
+                        pending,
+                        db_path
                     );
                     if let Err(e) = std::fs::rename(&pending, &db_path) {
                         log::error!("[restore] WARNING: failed to apply pending DB: {e}");
@@ -87,7 +88,10 @@ pub fn run() {
                     "debug" => log::LevelFilter::Debug,
                     other => {
                         if !other.is_empty() {
-                            log::warn!("[startup] unknown log_level {:?}, defaulting to Warn", other);
+                            log::warn!(
+                                "[startup] unknown log_level {:?}, defaulting to Warn",
+                                other
+                            );
                         }
                         log::LevelFilter::Warn
                     }

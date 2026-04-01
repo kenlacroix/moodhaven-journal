@@ -698,7 +698,9 @@ fn db_get_entries_full(conn: &Connection, ids: &[String]) -> Result<Vec<JournalE
                         mood: r.get(2)?,
                         privacy_mode: r.get(3)?,
                         location_weather: r.get(4)?,
-                        book_id: r.get::<_, Option<String>>(5)?.unwrap_or_else(|| "default".to_string()),
+                        book_id: r
+                            .get::<_, Option<String>>(5)?
+                            .unwrap_or_else(|| "default".to_string()),
                         pinned: r.get::<_, i32>(6)? != 0,
                         created_at: r.get(7)?,
                         updated_at: r.get(8)?,
@@ -894,7 +896,9 @@ fn do_serve_restore(
 
     log::info!(
         "[restore] Serving DB ({} bytes, {} chunks) to {}",
-        total_bytes, total_chunks, client_name
+        total_bytes,
+        total_chunks,
+        client_name
     );
 
     let _ = app.emit(
@@ -1064,7 +1068,9 @@ fn do_full_restore_client(app: &AppHandle, peer_device_id: &str, host: &str) -> 
                 };
                 log::debug!(
                     "[restore] Received chunk {}/{} ({:.1}%)",
-                    chunks_received, total_chunks, pct
+                    chunks_received,
+                    total_chunks,
+                    pct
                 );
                 let _ = app.emit(
                     "peer:restore_progress",
@@ -1084,7 +1090,8 @@ fn do_full_restore_client(app: &AppHandle, peer_device_id: &str, host: &str) -> 
             } => {
                 log::info!(
                     "[restore] Transfer complete: {} bytes in {} chunks",
-                    total_bytes, chunks
+                    total_bytes,
+                    chunks
                 );
                 break;
             }
@@ -1696,7 +1703,9 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
         Msg::NotTrusted { server_device_id } => {
             // The server no longer has us in its trusted list — auto-revoke it
             // from our side so both devices are in sync without manual intervention.
-            log::warn!("[sync] Client: server {server_device_id} does not trust us — auto-revoking");
+            log::warn!(
+                "[sync] Client: server {server_device_id} does not trust us — auto-revoking"
+            );
             let _ = remove_trusted_device(app, peer_device_id);
             let _ = app.emit(
                 "peer:peer_revoked_us",

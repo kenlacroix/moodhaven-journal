@@ -155,3 +155,21 @@
 **Effort:** human ~2h / CC+gstack ~20min
 
 ---
+
+---
+
+## Settings Refactor (refactor/settings-page-split-and-capsule-tests — v0.7.14)
+
+### SETTINGS-001: Extract `use2FASetup` hook (P3)
+**What:** Extract the 2FA state machine from `PrivacyTab.tsx` into a `src/hooks/use2FASetup.ts` hook. Covers: `show2FASetup`, `showBackupCodes`, `backupCodes`, `isDisabling2FA`, `showDisable2FAConfirm`, and all 6 associated callbacks.
+**Why:** PrivacyTab is currently the largest tab component (~523 lines). The 2FA state block is self-contained and reusable if a dedicated Security page is ever added.
+**Context:** Deferred from settings refactor plan (2026-04-01). Acceptable as-is since it doesn't affect DX or UX. Extract when PrivacyTab next needs modification.
+**Effort:** human ~1h / CC+gstack ~10min
+
+### SETTINGS-002: `React.lazy()` tab loading (P4)
+**What:** Wrap each tab import in `SettingsPage.tsx` with `React.lazy()` and add a `<Suspense fallback={null}>` wrapper around the rendered tab. Only the active tab's JS chunk is loaded on first render.
+**Why:** Settings is loaded lazily already at the page level; per-tab lazy loading would be a micro-optimization. Deferred until bundle analysis shows it matters.
+**Context:** Deferred from settings refactor plan (2026-04-01).
+**Effort:** human ~30min / CC+gstack ~5min
+
+---

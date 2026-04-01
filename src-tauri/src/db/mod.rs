@@ -199,7 +199,6 @@ pub fn map_entry_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<JournalEntryRo
     })
 }
 
-
 /// Database state managed by Tauri
 pub struct Database {
     pub conn: Mutex<Connection>,
@@ -278,13 +277,22 @@ impl Database {
         );
 
         // Runtime migrations: time capsule columns
-        let _ = conn.execute("ALTER TABLE journal_entries ADD COLUMN sealed_until TEXT", []);
-        let _ = conn.execute("ALTER TABLE journal_entries ADD COLUMN capsule_type TEXT", []);
+        let _ = conn.execute(
+            "ALTER TABLE journal_entries ADD COLUMN sealed_until TEXT",
+            [],
+        );
+        let _ = conn.execute(
+            "ALTER TABLE journal_entries ADD COLUMN capsule_type TEXT",
+            [],
+        );
         let _ = conn.execute(
             "ALTER TABLE journal_entries ADD COLUMN linked_original_id TEXT",
             [],
         );
-        let _ = conn.execute("ALTER TABLE journal_entries ADD COLUMN unsealed_at TEXT", []);
+        let _ = conn.execute(
+            "ALTER TABLE journal_entries ADD COLUMN unsealed_at TEXT",
+            [],
+        );
 
         // Runtime migration: entry status column (J2)
         let _ = conn.execute(
@@ -1118,9 +1126,7 @@ pub fn get_full_analytics_bundle(
 
     // Mood distribution
     let mut dist_stmt = conn
-        .prepare(
-            "SELECT mood, COUNT(*) as count FROM journal_entries GROUP BY mood ORDER BY mood",
-        )
+        .prepare("SELECT mood, COUNT(*) as count FROM journal_entries GROUP BY mood ORDER BY mood")
         .map_err(|e| format!("Distribution prepare failed: {}", e))?;
 
     let mood_distribution = dist_stmt
@@ -1136,7 +1142,13 @@ pub fn get_full_analytics_bundle(
 
     // Day of week stats
     let day_names = [
-        "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday",
+        "Sunday",
+        "Monday",
+        "Tuesday",
+        "Wednesday",
+        "Thursday",
+        "Friday",
+        "Saturday",
     ];
     let mut dow_stmt = conn
         .prepare(
@@ -1151,7 +1163,10 @@ pub fn get_full_analytics_bundle(
             let dow: i32 = row.get(0)?;
             Ok(DayOfWeekStats {
                 day_of_week: dow,
-                day_name: day_names.get(dow as usize).unwrap_or(&"Unknown").to_string(),
+                day_name: day_names
+                    .get(dow as usize)
+                    .unwrap_or(&"Unknown")
+                    .to_string(),
                 average_mood: row.get(1)?,
                 entry_count: row.get(2)?,
             })

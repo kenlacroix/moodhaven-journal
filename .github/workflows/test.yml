@@ -90,13 +90,13 @@ jobs:
         with:
           workspaces: src-tauri
 
-      - name: Create stub whisper sidecar (non-Linux)
-        if: matrix.os != 'ubuntu-latest'
+      - name: Create stub whisper sidecar
         shell: bash
         run: |
           # tauri-build validates sidecar existence at compile time.
           # Create a stub binary for the current host triple so cargo check passes
-          # on Windows/macOS without shipping a real whisper binary in CI.
+          # without shipping a real whisper binary in CI.
+          mkdir -p src-tauri/binaries
           TRIPLE=$(rustc -vV | sed -n 's/host: //p')
           EXT=""
           if [[ "$TRIPLE" == *"windows"* ]]; then EXT=".exe"; fi

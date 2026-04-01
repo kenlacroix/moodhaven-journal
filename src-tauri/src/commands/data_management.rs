@@ -172,17 +172,25 @@ pub async fn export_data(
             .filter(|e| {
                 // Mood range filter
                 if let Some(min) = f.mood_min {
-                    if e.mood < min { return false; }
+                    if e.mood < min {
+                        return false;
+                    }
                 }
                 if let Some(max) = f.mood_max {
-                    if e.mood > max { return false; }
+                    if e.mood > max {
+                        return false;
+                    }
                 }
                 // Date range filter (lexicographic on ISO 8601)
                 if let Some(ref start) = f.start_date {
-                    if e.created_at.as_str() < start.as_str() { return false; }
+                    if e.created_at.as_str() < start.as_str() {
+                        return false;
+                    }
                 }
                 if let Some(ref end) = f.end_date {
-                    if e.created_at.as_str() > end.as_str() { return false; }
+                    if e.created_at.as_str() > end.as_str() {
+                        return false;
+                    }
                 }
                 // Tag filter: entry must have ALL specified tags
                 if let Some(ref tags) = f.tags {

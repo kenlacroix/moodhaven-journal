@@ -457,7 +457,8 @@ fn run_pairing_server(
                 let _ = app.emit("peer:paired", &trusted);
                 log::info!(
                     "[pairing] Paired with {} ({})",
-                    trusted.device_name, trusted.device_id
+                    trusted.device_name,
+                    trusted.device_id
                 );
 
                 // Clear token and stop serving
@@ -667,7 +668,8 @@ pub async fn peer_accept_pairing(
     let _ = app.emit("peer:paired", &trusted);
     log::info!(
         "[pairing] Accepted pairing with {} ({})",
-        trusted.device_name, trusted.device_id
+        trusted.device_name,
+        trusted.device_id
     );
 
     Ok(trusted)

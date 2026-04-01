@@ -545,7 +545,8 @@ fn run_discovery(
                 let _ = app.emit("peer:discovered", &peer);
                 log::info!(
                     "[peer] Discovered: {} ({})",
-                    peer.device_name, peer.device_id
+                    peer.device_name,
+                    peer.device_id
                 );
             }
 

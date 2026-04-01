@@ -152,6 +152,7 @@ jobs:
             BIN="build/bin/whisper-cli"
           fi
 
+          mkdir -p "$GITHUB_WORKSPACE/src-tauri/binaries"
           cp "$BIN" "$GITHUB_WORKSPACE/src-tauri/binaries/${{ matrix.whisper_binary }}"
           chmod +x "$GITHUB_WORKSPACE/src-tauri/binaries/${{ matrix.whisper_binary }}"
 

@@ -7,6 +7,18 @@ use tauri::{AppHandle, Manager};
 
 use crate::db::{self, Database};
 
+/// Optional filters for selective export.
+/// All fields are optional; absent means "no filter" (export all).
+#[derive(serde::Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportFilter {
+    pub tags: Option<Vec<String>>,
+    pub mood_min: Option<i32>,
+    pub mood_max: Option<i32>,
+    pub start_date: Option<String>,
+    pub end_date: Option<String>,
+}
+
 /// Return the path to the rotating log file, or None if the file has not been created yet.
 #[tauri::command]
 pub fn get_log_path(app: AppHandle) -> Option<String> {
@@ -135,9 +147,15 @@ pub async fn factory_reset(app: AppHandle) -> Result<bool, String> {
     Ok(true)
 }
 
-/// Export all journal entries, settings, 2FA config, and tags to encrypted backup
+/// Export journal entries, settings, 2FA config, and tags to encrypted backup.
+/// Accepts optional filters (tags, mood range, date range) for selective export.
+/// When no filters are provided, exports all entries — WebDAV compat path unchanged.
 #[tauri::command]
-pub async fn export_data(app: AppHandle, _password: String) -> Result<String, String> {
+pub async fn export_data(
+    app: AppHandle,
+    _password: String,
+    filter: Option<ExportFilter>,
+) -> Result<String, String> {
     let db = app.state::<Database>();
 
     // Flush any pending WAL frames before reading, so the export is consistent
@@ -146,8 +164,42 @@ pub async fn export_data(app: AppHandle, _password: String) -> Result<String, St
         let _ = conn.execute_batch("PRAGMA wal_checkpoint(FULL)");
     }
 
-    // Get all journal entries
-    let entries = db::get_all_entries(&db, None)?;
+    // Get entries — full set or filtered
+    let all_entries = db::get_all_entries(&db, None)?;
+    let entries = if let Some(f) = filter {
+        all_entries
+            .into_iter()
+            .filter(|e| {
+                // Mood range filter
+                if let Some(min) = f.mood_min {
+                    if e.mood < min { return false; }
+                }
+                if let Some(max) = f.mood_max {
+                    if e.mood > max { return false; }
+                }
+                // Date range filter (lexicographic on ISO 8601)
+                if let Some(ref start) = f.start_date {
+                    if e.created_at.as_str() < start.as_str() { return false; }
+                }
+                if let Some(ref end) = f.end_date {
+                    if e.created_at.as_str() > end.as_str() { return false; }
+                }
+                // Tag filter: entry must have ALL specified tags
+                if let Some(ref tags) = f.tags {
+                    if !tags.is_empty() {
+                        let entry_tags: std::collections::HashSet<&str> =
+                            e.tags.iter().map(|t| t.as_str()).collect();
+                        if !tags.iter().all(|t| entry_tags.contains(t.as_str())) {
+                            return false;
+                        }
+                    }
+                }
+                true
+            })
+            .collect()
+    } else {
+        all_entries
+    };
 
     // Get frontend settings (settings.json file)
     let settings_path = app

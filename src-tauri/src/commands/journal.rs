@@ -128,6 +128,12 @@ pub fn patch_entry_pinned(db: State<Database>, id: String, pinned: bool) -> Resu
     db::patch_entry_pinned(&db, &id, pinned)
 }
 
+/// Set the status of an entry ('thinking' | 'complete' | 'revisit').
+#[tauri::command]
+pub fn patch_entry_status(db: State<Database>, id: String, status: String) -> Result<(), String> {
+    db::patch_entry_status(&db, &id, &status)
+}
+
 /// Sync tags for an entry (replaces all existing tags).
 #[tauri::command]
 pub fn sync_entry_tags(db: State<Database>, id: String, tags: Vec<String>) -> Result<(), String> {

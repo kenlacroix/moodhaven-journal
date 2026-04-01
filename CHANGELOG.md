@@ -7,6 +7,22 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.7.13] — 2026-03-31
+
+### Added
+- **Selective export.** The Export section in Settings now lets you filter by tags, mood range, and date range before exporting. Exports with no filters applied are identical to the previous full export (WebDAV-safe). The Rust `export_data` command accepts an optional `ExportFilter`; the `SelectiveExportPanel` component handles the filter UI with live entry count preview.
+- **WeeklyStreakCard.** New AI card showing entries written this week against your weekly goal (default: 3). A pop animation fires when the goal is reached (respects `prefers-reduced-motion`); the card is disabled when AI features are off.
+- **EntryStateBadge (J2).** Inline badge on each entry cycles through "Still thinking," "Complete," and "Come back to this." State is persisted via the new `patch_entry_status` Rust command. Null/undefined status defaults to "Complete" for backwards compatibility.
+- **AICardWrapper.** Wraps AI insight cards with a per-session privacy badge ("Generated locally," "Cloud mode," or "Ollama offline") so users see at a glance where inference is happening.
+- **ISO week utilities.** `getISOWeekStart()` and `countEntriesThisWeek()` added to `dateUtils.ts` for client-side weekly cadence counting.
+- **`status` column on `journal_entries`.** Additive runtime migration — default `'complete'`, supports `'thinking' | 'complete' | 'revisit'`. Validated server-side before any write.
+
+### Changed
+- Insights view integrates `AICardWrapper` and `WeeklyStreakCard` alongside existing AI cards.
+- Settings Export tab now renders `SelectiveExportPanel` instead of the bare export button.
+
+---
+
 ## [0.7.12] — 2026-03-31
 
 ### Changed

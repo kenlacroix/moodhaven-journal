@@ -60,7 +60,14 @@ const mockCreateAIServiceConfig = vi.mocked(createAIServiceConfig);
 // ── Defaults ─────────────────────────────────────────────────────────────────
 
 const defaultMeta = { entries_this_week: 3, total_entries: 10, top_tags: ['work', 'health'], last_entry_date: '2024-06-15' };
-const defaultLocalMeta = { totalEntries: 8, averageMood: 3.5, topEmotions: [], entryFrequency: 'daily' as const, preferredTime: 'morning' as const, moodTrend: 'stable' as const, recentMoodAverage: 3.5, dominantEmotions: [] };
+const defaultLocalMeta: import('../types/ai').AggregatedMetadata = {
+  periodDays: 30,
+  totalEntries: 8,
+  moodStats: { average: 3.5, trend: 'stable', volatility: 'low', distribution: { 1: 0, 2: 1, 3: 3, 4: 3, 5: 1 }, recentAverage: 3.5 },
+  patterns: { bestDayOfWeek: 'Monday', worstDayOfWeek: 'Friday', bestTimeOfDay: 'morning', frequency: 'daily', currentStreak: 2, longestStreak: 7 },
+  emotionalProfile: { dominantIndicators: [], recentIndicators: [], gratitudeFrequency: 0.2, goalsFrequency: 0.1 },
+  sentimentBreakdown: { positive: 0.5, negative: 0.2, neutral: 0.2, mixed: 0.1 },
+};
 const defaultAiMeta = { ...defaultLocalMeta, totalEntries: 5 };
 
 function setupDefaultMocks() {
@@ -184,7 +191,7 @@ describe('useInsights', () => {
         },
       });
       mockGetEntriesByDateRange.mockResolvedValue([{ id: '1' } as Awaited<ReturnType<typeof mockGetEntriesByDateRange>>[number]]);
-      mockGenerateInsights.mockResolvedValue({ success: true, data: [{ id: 'i1', type: 'pattern', title: 'test', message: 'msg', priority: 'low' }] });
+      mockGenerateInsights.mockResolvedValue({ success: true, data: [{ id: 'i1', type: 'pattern', title: 'test', message: 'msg', priority: 'low', basedOn: 'test data', actionable: false }] });
 
       const { result } = renderHook(() => useInsights());
 

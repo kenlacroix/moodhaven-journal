@@ -26,13 +26,21 @@ export async function exitApp(): Promise<void> {
   return invoke<void>('exit_app');
 }
 
+/** Optional filters for selective export. All fields optional; absent = no filter. */
+export interface ExportFilter {
+  tags?: string[];
+  moodMin?: number;
+  moodMax?: number;
+  startDate?: string; // ISO 8601
+  endDate?: string;   // ISO 8601
+}
+
 /**
- * Export all journal data to encrypted backup
- * @param password - Password to encrypt the backup
- * @returns Base64-encoded backup string
+ * Export journal data to encrypted backup.
+ * Pass `filter` for selective export; omit for full export (WebDAV-safe).
  */
-export async function exportData(password: string): Promise<string> {
-  return invoke<string>('export_data', { password });
+export async function exportData(password: string, filter?: ExportFilter): Promise<string> {
+  return invoke<string>('export_data', { password, filter: filter ?? null });
 }
 
 /**

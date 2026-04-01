@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { encrypt, decrypt } from './crypto';
 import type { EncryptedData, CryptoResult } from './crypto';
-import { encryptedExport, encryptedImport } from './dataManagementService';
+import { encryptedExport, encryptedImport, exportData } from './dataManagementService';
 
 vi.mock('./crypto', () => ({
   encrypt: vi.fn(),
@@ -36,13 +36,13 @@ describe('dataManagementService encryption', () => {
       expect(parsed.payload).toEqual(fakeEncryptedData);
     });
 
-    it('calls export_data with empty password', async () => {
+    it('calls export_data with empty password and no filter', async () => {
       mockInvoke.mockResolvedValueOnce('dGVzdA==');
       mockEncrypt.mockResolvedValueOnce({ success: true, data: fakeEncryptedData });
 
       await encryptedExport('my-password');
 
-      expect(mockInvoke).toHaveBeenCalledWith('export_data', { password: '' });
+      expect(mockInvoke).toHaveBeenCalledWith('export_data', { password: '', filter: null });
     });
 
     it('encrypts the base64 data with the provided password', async () => {
@@ -59,6 +59,30 @@ describe('dataManagementService encryption', () => {
       mockEncrypt.mockResolvedValueOnce({ success: false, error: 'Encryption error' });
 
       await expect(encryptedExport('password')).rejects.toThrow('Encryption error');
+    });
+  });
+
+  describe('G2: exportData with filters', () => {
+    it('G2-1: passes tags + moodRange filter params to invoke', async () => {
+      mockInvoke.mockResolvedValueOnce('base64result');
+
+      await exportData('pw', { tags: ['work'], moodMin: 1, moodMax: 3 });
+
+      expect(mockInvoke).toHaveBeenCalledWith('export_data', {
+        password: 'pw',
+        filter: { tags: ['work'], moodMin: 1, moodMax: 3 },
+      });
+    });
+
+    it('G2-2: exportData() with no filters passes filter: null — WebDAV regression', async () => {
+      mockInvoke.mockResolvedValueOnce('base64result');
+
+      await exportData('');
+
+      expect(mockInvoke).toHaveBeenCalledWith('export_data', {
+        password: '',
+        filter: null,
+      });
     });
   });
 

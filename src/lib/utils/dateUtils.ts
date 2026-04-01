@@ -278,3 +278,32 @@ export function getRelativeDateLabel(date: Date | string): string {
   if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
   return formatDisplayDate(d);
 }
+
+/**
+ * Return the ISO 8601 Monday of the week containing `date`.
+ * Week starts on Monday (ISO standard).
+ */
+export function getISOWeekStart(date: Date): Date {
+  const d = new Date(date);
+  const day = d.getDay(); // 0=Sun, 1=Mon, …
+  const diff = day === 0 ? -6 : 1 - day; // shift to Monday
+  d.setDate(d.getDate() + diff);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+/**
+ * Count entries whose `created_at` falls within the current ISO week (Mon–Sun).
+ * Useful for client-side weekly streak counting.
+ */
+export function countEntriesThisWeek(entries: Array<{ created_at: string }>): number {
+  const weekStart = getISOWeekStart(new Date());
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekStart.getDate() + 7);
+
+  return entries.filter((e) => {
+    const d = new Date(e.created_at);
+    return d >= weekStart && d < weekEnd;
+  }).length;
+}
+

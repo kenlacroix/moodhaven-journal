@@ -24,7 +24,10 @@ import {
   getDataStats,
   downloadBackup as downloadBackupFile,
   exportWithMedia,
+  exportData,
+  type ExportFilter,
 } from '../lib/services/dataManagementService';
+import { encrypt } from '../lib/services/crypto';
 import { testConnection as testWebDAVConnection } from '../lib/services/webdavService';
 import {
   get2FAStatus,
@@ -61,13 +64,14 @@ import {
   type RateLimitState,
 } from '../lib/services/rateLimitService';
 import { DevicesTab } from '../components/peer-sync';
+import { SelectiveExportPanel } from '../components/settings/SelectiveExportPanel';
 import { CloudConsentModal } from '../components/transcript/CloudConsentModal';
 import type { STTFormattingLayer } from '../types/settings';
 import { invoke } from '@tauri-apps/api/core';
 import { logger, setLevel } from '../lib/services/logger';
 import type { LogLevel } from '../lib/services/logger';
 
-type SettingsTab = 'general' | 'privacy' | 'sync' | 'ai' | 'health' | 'devices' | 'about';
+type SettingsTab = 'general' | 'privacy' | 'sync' | 'ai' | 'health' | 'devices' | 'export' | 'about';
 
 interface TabConfig {
   id: SettingsTab;
@@ -112,6 +116,12 @@ const TABS: TabConfig[] = [
     label: 'Devices',
     icon: 'M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z M13 17h-2m10 0h-1.5a2 2 0 01-2-2v-4a2 2 0 012-2h1.5M5 17H3.5a2 2 0 01-2-2v-4a2 2 0 012-2H5m0 0V7a2 2 0 012-2h6a2 2 0 012 2v2M5 9h14',
     keywords: ['devices', 'sync', 'local', 'peer', 'nearby', 'pairing', 'pair', 'wifi', 'network', 'lan'],
+  },
+  {
+    id: 'export',
+    label: 'Export',
+    icon: 'M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3',
+    keywords: ['export', 'backup', 'download', 'filter', 'tags', 'mood', 'selective', 'date range'],
   },
   {
     id: 'about',
@@ -183,6 +193,11 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
   // Refs for deep-link scroll targets
   const sttSectionRef = useRef<HTMLDivElement>(null);
   const aiSectionRef = useRef<HTMLDivElement>(null);
+
+  // Export tab state
+  const [exportMatchCount, setExportMatchCount] = useState<number | null>(null);
+  const [exportTags, setExportTags] = useState<string[]>([]);
+  const pendingExportFilter = useRef<ExportFilter | null>(null);
 
   // Data management state
   const [showResetConfirm, setShowResetConfirm] = useState(false);
@@ -366,6 +381,10 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
     if (activeTab === 'about') {
       invoke<string | null>('get_log_path').then(setLogPath).catch(() => setLogPath(null));
     }
+    if (activeTab === 'export') {
+      getDataStats().then((s) => setExportMatchCount(s.totalEntries)).catch(() => setExportMatchCount(0));
+      invoke<string[]>('get_book_tags', { bookId: 'default' }).then(setExportTags).catch(() => setExportTags([]));
+    }
   }, [activeTab]);
 
   // Refresh 2FA status after setup/changes
@@ -409,6 +428,11 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
   }, [refresh2FAStatus]);
 
   const handleExport = useCallback(() => {
+    setShowPasswordModal('export');
+  }, []);
+
+  const handleSelectiveExport = useCallback((filter: ExportFilter) => {
+    pendingExportFilter.current = filter;
     setShowPasswordModal('export');
   }, []);
 
@@ -516,9 +540,20 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
 
       setIsExporting(true);
       setExportProgress(null);
-      const data = await exportWithMedia(syncPassword, (done, total) => {
-        setExportProgress({ done, total });
-      });
+      const filter = pendingExportFilter.current;
+      pendingExportFilter.current = null;
+      let data: string;
+      if (filter !== null) {
+        // Selective export (entries only, no media)
+        const base64 = await exportData(syncPassword, filter);
+        const encrypted = await encrypt(base64, syncPassword);
+        if (!encrypted.success || !encrypted.data) throw new Error(encrypted.error || 'Encryption failed');
+        data = JSON.stringify({ format: 'moodhaven-encrypted-v1', payload: encrypted.data });
+      } else {
+        data = await exportWithMedia(syncPassword, (done, total) => {
+          setExportProgress({ done, total });
+        });
+      }
       setExportProgress(null);
       const date = new Date().toISOString().split('T')[0];
       await downloadBackupFile(data, `moodhaven-backup-${date}.moodhaven`);
@@ -1794,6 +1829,27 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
                 {activeTab === 'devices' && (
                   <div id="panel-devices" role="tabpanel" className="space-y-6">
                     <DevicesTab />
+                  </div>
+                )}
+
+                {/* Export Tab */}
+                {activeTab === 'export' && (
+                  <div id="panel-export" role="tabpanel" className="space-y-6">
+                    <div>
+                      <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-1">
+                        Selective Export
+                      </h3>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
+                        Export a filtered subset of your journal. Leave all filters blank to export everything.
+                        Exports entries only (no media attachments).
+                      </p>
+                      <SelectiveExportPanel
+                        availableTags={exportTags}
+                        matchCount={exportMatchCount}
+                        onExport={handleSelectiveExport}
+                        isExporting={isExporting}
+                      />
+                    </div>
                   </div>
                 )}
 

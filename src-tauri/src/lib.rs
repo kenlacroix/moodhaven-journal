@@ -173,6 +173,7 @@ pub fn run() {
             commands::delete_journal_entry,
             commands::patch_entry_location_weather,
             commands::patch_entry_pinned,
+            commands::patch_entry_status,
             commands::sync_entry_tags,
             commands::get_book_tags,
             // Statistics

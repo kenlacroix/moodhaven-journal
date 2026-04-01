@@ -192,3 +192,230 @@ pub fn get_mood_delta(
         mood_today,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use rusqlite::{params, Connection};
+
+    fn setup_db() -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE journal_entries (
+                id TEXT PRIMARY KEY,
+                encrypted_content TEXT NOT NULL DEFAULT '{}',
+                mood INTEGER NOT NULL DEFAULT 3,
+                privacy_mode INTEGER DEFAULT 0,
+                location_weather TEXT,
+                book_id TEXT NOT NULL DEFAULT 'default',
+                pinned INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                sealed_until TEXT,
+                capsule_type TEXT,
+                linked_original_id TEXT,
+                unsealed_at TEXT,
+                status TEXT
+            );
+            CREATE TABLE tags (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT UNIQUE NOT NULL
+            );
+            CREATE TABLE entry_tags (
+                entry_id TEXT,
+                tag_id INTEGER,
+                PRIMARY KEY (entry_id, tag_id)
+            );",
+        )
+        .unwrap();
+        conn
+    }
+
+    fn insert_entry(conn: &Connection, id: &str, created_at: &str) {
+        conn.execute(
+            "INSERT INTO journal_entries (id, encrypted_content, mood, created_at, updated_at)
+             VALUES (?1, '{}', 3, ?2, ?2)",
+            params![id, created_at],
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn test_seal_entry_sets_columns() {
+        let conn = setup_db();
+        insert_entry(&conn, "e1", "2026-01-01T00:00:00Z");
+
+        let rows = conn
+            .execute(
+                "UPDATE journal_entries
+                 SET sealed_until = ?1, capsule_type = ?2
+                 WHERE id = ?3
+                   AND datetime(?1) > datetime('now')
+                   AND sealed_until IS NULL
+                   AND unsealed_at IS NULL",
+                params!["2099-01-01T00:00:00Z", "letter", "e1"],
+            )
+            .unwrap();
+        assert_eq!(rows, 1);
+
+        let (sealed_until, capsule_type): (Option<String>, Option<String>) = conn
+            .query_row(
+                "SELECT sealed_until, capsule_type FROM journal_entries WHERE id = 'e1'",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(sealed_until.as_deref(), Some("2099-01-01T00:00:00Z"));
+        assert_eq!(capsule_type.as_deref(), Some("letter"));
+    }
+
+    #[test]
+    fn test_seal_entry_rejects_past_date() {
+        let conn = setup_db();
+        insert_entry(&conn, "e2", "2026-01-01T00:00:00Z");
+
+        let rows = conn
+            .execute(
+                "UPDATE journal_entries
+                 SET sealed_until = ?1, capsule_type = ?2
+                 WHERE id = ?3
+                   AND datetime(?1) > datetime('now')
+                   AND sealed_until IS NULL
+                   AND unsealed_at IS NULL",
+                params!["2000-01-01T00:00:00Z", "vault", "e2"],
+            )
+            .unwrap();
+        assert_eq!(rows, 0);
+    }
+
+    #[test]
+    fn test_seal_entry_double_seal_guard() {
+        let conn = setup_db();
+        insert_entry(&conn, "e3", "2026-01-01T00:00:00Z");
+
+        // First seal
+        let rows1 = conn
+            .execute(
+                "UPDATE journal_entries
+                 SET sealed_until = ?1, capsule_type = ?2
+                 WHERE id = ?3
+                   AND datetime(?1) > datetime('now')
+                   AND sealed_until IS NULL
+                   AND unsealed_at IS NULL",
+                params!["2099-01-01T00:00:00Z", "letter", "e3"],
+            )
+            .unwrap();
+        assert_eq!(rows1, 1);
+
+        // Second seal attempt — sealed_until IS NULL guard blocks it
+        let rows2 = conn
+            .execute(
+                "UPDATE journal_entries
+                 SET sealed_until = ?1, capsule_type = ?2
+                 WHERE id = ?3
+                   AND datetime(?1) > datetime('now')
+                   AND sealed_until IS NULL
+                   AND unsealed_at IS NULL",
+                params!["2099-06-01T00:00:00Z", "vault", "e3"],
+            )
+            .unwrap();
+        assert_eq!(rows2, 0);
+    }
+
+    #[test]
+    fn test_unseal_entry_clears_columns() {
+        let conn = setup_db();
+        // Insert an already-sealed entry
+        conn.execute(
+            "INSERT INTO journal_entries
+             (id, encrypted_content, mood, created_at, updated_at, sealed_until, capsule_type)
+             VALUES ('e4', '{}', 3, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z',
+                     '2099-01-01T00:00:00Z', 'letter')",
+            [],
+        )
+        .unwrap();
+
+        let rows = conn
+            .execute(
+                "UPDATE journal_entries
+                 SET unsealed_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'),
+                     capsule_type = COALESCE(capsule_type, 'anniversary'),
+                     sealed_until = NULL
+                 WHERE id = ?1
+                   AND unsealed_at IS NULL",
+                params!["e4"],
+            )
+            .unwrap();
+        assert_eq!(rows, 1);
+
+        let (sealed_until, capsule_type, unsealed_at): (Option<String>, Option<String>, Option<String>) =
+            conn.query_row(
+                "SELECT sealed_until, capsule_type, unsealed_at FROM journal_entries WHERE id = 'e4'",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            )
+            .unwrap();
+        assert!(sealed_until.is_none());
+        assert_eq!(capsule_type.as_deref(), Some("letter"));
+        assert!(unsealed_at.is_some());
+    }
+
+    #[test]
+    fn test_get_due_capsules_returns_past_due() {
+        let conn = setup_db();
+        conn.execute(
+            "INSERT INTO journal_entries
+             (id, encrypted_content, mood, created_at, updated_at, sealed_until, capsule_type)
+             VALUES ('e5', '{}', 3, '2025-01-15T00:00:00Z', '2025-01-15T00:00:00Z',
+                     '2025-06-01T00:00:00Z', 'vault')",
+            [],
+        )
+        .unwrap();
+
+        let sql = "SELECT je.id
+                   FROM journal_entries je
+                   WHERE je.unsealed_at IS NULL
+                     AND (
+                       (je.sealed_until IS NOT NULL AND datetime(je.sealed_until) <= datetime('now'))
+                     )
+                     AND NOT (strftime('%m-%d', je.created_at) = strftime('%m-%d', 'now'))
+                   LIMIT 1";
+
+        let id: String = conn.query_row(sql, [], |r| r.get(0)).unwrap();
+        assert_eq!(id, "e5");
+    }
+
+    #[test]
+    fn test_get_due_capsules_anniversary_exclusion() {
+        let conn = setup_db();
+        // created_at matches today's M-D (use a past year so anniversary logic triggers)
+        let today_md = "strftime('%m-%d', 'now')";
+        let created_at_expr = format!(
+            "strftime('%Y', 'now', '-2 years') || '-' || {}",
+            today_md
+        );
+        conn.execute(
+            &format!(
+                "INSERT INTO journal_entries
+                 (id, encrypted_content, mood, created_at, updated_at, sealed_until, capsule_type)
+                 VALUES ('e6', '{{}}', 3,
+                         ({}),
+                         ({}),
+                         '2025-01-01T00:00:00Z', 'letter')",
+                created_at_expr, created_at_expr
+            ),
+            [],
+        )
+        .unwrap();
+
+        let sql = "SELECT COUNT(*)
+                   FROM journal_entries je
+                   WHERE je.unsealed_at IS NULL
+                     AND (
+                       (je.sealed_until IS NOT NULL AND datetime(je.sealed_until) <= datetime('now'))
+                     )
+                     AND NOT (strftime('%m-%d', je.created_at) = strftime('%m-%d', 'now'))";
+
+        let count: i64 = conn.query_row(sql, [], |r| r.get(0)).unwrap();
+        assert_eq!(count, 0);
+    }
+}

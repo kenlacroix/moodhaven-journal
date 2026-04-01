@@ -1,26 +1,6 @@
-/**
- * SettingsPage - User preferences and configuration
- *
- * Features:
- * - Modal overlay with vertical left sidebar navigation
- * - Search functionality to find settings quickly
- * - Keyboard navigation support
- * - Escape key to close
- */
-
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useSettingsStore } from '../stores/settingsStore';
 import {
-  SettingSection,
-  SettingToggle,
-  SettingSelect,
-  SettingInput,
-  DaySelector,
-} from '../components/settings';
-import { testOpenAIKey, testLocalAIConnection } from '../lib/services/settingsService';
-import {
-  factoryReset,
-  exitApp,
   getDataStats,
   downloadBackup as downloadBackupFile,
   exportWithMedia,
@@ -28,29 +8,12 @@ import {
   type ExportFilter,
 } from '../lib/services/dataManagementService';
 import { encrypt } from '../lib/services/crypto';
-import { testConnection as testWebDAVConnection } from '../lib/services/webdavService';
 import {
   get2FAStatus,
-  regenerateBackupCodes,
-  disable2FA,
   getBackupCodesCount,
 } from '../lib/services/twoFactorService';
-import { TotpSetup, HardwareKeySetup, BackupCodesDisplay } from '../components/two-factor';
-import type { TwoFactorStatus, BackupCodes } from '../types/twoFactor';
-import type { ReminderFrequency, StorageBackend, STTModel } from '../types/settings';
-import { STT_MODELS } from '../types/settings';
-import { sendTestNotification } from '../lib/services/reminderService';
-import {
-  checkModelStatus,
-  downloadModel,
-  deleteModel,
-  checkSidecarAvailable,
-} from '../lib/services/speechToTextService';
+import type { TwoFactorStatus } from '../types/twoFactor';
 import { verifyUserPassword } from '../lib/services/journalService';
-import { biometricIsAvailable, biometricIsEnrolled, biometricUnenroll } from '../lib/services/biometricService';
-import { usePlatform } from '../hooks/usePlatform';
-import { OuraConnectionCard } from '../components/oura/OuraConnectionCard';
-import { UpdatePanel } from '../components/updater/UpdatePanel';
 import type { UseUpdateCheckReturn } from '../hooks/useUpdateCheck';
 import {
   loadRateLimitState,
@@ -64,12 +27,18 @@ import {
   type RateLimitState,
 } from '../lib/services/rateLimitService';
 import { DevicesTab } from '../components/peer-sync';
-import { SelectiveExportPanel } from '../components/settings/SelectiveExportPanel';
-import { CloudConsentModal } from '../components/transcript/CloudConsentModal';
-import type { STTFormattingLayer } from '../types/settings';
 import { invoke } from '@tauri-apps/api/core';
 import { logger, setLevel } from '../lib/services/logger';
 import type { LogLevel } from '../lib/services/logger';
+import {
+  GeneralTab,
+  PrivacyTab,
+  SyncTab,
+  AITab,
+  HealthTab,
+  ExportTab,
+  AboutTab,
+} from '../components/settings/tabs';
 
 type SettingsTab = 'general' | 'privacy' | 'sync' | 'ai' | 'health' | 'devices' | 'export' | 'about';
 
@@ -190,45 +159,20 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
 
-  // Refs for deep-link scroll targets
   const sttSectionRef = useRef<HTMLDivElement>(null);
   const aiSectionRef = useRef<HTMLDivElement>(null);
 
-  // Export tab state
   const [exportMatchCount, setExportMatchCount] = useState<number | null>(null);
   const [exportTags, setExportTags] = useState<string[]>([]);
   const pendingExportFilter = useRef<ExportFilter | null>(null);
 
-  // Data management state
-  const [showResetConfirm, setShowResetConfirm] = useState(false);
-  const [resetConfirmText, setResetConfirmText] = useState('');
-  const [isResetting, setIsResetting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState<{ done: number; total: number } | null>(null);
   const [dataStats, setDataStats] = useState<{ totalEntries: number; averageMood: number } | null>(null);
 
-  // 2FA state
   const [twoFactorStatus, setTwoFactorStatus] = useState<TwoFactorStatus | null>(null);
   const [backupCodesCount, setBackupCodesCount] = useState<number>(0);
-  const [show2FASetup, setShow2FASetup] = useState<'totp' | 'webauthn' | null>(null);
-  const [showBackupCodes, setShowBackupCodes] = useState(false);
-  const [backupCodes, setBackupCodes] = useState<BackupCodes | null>(null);
-  const [isDisabling2FA, setIsDisabling2FA] = useState(false);
-  const [showDisable2FAConfirm, setShowDisable2FAConfirm] = useState(false);
 
-  // Reminder test state
-  const [testingNotification, setTestingNotification] = useState(false);
-  const [notificationTestResult, setNotificationTestResult] = useState<string | null>(null);
-
-  // Platform detection
-  const { isAndroid } = usePlatform();
-
-  // Biometric state (Android only)
-  const [biometricAvailable, setBiometricAvailable] = useState(false);
-  const [biometricEnrolled, setBiometricEnrolled] = useState(false);
-  const [biometricDisabling, setBiometricDisabling] = useState(false);
-
-  // Log path state (About tab)
   const [logPath, setLogPath] = useState<string | null>(null);
 
   function handleLogLevelChange(level: LogLevel): void {
@@ -244,83 +188,11 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
     ]);
   }
 
-  // Speech-to-Text state
-  const [sttDownloading, setSTTDownloading] = useState(false);
-  const [sttDownloadError, setSTTDownloadError] = useState<string | null>(null);
-  const [sttSidecarAvailable, setSTTSidecarAvailable] = useState<boolean | null>(null);
-  const [cloudConsentModalOpen, setCloudConsentModalOpen] = useState(false);
-  // Tracks the layer the user was on before opening the consent modal (to revert on cancel)
-  const prevFormattingLayerRef = useRef<STTFormattingLayer>('local');
-
-  // Tutorial state
-  const handleShowTutorial = useCallback(async () => {
-    setHasSeenTutorial(false);
-    await saveSettings();
-  }, [setHasSeenTutorial, saveSettings]);
-
-  // Check biometric availability on mount (Android only)
-  useEffect(() => {
-    if (!isAndroid) return;
-    Promise.all([biometricIsAvailable(), biometricIsEnrolled()]).then(
-      ([available, enrolled]) => {
-        setBiometricAvailable(available);
-        setBiometricEnrolled(enrolled);
-      }
-    ).catch(() => {});
-  }, [isAndroid]);
-
-  // Check STT model and sidecar on mount and whenever the selected model changes.
-  // Intentionally excludes modelDownloaded from deps — this effect is the source
-  // of truth for that flag (re-running on its own update would be redundant).
-  useEffect(() => {
-    checkSidecarAvailable().then(setSTTSidecarAvailable);
-    if (settings.speechToText.model) {
-      checkModelStatus(settings.speechToText.model).then((status) => {
-        setSTTModelDownloaded(status.downloaded);
-      });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settings.speechToText.model, setSTTModelDownloaded]);
-
-  // Handle STT model download
-  const handleSTTModelDownload = useCallback(async () => {
-    setSTTDownloading(true);
-    setSTTDownloadError(null);
-    setSTTDownloadProgress(0);
-
-    try {
-      await downloadModel(settings.speechToText.model, (progress) => {
-        setSTTDownloadProgress(progress.percentage);
-      });
-      setSTTModelDownloaded(true);
-      setSTTDownloadProgress(null);
-      await saveSettings();
-    } catch (error) {
-      setSTTDownloadError(error instanceof Error ? error.message : 'Download failed');
-      setSTTDownloadProgress(null);
-    } finally {
-      setSTTDownloading(false);
-    }
-  }, [settings.speechToText.model, setSTTModelDownloaded, setSTTDownloadProgress, saveSettings]);
-
-  // Handle STT model delete
-  const handleSTTModelDelete = useCallback(async () => {
-    try {
-      await deleteModel(settings.speechToText.model);
-      setSTTModelDownloaded(false);
-      await saveSettings();
-    } catch (error) {
-      setSTTDownloadError(error instanceof Error ? error.message : 'Delete failed');
-    }
-  }, [settings.speechToText.model, setSTTModelDownloaded, saveSettings]);
-
-  // Export modal state
   const [showPasswordModal, setShowPasswordModal] = useState<'export' | null>(null);
   const [syncPassword, setSyncPassword] = useState('');
   const [syncPasswordError, setSyncPasswordError] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
 
-  // Rate limiting for password modal (shares persisted state with lock screen)
   const [syncRateLimit, setSyncRateLimit] = useState<RateLimitState>({
     failedAttempts: 0,
     lockoutUntil: null,
@@ -333,7 +205,6 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
     loadSettings();
   }, [loadSettings]);
 
-  // Escape key closes the modal
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -342,7 +213,6 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
     return () => document.removeEventListener('keydown', handleEscape);
   }, [onClose]);
 
-  // Handle scroll-to-section navigation from other pages
   useEffect(() => {
     if (scrollToSection === 'speech-to-text') {
       setActiveTab('general');
@@ -371,7 +241,6 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
     }
   }, [scrollToSection, setScrollToSection]);
 
-  // Load data stats and 2FA status when privacy tab is active
   useEffect(() => {
     if (activeTab === 'privacy') {
       getDataStats().then(setDataStats).catch(() => setDataStats(null));
@@ -387,45 +256,12 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
     }
   }, [activeTab]);
 
-  // Refresh 2FA status after setup/changes
   const refresh2FAStatus = useCallback(async () => {
     const status = await get2FAStatus();
     setTwoFactorStatus(status);
     const count = await getBackupCodesCount();
     setBackupCodesCount(count);
   }, []);
-
-  // Handle 2FA setup completion
-  const handle2FASetupComplete = useCallback(() => {
-    setShow2FASetup(null);
-    refresh2FAStatus();
-  }, [refresh2FAStatus]);
-
-  // Handle regenerate backup codes
-  const handleRegenerateBackupCodes = useCallback(async () => {
-    try {
-      const codes = await regenerateBackupCodes();
-      setBackupCodes(codes);
-      setShowBackupCodes(true);
-      refresh2FAStatus();
-    } catch (error) {
-      logger.error('Failed to regenerate backup codes:', { error: String(error) });
-    }
-  }, [refresh2FAStatus]);
-
-  // Handle disable 2FA
-  const handleDisable2FA = useCallback(async () => {
-    setIsDisabling2FA(true);
-    try {
-      await disable2FA();
-      setShowDisable2FAConfirm(false);
-      refresh2FAStatus();
-    } catch (error) {
-      logger.error('Failed to disable 2FA:', { error: String(error) });
-    } finally {
-      setIsDisabling2FA(false);
-    }
-  }, [refresh2FAStatus]);
 
   const handleExport = useCallback(() => {
     setShowPasswordModal('export');
@@ -436,7 +272,6 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
     setShowPasswordModal('export');
   }, []);
 
-  // Load rate limit state when password modal opens
   useEffect(() => {
     let mounted = true;
     if (showPasswordModal) {
@@ -456,7 +291,6 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
     };
   }, [showPasswordModal]);
 
-  // Countdown timer for lockout in password modal
   useEffect(() => {
     if (syncTimerRef.current) {
       clearInterval(syncTimerRef.current);
@@ -487,7 +321,6 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
 
   const syncLockedOut = syncLockoutRemaining > 0;
 
-  /** Format remaining ms as mm:ss for the countdown display. */
   const formatCountdown = (ms: number): string => {
     const totalSeconds = Math.ceil(ms / 1000);
     const minutes = Math.floor(totalSeconds / 60);
@@ -498,7 +331,6 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
   const handlePasswordSubmit = useCallback(async () => {
     if (!syncPassword) return;
 
-    // Block if currently locked out
     if (isLockedOut(syncRateLimit)) {
       const remaining = getRemainingLockoutMs(syncRateLimit);
       setSyncLockoutRemaining(remaining);
@@ -510,7 +342,6 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
     setIsSyncing(true);
 
     try {
-      // Verify password before proceeding
       const isValid = await verifyUserPassword(syncPassword);
       if (!isValid) {
         const newState = await recordFailedAttempt(syncRateLimit);
@@ -534,7 +365,6 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
         return;
       }
 
-      // Password verified — reset rate limit
       await resetRateLimit();
       setSyncRateLimit({ failedAttempts: 0, lockoutUntil: null, lastFailedAt: null });
 
@@ -544,7 +374,6 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
       pendingExportFilter.current = null;
       let data: string;
       if (filter !== null) {
-        // Selective export (entries only, no media)
         const base64 = await exportData(syncPassword, filter);
         const encrypted = await encrypt(base64, syncPassword);
         if (!encrypted.success || !encrypted.data) throw new Error(encrypted.error || 'Encryption failed');
@@ -569,42 +398,9 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
     }
   }, [syncPassword, syncRateLimit, showPasswordModal]);
 
-  const handleTestNotification = useCallback(async () => {
-    setTestingNotification(true);
-    setNotificationTestResult(null);
-    try {
-      await sendTestNotification(settings.reminders.message);
-      setNotificationTestResult('Notification sent!');
-      setTimeout(() => setNotificationTestResult(null), 3000);
-    } catch (error) {
-      setNotificationTestResult(
-        error instanceof Error ? error.message : 'Failed to send notification'
-      );
-    } finally {
-      setTestingNotification(false);
-    }
-  }, [settings.reminders.message]);
-
-  const handleReset = useCallback(async () => {
-    if (resetConfirmText !== 'RESET') return;
-
-    setIsResetting(true);
-    try {
-      await factoryReset();
-      // Exit the app completely - user will need to reopen it
-      // This ensures the backend reinitializes with a fresh database
-      await exitApp();
-    } catch (error) {
-      logger.error('Reset failed:', { error: String(error) });
-      setIsResetting(false);
-    }
-  }, [resetConfirmText]);
-
-  // Auto-switch tabs based on search query
   const matchedTab = useMemo(() => {
     if (!searchQuery.trim()) return null;
     const query = searchQuery.toLowerCase();
-
     for (const tab of TABS) {
       if (tab.keywords.some(kw => kw.includes(query))) {
         return tab.id;
@@ -630,7 +426,6 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
     }
   };
 
-  // Handle keyboard navigation
   const handleKeyDown = (e: React.KeyboardEvent) => {
     const currentIndex = TABS.findIndex(t => t.id === activeTab);
     if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
@@ -669,7 +464,6 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
               Settings
             </h1>
 
-            {/* Search bar */}
             <div className="relative flex-1 max-w-sm">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <svg className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -698,7 +492,6 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
 
             <div className="flex-1" />
 
-            {/* Close button */}
             <button
               type="button"
               onClick={onClose}
@@ -750,1239 +543,106 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
             <div className="flex-1 overflow-y-auto">
               <div className="p-6 pb-8">
 
-                {/* General Tab */}
                 {activeTab === 'general' && (
-                  <div id="panel-general" role="tabpanel" className="space-y-6">
-                    <SettingSection
-                      title="Appearance"
-                      description="Customize how MoodHaven Journal looks"
-                    >
-                      <SettingSelect
-                        label="Theme"
-                        description="Choose your preferred color scheme"
-                        value={settings.appearance.theme}
-                        options={[
-                          { value: 'system', label: 'System' },
-                          { value: 'light', label: 'Light' },
-                          { value: 'dark', label: 'Dark' },
-                        ]}
-                        onChange={(v) => setTheme(v as 'light' | 'dark' | 'system')}
-                      />
-
-                      <SettingToggle
-                        label="Compact mode"
-                        description="Use less spacing for a denser layout"
-                        checked={settings.appearance.compactMode}
-                        onChange={setCompactMode}
-                      />
-
-                      <SettingToggle
-                        label="Animations"
-                        description="Enable smooth transitions and animations"
-                        checked={settings.appearance.animationsEnabled}
-                        onChange={setAnimationsEnabled}
-                      />
-                    </SettingSection>
-
-                    <SettingSection
-                      title="Journal"
-                      description="Configure your journaling experience"
-                    >
-                      <SettingToggle
-                        label="Show writing prompts"
-                        description="Display helpful prompts when creating entries"
-                        checked={settings.journal.showPrompts}
-                        onChange={setShowPrompts}
-                      />
-
-                      <SettingToggle
-                        label="Auto-save drafts"
-                        description="Automatically save your entry as you type"
-                        checked={settings.journal.autoSave}
-                        onChange={(v) => useSettingsStore.setState((s) => ({
-                          settings: { ...s.settings, journal: { ...s.settings.journal, autoSave: v } },
-                          hasUnsavedChanges: true,
-                        }))}
-                      />
-
-                      <SettingToggle
-                        label="Auto-add location & weather"
-                        description="Capture your city and weather when starting a new entry. Uses Open-Meteo + OpenStreetMap — no API key required."
-                        checked={settings.journal.autoLocationWeather ?? false}
-                        onChange={setAutoLocationWeather}
-                      />
-
-                      <SettingSelect
-                        label="Temperature unit"
-                        description="Display unit for weather chips"
-                        value={settings.journal.temperatureUnit ?? 'C'}
-                        options={[
-                          { value: 'C', label: 'Celsius (°C)' },
-                          { value: 'F', label: 'Fahrenheit (°F)' },
-                        ]}
-                        onChange={(v) => setTemperatureUnit(v as 'C' | 'F')}
-                      />
-
-                      <SettingToggle
-                        label="Auto-title entries"
-                        description="Generate an entry title from the first sentence when you don't type one"
-                        checked={settings.journal.autoTitle ?? false}
-                        onChange={setAutoTitle}
-                      />
-                    </SettingSection>
-
-                    <SettingSection
-                      title="Reminders"
-                      description="Get notified to journal regularly"
-                    >
-                      <SettingToggle
-                        label="Enable reminders"
-                        description="Receive notifications at your preferred time"
-                        checked={settings.reminders.enabled}
-                        onChange={setReminderEnabled}
-                      />
-
-                      {settings.reminders.enabled && (
-                        <>
-                          <SettingInput
-                            label="Reminder time"
-                            description="When should we remind you?"
-                            value={settings.reminders.time}
-                            onChange={setReminderTime}
-                            type="time"
-                          />
-
-                          <SettingSelect
-                            label="Frequency"
-                            description="How often do you want reminders?"
-                            value={settings.reminders.frequency}
-                            options={[
-                              { value: 'daily', label: 'Every day' },
-                              { value: 'weekdays', label: 'Weekdays only' },
-                              { value: 'weekends', label: 'Weekends only' },
-                              { value: 'custom', label: 'Custom days' },
-                            ]}
-                            onChange={(v) => setReminderFrequency(v as ReminderFrequency)}
-                          />
-
-                          {settings.reminders.frequency === 'custom' && (
-                            <div className="py-2">
-                              <p className="font-medium text-slate-700 dark:text-slate-200 mb-2">
-                                Select days
-                              </p>
-                              <DaySelector
-                                selectedDays={settings.reminders.customDays}
-                                onChange={setReminderCustomDays}
-                              />
-                            </div>
-                          )}
-
-                          <SettingInput
-                            label="Reminder message"
-                            description="Customize your notification message"
-                            value={settings.reminders.message}
-                            onChange={setReminderMessage}
-                            placeholder="Time to reflect on your day"
-                          />
-
-                          <SettingToggle
-                            label="Play sound"
-                            description="Play a sound with the notification"
-                            checked={settings.reminders.sound}
-                            onChange={setReminderSound}
-                          />
-
-                          <div className="pt-2 border-t border-slate-200 dark:border-slate-700">
-                            <button
-                              type="button"
-                              onClick={handleTestNotification}
-                              disabled={testingNotification}
-                              className="px-4 py-2 text-sm font-medium text-violet-600 dark:text-violet-400 bg-violet-100 dark:bg-violet-900/30 rounded-lg hover:bg-violet-200 dark:hover:bg-violet-900/50 transition-colors disabled:opacity-50"
-                            >
-                              {testingNotification ? 'Sending...' : 'Send Test Notification'}
-                            </button>
-                            {notificationTestResult && (
-                              <p className={`text-sm mt-2 ${notificationTestResult.includes('sent') ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
-                                {notificationTestResult}
-                              </p>
-                            )}
-                          </div>
-                        </>
-                      )}
-                    </SettingSection>
-
-                    <div ref={sttSectionRef}>
-                    <SettingSection
-                      title="Speech to Text"
-                      description="Dictate journal entries using your voice"
-                    >
-                      {sttSidecarAvailable === false && (
-                        <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-200 text-sm mb-3">
-                          <p className="font-medium">Whisper engine not installed</p>
-                          <p className="text-xs mt-1 text-amber-700 dark:text-amber-300">
-                            Speech-to-text requires the Whisper sidecar. This feature will be available in a future release.
-                          </p>
-                        </div>
-                      )}
-
-                      <SettingToggle
-                        label="Enable speech to text"
-                        description="Show microphone button in the editor toolbar"
-                        checked={settings.speechToText.enabled}
-                        onChange={setSTTEnabled}
-                        disabled={sttSidecarAvailable === false}
-                      />
-
-                      {settings.speechToText.enabled && (
-                        <>
-                          <SettingSelect
-                            label="Model"
-                            description="Choose quality vs. speed tradeoff"
-                            value={settings.speechToText.model}
-                            options={STT_MODELS.map((m) => ({
-                              value: m.id,
-                              label: `${m.name} (${m.size})`,
-                            }))}
-                            onChange={(v) => setSTTModel(v as STTModel)}
-                          />
-
-                          <div className="py-2">
-                            <div className="flex items-center justify-between mb-2">
-                              <div>
-                                <p className="font-medium text-slate-700 dark:text-slate-200 text-sm">
-                                  Model Status
-                                </p>
-                                <p className="text-xs text-slate-500 dark:text-slate-400">
-                                  {settings.speechToText.modelDownloaded
-                                    ? `${STT_MODELS.find(m => m.id === settings.speechToText.model)?.name} is ready to use`
-                                    : 'Model needs to be downloaded for offline use'}
-                                </p>
-                              </div>
-
-                              {settings.speechToText.modelDownloaded ? (
-                                <button
-                                  type="button"
-                                  onClick={handleSTTModelDelete}
-                                  className="px-3 py-1.5 text-sm font-medium text-rose-600 dark:text-rose-400 bg-rose-100 dark:bg-rose-900/30 rounded-lg hover:bg-rose-200 dark:hover:bg-rose-900/50 transition-colors"
-                                >
-                                  Delete Model
-                                </button>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={handleSTTModelDownload}
-                                  disabled={sttDownloading}
-                                  className="px-3 py-1.5 text-sm font-medium text-violet-600 dark:text-violet-400 bg-violet-100 dark:bg-violet-900/30 rounded-lg hover:bg-violet-200 dark:hover:bg-violet-900/50 transition-colors disabled:opacity-50"
-                                >
-                                  {sttDownloading ? 'Downloading...' : 'Download Model'}
-                                </button>
-                              )}
-                            </div>
-
-                            {sttDownloading && settings.speechToText.downloadProgress !== null && (
-                              <div className="mt-2">
-                                <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400 mb-1">
-                                  <span>Downloading...</span>
-                                  <span>{Math.round(settings.speechToText.downloadProgress)}%</span>
-                                </div>
-                                <div className="h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                                  <div
-                                    className="h-full bg-violet-500 transition-all duration-300"
-                                    style={{ width: `${settings.speechToText.downloadProgress}%` }}
-                                  />
-                                </div>
-                              </div>
-                            )}
-
-                            {sttDownloadError && (
-                              <p className="text-sm text-rose-600 dark:text-rose-400 mt-2">
-                                {sttDownloadError}
-                              </p>
-                            )}
-                          </div>
-
-                          <div className="text-xs text-slate-500 dark:text-slate-400 p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50">
-                            <p className="font-medium text-slate-600 dark:text-slate-300 mb-1">Privacy Notice</p>
-                            <p>
-                              All speech recognition happens locally on your device. No audio data is ever sent to external servers.
-                              Models are downloaded from Hugging Face once and stored locally.
-                            </p>
-                          </div>
-
-                          {/* Formatting layer sub-section */}
-                          <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
-                            <p className="text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">
-                              Formatting layer
-                            </p>
-                            <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
-                              How should raw whisper output be cleaned up before inserting into your journal?
-                            </p>
-
-                            <div className="space-y-2">
-                              {/* Local cleanup */}
-                              <label className="flex items-start gap-3 cursor-pointer">
-                                <input
-                                  type="radio"
-                                  name="stt-formatting-layer"
-                                  value="local"
-                                  checked={settings.speechToText.formatting?.layer === 'local' || !settings.speechToText.formatting?.layer}
-                                  onChange={() => {
-                                    setSttFormattingLayer('local');
-                                    void saveSettings();
-                                  }}
-                                  className="mt-0.5 accent-violet-600"
-                                />
-                                <div>
-                                  <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
-                                    Local cleanup
-                                  </span>
-                                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                                    Always on. No LLM. Removes fillers, adds paragraph breaks.
-                                  </p>
-                                </div>
-                              </label>
-
-                              {/* Ollama */}
-                              <label className={`flex items-start gap-3 ${settings.ai.localAI.enabled ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}>
-                                <input
-                                  type="radio"
-                                  name="stt-formatting-layer"
-                                  value="ollama"
-                                  checked={settings.speechToText.formatting?.layer === 'ollama'}
-                                  disabled={!settings.ai.localAI.enabled}
-                                  onChange={() => {
-                                    if (!settings.ai.localAI.enabled) return;
-                                    setSttFormattingLayer('ollama');
-                                    void saveSettings();
-                                  }}
-                                  className="mt-0.5 accent-violet-600"
-                                />
-                                <div>
-                                  <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
-                                    Ollama (local LLM)
-                                  </span>
-                                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                                    {settings.ai.localAI.enabled
-                                      ? 'Requires Ollama running. Full quality, stays on device.'
-                                      : 'Requires Ollama endpoint configured in AI settings.'}
-                                  </p>
-                                </div>
-                              </label>
-
-                              {/* OpenAI */}
-                              <label className={`flex items-start gap-3 ${settings.ai.openai.apiKey ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}>
-                                <input
-                                  type="radio"
-                                  name="stt-formatting-layer"
-                                  value="openai"
-                                  checked={settings.speechToText.formatting?.layer === 'openai'}
-                                  disabled={!settings.ai.openai.apiKey}
-                                  onChange={() => {
-                                    if (!settings.ai.openai.apiKey) return;
-                                    // If consent not yet given, open consent modal first
-                                    if (!settings.speechToText.formatting?.cloudConsentGiven) {
-                                      prevFormattingLayerRef.current = settings.speechToText.formatting?.layer ?? 'local';
-                                      setSttFormattingLayer('openai');
-                                      setCloudConsentModalOpen(true);
-                                    } else {
-                                      setSttFormattingLayer('openai');
-                                      void saveSettings();
-                                    }
-                                  }}
-                                  className="mt-0.5 accent-violet-600"
-                                />
-                                <div>
-                                  <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
-                                    OpenAI (cloud)
-                                  </span>
-                                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                                    {settings.ai.openai.apiKey
-                                      ? 'Requires API key + consent. Best quality.'
-                                      : 'Requires an OpenAI API key set in AI settings.'}
-                                  </p>
-                                </div>
-                              </label>
-                            </div>
-
-                            {/* Consent status */}
-                            {settings.speechToText.formatting?.layer === 'openai' && !settings.speechToText.formatting?.cloudConsentGiven && (
-                              <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
-                                ⚠️ Selecting OpenAI will prompt for consent before first use.
-                              </p>
-                            )}
-                            {settings.speechToText.formatting?.layer === 'openai' && settings.speechToText.formatting?.cloudConsentGiven && (
-                              <div className="flex items-center justify-between mt-2">
-                                <p className="text-xs text-green-600 dark:text-green-400">
-                                  ✓ Cloud consent granted{settings.speechToText.formatting.consentDate
-                                    ? ` on ${new Date(settings.speechToText.formatting.consentDate).toLocaleDateString()}`
-                                    : ''}
-                                </p>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setSttCloudConsent(false);
-                                    setSttFormattingLayer('local');
-                                    void saveSettings();
-                                  }}
-                                  className="text-xs text-rose-500 hover:text-rose-700 underline"
-                                >
-                                  Revoke
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        </>
-                      )}
-                    </SettingSection>
-                    </div>
-
-                    {/* Cloud consent modal */}
-                    <CloudConsentModal
-                      isOpen={cloudConsentModalOpen}
-                      onConfirm={() => {
-                        setSttCloudConsent(true);
-                        setCloudConsentModalOpen(false);
-                        void saveSettings();
-                      }}
-                      onCancel={() => {
-                        // Revert to previous layer
-                        setSttFormattingLayer(prevFormattingLayerRef.current);
-                        setCloudConsentModalOpen(false);
-                      }}
-                    />
-
-                    <SettingSection
-                      title="Time Capsule"
-                      description="Seal entries to reveal in the future"
-                    >
-                      <SettingToggle
-                        label="Enable time capsule reveals"
-                        description="Show a reveal prompt when sealed entries become due"
-                        checked={settings.timeCapsule?.enabled ?? true}
-                        onChange={(v) => { setTimeCapsuleSettings({ enabled: v }); void saveSettings(); }}
-                      />
-                      <SettingToggle
-                        label="Auto-surface anniversary entries"
-                        description="Highlight entries written one or more years ago"
-                        checked={settings.timeCapsule?.anniversaryReveal ?? true}
-                        onChange={(v) => { setTimeCapsuleSettings({ anniversaryReveal: v }); void saveSettings(); }}
-                      />
-                      <SettingSelect
-                        label="Default seal duration"
-                        description="How far ahead entries are sealed by default"
-                        value={String(settings.timeCapsule?.defaultSealDays ?? 30)}
-                        options={[
-                          { value: '30', label: '30 days' },
-                          { value: '90', label: '90 days' },
-                          { value: '180', label: '180 days' },
-                          { value: '365', label: '1 year' },
-                        ]}
-                        onChange={(v) => { setTimeCapsuleSettings({ defaultSealDays: Number(v) }); void saveSettings(); }}
-                      />
-                    </SettingSection>
-
-                    <SettingSection
-                      title="Help"
-                      description="Learn how to use MoodHaven Journal"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="font-medium text-slate-700 dark:text-slate-200 text-sm">
-                            App Tutorial
-                          </p>
-                          <p className="text-xs text-slate-500 dark:text-slate-400">
-                            Replay the introductory tour of MoodHaven Journal
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={handleShowTutorial}
-                          className="px-4 py-2 text-sm font-medium text-violet-600 dark:text-violet-400 bg-violet-100 dark:bg-violet-900/30 rounded-lg hover:bg-violet-200 dark:hover:bg-violet-900/50 transition-colors"
-                        >
-                          Show Tutorial
-                        </button>
-                      </div>
-                    </SettingSection>
-                  </div>
+                  <GeneralTab
+                    settings={settings}
+                    saveSettings={saveSettings}
+                    sttSectionRef={sttSectionRef}
+                    setTheme={setTheme}
+                    setCompactMode={setCompactMode}
+                    setAnimationsEnabled={setAnimationsEnabled}
+                    setShowPrompts={setShowPrompts}
+                    setAutoLocationWeather={setAutoLocationWeather}
+                    setTemperatureUnit={setTemperatureUnit}
+                    setAutoTitle={setAutoTitle}
+                    setReminderEnabled={setReminderEnabled}
+                    setReminderTime={setReminderTime}
+                    setReminderFrequency={setReminderFrequency}
+                    setReminderCustomDays={setReminderCustomDays}
+                    setReminderMessage={setReminderMessage}
+                    setReminderSound={setReminderSound}
+                    setSTTEnabled={setSTTEnabled}
+                    setSTTModel={setSTTModel}
+                    setSTTModelDownloaded={setSTTModelDownloaded}
+                    setSTTDownloadProgress={setSTTDownloadProgress}
+                    setSttFormattingLayer={setSttFormattingLayer}
+                    setSttCloudConsent={setSttCloudConsent}
+                    setHasSeenTutorial={setHasSeenTutorial}
+                    setTimeCapsuleSettings={setTimeCapsuleSettings}
+                  />
                 )}
 
-                {/* Privacy Tab */}
                 {activeTab === 'privacy' && (
-                  <div id="panel-privacy" role="tabpanel" className="space-y-6">
-                    <SettingSection
-                      title="Privacy & Security"
-                      description="Keep your journal safe"
-                    >
-                      <SettingSelect
-                        label="Auto-lock timeout"
-                        description="Lock the app after inactivity"
-                        value={String(settings.privacy.autoLockTimeout)}
-                        options={[
-                          { value: '0', label: 'Never' },
-                          { value: '1', label: '1 minute' },
-                          { value: '5', label: '5 minutes' },
-                          { value: '15', label: '15 minutes' },
-                          { value: '30', label: '30 minutes' },
-                        ]}
-                        onChange={(v) => setAutoLockTimeout(Number(v))}
-                      />
-
-                      <SettingToggle
-                        label="Clear clipboard on lock"
-                        description="Remove copied content when the app locks"
-                        checked={settings.privacy.clearClipboardOnLock}
-                        onChange={(v) => useSettingsStore.setState((s) => ({
-                          settings: { ...s.settings, privacy: { ...s.settings.privacy, clearClipboardOnLock: v } },
-                          hasUnsavedChanges: true,
-                        }))}
-                      />
-                    </SettingSection>
-
-                    {/* Biometric Unlock — Android only */}
-                    {isAndroid && biometricAvailable && (
-                      <SettingSection
-                        title="Biometric Unlock"
-                        description="Use fingerprint or face to unlock MoodHaven Journal instead of typing your password"
-                      >
-                        {biometricEnrolled ? (
-                          <div className="flex items-center justify-between py-2">
-                            <div>
-                              <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
-                                Biometric unlock is enabled
-                              </p>
-                              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                                Your password is encrypted with a key only your fingerprint can unlock
-                              </p>
-                            </div>
-                            <button
-                              type="button"
-                              disabled={biometricDisabling}
-                              onClick={async () => {
-                                setBiometricDisabling(true);
-                                await biometricUnenroll();
-                                setBiometricEnrolled(false);
-                                setBiometricDisabling(false);
-                              }}
-                              className="px-3 py-1.5 text-sm font-medium text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/20 rounded-lg hover:bg-rose-100 dark:hover:bg-rose-900/40 transition-colors disabled:opacity-50"
-                            >
-                              {biometricDisabling ? 'Disabling…' : 'Disable'}
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="flex items-start gap-3 py-2">
-                            <div className="flex-1">
-                              <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
-                                Biometric unlock is not set up
-                              </p>
-                              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                                To enable it, lock the app and use your password to unlock — you'll be offered fingerprint setup automatically.
-                              </p>
-                            </div>
-                          </div>
-                        )}
-                      </SettingSection>
-                    )}
-
-                    {/* Two-Factor Authentication Section */}
-                    <SettingSection
-                      title="Two-Factor Authentication"
-                      description="Add an extra layer of security to your account"
-                    >
-                      {twoFactorStatus?.enabled ? (
-                        // 2FA is enabled
-                        <div className="space-y-4">
-                          <div className="flex items-center gap-3 p-4 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl">
-                            <div className="w-10 h-10 bg-emerald-100 dark:bg-emerald-800/50 rounded-full flex items-center justify-center">
-                              <svg className="w-5 h-5 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                              </svg>
-                            </div>
-                            <div className="flex-1">
-                              <p className="font-medium text-emerald-800 dark:text-emerald-200">
-                                2FA Enabled
-                              </p>
-                              <p className="text-sm text-emerald-600 dark:text-emerald-400">
-                                {twoFactorStatus.method === 'totp' && 'Using authenticator app'}
-                                {twoFactorStatus.method === 'webauthn' && 'Using security key'}
-                                {twoFactorStatus.method === 'both' && 'Using authenticator app & security key'}
-                              </p>
-                            </div>
-                          </div>
-
-                          {/* Backup codes status */}
-                          <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
-                            <div>
-                              <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
-                                Backup Codes
-                              </p>
-                              <p className="text-xs text-slate-500 dark:text-slate-400">
-                                {backupCodesCount} code{backupCodesCount !== 1 ? 's' : ''} remaining
-                              </p>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={handleRegenerateBackupCodes}
-                              className="px-3 py-1.5 text-sm font-medium text-violet-600 dark:text-violet-400 bg-violet-100 dark:bg-violet-900/30 rounded-lg hover:bg-violet-200 dark:hover:bg-violet-900/50 transition-colors"
-                            >
-                              Regenerate
-                            </button>
-                          </div>
-
-                          {/* Add another method if only one is enabled */}
-                          {twoFactorStatus.method !== 'both' && (
-                            <div className="pt-2">
-                              <p className="text-sm text-slate-500 dark:text-slate-400 mb-2">
-                                Add another method:
-                              </p>
-                              <div className="flex gap-2">
-                                {twoFactorStatus.method !== 'totp' && (
-                                  <button
-                                    type="button"
-                                    onClick={() => setShow2FASetup('totp')}
-                                    className="flex-1 px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-700 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
-                                  >
-                                    Add Authenticator App
-                                  </button>
-                                )}
-                                {twoFactorStatus.method !== 'webauthn' && (
-                                  <button
-                                    type="button"
-                                    onClick={() => setShow2FASetup('webauthn')}
-                                    className="flex-1 px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-700 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
-                                  >
-                                    Add Security Key
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Disable 2FA */}
-                          <div className="pt-2 border-t border-slate-200 dark:border-slate-700">
-                            <button
-                              type="button"
-                              onClick={() => setShowDisable2FAConfirm(true)}
-                              className="text-sm text-rose-500 hover:text-rose-600 transition-colors"
-                            >
-                              Disable Two-Factor Authentication
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        // 2FA is not enabled
-                        <div className="space-y-4">
-                          <p className="text-sm text-slate-600 dark:text-slate-300">
-                            Protect your journal with an extra layer of security. Choose your preferred method:
-                          </p>
-
-                          <div className="grid gap-3">
-                            <button
-                              type="button"
-                              onClick={() => setShow2FASetup('totp')}
-                              className="flex items-center gap-4 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors text-left"
-                            >
-                              <div className="w-10 h-10 bg-violet-100 dark:bg-violet-900/30 rounded-full flex items-center justify-center">
-                                <span className="text-xl">&#128241;</span>
-                              </div>
-                              <div className="flex-1">
-                                <p className="font-medium text-slate-800 dark:text-slate-100">
-                                  Authenticator App
-                                </p>
-                                <p className="text-sm text-slate-500 dark:text-slate-400">
-                                  Use Authy, Google Authenticator, or similar
-                                </p>
-                              </div>
-                              <svg className="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                              </svg>
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => setShow2FASetup('webauthn')}
-                              className="flex items-center gap-4 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors text-left"
-                            >
-                              <div className="w-10 h-10 bg-violet-100 dark:bg-violet-900/30 rounded-full flex items-center justify-center">
-                                <span className="text-xl">&#128273;</span>
-                              </div>
-                              <div className="flex-1">
-                                <p className="font-medium text-slate-800 dark:text-slate-100">
-                                  Hardware Security Key
-                                </p>
-                                <p className="text-sm text-slate-500 dark:text-slate-400">
-                                  Use YubiKey or similar device
-                                </p>
-                              </div>
-                              <svg className="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                              </svg>
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </SettingSection>
-
-                    <SettingSection
-                      title="Data Management"
-                      description="Control your personal data"
-                    >
-                      {/* Data stats */}
-                      {dataStats && (
-                        <div className="flex gap-4 mb-4">
-                          <div className="flex-1 p-3 bg-violet-50 dark:bg-violet-900/20 rounded-xl text-center">
-                            <div className="text-2xl font-bold text-violet-600 dark:text-violet-400">
-                              {dataStats.totalEntries}
-                            </div>
-                            <div className="text-xs text-violet-600/70 dark:text-violet-400/70">
-                              Total Entries
-                            </div>
-                          </div>
-                          <div className="flex-1 p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl text-center">
-                            <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
-                              {dataStats.averageMood.toFixed(1)}
-                            </div>
-                            <div className="text-xs text-emerald-600/70 dark:text-emerald-400/70">
-                              Avg Mood
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl">
-                        <p className="text-sm text-slate-600 dark:text-slate-300 mb-3">
-                          Your journal entries are encrypted using AES-256-GCM encryption with PBKDF2 key derivation (600,000 iterations).
-                        </p>
-                        <div className="flex gap-2">
-                          <button
-                            type="button"
-                            disabled={isExporting}
-                            className="px-3 py-1.5 text-sm font-medium text-violet-600 dark:text-violet-400 bg-violet-100 dark:bg-violet-900/30 rounded-lg hover:bg-violet-200 dark:hover:bg-violet-900/50 transition-colors disabled:opacity-50"
-                            onClick={handleExport}
-                          >
-                            {isExporting
-                              ? exportProgress
-                                ? `Packing media ${exportProgress.done}/${exportProgress.total}…`
-                                : 'Exporting…'
-                              : 'Export Data'}
-                          </button>
-                          <button
-                            type="button"
-                            className="px-3 py-1.5 text-sm font-medium text-rose-600 dark:text-rose-400 bg-rose-100 dark:bg-rose-900/30 rounded-lg hover:bg-rose-200 dark:hover:bg-rose-900/50 transition-colors"
-                            onClick={() => setShowResetConfirm(true)}
-                          >
-                            Reset App
-                          </button>
-                        </div>
-                      </div>
-                    </SettingSection>
-                  </div>
+                  <PrivacyTab
+                    settings={settings}
+                    dataStats={dataStats}
+                    twoFactorStatus={twoFactorStatus}
+                    backupCodesCount={backupCodesCount}
+                    refresh2FAStatus={refresh2FAStatus}
+                    isExporting={isExporting}
+                    exportProgress={exportProgress}
+                    handleExport={handleExport}
+                    setAutoLockTimeout={setAutoLockTimeout}
+                  />
                 )}
 
-                {/* Sync Tab */}
                 {activeTab === 'sync' && (
-                  <div id="panel-sync" role="tabpanel" className="space-y-6">
-                    <SettingSection
-                      title="Cloud Sync"
-                      description="Sync entries across devices via a WebDAV server. Each entry is encrypted individually before upload."
-                    >
-                      <SettingSelect
-                        label="Storage backend"
-                        description="Where to store synced data"
-                        value={settings.storage.type}
-                        options={[
-                          { value: 'local', label: 'Local only' },
-                          { value: 'webdav', label: 'WebDAV' },
-                        ]}
-                        onChange={(v) => setStorageType(v as StorageBackend)}
-                      />
-
-                      {settings.storage.type === 'webdav' && (
-                        <>
-                          <SettingInput
-                            label="WebDAV URL"
-                            description="Full URL to your WebDAV directory"
-                            value={settings.storage.webdav.url}
-                            onChange={(v) => setWebDAVConfig({ url: v })}
-                            placeholder="https://cloud.example.com/remote.php/dav/files/user/"
-                            type="url"
-                            onTest={async () => {
-                              const result = await testWebDAVConnection(settings.storage.webdav);
-                              return { valid: result.success, error: result.error };
-                            }}
-                          />
-
-                          <SettingInput
-                            label="Username"
-                            description="WebDAV login username"
-                            value={settings.storage.webdav.username}
-                            onChange={(v) => setWebDAVConfig({ username: v })}
-                            placeholder="username"
-                          />
-
-                          <SettingInput
-                            label="Password"
-                            description="WebDAV login password"
-                            value={settings.storage.webdav.password}
-                            onChange={(v) => setWebDAVConfig({ password: v })}
-                            placeholder="password"
-                            type="password"
-                          />
-
-                          <SettingSelect
-                            label="Sync on open"
-                            description="Automatically sync once each time the app unlocks"
-                            value={settings.sync.syncMode}
-                            options={[
-                              { value: 'manual', label: 'Off' },
-                              { value: 'on-open', label: 'On' },
-                            ]}
-                            onChange={(v) => setSyncMode(v as 'manual' | 'on-open' | 'on-save')}
-                          />
-
-                          <SettingSelect
-                            label="Sync every"
-                            description="Background sync runs silently while the app is unlocked — no password prompt needed"
-                            value={String(settings.sync.syncIntervalMinutes ?? 0)}
-                            options={[
-                              { value: '0', label: 'Off' },
-                              { value: '5', label: '5 minutes' },
-                              { value: '15', label: '15 minutes' },
-                              { value: '30', label: '30 minutes' },
-                              { value: '60', label: '1 hour' },
-                            ]}
-                            onChange={(v) => setSyncIntervalMinutes(Number(v))}
-                          />
-
-                          <div className="pt-3 border-t border-slate-200 dark:border-slate-700">
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <p className="text-sm font-medium text-slate-700 dark:text-slate-200">Last sync</p>
-                                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                                  {settings.sync.lastSyncAt
-                                    ? new Date(settings.sync.lastSyncAt).toLocaleString()
-                                    : 'Never synced'}
-                                  {settings.sync.lastSyncResult === 'error' && (
-                                    <span className="ml-1 text-rose-500 dark:text-rose-400">· Error</span>
-                                  )}
-                                </p>
-                              </div>
-                              <p className="text-xs text-slate-400 dark:text-slate-500">
-                                Use the sync icon in the sidebar to sync now
-                              </p>
-                            </div>
-                          </div>
-                        </>
-                      )}
-                    </SettingSection>
-                  </div>
+                  <SyncTab
+                    settings={settings}
+                    saveSettings={saveSettings}
+                    setStorageType={setStorageType}
+                    setWebDAVConfig={setWebDAVConfig}
+                    setSyncMode={setSyncMode}
+                    setSyncIntervalMinutes={setSyncIntervalMinutes}
+                  />
                 )}
 
-                {/* AI Tab */}
                 {activeTab === 'ai' && (
-                  <div id="panel-ai" role="tabpanel" className="space-y-6" ref={aiSectionRef}>
-                    <SettingSection
-                      title="AI Features"
-                      description="Optional AI-powered insights (your journal content is never sent to external servers)"
-                    >
-                      <SettingToggle
-                        label="Enable AI features"
-                        description="Get personalized prompts and insights based on your mood patterns"
-                        checked={settings.ai.enabled}
-                        onChange={setAIEnabled}
-                      />
-
-                      {settings.ai.enabled && (
-                        <>
-                          {/* AI Provider Selection */}
-                          <div className="mt-4 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl">
-                            <p className="text-sm font-medium text-slate-700 dark:text-slate-200 mb-3">
-                              AI Provider
-                            </p>
-
-                            <div className="space-y-2">
-                              <label className="flex items-start gap-3 p-3 rounded-lg cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors">
-                                <input
-                                  type="radio"
-                                  name="ai-provider"
-                                  value="openai"
-                                  checked={settings.ai.provider === 'openai'}
-                                  onChange={() => setAIProvider('openai')}
-                                  className="mt-1 accent-violet-500"
-                                />
-                                <div>
-                                  <p className="font-medium text-slate-700 dark:text-slate-200">OpenAI API</p>
-                                  <p className="text-sm text-slate-500 dark:text-slate-400">
-                                    Use your own OpenAI API key. You control the costs.
-                                  </p>
-                                </div>
-                              </label>
-
-                              <label className="flex items-start gap-3 p-3 rounded-lg cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors">
-                                <input
-                                  type="radio"
-                                  name="ai-provider"
-                                  value="local"
-                                  checked={settings.ai.provider === 'local'}
-                                  onChange={() => setAIProvider('local')}
-                                  className="mt-1 accent-violet-500"
-                                />
-                                <div>
-                                  <p className="font-medium text-slate-700 dark:text-slate-200">Local AI (Ollama)</p>
-                                  <p className="text-sm text-slate-500 dark:text-slate-400">
-                                    Use a local AI server. Maximum privacy - nothing leaves your computer.
-                                  </p>
-                                </div>
-                              </label>
-                            </div>
-                          </div>
-
-                          {/* OpenAI Configuration */}
-                          {settings.ai.provider === 'openai' && (
-                            <div className="mt-4 space-y-4">
-                              <SettingInput
-                                label="OpenAI API Key"
-                                description="Your key is stored locally and encrypted"
-                                value={settings.ai.openai.apiKey || ''}
-                                onChange={(v) => setOpenAIKey(v || null)}
-                                placeholder="sk-..."
-                                type="password"
-                                onTest={() => testOpenAIKey(settings.ai.openai.apiKey || '')}
-                              />
-
-                              <SettingSelect
-                                label="Model"
-                                description="Choose the AI model to use"
-                                value={settings.ai.openai.model}
-                                options={[
-                                  { value: 'gpt-4o-mini', label: 'GPT-4o Mini (Recommended)' },
-                                  { value: 'gpt-4o', label: 'GPT-4o (Most capable)' },
-                                  { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo (Fastest)' },
-                                ]}
-                                onChange={(v) => setOpenAIModel(v as 'gpt-4o-mini' | 'gpt-4o' | 'gpt-3.5-turbo')}
-                              />
-                            </div>
-                          )}
-
-                          {/* Local AI Configuration */}
-                          {settings.ai.provider === 'local' && (
-                            <div className="mt-4 space-y-4">
-                              <SettingInput
-                                label="Ollama Endpoint"
-                                description="URL of your local Ollama server"
-                                value={settings.ai.localAI.endpoint}
-                                onChange={setLocalAIEndpoint}
-                                placeholder="http://localhost:11434"
-                                type="url"
-                                onTest={async () => {
-                                  const result = await testLocalAIConnection(settings.ai.localAI.endpoint);
-                                  if (result.valid && result.models && result.models.length > 0) {
-                                    return { valid: true, error: `Found ${result.models.length} models` };
-                                  }
-                                  return result;
-                                }}
-                              />
-
-                              <SettingInput
-                                label="Model Name"
-                                description="The model to use (e.g., llama2, mistral, codellama)"
-                                value={settings.ai.localAI.model}
-                                onChange={setLocalAIModel}
-                                placeholder="llama2"
-                              />
-                            </div>
-                          )}
-
-                          {/* AI Feature Toggles */}
-                          <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
-                            <p className="text-sm font-medium text-slate-700 dark:text-slate-200 mb-3">
-                              Features
-                            </p>
-
-                            <SettingToggle
-                              label="Contextual prompts"
-                              description="Get personalized writing prompts based on your patterns"
-                              checked={settings.ai.features.contextualPrompts}
-                              onChange={(v) => setAIFeatures({ contextualPrompts: v })}
-                            />
-
-                            <SettingToggle
-                              label="Wellness insights"
-                              description="Receive gentle observations about your mood trends"
-                              checked={settings.ai.features.wellnessInsights}
-                              onChange={(v) => setAIFeatures({ wellnessInsights: v })}
-                            />
-
-                            <SettingToggle
-                              label="Weekly reflections"
-                              description="Get a summary and reflection prompts each week"
-                              checked={settings.ai.features.weeklyReflections}
-                              onChange={(v) => setAIFeatures({ weeklyReflections: v })}
-                            />
-                          </div>
-
-                          {/* Privacy Notice */}
-                          {!settings.ai.consent.agreedToTerms && (
-                            <div className="mt-4 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl">
-                              <p className="text-sm text-amber-800 dark:text-amber-200 font-medium mb-2">
-                                Privacy Notice
-                              </p>
-                              <p className="text-sm text-amber-700 dark:text-amber-300 mb-3">
-                                AI features only send anonymized metadata (mood scores, patterns, statistics) -
-                                never your actual journal content. Your thoughts remain private.
-                              </p>
-                              <button
-                                type="button"
-                                onClick={() => setAIConsent(true)}
-                                className="px-4 py-2 bg-amber-600 text-white rounded-lg text-sm font-medium hover:bg-amber-700 transition-colors"
-                              >
-                                I understand, enable AI
-                              </button>
-                            </div>
-                          )}
-                        </>
-                      )}
-                    </SettingSection>
-                  </div>
+                  <AITab
+                    settings={settings}
+                    saveSettings={saveSettings}
+                    aiSectionRef={aiSectionRef}
+                    setAIEnabled={setAIEnabled}
+                    setAIProvider={setAIProvider}
+                    setOpenAIKey={setOpenAIKey}
+                    setOpenAIModel={setOpenAIModel}
+                    setLocalAIEndpoint={setLocalAIEndpoint}
+                    setLocalAIModel={setLocalAIModel}
+                    setAIFeatures={setAIFeatures}
+                    setAIConsent={setAIConsent}
+                  />
                 )}
 
-                {/* Health Tab */}
                 {activeTab === 'health' && (
-                  <div id="panel-health" role="tabpanel" className="space-y-6">
-                    <SettingSection
-                      title="Oura Ring"
-                      description="Connect your Oura Ring to enrich journal writing prompts with today's sleep, readiness, and stress context. Health data stays on your device."
-                    >
-                      {/* Enable toggle */}
-                      <SettingToggle
-                        label="Enable Oura Integration"
-                        description="Show health context in the writing view and optionally enrich AI prompts"
-                        checked={settings.oura.enabled}
-                        onChange={(v) => {
-                          setOuraEnabled(v);
-                          void saveSettings();
-                        }}
-                      />
-
-                      {settings.oura.enabled && (
-                        <div className="mt-4 space-y-4">
-                          <OuraConnectionCard
-                            onConnected={() => {
-                              setOuraSettings({ connectedAt: new Date().toISOString() });
-                              void saveSettings();
-                            }}
-                            onDisconnected={() => {
-                              setOuraSettings({ connectedAt: null, lastSyncAt: null });
-                              void saveSettings();
-                            }}
-                          />
-
-                          <SettingToggle
-                            label="Auto-sync on open"
-                            description="Fetch today's health data automatically when you open the app"
-                            checked={settings.oura.autoSyncOnOpen}
-                            onChange={(v) => {
-                              setOuraSettings({ autoSyncOnOpen: v });
-                              void saveSettings();
-                            }}
-                          />
-
-                          <SettingToggle
-                            label="Enrich writing prompts"
-                            description="Include health context when generating AI writing prompts (qualitative labels only — no raw biometrics sent)"
-                            checked={settings.oura.enrichPrompts}
-                            onChange={(v) => {
-                              setOuraSettings({ enrichPrompts: v });
-                              void saveSettings();
-                            }}
-                          />
-                        </div>
-                      )}
-                    </SettingSection>
-
-                    <SettingSection
-                      title="Privacy"
-                      description="How your health data is handled"
-                    >
-                      <div className="space-y-3 text-sm text-slate-600 dark:text-slate-400">
-                        <div className="flex gap-2.5">
-                          <span className="text-emerald-500 mt-0.5">✓</span>
-                          <span>Health data is fetched directly from Oura's API and stored locally in your encrypted database</span>
-                        </div>
-                        <div className="flex gap-2.5">
-                          <span className="text-emerald-500 mt-0.5">✓</span>
-                          <span>When AI prompt enrichment is on, only qualitative labels are included (e.g., "user is well rested") — never raw scores or biometrics</span>
-                        </div>
-                        <div className="flex gap-2.5">
-                          <span className="text-emerald-500 mt-0.5">✓</span>
-                          <span>Your Personal Access Token is stored in your local database — it never leaves your device except to connect to Oura's API</span>
-                        </div>
-                        <div className="flex gap-2.5">
-                          <span className="text-emerald-500 mt-0.5">✓</span>
-                          <span>All health data is included in your encrypted backup when you export your journal</span>
-                        </div>
-                      </div>
-                    </SettingSection>
-                  </div>
+                  <HealthTab
+                    settings={settings}
+                    saveSettings={saveSettings}
+                    setOuraEnabled={setOuraEnabled}
+                    setOuraSettings={setOuraSettings}
+                  />
                 )}
 
-                {/* Devices Tab */}
                 {activeTab === 'devices' && (
-                  <div id="panel-devices" role="tabpanel" className="space-y-6">
-                    <DevicesTab />
-                  </div>
+                  <DevicesTab />
                 )}
 
-                {/* Export Tab */}
                 {activeTab === 'export' && (
-                  <div id="panel-export" role="tabpanel" className="space-y-6">
-                    <div>
-                      <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-1">
-                        Selective Export
-                      </h3>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
-                        Export a filtered subset of your journal. Leave all filters blank to export everything.
-                        Exports entries only (no media attachments).
-                      </p>
-                      <SelectiveExportPanel
-                        availableTags={exportTags}
-                        matchCount={exportMatchCount}
-                        onExport={handleSelectiveExport}
-                        isExporting={isExporting}
-                      />
-                    </div>
-                  </div>
+                  <ExportTab
+                    exportMatchCount={exportMatchCount}
+                    exportTags={exportTags}
+                    handleSelectiveExport={handleSelectiveExport}
+                    isExporting={isExporting}
+                  />
                 )}
 
-                {/* About Tab */}
                 {activeTab === 'about' && (
-                  <div id="panel-about" role="tabpanel" className="space-y-6">
-
-                    {/* Updates section */}
-                    <SettingSection
-                      title="Updates"
-                      description="Keep MoodHaven Journal up to date"
-                    >
-                      <UpdatePanel hook={updateHook} currentVersion={appVersion} />
-                    </SettingSection>
-
-                    <SettingSection
-                      title="About MoodHaven Journal"
-                      description="App information and credits"
-                    >
-                      <div className="space-y-4">
-                        <div className="flex items-center justify-between py-3 border-b border-slate-100 dark:border-slate-700">
-                          <p className="text-slate-700 dark:text-slate-200">App Version</p>
-                          <p className="text-slate-500 dark:text-slate-400 font-mono bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded">
-                            v{appVersion}
-                          </p>
-                        </div>
-
-                        <div className="flex items-center justify-between py-3 border-b border-slate-100 dark:border-slate-700">
-                          <p className="text-slate-700 dark:text-slate-200">Settings Version</p>
-                          <p className="text-slate-500 dark:text-slate-400 font-mono bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded">
-                            {settings.version}
-                          </p>
-                        </div>
-
-                        <div className="flex items-center justify-between py-3 border-b border-slate-100 dark:border-slate-700">
-                          <p className="text-slate-700 dark:text-slate-200">Platform</p>
-                          <p className="text-slate-500 dark:text-slate-400">
-                            {navigator.platform}
-                          </p>
-                        </div>
-
-                        <div className="flex items-center justify-between py-3 border-b border-slate-100 dark:border-slate-700">
-                          <div>
-                            <p className="text-slate-700 dark:text-slate-200">Log Level</p>
-                            <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Debug is verbose — use only for troubleshooting</p>
-                          </div>
-                          <select
-                            aria-label="Log level"
-                            value={settings.logLevel ?? 'warn'}
-                            onChange={(e) => handleLogLevelChange(e.target.value as LogLevel)}
-                            className="px-3 py-1 text-sm rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 border-0 cursor-pointer"
-                          >
-                            <option value="error">Error</option>
-                            <option value="warn">Warn</option>
-                            <option value="info">Info</option>
-                            <option value="debug">Debug</option>
-                          </select>
-                        </div>
-
-                        <div className="flex items-center justify-between py-3 border-b border-slate-100 dark:border-slate-700">
-                          <p className="text-slate-700 dark:text-slate-200">Log File</p>
-                          <button
-                            onClick={() => {
-                              if (logPath) {
-                                invoke('open_log_folder').catch((e: unknown) => {
-                                  logger.error('open_log_folder failed', { err: String(e) });
-                                });
-                              }
-                            }}
-                            disabled={!logPath}
-                            className="px-3 py-1 text-sm rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                          >
-                            Open Log Folder
-                          </button>
-                        </div>
-
-                        <div className="pt-4">
-                          <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
-                            MoodHaven Journal is a privacy-focused mood tracking and journaling application.
-                            All your data is stored locally on your device and encrypted using
-                            industry-standard AES-256-GCM encryption.
-                          </p>
-                          <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed mt-2">
-                            MoodHaven Journal is built by one person. If it brings value to your life, a coffee goes a long way.
-                          </p>
-                        </div>
-
-                        <div className="p-4 bg-gradient-to-br from-violet-50 to-purple-50 dark:from-violet-900/20 dark:to-purple-900/20 rounded-xl border border-violet-100 dark:border-violet-800">
-                          <p className="text-sm font-medium text-violet-700 dark:text-violet-300 mb-2">
-                            Built with
-                          </p>
-                          <div className="flex flex-wrap gap-2">
-                            {['Tauri', 'React', 'TypeScript', 'TailwindCSS', 'Rust', 'SQLite'].map((tech) => (
-                              <span
-                                key={tech}
-                                className="px-2 py-1 text-xs font-medium bg-white dark:bg-slate-800 text-violet-600 dark:text-violet-400 rounded-md shadow-sm"
-                              >
-                                {tech}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-
-                        {/* Links */}
-                        <div className="flex flex-wrap gap-3 pt-2">
-                          <a
-                            href="https://github.com/kenlacroix/moodhaven-journal#readme"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-1.5 px-4 py-2 text-sm text-violet-600 dark:text-violet-400 border border-violet-200 dark:border-violet-800 rounded-xl hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-colors"
-                          >
-                            User Guide ↗
-                          </a>
-                          <a
-                            href="https://github.com/kenlacroix/moodhaven-journal/issues"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-1.5 px-4 py-2 text-sm text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-                          >
-                            Share Feedback ↗
-                          </a>
-                          <a
-                            href="https://buymeacoffee.com/moodbloom"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-1.5 px-4 py-2 text-sm text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-                          >
-                            Buy Me a Coffee ↗
-                          </a>
-                        </div>
-                      </div>
-                    </SettingSection>
-                  </div>
+                  <AboutTab
+                    settings={settings}
+                    updateHook={updateHook}
+                    appVersion={appVersion}
+                    logPath={logPath}
+                    handleLogLevelChange={handleLogLevelChange}
+                  />
                 )}
 
               </div>
@@ -2016,160 +676,6 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
         </div>
       </div>
 
-      {/* Sub-modals at z-[60] so they appear above the settings modal */}
-
-      {/* Reset confirmation dialog */}
-      {showResetConfirm && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-6 max-w-md mx-4">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-full bg-rose-100 dark:bg-rose-900/30 flex items-center justify-center">
-                <svg className="w-5 h-5 text-rose-600 dark:text-rose-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-slate-800 dark:text-white">
-                  Factory Reset
-                </h3>
-                <p className="text-sm text-slate-500 dark:text-slate-400">
-                  This action cannot be undone
-                </p>
-              </div>
-            </div>
-
-            <p className="text-sm text-slate-600 dark:text-slate-300 mb-4">
-              This will permanently delete all your journal entries, settings, and encryption keys.
-              You will need to set up the app again.
-            </p>
-
-            <div className="mb-4">
-              <label htmlFor="resetConfirm" className="block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">
-                Type <span className="font-mono bg-slate-100 dark:bg-slate-700 px-1 rounded">RESET</span> to confirm
-              </label>
-              <input
-                id="resetConfirm"
-                type="text"
-                value={resetConfirmText}
-                onChange={(e) => setResetConfirmText(e.target.value)}
-                placeholder="RESET"
-                className="input"
-                autoFocus
-              />
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                type="button"
-                className="flex-1 px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
-                onClick={() => {
-                  setShowResetConfirm(false);
-                  setResetConfirmText('');
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={resetConfirmText !== 'RESET' || isResetting}
-                className="flex-1 px-4 py-2 text-sm font-medium text-white bg-rose-600 rounded-lg hover:bg-rose-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                onClick={handleReset}
-              >
-                {isResetting ? 'Resetting...' : 'Delete Everything'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 2FA Setup Modal - TOTP */}
-      {show2FASetup === 'totp' && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-6 max-w-md mx-4 w-full">
-            <TotpSetup
-              onComplete={handle2FASetupComplete}
-              onCancel={() => setShow2FASetup(null)}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* 2FA Setup Modal - Hardware Key (native FIDO2) */}
-      {show2FASetup === 'webauthn' && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-6 max-w-md mx-4 w-full">
-            <HardwareKeySetup
-              onComplete={handle2FASetupComplete}
-              onCancel={() => setShow2FASetup(null)}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* Backup Codes Modal */}
-      {showBackupCodes && backupCodes && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-6 max-w-md mx-4 w-full">
-            <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-4">
-              New Backup Codes
-            </h3>
-            <BackupCodesDisplay
-              codes={backupCodes.codes}
-              onDone={() => {
-                setShowBackupCodes(false);
-                setBackupCodes(null);
-              }}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* Disable 2FA Confirmation */}
-      {showDisable2FAConfirm && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-6 max-w-md mx-4">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
-                <svg className="w-5 h-5 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-slate-800 dark:text-white">
-                  Disable 2FA
-                </h3>
-                <p className="text-sm text-slate-500 dark:text-slate-400">
-                  This will reduce your account security
-                </p>
-              </div>
-            </div>
-
-            <p className="text-sm text-slate-600 dark:text-slate-300 mb-4">
-              Are you sure you want to disable two-factor authentication?
-              Your journal will only be protected by your password.
-            </p>
-
-            <div className="flex gap-3">
-              <button
-                type="button"
-                className="flex-1 px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
-                onClick={() => setShowDisable2FAConfirm(false)}
-              >
-                Keep Enabled
-              </button>
-              <button
-                type="button"
-                disabled={isDisabling2FA}
-                className="flex-1 px-4 py-2 text-sm font-medium text-white bg-rose-600 rounded-lg hover:bg-rose-700 transition-colors disabled:opacity-50"
-                onClick={handleDisable2FA}
-              >
-                {isDisabling2FA ? 'Disabling...' : 'Disable 2FA'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Password prompt modal for export */}
       {showPasswordModal && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm">
@@ -2199,7 +705,6 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
               autoFocus
             />
 
-            {/* Error message or lockout countdown */}
             {syncPasswordError && (
               <p className="mt-2 text-sm text-rose-600 dark:text-rose-400">
                 {syncPasswordError}

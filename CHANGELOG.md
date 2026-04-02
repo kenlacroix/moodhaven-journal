@@ -7,6 +7,19 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.7.15] — 2026-04-02
+
+### Fixed
+- **Wear OS companion: MoodHistory crash on unknown mood level.** `MoodHistory.Entry.mood` now falls back by `level == 3` (neutral) rather than `MOODS[2]` array index, making it safe if mood order changes.
+- **Wear OS companion: AudioFrameParser path traversal.** Frame IDs from the watch are now sanitized (non-alphanumeric characters replaced with `_`) before being used as filenames. Empty audio frames are rejected.
+- **Wear OS companion: channel close failures logged.** `WearListenerService` and `WearPlugin` now log a warning when `channelClient.close()` fails instead of swallowing the error silently.
+- **Wear OS companion: complication cache visibility.** `MoodComplicationService` cache fields marked `@Volatile` for correct visibility across coroutine dispatchers.
+
+### Changed
+- **Wear OS companion: polish pass.** Addresses correctness and reliability issues across the Android phone bridge and Wear OS watch app. Key changes: `AudioFrameParser` extracted as a single parsing source of truth used by both `WearListenerService` (background) and `WearPlugin` (foreground); wire protocol constants consolidated into `WearProtocol`; `BreatheSessionActivity` busy-wait replaced with `AtomicBoolean` + `Channel(CONFLATED)` for correct pause/resume; `OfflineQueue` eviction changed from O(n) to O(1) `ArrayDeque`; `SignalSender` now retries with 250/500/1000 ms exponential backoff; `MoodComplicationService` adds 30-second SharedPrefs cache; `HistoryAdapter` extracted into `MoodHistoryAdapter` for reuse across `HistoryActivity` and `HistoryFragment`; `MoodAdapter` reuses existing `GradientDrawable` instead of allocating per bind.
+
+---
+
 ## [0.7.14] — 2026-04-01
 
 ### Changed

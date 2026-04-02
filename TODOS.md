@@ -158,6 +158,16 @@
 
 ---
 
+## Android Wear Companion (feat/android-wear-companion-polish — v0.7.15)
+
+### WEAR-001: Enable BuildConfig generation in wear module (P3)
+**What:** Add `buildFeatures { buildConfig = true }` to `src-tauri/gen/android/wear/build.gradle.kts` and replace the hardcoded `"com.moodbloom.app"` string in `MoodTileService.kt` with `BuildConfig.APPLICATION_ID`.
+**Why:** `MoodTileService.kt:118` currently has a hardcoded `setPackageName("com.moodbloom.app")` string. If the app's `applicationId` ever changes, this silently breaks tile launch without a compile error. `BuildConfig` is the safe derived constant.
+**Context:** Attempted during companion polish pass (2026-04-02) but BuildConfig generation is not enabled in the wear module's `build.gradle.kts`, causing an unresolved reference. Deferred — the hardcoded value matches the actual applicationId in `build.gradle.kts`.
+**Effort:** human ~15min / CC+gstack ~5min
+
+---
+
 ## Settings Refactor (refactor/settings-page-split-and-capsule-tests — v0.7.14)
 
 ### SETTINGS-001: Extract `use2FASetup` hook (P3)

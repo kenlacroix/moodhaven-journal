@@ -23,6 +23,7 @@ jobs:
   build:
     name: Build (${{ matrix.platform }})
     runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.continue_on_error == true }}
     permissions:
       contents: write
 
@@ -46,6 +47,7 @@ jobs:
               -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc
               -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++
             cross: true
+            continue_on_error: true
 
           - platform: Windows (x86_64)
             os: windows-latest
@@ -89,8 +91,10 @@ jobs:
         if: matrix.cross == true
         run: |
           sudo dpkg --add-architecture arm64
-          # Restrict existing sources to amd64, add arm64 ports
+          # Restrict all existing sources to amd64 (sources.list + sources.list.d)
           sudo sed -i 's/^deb http/deb [arch=amd64] http/g' /etc/apt/sources.list
+          sudo find /etc/apt/sources.list.d/ -name "*.list" -exec \
+            sudo sed -i 's/^deb http/deb [arch=amd64] http/g' {} \;
           echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy main restricted universe multiverse" | sudo tee -a /etc/apt/sources.list
           echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy-updates main restricted universe multiverse" | sudo tee -a /etc/apt/sources.list
           sudo apt-get update -qq
@@ -210,7 +214,7 @@ jobs:
   # ── Post-build: checksums + release notes ──────────────────────────────────
   update-manifest:
     needs: build
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' && !cancelled()
     runs-on: ubuntu-22.04
     permissions:
       contents: write

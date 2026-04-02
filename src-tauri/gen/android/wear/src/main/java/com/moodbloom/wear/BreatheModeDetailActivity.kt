@@ -7,6 +7,7 @@ import android.widget.TextView
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * BreatheModeDetailActivity — shows mode description, cycle adjuster, and Begin button.
@@ -69,14 +70,15 @@ class BreatheModeDetailActivity : FragmentActivity() {
             btnBegin.isEnabled = false
             btnBegin.text      = "…"
             lifecycleScope.launch {
-                // Non-blocking resting HR capture (≤10s timeout)
-                val hrJson  = HealthSnapshot.capture(applicationContext)
+                // Non-blocking resting HR capture — 12s hard timeout so btnBegin always re-enables
+                val hrJson = withTimeoutOrNull(12_000L) { HealthSnapshot.capture(applicationContext) }
                 val hrBefore = hrJson?.let {
                     try { org.json.JSONObject(it).optInt("hr", 0).takeIf { v -> v > 0 } }
                     catch (_: Exception) { null }
                 }
                 // Cache for suggestion chip in BreatheFragment
                 hrBefore?.let { HealthSnapshot.lastHr = it }
+                btnBegin.isEnabled = true
                 startSession(hrBefore)
             }
         }

@@ -17,8 +17,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import org.json.JSONObject
 import java.io.File
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -80,7 +78,7 @@ class WearPlugin(private val activity: Activity) : Plugin(activity) {
         // Registering here ensures audio arrives regardless of app state.
         val cb = object : ChannelClient.ChannelCallback() {
             override fun onChannelOpened(channel: ChannelClient.Channel) {
-                if (channel.path != WearListenerService.CHANNEL_AUDIO) {
+                if (channel.path != WearProtocol.CHANNEL_AUDIO) {
                     Log.w(TAG, "Plugin: unexpected channel path: ${channel.path}")
                     return
                 }
@@ -159,53 +157,32 @@ class WearPlugin(private val activity: Activity) : Plugin(activity) {
             val allBytes = inputStream.readBytes()
             inputStream.close()
 
-            if (allBytes.size < 5) {
-                Log.e(TAG, "Plugin: channel data too short: ${allBytes.size} bytes")
-                return
-            }
+            val frame = AudioFrameParser.parse(allBytes) ?: return
+            Log.i(TAG, "Plugin: audio received id=${frame.id} duration=${frame.durationMs}ms size=${frame.audioBytes.size}")
 
-            val metaLen: Int = ByteBuffer.wrap(allBytes, 0, 4).order(ByteOrder.BIG_ENDIAN).int
-            if (metaLen <= 0 || metaLen > allBytes.size - 4) {
-                Log.e(TAG, "Plugin: invalid metadata length: $metaLen (total=${allBytes.size})")
-                return
-            }
-
-            val metaBytes  = allBytes.sliceArray(4 until 4 + metaLen)
-            val audioBytes = allBytes.sliceArray(4 + metaLen until allBytes.size)
-            val meta       = JSONObject(String(metaBytes, Charsets.UTF_8))
-
-            val id         = meta.optString("id").takeIf { it.isNotBlank() }
-                ?: run { Log.e(TAG, "Plugin: missing id in audio metadata"); return }
-            val timestamp  = meta.optString("timestamp").takeIf { it.isNotBlank() } ?: nowIso8601()
-            val durationMs = meta.optLong("duration_ms", 0L)
-            val healthJson = meta.optString("health").takeIf { it.isNotBlank() }
-
-            Log.i(TAG, "Plugin: audio received id=$id duration=${durationMs}ms size=${audioBytes.size}")
-
-            val incomingDir = File(activity.filesDir, WearListenerService.INCOMING_DIR).also { it.mkdirs() }
-            val outFile     = File(incomingDir, "$id.m4a")
+            val incomingDir = File(activity.filesDir, WearProtocol.INCOMING_DIR).also { it.mkdirs() }
+            val outFile = File(incomingDir, "${frame.id}.m4a")
 
             if (outFile.exists()) {
-                Log.i(TAG, "Plugin: $id already saved — skipping duplicate")
+                Log.i(TAG, "Plugin: ${frame.id} already saved — skipping duplicate")
             } else {
-                outFile.writeBytes(audioBytes)
+                outFile.writeBytes(frame.audioBytes)
                 Log.i(TAG, "Plugin: audio saved ${outFile.absolutePath}")
             }
 
-            // Acknowledge to the watch
             try {
                 Wearable.getMessageClient(activity)
-                    .sendMessage(channel.nodeId, "/feedback", "received".toByteArray())
+                    .sendMessage(channel.nodeId, WearProtocol.PATH_FEEDBACK, "received".toByteArray())
                     .await()
             } catch (e: Exception) {
                 Log.w(TAG, "Plugin: feedback send failed: ${e.message}")
             }
 
             bridgeVoiceMemo(
-                id           = id,
-                timestamp    = timestamp,
-                durationMs   = durationMs,
-                healthJson   = healthJson,
+                id           = frame.id,
+                timestamp    = frame.timestamp,
+                durationMs   = frame.durationMs,
+                healthJson   = frame.healthJson,
                 incomingFile = outFile.name,
                 nodeId       = channel.nodeId,
             )
@@ -222,8 +199,10 @@ class WearPlugin(private val activity: Activity) : Plugin(activity) {
         for (rawJson in buffered) {
             try {
                 val json = JSONObject(rawJson)
+                val id = json.optString("id").takeIf { it.isNotBlank() }
+                if (id == null) { Log.w(TAG, "Dropping buffered signal with missing id"); continue }
                 bridgeFromWatch(
-                    id = json.optString("id", java.util.UUID.randomUUID().toString()),
+                    id = id!!,
                     timestamp = json.optString("timestamp", nowIso8601()),
                     type = json.optString("type", "unknown"),
                     source = json.optString("source", "watch"),

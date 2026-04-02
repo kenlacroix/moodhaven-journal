@@ -1,12 +1,15 @@
 package com.moodbloom.wear
 
-import android.app.Activity
 import android.graphics.Color
+import android.os.Build
 import android.os.Bundle
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import android.widget.FrameLayout
 import android.widget.TextView
-import androidx.lifecycle.lifecycleScope
 import androidx.fragment.app.FragmentActivity
+import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -54,8 +57,20 @@ class TileActionActivity : FragmentActivity() {
         MoodHistory.record(this, mood.level)
 
         lifecycleScope.launch {
-            SignalSender.sendMoodTap(this@TileActionActivity, mood.level)
-            // Refresh the tile so the highlighted button updates
+            val sent = SignalSender.sendMoodTap(this@TileActionActivity, mood.level)
+            if (!sent) {
+                // Signal queued — show error state so user knows it will retry
+                root.setBackgroundColor(Color.parseColor("#7F1D1D"))
+                label.text = "${mood.emoji}\nQueued"
+                try {
+                    val vib = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        (getSystemService(VIBRATOR_MANAGER_SERVICE) as VibratorManager).defaultVibrator
+                    } else {
+                        @Suppress("DEPRECATION") getSystemService(VIBRATOR_SERVICE) as Vibrator
+                    }
+                    vib.vibrate(VibrationEffect.createWaveform(longArrayOf(0, 30, 60, 30), -1))
+                } catch (_: Exception) {}
+            }
             androidx.wear.tiles.TileService.getUpdater(this@TileActionActivity)
                 .requestUpdate(MoodTileService::class.java)
             delay(1200)

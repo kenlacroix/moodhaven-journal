@@ -2,6 +2,7 @@ package com.moodbloom.app
 
 import android.app.Activity
 import android.content.Context
+import android.util.Log
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
@@ -20,6 +21,7 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
+private const val TAG = "BiometricPlugin"
 private const val KEY_ALIAS = "MoodBloomBiometricKey"
 private const val PREFS_NAME = "moodbloom_biometric"
 private const val PREF_ENCRYPTED_PW = "encrypted_password"
@@ -100,6 +102,10 @@ class BiometricPlugin(private val activity: Activity) : Plugin(activity) {
         }
 
         activity.runOnUiThread {
+            val fa = activity as? FragmentActivity ?: run {
+                invoke.reject("BiometricPlugin requires FragmentActivity")
+                return@runOnUiThread
+            }
             try {
                 val cipher = buildEncryptCipher()
                 val promptInfo = BiometricPrompt.PromptInfo.Builder()
@@ -109,7 +115,7 @@ class BiometricPlugin(private val activity: Activity) : Plugin(activity) {
                     .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
                     .build()
 
-                BiometricPrompt(activity as FragmentActivity, executor, callback)
+                BiometricPrompt(fa, executor, callback)
                     .authenticate(promptInfo, BiometricPrompt.CryptoObject(cipher))
             } catch (e: Exception) {
                 invoke.reject("Failed to start biometric: ${e.message}")
@@ -162,6 +168,10 @@ class BiometricPlugin(private val activity: Activity) : Plugin(activity) {
         }
 
         activity.runOnUiThread {
+            val fa = activity as? FragmentActivity ?: run {
+                invoke.reject("BiometricPlugin requires FragmentActivity")
+                return@runOnUiThread
+            }
             try {
                 val cipher = buildDecryptCipher(iv)
                 val promptInfo = BiometricPrompt.PromptInfo.Builder()
@@ -171,7 +181,7 @@ class BiometricPlugin(private val activity: Activity) : Plugin(activity) {
                     .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
                     .build()
 
-                BiometricPrompt(activity as FragmentActivity, executor, callback)
+                BiometricPrompt(fa, executor, callback)
                     .authenticate(promptInfo, BiometricPrompt.CryptoObject(cipher))
             } catch (e: Exception) {
                 // Cipher init failed — key likely invalidated by new biometric enrollment
@@ -237,6 +247,8 @@ class BiometricPlugin(private val activity: Activity) : Plugin(activity) {
         try {
             val ks = KeyStore.getInstance("AndroidKeyStore").also { it.load(null) }
             if (ks.containsAlias(KEY_ALIAS)) ks.deleteEntry(KEY_ALIAS)
-        } catch (_: Exception) {}
+        } catch (e: Exception) {
+            Log.w(TAG, "KeyStore cleanup failed: ${e.message}")
+        }
     }
 }

@@ -14,9 +14,11 @@ import android.widget.TextView
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * BreatheSessionActivity — full-screen guided breathing session.
@@ -49,10 +51,11 @@ class BreatheSessionActivity : FragmentActivity() {
     private lateinit var btnResume:     Button
     private lateinit var btnEnd:        Button
 
-    private var sessionJob:  Job     = Job()
-    @Volatile private var isPaused:  Boolean = false
-    @Volatile private var skipPhase: Boolean = false
-    private var startMs:     Long    = 0L
+    private var sessionJob:  Job          = Job()
+    private val isPaused:    AtomicBoolean = AtomicBoolean(false)
+    private val resumeSignal: Channel<Unit> = Channel(Channel.CONFLATED)
+    private val skipPhase:   AtomicBoolean = AtomicBoolean(false)
+    private var startMs:     Long          = 0L
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -119,7 +122,7 @@ class BreatheSessionActivity : FragmentActivity() {
 
     private suspend fun runPhase(phase: Phase, durationSec: Int) {
         vibratePhaseStart(phase)
-        skipPhase = false
+        skipPhase.set(false)
 
         val expanded  = phase == Phase.INHALE || phase == Phase.HOLD1
         val targetF   = if (expanded) 0.90f else 0.40f
@@ -133,10 +136,10 @@ class BreatheSessionActivity : FragmentActivity() {
 
         // Count down second by second
         for (remaining in durationSec downTo 1) {
-            if (!lifecycleScope.isActive || skipPhase) break
+            if (!lifecycleScope.isActive || skipPhase.get()) break
             tvCountdown.text = remaining.toString()
             awaitSecond()
-            if (skipPhase) break
+            if (skipPhase.get()) break
         }
     }
 
@@ -144,8 +147,8 @@ class BreatheSessionActivity : FragmentActivity() {
     private suspend fun awaitSecond() {
         val deadline = System.currentTimeMillis() + 1_000L
         while (System.currentTimeMillis() < deadline) {
-            if (!lifecycleScope.isActive || skipPhase) return
-            while (isPaused) delay(50)
+            if (!lifecycleScope.isActive || skipPhase.get()) return
+            if (isPaused.get()) resumeSignal.receive()   // suspend until hidePause() sends
             delay(40)
         }
     }
@@ -153,20 +156,21 @@ class BreatheSessionActivity : FragmentActivity() {
     // ── Pause overlay ─────────────────────────────────────────────────────────
 
     private fun showPause() {
-        isPaused              = true
+        isPaused.set(true)
         pauseOverlay.visibility = View.VISIBLE
     }
 
     private fun hidePause() {
-        isPaused              = false
+        isPaused.set(false)
         pauseOverlay.visibility = View.GONE
+        resumeSignal.trySend(Unit)   // wake the suspended awaitSecond coroutine
     }
 
     // ── Crown / bezel — skip to next phase ───────────────────────────────────
 
     override fun onGenericMotionEvent(event: MotionEvent): Boolean {
         if (event.action == MotionEvent.ACTION_SCROLL) {
-            skipPhase = true
+            skipPhase.set(true)
             return true
         }
         return super.onGenericMotionEvent(event)
@@ -208,6 +212,7 @@ class BreatheSessionActivity : FragmentActivity() {
     }
 
     private fun vibrate(pattern: LongArray) {
+        if (!lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) return
         try {
             val vibrator: Vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 (getSystemService(VIBRATOR_MANAGER_SERVICE) as VibratorManager).defaultVibrator

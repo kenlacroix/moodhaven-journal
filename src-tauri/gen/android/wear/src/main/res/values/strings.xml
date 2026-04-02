@@ -3,4 +3,9 @@
     <string name="app_name">MoodBloom</string>
     <string name="tile_label">MoodBloom Mood</string>
     <string name="complication_label">MoodBloom</string>
+    <string name="complication_log_mood">Log mood</string>
+    <string name="sync_now">Sync now</string>
+    <string name="sync_syncing">Syncing…</string>
+    <string name="sync_sent">Sent %d</string>
+    <string name="sync_failed">Sync failed</string>
 </resources>

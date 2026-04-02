@@ -37,8 +37,9 @@ object OfflineQueue {
             moodLevel = moodLevel,
         )
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val existing = load(prefs)
-        val updated = (existing + entry).takeLast(MAX_ENTRIES)
+        val updated = ArrayDeque(load(prefs))
+        if (updated.size >= MAX_ENTRIES) updated.removeFirst()
+        updated.addLast(entry)
         save(prefs, updated)
         Log.i(TAG, "Queued signal mood=${moodLevel} (queue size=${updated.size})")
     }

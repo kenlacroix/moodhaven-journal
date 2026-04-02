@@ -145,7 +145,10 @@ describe('useInsights', () => {
 
       const { result } = renderHook(() => useInsights());
 
-      await waitFor(() => !result.current.isLoading);
+      await waitFor(() => {
+        expect(result.current.isMetadataReady).toBe(true);
+        expect(result.current.isLoading).toBe(false);
+      });
       expect(mockGetAllEntries).toHaveBeenCalledTimes(1);
       expect(result.current.gratitudeStreak).toBe(5); // from calculateGratitudeStreak mock
       // Cache should be updated

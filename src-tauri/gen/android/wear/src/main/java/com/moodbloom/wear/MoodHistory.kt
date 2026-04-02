@@ -23,7 +23,9 @@ object MoodHistory {
         val moodLevel: Int,
         val timestamp: String,   // ISO-8601
     ) {
-        val mood: MoodItem get() = MOODS.firstOrNull { it.level == moodLevel } ?: MOODS[2]
+        val mood: MoodItem get() = MOODS.firstOrNull { it.level == moodLevel }
+            ?: MOODS.firstOrNull { it.level == 3 }  // neutral fallback by level, not array index
+            ?: MOODS.first()
 
         /** e.g. "Today 09:14" or "Mon 21:32" */
         fun displayTime(): String = try {

@@ -143,7 +143,9 @@ class WearListenerService : WearableListenerService() {
                 Log.e(TAG, "Audio channel error: ${e.message}", e)
                 outFile?.delete()  // clean up partial file on failure
             } finally {
-                try { channelClient.close(channel).await() } catch (_: Exception) {}
+                try { channelClient.close(channel).await() } catch (e: Exception) {
+                    Log.w(TAG, "Channel close failed: ${e.message}")
+                }
             }
         }
     }

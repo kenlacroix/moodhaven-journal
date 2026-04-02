@@ -190,7 +190,9 @@ class WearPlugin(private val activity: Activity) : Plugin(activity) {
         } catch (e: Exception) {
             Log.e(TAG, "Plugin: audio channel error: ${e.message}", e)
         } finally {
-            try { channelClient.close(channel).await() } catch (_: Exception) {}
+            try { channelClient.close(channel).await() } catch (e: Exception) {
+                Log.w(TAG, "Plugin: channel close failed: ${e.message}")
+            }
         }
     }
 

@@ -62,6 +62,11 @@ object AudioFrameParser {
         val metaBytes = allBytes.sliceArray(4 until 4 + metaLen)
         val audioBytes = allBytes.sliceArray(4 + metaLen until allBytes.size)
 
+        if (audioBytes.isEmpty()) {
+            Log.e(TAG, "Frame contains no audio bytes (total=${allBytes.size} metaLen=$metaLen)")
+            return null
+        }
+
         val meta = try {
             JSONObject(String(metaBytes, Charsets.UTF_8))
         } catch (e: Exception) {
@@ -69,10 +74,15 @@ object AudioFrameParser {
             return null
         }
 
-        val id = meta.optString("id").takeIf { it.isNotBlank() }
-        if (id == null) {
+        val rawId = meta.optString("id").takeIf { it.isNotBlank() }
+        if (rawId == null) {
             Log.e(TAG, "Frame missing required 'id' field")
             return null
+        }
+        // Sanitize id: only allow alphanumerics, hyphens, and underscores to prevent path traversal
+        val id = rawId.replace(Regex("[^a-zA-Z0-9_-]"), "_")
+        if (id != rawId) {
+            Log.w(TAG, "id sanitized: '$rawId' → '$id'")
         }
 
         val timestamp = meta.optString("timestamp").takeIf { it.isNotBlank() } ?: nowIso8601()

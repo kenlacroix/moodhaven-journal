@@ -25,8 +25,8 @@ import androidx.wear.watchface.complications.datasource.SuspendingComplicationDa
 class MoodComplicationService : SuspendingComplicationDataSourceService() {
 
     // 30-second in-memory cache to avoid hitting SharedPrefs on every watch face tick
-    private var cachedEntry: MoodHistory.Entry? = null
-    private var cacheTimestampMs: Long = 0L
+    @Volatile private var cachedEntry: MoodHistory.Entry? = null
+    @Volatile private var cacheTimestampMs: Long = 0L
     private val cacheTtlMs = 30_000L
 
     override fun getPreviewData(type: ComplicationType): ComplicationData? {

@@ -7,6 +7,16 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.7.14] — 2026-04-01
+
+### Changed
+- **SettingsPage split into tab components.** The 2,239-line `SettingsPage.tsx` has been broken into eight focused files under `src/components/settings/tabs/`: `GeneralTab`, `PrivacyTab`, `SyncTab`, `AITab`, `HealthTab`, `ExportTab`, `AboutTab`, and a barrel export. No behavior changes — the refactor improves navigation, reduces merge conflicts, and makes each settings area independently readable. The coordinator shell (`SettingsPage.tsx`) retains tab routing, scroll-to-section deep-links, and the export password modal.
+
+### Added
+- **Rust tests for time capsule commands.** Six `#[cfg(test)]` unit tests added to `src-tauri/src/commands/time_capsule.rs` using an in-memory SQLite database: seal sets columns correctly, seal rejects past dates, seal double-seal guard (can't seal an already-sealed entry), unseal clears `sealed_until` and defaults `capsule_type` to `'anniversary'`, `get_due_capsules` returns past-due entries, `get_due_capsules` excludes entries whose month/day matches today.
+
+---
+
 ## [0.7.13] — 2026-03-31
 
 ### Added

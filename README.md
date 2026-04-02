@@ -7,7 +7,7 @@
 <p><strong>A calm, encrypted desktop journal with mood tracking, AI insights, and local peer sync</strong></p>
 
 <p>
-<a href="https://github.com/kenlacroix/moodhaven-journal/releases"><img src="https://img.shields.io/badge/version-0.7.13-7c3aed?style=flat-square" alt="Version"></a>
+<a href="https://github.com/kenlacroix/moodhaven-journal/releases"><img src="https://img.shields.io/badge/version-0.7.14-7c3aed?style=flat-square" alt="Version"></a>
 <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-22c55e?style=flat-square" alt="License"></a>
 <a href="#installation"><img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-0ea5e9?style=flat-square" alt="Platform"></a>
 <a href="#tech-stack"><img src="https://img.shields.io/badge/tests-585%20passing-22c55e?style=flat-square" alt="Tests"></a>
@@ -76,10 +76,10 @@ Grab the latest build from the [Releases](https://github.com/kenlacroix/moodhave
 
 | Platform | Installer | Minimum Version |
 |:---|:---|:---|
-| **Windows** | `MoodHaven_0.7.13_x64-setup.exe` | Windows 10 |
-| **macOS** | `MoodHaven_0.7.13_x64.dmg` | macOS 10.15 Catalina |
-| **Linux** | `moodhaven_0.7.13_amd64.AppImage` | Any modern distro |
-| **Linux (Debian)** | `moodhaven_0.7.13_amd64.deb` | Ubuntu 22.04+ |
+| **Windows** | `MoodHaven_0.7.14_x64-setup.exe` | Windows 10 |
+| **macOS** | `MoodHaven_0.7.14_x64.dmg` | macOS 10.15 Catalina |
+| **Linux** | `moodhaven_0.7.14_amd64.AppImage` | Any modern distro |
+| **Linux (Debian)** | `moodhaven_0.7.14_amd64.deb` | Ubuntu 22.04+ |
 
 ### First Launch
 
@@ -331,6 +331,7 @@ See [CLAUDE.md](CLAUDE.md) for architectural decisions, security guidelines, and
 
 ## Recent Changes
 
+**v0.7.14** — SettingsPage split from 2239-line monolith into 7 focused tab components (GeneralTab, PrivacyTab, SyncTab, AITab, HealthTab, ExportTab, AboutTab); 6 Rust `#[cfg(test)]` unit tests for time capsule seal/unseal logic
 **v0.7.13** — Selective export with tag/mood/date filters and live entry count, `EntryStateBadge` with optimistic UI and `thinking/complete/revisit` states, date comparison fix for filtered exports, credentials stripped from filtered backup files, tags sourced from all books in export picker, 585 tests
 **v0.7.12** — ISO week utilities (`getISOWeekStart`, `countEntriesThisWeek`), 8 new tests for SelectiveExportPanel, `motion-safe:` prefixed on mood-pop animation
 **v0.7.11** — UI micro-animations: bar-grow on mood distribution chart, slide-up modals and drawers, staggered entry card cascades, scale tap targets on sidebar/nav/calendar, filter-change re-stagger on Timeline, 6 new tests

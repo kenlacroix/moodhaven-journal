@@ -213,15 +213,6 @@ jobs:
           retention-days: 1
 
   # ── Android: Wear OS companion APK ─────────────────────────────────────────
-  # Phase 1: debug-signed wear APK only.
-  # Phase 2 (TODO): sign with upload keystore (ANDROID_KEYSTORE_BASE64 +
-  #   ANDROID_KEY_ALIAS + ANDROID_KEY_PASSWORD secrets), swap assembleDebug
-  #   for bundleRelease to produce .aab for Play Store submission.
-  # Note: :app (Tauri Android app) is excluded — it requires Rust + NDK
-  #   cross-compilation for 4 targets. Handle via `npm run tauri android build`
-  #   in a dedicated job when ready.
-  # Note: wearApp { uses ':wear' } is not yet added to app/build.gradle.kts —
-  #   required for Play Store auto-install pairing before submission.
   build-android:
     name: Build Android (Wear OS companion)
     runs-on: ubuntu-latest
@@ -271,9 +262,62 @@ jobs:
           path: src-tauri/gen/android/wear/build/outputs/apk/debug/wear-debug.apk
           retention-days: 1
 
+  # ── Android: Phone app APK (Tauri + Rust, arm64 only, debug-signed) ─────────
+  build-android-phone:
+    name: Build Android phone APK
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: aarch64-linux-android
+
+      - name: Accept Android SDK licenses
+        run: yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses 2>/dev/null || true
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build Android phone debug APK (arm64)
+        run: npm run tauri android build -- --target aarch64 --debug
+        env:
+          NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
+
+      - name: Upload phone APK artifact (for release attachment in update-manifest)
+        uses: actions/upload-artifact@v4
+        with:
+          name: phone-apk
+          path: src-tauri/gen/android/app/build/outputs/apk/**/*.apk
+          retention-days: 1
+
   # ── Post-build: checksums + release notes ──────────────────────────────────
   update-manifest:
-    needs: [build, build-android]
+    needs: [build, build-android, build-android-phone]
     if: github.event_name == 'push' && !cancelled()
     runs-on: ubuntu-22.04
     permissions:
@@ -300,6 +344,15 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           APK=$(find artifacts/wear-apk -name "*.apk" | head -1)
+          if [ -n "$APK" ]; then
+            gh release upload "${{ github.ref_name }}" "$APK" --clobber
+          fi
+
+      - name: Attach phone APK to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          APK=$(find artifacts/phone-apk -name "*.apk" | head -1)
           if [ -n "$APK" ]; then
             gh release upload "${{ github.ref_name }}" "$APK" --clobber
           fi

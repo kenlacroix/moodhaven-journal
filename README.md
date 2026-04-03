@@ -4,12 +4,13 @@
 
 <h1>MoodHaven Journal</h1>
 
-<p><strong>A calm, encrypted desktop journal with mood tracking, AI insights, and local peer sync</strong></p>
+<p><strong>A calm, encrypted journal with mood tracking, AI insights, local peer sync, and a Wear OS wrist companion</strong></p>
 
 <p>
 <a href="https://github.com/kenlacroix/moodhaven-journal/releases"><img src="https://img.shields.io/badge/version-0.7.15-7c3aed?style=flat-square" alt="Version"></a>
 <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-22c55e?style=flat-square" alt="License"></a>
 <a href="#installation"><img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-0ea5e9?style=flat-square" alt="Platform"></a>
+<a href="#watch--phone-companion-beta"><img src="https://img.shields.io/badge/companion-Wear%20OS%20%7C%20Android-f97316?style=flat-square" alt="Companion: Wear OS + Android"></a>
 <a href="#tech-stack"><img src="https://img.shields.io/badge/tests-585%20passing-22c55e?style=flat-square" alt="Tests"></a>
 <a href="https://tauri.app"><img src="https://img.shields.io/badge/built%20with-Tauri%202-ffd866?style=flat-square" alt="Built with Tauri"></a>
 <a href="#security--privacy"><img src="https://img.shields.io/badge/encryption-AES--256--GCM-ef4444?style=flat-square" alt="Encryption"></a>
@@ -64,7 +65,14 @@ MoodHaven Journal combines structured mood tracking with free-form encrypted jou
 | AES-256-GCM encryption, PBKDF2 key derivation | Local peer sync over LAN — no cloud server needed |
 | Zero-knowledge: app never sees your plaintext | Encrypted WebDAV backup (Nextcloud, etc.) |
 | TOTP 2FA and native FIDO2 hardware key support | Encrypted `.moodhaven` export for offline archival |
-| Optional 24-character offline recovery key | Wear OS companion for wrist voice capture *(beta)* |
+| Optional 24-character offline recovery key | Encrypted peer sync across your own devices |
+
+| Wear OS Companion *(beta)* | Android Phone Bridge *(beta)* |
+|:---|:---|
+| Record voice memos from your wrist (up to 10 min) | Receives audio over Wear OS ChannelAPI |
+| Quick mood taps — 4 levels, one tap | Forwards memos to desktop for whisper.cpp transcription |
+| Health snapshot at recording time (HR, activity) | Offline queue — memos held until desktop is reachable |
+| Auto-arc recording indicator, breathe sessions | Works in background; no app open required |
 
 ---
 
@@ -200,6 +208,55 @@ Full protocol details: [docs/peer-sync-security.md](docs/peer-sync-security.md)
 
 ---
 
+## Watch & Phone Companion *(beta)*
+
+> **Beta:** Core recording and transfer pipeline is complete and working on hardware. Phase 2 UX polish (breathe screen, history view, tile improvements) is in progress.
+
+The Wear OS companion lets you capture a voice reflection from your wrist before the thought fades. When you sit down at your desk, the transcription is waiting.
+
+```
+Wear OS Watch
+    │  Tap to record (up to 10 min, 16 kHz mono)
+    │  Quick mood tap (1–4) via tile or app screen
+    │  Breathe session with health context snapshot
+    ▼
+Android Phone (bridge app)
+    │  Receives audio over ChannelAPI — works in background
+    │  Offline queue: holds memos until desktop is reachable
+    │  Mood signals forwarded via MessageAPI
+    ▼
+MoodHaven Journal (desktop)
+    │  Voice memo appears in Writing view
+    │  whisper.cpp transcribes locally — no cloud
+    │  "Create Entry" pre-fills the editor with the transcript
+    └  Mood tap stored as a signal, linkable to a journal entry
+```
+
+**What the watch does:**
+- Records voice memos up to 10 minutes — audio stays on your devices
+- Sends mood taps (one-tap, one-handed) that land as signals in the desktop app
+- Captures a health snapshot (heart rate, activity level) at recording time
+- Breathe screen with HR delta shown in the post-session summary
+
+**What the watch does NOT do:**
+- Store journal entries
+- Connect to any cloud service
+- Send audio anywhere except your paired phone
+
+### Setup *(beta)*
+
+1. Install the MoodHaven Journal bridge APK on your Android phone.
+2. Install the MoodHaven Journal watch APK on your Wear OS watch.
+3. Pair the watch to the phone via Bluetooth as normal.
+4. Open MoodHaven Journal on your desktop — new voice memos appear automatically.
+
+> Requires Wear OS 3.0+, Android 11+, and MoodHaven Journal desktop v0.7.0+.
+> APKs are available in [Releases](https://github.com/kenlacroix/moodhaven-journal/releases) as `moodhaven-phone-debug.apk` and `moodhaven-wear-debug.apk`.
+
+Full architecture: [docs/watch-companion.md](docs/watch-companion.md)
+
+---
+
 ## Building from Source
 
 ### Prerequisites
@@ -281,6 +338,8 @@ Full cross-platform build guide: [docs/build.md](docs/build.md)
 | **Charts** | Custom SVG (no charting library dependency) |
 | **Testing** | [Vitest](https://vitest.dev) + Testing Library (585 tests) |
 | **Build** | Vite 5 + `npm run tauri build` |
+| **Android bridge** | Kotlin + Wear OS Data Layer (MessageAPI + ChannelAPI) |
+| **Wear OS app** | Kotlin + Wear OS Compose-free (XML layouts, Wearable widgets) |
 
 ---
 
@@ -288,11 +347,19 @@ Full cross-platform build guide: [docs/build.md](docs/build.md)
 
 MoodHaven Journal is in public beta. The core feature set is complete and stable — the app is used daily in production. What beta testers can help with:
 
+**Desktop:**
 - **Try the full setup flow** — First-run wizard, password, 2FA, recovery key
 - **Write entries and use Books** — Does auto-save, mood detection, and templates behave as expected?
 - **Test on your OS** — Especially Windows and macOS (primary dev is on Linux)
 - **Exercise peer sync** — If you have two machines on the same LAN, try pairing and syncing
 - **Break it** — Edge cases, unusual input, rapid navigation, large entry counts
+
+**Wear OS companion *(beta — needs testers with Wear OS 3+ hardware)*:**
+- **Record a voice memo** — tap to record, stop, confirm it arrives and transcribes on the desktop
+- **Send mood taps** — do they land in the desktop app even if MoodHaven Journal isn't in the foreground?
+- **Offline queue** — send taps while the phone is out of range, reconnect, confirm they drain
+- **Breathe session** — does pause/resume work? Does the post-session summary show correctly?
+- **Health context** — does the health snapshot attach to the voice memo correctly?
 
 File issues at [GitHub Issues](https://github.com/kenlacroix/moodhaven-journal/issues). Screenshots are always appreciated.
 

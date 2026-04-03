@@ -143,7 +143,7 @@ class RecordFragment : Fragment() {
         if (!hasPerm(Manifest.permission.RECORD_AUDIO)) perms += Manifest.permission.RECORD_AUDIO
         if (perms.isNotEmpty()) { requestMic.launch(perms.toTypedArray()); return }
 
-        val s = RecordingSession(requireContext(), onAutoStop = { stopRecording() })
+        val s = RecordingSession(requireContext(), onAutoStop = { if (isAdded) stopRecording() })
         if (!s.start()) { statusText.text = "Mic unavailable"; return }
 
         session = s

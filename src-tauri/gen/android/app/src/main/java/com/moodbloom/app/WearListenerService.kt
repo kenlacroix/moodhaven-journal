@@ -1,6 +1,7 @@
 package com.moodbloom.app
 
 import android.util.Log
+import org.json.JSONObject
 import com.google.android.gms.wearable.ChannelClient
 import com.google.android.gms.wearable.MessageEvent
 import com.google.android.gms.wearable.Wearable
@@ -11,12 +12,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
-import org.json.JSONObject
 import java.io.File
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
-import java.util.TimeZone
+import java.time.Instant
 
 /**
  * WearListenerService — phone-side Wear OS Data Layer receiver.
@@ -38,17 +35,7 @@ import java.util.TimeZone
 class WearListenerService : WearableListenerService() {
 
     companion object {
-        private const val TAG              = "WearListenerService"
-        const val PATH_SIGNAL              = "/signal"
-        const val PATH_VOICE_MEMO_META     = "/voice_memo"   // legacy metadata path (kept for compat)
-        const val CHANNEL_AUDIO            = "/audio_channel"
-        const val INCOMING_DIR             = "voice_memos_incoming"
-
-        private fun nowIso8601(): String {
-            val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US)
-            sdf.timeZone = TimeZone.getTimeZone("UTC")
-            return sdf.format(Date())
-        }
+        private const val TAG = "WearListenerService"
     }
 
     private val ioScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -71,9 +58,9 @@ class WearListenerService : WearableListenerService() {
         }
 
         when (event.path) {
-            PATH_SIGNAL          -> handleSignalMessage(event.sourceNodeId, payload)
-            PATH_VOICE_MEMO_META -> Log.i(TAG, "Legacy /voice_memo message ignored — using ChannelAPI")
-            else                 -> Log.w(TAG, "Unhandled path: ${event.path}")
+            WearProtocol.PATH_SIGNAL          -> handleSignalMessage(event.sourceNodeId, payload)
+            WearProtocol.PATH_VOICE_MEMO_META -> Log.i(TAG, "Legacy /voice_memo message ignored — using ChannelAPI")
+            else                              -> Log.w(TAG, "Unhandled path: ${event.path}")
         }
     }
 
@@ -97,7 +84,7 @@ class WearListenerService : WearableListenerService() {
 
         WearPlugin.getInstance()?.bridgeFromWatch(
             id        = id,
-            timestamp = timestamp ?: nowIso8601(),
+            timestamp = timestamp ?: Instant.now().toString(),
             type      = type,
             source    = "watch",
             payload   = payload,
@@ -111,7 +98,7 @@ class WearListenerService : WearableListenerService() {
     // ── ChannelAPI (audio transfer) ───────────────────────────────────────────
 
     override fun onChannelOpened(channel: ChannelClient.Channel) {
-        if (channel.path != CHANNEL_AUDIO) {
+        if (channel.path != WearProtocol.CHANNEL_AUDIO) {
             Log.w(TAG, "Unexpected channel path: ${channel.path}")
             return
         }
@@ -120,71 +107,45 @@ class WearListenerService : WearableListenerService() {
         val channelClient = Wearable.getChannelClient(this)
 
         ioScope.launch {
+            var outFile: File? = null
             try {
                 val inputStream = channelClient.getInputStream(channel).await()
-
-                // Read all bytes (max ~3 min × 32 kbps ≈ 720 KB — fits in memory)
                 val allBytes = inputStream.readBytes()
                 inputStream.close()
 
-                if (allBytes.size < 5) {
-                    Log.e(TAG, "Channel data too short: ${allBytes.size} bytes")
-                    return@launch
-                }
+                val frame = AudioFrameParser.parse(allBytes) ?: return@launch
 
-                // Parse 4-byte big-endian metadata length header
-                // Explicit Int type avoids Kotlin overload-resolution ambiguity on
-                // downstream arithmetic (sliceArray bounds use metaLen as Int).
-                val metaLen: Int = java.nio.ByteBuffer.wrap(allBytes, 0, 4)
-                    .order(java.nio.ByteOrder.BIG_ENDIAN).int
+                Log.i(TAG, "Audio received: id=${frame.id} duration=${frame.durationMs}ms size=${frame.audioBytes.size} bytes")
 
-                if (metaLen <= 0 || metaLen > allBytes.size - 4) {
-                    Log.e(TAG, "Invalid metadata length: $metaLen (total=${allBytes.size})")
-                    return@launch
-                }
-
-                val metaBytes  = allBytes.sliceArray(4 until 4 + metaLen)
-                val audioBytes = allBytes.sliceArray(4 + metaLen until allBytes.size)
-                val meta       = JSONObject(String(metaBytes, Charsets.UTF_8))
-
-                val id          = meta.optString("id").takeIf { it.isNotBlank() }
-                    ?: run { Log.e(TAG, "Missing id in audio metadata"); return@launch }
-                val timestamp   = meta.optString("timestamp").takeIf { it.isNotBlank() } ?: nowIso8601()
-                val durationMs  = meta.optLong("duration_ms", 0L)
-                val healthJson  = meta.optString("health").takeIf { it.isNotBlank() }
-
-                Log.i(TAG, "Audio received: id=$id duration=${durationMs}ms size=${audioBytes.size} bytes")
-
-                // Save to filesDir/voice_memos_incoming/<id>.m4a
-                val incomingDir = File(filesDir, INCOMING_DIR).also { it.mkdirs() }
-                val outFile     = File(incomingDir, "$id.m4a")
-                outFile.writeBytes(audioBytes)
-
+                val incomingDir = File(filesDir, WearProtocol.INCOMING_DIR).also { it.mkdirs() }
+                outFile = File(incomingDir, "${frame.id}.m4a")
+                outFile.writeBytes(frame.audioBytes)
                 Log.i(TAG, "Audio saved: ${outFile.absolutePath}")
 
-                // Send feedback haptic to watch
                 try {
                     Wearable.getMessageClient(this@WearListenerService)
-                        .sendMessage(channel.nodeId, "/feedback", "received".toByteArray())
+                        .sendMessage(channel.nodeId, WearProtocol.PATH_FEEDBACK, "received".toByteArray())
                         .await()
                 } catch (e: Exception) {
                     Log.w(TAG, "Feedback send failed: ${e.message}")
                 }
 
-                // Bridge to TypeScript via WearPlugin
                 WearPlugin.getInstance()?.bridgeVoiceMemo(
-                    id             = id,
-                    timestamp      = timestamp,
-                    durationMs     = durationMs,
-                    healthJson     = healthJson,
-                    incomingFile   = outFile.name,
-                    nodeId         = channel.nodeId,
-                ) ?: Log.w(TAG, "WearPlugin not ready — voice memo $id saved but not bridged yet")
+                    id           = frame.id,
+                    timestamp    = frame.timestamp,
+                    durationMs   = frame.durationMs,
+                    healthJson   = frame.healthJson,
+                    incomingFile = outFile.name,
+                    nodeId       = channel.nodeId,
+                ) ?: Log.w(TAG, "WearPlugin not ready — voice memo ${frame.id} saved but not bridged yet")
 
             } catch (e: Exception) {
                 Log.e(TAG, "Audio channel error: ${e.message}", e)
+                outFile?.delete()  // clean up partial file on failure
             } finally {
-                try { channelClient.close(channel).await() } catch (_: Exception) {}
+                try { channelClient.close(channel).await() } catch (e: Exception) {
+                    Log.w(TAG, "Channel close failed: ${e.message}")
+                }
             }
         }
     }

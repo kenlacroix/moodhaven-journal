@@ -41,14 +41,17 @@ class MoodAdapter(
 
         val color = try { Color.parseColor(mood.colorHex) } catch (_: IllegalArgumentException) { Color.GRAY }
 
-        val density = holder.itemView.context.resources.displayMetrics.density
-        val drawable = GradientDrawable().apply {
-            shape        = GradientDrawable.RECTANGLE
-            cornerRadius = 36f * density
-            setColor(color)
-            alpha = 90
+        // Reuse existing background drawable instead of allocating a new GradientDrawable per bind
+        val pill = holder.colorPill.background as? GradientDrawable ?: run {
+            val density = holder.itemView.context.resources.displayMetrics.density
+            GradientDrawable().also {
+                it.shape        = GradientDrawable.RECTANGLE
+                it.cornerRadius = 36f * density
+                it.alpha        = 90
+                holder.colorPill.background = it
+            }
         }
-        holder.colorPill.background = drawable
+        pill.setColor(color)
 
         // ✓ badge if this is the last sent mood; otherwise level number
         if (mood.level == lastSentLevel) {

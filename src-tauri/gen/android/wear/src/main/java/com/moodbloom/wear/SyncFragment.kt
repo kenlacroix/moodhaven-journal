@@ -77,7 +77,7 @@ class SyncFragment : Fragment() {
         moodQueueCount.text      = "$moodQ"
 
         retryBtn.visibility = if (totalQ > 0) View.VISIBLE else View.GONE
-        retryBtn.text = "↑ Sync now"
+        retryBtn.text = getString(R.string.sync_now)
     }
 
     private fun checkConnection() {
@@ -104,22 +104,25 @@ class SyncFragment : Fragment() {
     }
 
     private fun drainQueues() {
-        retryBtn.text      = "Syncing…"
+        val ctx = requireContext()
+        val hadItems = AudioQueue.size(ctx) > 0 || OfflineQueue.size(ctx) > 0
+
+        retryBtn.text = getString(R.string.sync_syncing)
         retryBtn.isEnabled = false
 
         lifecycleScope.launch {
-            // Drain voice memos
-            val voiceSent = AudioTransferService.drainQueue(requireContext())
-            if (voiceSent > 0) {
-                repeat(voiceSent) { SyncStats.recordSynced(requireContext()) }
-            }
-            // Drain mood signals
-            SignalSender.drainAndSend(requireContext())
+            val voiceSent = AudioTransferService.drainQueue(ctx)
+            if (voiceSent > 0) repeat(voiceSent) { SyncStats.recordSynced(ctx) }
+            val moodSent = SignalSender.drainAndSend(ctx)
 
             updateCounters()
             retryBtn.isEnabled = true
-            val total = voiceSent
-            retryBtn.text = if (total > 0) "✓ Sent $total" else "↑ Sync now"
+            val total = voiceSent + moodSent
+            retryBtn.text = when {
+                total > 0  -> getString(R.string.sync_sent, total)
+                hadItems   -> getString(R.string.sync_failed)
+                else       -> getString(R.string.sync_now)
+            }
         }
     }
 }

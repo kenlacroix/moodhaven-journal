@@ -24,6 +24,11 @@ import androidx.wear.watchface.complications.datasource.SuspendingComplicationDa
  */
 class MoodComplicationService : SuspendingComplicationDataSourceService() {
 
+    // 30-second in-memory cache to avoid hitting SharedPrefs on every watch face tick
+    @Volatile private var cachedEntry: MoodHistory.Entry? = null
+    @Volatile private var cacheTimestampMs: Long = 0L
+    private val cacheTtlMs = 30_000L
+
     override fun getPreviewData(type: ComplicationType): ComplicationData? {
         val sample = MOODS.first()  // level 5 "Great" as preview
         return when (type) {
@@ -34,8 +39,15 @@ class MoodComplicationService : SuspendingComplicationDataSourceService() {
     }
 
     override suspend fun onComplicationRequest(request: ComplicationRequest): ComplicationData? {
-        val history = MoodHistory.load(this)
-        val latest  = history.firstOrNull()
+        val now = System.currentTimeMillis()
+        val latest = if (now - cacheTimestampMs < cacheTtlMs) {
+            cachedEntry
+        } else {
+            val entry = MoodHistory.load(this).firstOrNull()
+            cachedEntry = entry
+            cacheTimestampMs = now
+            entry
+        }
 
         return if (latest == null) {
             // No history yet — prompt user to log

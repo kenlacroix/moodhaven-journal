@@ -13,7 +13,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.RecyclerView
 import androidx.wear.widget.WearableLinearLayoutManager
 import androidx.wear.widget.WearableRecyclerView
-import java.util.Calendar
+import java.time.LocalTime
 import kotlin.math.abs
 import kotlinx.coroutines.launch
 
@@ -88,7 +88,7 @@ class BreatheFragment : Fragment() {
             chipView.visibility = View.GONE
             return
         }
-        val hour      = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+        val hour      = LocalTime.now().hour
         val suggested = BreathingMode.suggest(lastHr, hour)
         if (suggested == null) {
             chipView.visibility = View.GONE

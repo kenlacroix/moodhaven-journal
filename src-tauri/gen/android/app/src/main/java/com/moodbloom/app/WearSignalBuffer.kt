@@ -19,8 +19,14 @@ object WearSignalBuffer {
 
     private val queue: ConcurrentLinkedQueue<String> = ConcurrentLinkedQueue()
 
-    /** Add a raw JSON signal envelope to the buffer */
+    /** Add a raw JSON signal envelope to the buffer. Discards malformed JSON at enqueue time. */
     fun enqueue(rawJson: String) {
+        try {
+            org.json.JSONObject(rawJson)
+        } catch (e: Exception) {
+            Log.w(TAG, "Discarding malformed signal JSON: ${e.message} — raw=${rawJson.take(60)}")
+            return
+        }
         if (queue.size >= MAX_BUFFER) {
             val dropped = queue.poll()
             Log.w(TAG, "Buffer full — dropped oldest signal: ${dropped?.take(60)}")

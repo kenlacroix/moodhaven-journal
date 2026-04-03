@@ -5,6 +5,7 @@ import android.util.Log
 import com.google.android.gms.tasks.Tasks
 import com.google.android.gms.wearable.Wearable
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.time.Instant
@@ -63,7 +64,7 @@ object SignalSender {
 
             var sent = 0
             for (p in pending) {
-                val ok = trySend(context, p.id, p.timestamp, p.moodLevel)
+                val ok = trySendWithBackoff(context, p.id, p.timestamp, p.moodLevel)
                 if (ok) sent++ else OfflineQueue.enqueue(context, p.moodLevel)
             }
             Log.i(TAG, "drainAndSend: sent $sent/${pending.size}")
@@ -71,6 +72,21 @@ object SignalSender {
         }
 
     // ── Internal ──────────────────────────────────────────────────────────────
+
+    // Delays between retries: immediate → 250 ms → 500 ms → 1 s → give up
+    private val RETRY_DELAYS_MS = longArrayOf(250L, 500L, 1_000L)
+
+    private suspend fun trySendWithBackoff(
+        context: Context, id: String, timestamp: String, moodLevel: Int,
+    ): Boolean {
+        if (trySend(context, id, timestamp, moodLevel)) return true
+        for ((i, delayMs) in RETRY_DELAYS_MS.withIndex()) {
+            delay(delayMs)
+            Log.w(TAG, "trySendWithBackoff: retry ${i + 1} (mood=$moodLevel, after ${delayMs}ms)")
+            if (trySend(context, id, timestamp, moodLevel)) return true
+        }
+        return false
+    }
 
     private fun buildEnvelope(id: String, timestamp: String, moodLevel: Int): ByteArray {
         val envelope = JSONObject().apply {

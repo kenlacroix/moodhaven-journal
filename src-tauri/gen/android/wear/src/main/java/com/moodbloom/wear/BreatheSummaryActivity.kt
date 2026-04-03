@@ -9,6 +9,7 @@ import android.widget.TextView
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 
@@ -85,10 +86,10 @@ class BreatheSummaryActivity : FragmentActivity() {
             navigateToRecord(prefill = null)
         }
 
-        // Auto-dismiss after 6 seconds
+        // Auto-dismiss after 6 seconds (lifecycleScope cancels if activity is destroyed)
         lifecycleScope.launch {
             delay(6_000)
-            if (!userInteracted) navigateToRecord(prefill = null)
+            if (isActive && !userInteracted) navigateToRecord(prefill = null)
         }
     }
 

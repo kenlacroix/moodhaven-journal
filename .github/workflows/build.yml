@@ -309,6 +309,10 @@ jobs:
           # the Android project uses com.moodbloom.app. Tauri CLI checks that the java
           # directory matching the identifier exists — create it to pass validation.
           mkdir -p src-tauri/gen/android/app/src/main/java/com/moodhaven/app
+          # tauri-build requires the whisper sidecar to exist for each target. Sidecars
+          # are desktop-only on Android (Android cannot exec arbitrary binaries) so we
+          # create a placeholder that satisfies the file existence check.
+          touch src-tauri/binaries/whisper-aarch64-linux-android
           # NDK_HOME must be exported from the shell env, not ${{ env.* }}
           export NDK_HOME="${ANDROID_NDK_LATEST_HOME:-$ANDROID_NDK_HOME}"
           npm run tauri android build -- --target aarch64 --debug

@@ -304,9 +304,14 @@ jobs:
         run: npm ci
 
       - name: Build Android phone debug APK (arm64)
-        run: npm run tauri android build -- --target aarch64 --debug
-        env:
-          NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
+        run: |
+          # tauri.conf.json identifier is com.moodhaven.app (desktop data path) but
+          # the Android project uses com.moodbloom.app. Tauri CLI checks that the java
+          # directory matching the identifier exists — create it to pass validation.
+          mkdir -p src-tauri/gen/android/app/src/main/java/com/moodhaven/app
+          # NDK_HOME must be exported from the shell env, not ${{ env.* }}
+          export NDK_HOME="${ANDROID_NDK_LATEST_HOME:-$ANDROID_NDK_HOME}"
+          npm run tauri android build -- --target aarch64 --debug
 
       - name: Upload phone APK artifact (for release attachment in update-manifest)
         uses: actions/upload-artifact@v4

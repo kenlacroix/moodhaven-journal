@@ -264,13 +264,12 @@ jobs:
         working-directory: src-tauri/gen/android
         run: ./gradlew :wear:assembleDebug --no-daemon -Dorg.gradle.java.home=$JAVA_HOME
 
-      - name: Upload Wear OS APK to release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release upload "${{ github.ref_name }}" \
-            src-tauri/gen/android/wear/build/outputs/apk/debug/wear-debug.apk \
-            --clobber
+      - name: Upload APK artifact (for release attachment in update-manifest)
+        uses: actions/upload-artifact@v4
+        with:
+          name: wear-apk
+          path: src-tauri/gen/android/wear/build/outputs/apk/debug/wear-debug.apk
+          retention-days: 1
 
   # ── Post-build: checksums + release notes ──────────────────────────────────
   update-manifest:
@@ -295,6 +294,15 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts/
+
+      - name: Attach Wear OS APK to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          APK=$(find artifacts/wear-apk -name "*.apk" | head -1)
+          if [ -n "$APK" ]; then
+            gh release upload "${{ github.ref_name }}" "$APK" --clobber
+          fi
 
       - name: Generate checksums.txt and attach to release
         env:

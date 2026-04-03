@@ -262,7 +262,7 @@ jobs:
 
       - name: Build Wear OS debug APK
         working-directory: src-tauri/gen/android
-        run: ./gradlew :wear:assembleDebug --no-daemon
+        run: ./gradlew :wear:assembleDebug --no-daemon -Dorg.gradle.java.home=$JAVA_HOME
 
       - name: Upload Wear OS APK to release
         env:

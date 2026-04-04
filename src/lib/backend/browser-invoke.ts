@@ -360,8 +360,12 @@ async function dispatch(command: string, p: Params): Promise<any> {
       return entries.map((e) => ({ id: e.id, updatedAt: e.updated_at }));
     }
     case 'upsert_entry_from_sync': {
-      const entry = JSON.parse(p.entryJson as string) as BrowserEntryRow;
-      return dbImportEntries([entry]);
+      try {
+        const entry = JSON.parse(p.entryJson as string) as BrowserEntryRow;
+        return dbImportEntries([entry]);
+      } catch {
+        throw new Error('upsert_entry_from_sync: invalid entry JSON');
+      }
     }
 
     // Capsule commands

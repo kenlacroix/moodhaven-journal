@@ -284,7 +284,9 @@ export async function dbGetMonthlyMoodData(
   month: number,
 ): Promise<Array<{ date: string; avgMood: number; count: number }>> {
   const start = `${year}-${String(month).padStart(2, '0')}-01`;
-  const end = `${year}-${String(month).padStart(2, '0')}-31`;
+  // Date(year, month, 0) gives the last day of the target month (month is 1-indexed here)
+  const lastDay = new Date(year, month, 0).getDate();
+  const end = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
   return dbGetMoodStatistics(start, end);
 }
 
@@ -375,16 +377,29 @@ export async function dbUpdateBook(book: BrowserBook): Promise<void> {
 export async function dbDeleteBook(id: string): Promise<void> {
   if (id === 'default') return;
   const db = await openDB();
-  // Reassign entries to default
-  const entryTx = tx(db, 'journal_entries', 'readwrite');
-  const entries = await all<BrowserEntryRow>(entryTx.objectStore('journal_entries'));
-  const toUpdate = entries.filter((e) => e.book_id === id);
-  for (const entry of toUpdate) {
-    await put(entryTx.objectStore('journal_entries'), { ...entry, book_id: 'default' });
-  }
-  // Delete the book
-  const bookTx = tx(db, 'books', 'readwrite');
-  await del(bookTx.objectStore('books'), id);
+  // Single multi-store transaction avoids a race between reading entries and deleting the book.
+  return new Promise((resolve, reject) => {
+    const t = db.transaction(['journal_entries', 'books'], 'readwrite');
+    const entriesStore = t.objectStore('journal_entries');
+    const booksStore = t.objectStore('books');
+
+    // Cursor-scan entries: reassign any in the deleted book to 'default'
+    const cursorReq = entriesStore.openCursor();
+    cursorReq.onsuccess = (e) => {
+      const cursor = (e.target as IDBRequest<IDBCursorWithValue>).result;
+      if (cursor) {
+        if ((cursor.value as BrowserEntryRow).book_id === id) {
+          cursor.update({ ...cursor.value, book_id: 'default' });
+        }
+        cursor.continue();
+      }
+    };
+    cursorReq.onerror = () => reject(cursorReq.error);
+
+    booksStore.delete(id);
+    t.oncomplete = () => resolve();
+    t.onerror = () => reject(t.error);
+  });
 }
 
 // --------------------------------------------------------------------------

@@ -4,7 +4,19 @@ import {
   buildFilePath,
   buildDirectoryPath,
   parseFilenamesFromPropfind,
+  uploadFile,
+  uploadFileWithETagRetry,
+  downloadFile,
 } from './webdavService';
+
+vi.mock('./http', () => ({
+  httpFetch: vi.fn(),
+}));
+
+import { httpFetch } from './http';
+const mockFetch = vi.mocked(httpFetch);
+
+const config = { url: 'https://dav.example.com/', username: 'u', password: 'p' };
 
 describe('webdavService', () => {
   describe('buildAuthHeader', () => {
@@ -146,6 +158,111 @@ describe('webdavService', () => {
 
     it('returns empty array for empty XML', () => {
       expect(parseFilenamesFromPropfind('')).toEqual([]);
+    });
+  });
+
+  describe('uploadFile ETag support', () => {
+    beforeEach(() => vi.clearAllMocks());
+
+    it('succeeds and returns etag from response', async () => {
+      mockFetch.mockResolvedValue({
+        status: 201,
+        ok: true,
+        headers: { get: (h: string) => h === 'ETag' ? '"abc"' : null },
+      } as unknown as Response);
+      const result = await uploadFile(config, 'test.moodhaven', 'data');
+      expect(result.success).toBe(true);
+      expect(result.etag).toBe('"abc"');
+    });
+
+    it('sends If-Match header when etag provided', async () => {
+      mockFetch.mockResolvedValue({
+        status: 204,
+        ok: true,
+        headers: { get: () => null },
+      } as unknown as Response);
+      await uploadFile(config, 'test.moodhaven', 'data', '"v1"');
+      const [, opts] = mockFetch.mock.calls[0];
+      expect((opts as RequestInit & { headers: Record<string, string> }).headers['If-Match']).toBe('"v1"');
+    });
+
+    it('returns status 412 on ETag mismatch', async () => {
+      mockFetch.mockResolvedValue({
+        status: 412,
+        ok: false,
+        headers: { get: () => null },
+      } as unknown as Response);
+      const result = await uploadFile(config, 'test.moodhaven', 'data', '"stale"');
+      expect(result.success).toBe(false);
+      expect(result.status).toBe(412);
+    });
+  });
+
+  describe('uploadFileWithETagRetry', () => {
+    beforeEach(() => vi.clearAllMocks());
+
+    it('succeeds on first attempt if no conflict', async () => {
+      mockFetch.mockResolvedValue({
+        status: 201,
+        ok: true,
+        headers: { get: (h: string) => h === 'ETag' ? '"new"' : null },
+      } as unknown as Response);
+      const result = await uploadFileWithETagRetry(config, 'f.moodhaven', 'data', null);
+      expect(result.success).toBe(true);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('on 412: downloads remote, merges LWW, retries once', async () => {
+      const localContent = JSON.stringify({ entries: [{ id: 'a', updated_at: '2026-06-01T00:00:00.000Z', mood: 5 }] });
+      const remoteContent = JSON.stringify({ entries: [{ id: 'b', updated_at: '2026-01-01T00:00:00.000Z', mood: 1 }] });
+
+      mockFetch
+        // First PUT: 412 conflict
+        .mockResolvedValueOnce({ status: 412, ok: false, headers: { get: () => null } } as unknown as Response)
+        // GET for remote
+        .mockResolvedValueOnce({ ok: true, status: 200, text: async () => remoteContent, headers: { get: () => null } } as unknown as Response)
+        // Retry PUT: success
+        .mockResolvedValueOnce({ status: 201, ok: true, headers: { get: (h: string) => h === 'ETag' ? '"merged"' : null } } as unknown as Response);
+
+      const result = await uploadFileWithETagRetry(config, 'f.moodhaven', localContent, '"old"');
+      expect(result.success).toBe(true);
+      expect(mockFetch).toHaveBeenCalledTimes(3);
+    });
+
+    it('returns error if 412 and remote download also fails', async () => {
+      mockFetch
+        .mockResolvedValueOnce({ status: 412, ok: false, headers: { get: () => null } } as unknown as Response)
+        .mockResolvedValueOnce({ ok: false, status: 404, headers: { get: () => null } } as unknown as Response);
+      const result = await uploadFileWithETagRetry(config, 'f.moodhaven', 'data', '"old"');
+      expect(result.success).toBe(false);
+    });
+  });
+
+  describe('downloadFile ETag capture', () => {
+    beforeEach(() => vi.clearAllMocks());
+
+    it('returns etag from response headers', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        text: async () => 'content',
+        headers: { get: (h: string) => h === 'ETag' ? '"etag-value"' : null },
+      } as unknown as Response);
+      const result = await downloadFile(config, 'file.moodhaven');
+      expect(result.success).toBe(true);
+      expect(result.etag).toBe('"etag-value"');
+      expect(result.data).toBe('content');
+    });
+
+    it('returns undefined etag when header absent', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        text: async () => '',
+        headers: { get: () => null },
+      } as unknown as Response);
+      const result = await downloadFile(config, 'file.moodhaven');
+      expect(result.etag).toBeUndefined();
     });
   });
 });

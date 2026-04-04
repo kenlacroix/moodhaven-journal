@@ -5,7 +5,6 @@ import { useEffect, useState, KeyboardEvent, useRef } from "react";
 import dynamic from "next/dynamic";
 import AnimatedReveal from "./AnimatedReveal";
 import { Heart, Lock, Feather } from "lucide-react";
-import WaitlistModal from "./WaitlistModal";
 
 const HeroParticles = dynamic(() => import("./HeroParticles"), {
   ssr: false,
@@ -24,7 +23,6 @@ type Props = {
 
 export default function HomeClient({ posts }: Props) {
   const [isMobile, setIsMobile] = useState(false);
-  const [isModalOpen, setIsModalOpen] = useState(false);
   const carouselRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -46,9 +44,6 @@ export default function HomeClient({ posts }: Props) {
 
   return (
     <div className="w-full">
-      {/* Waitlist Modal Integration */}
-      <WaitlistModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
-
       {/* Hero Section */}
       <section className="relative text-white py-16 md:py-28 overflow-hidden md:mask-fade-edges">
         <img
@@ -64,21 +59,25 @@ export default function HomeClient({ posts }: Props) {
             Your Private, Calm Space to Reflect
           </h1>
           <p className="text-lg md:text-xl text-blue-100 mt-2">
-            MoodHaven Journal — encrypted, local-first journaling with mood tracking. Your thoughts stay yours, always.
+            No account. No cloud required. Just a private journal that learns your patterns — AI insights from your moods, not your words.
           </p>
           <div className="flex flex-col sm:flex-row justify-center gap-4 pt-6">
             <a
-              href="https://journal.moodhaven.app"
-              className="w-full sm:w-auto text-center rounded-full bg-white text-[#3A6EA5] px-6 py-4 text-sm font-semibold shadow transition-all duration-200 ease-out hover:bg-blue-100 hover:scale-105 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#3A6EA5]/60"
+              href="https://github.com/kenlacroix/moodhaven-journal/releases/latest"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full sm:w-auto text-center rounded-full bg-accent-cta text-neutral-900 px-6 py-4 text-sm font-semibold shadow transition-all duration-200 ease-out hover:bg-accent-cta/90 hover:scale-105 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-cta/60"
             >
-              Try the Web App
+              Download Desktop App
             </a>
-            <button
-              onClick={() => setIsModalOpen(true)}
-              className="w-full sm:w-auto text-center rounded-full bg-[#F28C38] text-white px-6 py-4 text-sm font-semibold shadow transition-all duration-200 ease-out hover:bg-orange-500 hover:scale-105 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300"
+            <a
+              href="https://journal.moodhaven.app"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full sm:w-auto text-center rounded-full bg-white text-primary-700 px-6 py-4 text-sm font-semibold shadow transition-all duration-200 ease-out hover:bg-primary-100 hover:scale-105 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-700/60"
             >
-              Get Desktop App
-            </button>
+              Try in Browser
+            </a>
           </div>
         </AnimatedReveal>
       </section>
@@ -93,9 +92,9 @@ export default function HomeClient({ posts }: Props) {
               className="space-y-4 p-4 transition-transform duration-300 ease-in-out hover:scale-[1.015] hover:shadow-md hover:shadow-neutral-200/50 rounded-xl"
             >
               <div className="h-20 flex items-end justify-center">
-                {label === 'Privacy' && <Lock className="w-16 h-16 text-[#3A6EA5]" />}
-                {label === 'Calm Interface' && <Feather className="w-16 h-16 text-[#4A90E2]" />}
-                {label === 'Cross-Platform' && <Heart className="w-16 h-16 text-[#F28C38]" />}
+                {label === 'Privacy' && <Lock className="w-16 h-16 text-primary-700" />}
+                {label === 'Calm Interface' && <Feather className="w-16 h-16 text-primary-500" />}
+                {label === 'Cross-Platform' && <Heart className="w-16 h-16 text-accent-ctaDecor" />}
               </div>
               <h3 className="text-xl font-semibold text-neutral-800 tracking-tight">{label}</h3>
               <p className="text-sm text-neutral-600 leading-relaxed">
@@ -104,7 +103,7 @@ export default function HomeClient({ posts }: Props) {
                 {label === 'Calm Interface' &&
                   'A soothing, distraction-free design that helps you breathe and reflect.'}
                 {label === 'Cross-Platform' &&
-                  'Use in your browser today. Native desktop apps for Windows, macOS, and Linux coming soon.'}
+                  'Available now — Windows, macOS, Linux, and the web.'}
               </p>
             </AnimatedReveal>
           ))}
@@ -186,7 +185,8 @@ export default function HomeClient({ posts }: Props) {
               <a
                 href="https://moodhaven.substack.com"
                 target="_blank"
-                className="block w-full text-center bg-[#F28C38] text-white px-6 py-4 text-sm font-semibold rounded-full hover:bg-orange-500 transition duration-200"
+                rel="noopener noreferrer"
+                className="block w-full text-center bg-accent-cta text-neutral-900 px-6 py-4 text-sm font-semibold rounded-full hover:bg-accent-cta/90 transition duration-200"
               >
                 View All on Substack
               </a>
@@ -202,7 +202,7 @@ export default function HomeClient({ posts }: Props) {
               <p className="text-sm text-neutral-700 font-semibold">Built by</p>
               <h3 className="text-lg font-bold text-neutral-900">Ken LaCroix</h3>
               <div className="relative mt-6">
-                <div className="absolute inset-0 rounded-full bg-[#F28C38]/10 blur-sm scale-110" />
+                <div className="absolute inset-0 rounded-full bg-accent-cta/10 blur-sm scale-110" />
                 <img
                   src="/founder-headshot.png"
                   alt="Ken LaCroix headshot"
@@ -212,7 +212,7 @@ export default function HomeClient({ posts }: Props) {
             </div>
             <a
               href="/founders"
-              className="block w-full text-center bg-white text-[#F28C38] px-6 py-4 text-sm font-semibold rounded-full border border-[#F28C38]/30 hover:bg-orange-50 transition duration-200"
+              className="block w-full text-center bg-white text-accent-cta px-6 py-4 text-sm font-semibold rounded-full border border-accent-cta/30 hover:bg-orange-50 transition duration-200"
             >
               Read My Story
             </a>

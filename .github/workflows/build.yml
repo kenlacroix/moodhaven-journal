@@ -50,6 +50,13 @@ jobs:
               -DCMAKE_SYSTEM_PROCESSOR=aarch64
               -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc
               -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++
+              -DGGML_AVX=OFF
+              -DGGML_AVX2=OFF
+              -DGGML_AVX512=OFF
+              -DGGML_FMA=OFF
+              -DGGML_F16C=OFF
+              -DGGML_BMI2=OFF
+              -DGGML_SSE42=OFF
             cross: true
             continue_on_error: true
 

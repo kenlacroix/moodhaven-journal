@@ -15,6 +15,7 @@ vi.mock('./webdavService', () => ({
   testConnection: vi.fn(),
   ensureDirectory: vi.fn(),
   uploadFile: vi.fn(),
+  uploadFileWithETagRetry: vi.fn(),
   downloadFile: vi.fn(),
   listFiles: vi.fn(),
 }));
@@ -22,6 +23,11 @@ vi.mock('./webdavService', () => ({
 vi.mock('./dataManagementService', () => ({
   encryptedExport: vi.fn(),
   encryptedImport: vi.fn(),
+}));
+
+vi.mock('../backend/browser', () => ({
+  dbGetWebDAVState: vi.fn().mockResolvedValue(null),
+  dbSetWebDAVState: vi.fn().mockResolvedValue(undefined),
 }));
 
 const mockConfig = { url: 'https://dav.example.com/', username: 'user', password: 'pass' };

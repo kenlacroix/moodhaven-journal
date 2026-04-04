@@ -149,25 +149,18 @@ jobs:
         run: npm ci
 
       # ── whisper-cli sidecar ─────────────────────────────────────────────────
-      - name: Get whisper.cpp HEAD SHA (for cache key)
-        id: whisper_hash
-        shell: bash
-        run: |
-          SHA=$(git ls-remote https://github.com/ggerganov/whisper.cpp HEAD | cut -f1 | cut -c1-8)
-          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
-
       - name: Cache whisper-cli binary
         id: whisper_cache
         uses: actions/cache@v4
         with:
           path: src-tauri/binaries/${{ matrix.whisper_binary }}
-          key: whisper-${{ matrix.whisper_binary }}-${{ steps.whisper_hash.outputs.sha }}
+          key: whisper-${{ matrix.whisper_binary }}-v1.8.4
 
       - name: Build whisper-cli sidecar
         if: steps.whisper_cache.outputs.cache-hit != 'true'
         shell: bash
         run: |
-          git clone --depth 1 https://github.com/ggerganov/whisper.cpp /tmp/whisper
+          git clone --depth 1 --branch v1.8.4 https://github.com/ggerganov/whisper.cpp /tmp/whisper
           cd /tmp/whisper
           cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DGGML_NATIVE=OFF ${{ matrix.cmake_extra }}
           cmake --build build --config Release --target whisper-cli -j4
@@ -391,7 +384,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.ref_name }}
-        run: node scripts/generate-checksums.js
+        run: node scripts/generate-checksums.cjs
 
       - name: Update release notes from tag annotation
         env:

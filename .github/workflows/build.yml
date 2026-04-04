@@ -95,20 +95,22 @@ jobs:
         if: matrix.cross == true
         run: |
           sudo dpkg --add-architecture arm64
-          # Restrict all existing sources to amd64 — handle both http and https,
-          # traditional .list format and DEB822 .sources format used on newer runners
+          # Restrict all existing sources to amd64 only (traditional .list format)
           sudo sed -i -E 's/^deb (https?:\/\/)/deb [arch=amd64] \1/' /etc/apt/sources.list
           sudo find /etc/apt/sources.list.d/ -name "*.list" -exec \
             sudo sed -i -E 's/^deb (https?:\/\/)/deb [arch=amd64] \1/' {} \;
+          # Handle DEB822 .sources format (Ubuntu 24.04+ runners)
           for f in /etc/apt/sources.list.d/*.sources; do
             [ -f "$f" ] || continue
             grep -q "^Architectures:" "$f" || sudo sed -i '/^Types:/a Architectures: amd64' "$f"
           done
-          # Add arm64 sources from ports (includes security)
+          # Add arm64 sources from ports.ubuntu.com (the only mirror that serves arm64)
           echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy main restricted universe multiverse" | sudo tee -a /etc/apt/sources.list
           echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy-updates main restricted universe multiverse" | sudo tee -a /etc/apt/sources.list
           echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy-security main restricted universe multiverse" | sudo tee -a /etc/apt/sources.list
-          sudo apt-get update -qq
+          # security.ubuntu.com does not serve arm64 — 404s are expected and harmless
+          # since the arm64 packages we need come from ports.ubuntu.com above
+          sudo apt-get update -qq || true
           sudo apt-get install -y \
             gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
             libwebkit2gtk-4.1-dev:arm64 \

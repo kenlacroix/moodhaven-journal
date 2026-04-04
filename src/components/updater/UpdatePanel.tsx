@@ -19,6 +19,7 @@ import { open } from '@tauri-apps/plugin-shell';
 import { downloadAndInstallUpdate } from '../../lib/services/updaterService';
 import { useSettingsStore } from '../../stores/settingsStore';
 import type { UseUpdateCheckReturn } from '../../hooks/useUpdateCheck';
+import { usePlatform } from '../../hooks/usePlatform';
 
 // ── Minimal inline markdown → HTML renderer ───────────────────────────────────
 // Handles: ## headings, **bold**, `code`, - bullet lists, blank line → <p>
@@ -115,6 +116,7 @@ type InstallPhase = 'idle' | 'downloading' | 'verifying' | 'ready' | 'error';
 
 export function UpdatePanel({ hook, currentVersion }: UpdatePanelProps) {
   const { updateInfo, isChecking, checkError, checkNow, skipVersion } = hook;
+  const { isBrowser } = usePlatform();
   const autoCheck = useSettingsStore((s) => s.settings.updates.autoCheck);
   const setAutoCheck = useSettingsStore((s) => s.setUpdateAutoCheck);
   const saveSettings = useSettingsStore((s) => s.saveSettings);
@@ -279,7 +281,7 @@ export function UpdatePanel({ hook, currentVersion }: UpdatePanelProps) {
 
           {/* Footer: actions */}
           <div className="px-5 py-4 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center gap-3">
-            {updateInfo.can_self_update && updateInfo.asset ? (
+            {updateInfo.can_self_update && updateInfo.asset && !isBrowser ? (
               <>
                 <button
                   type="button"

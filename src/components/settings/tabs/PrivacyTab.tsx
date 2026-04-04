@@ -33,7 +33,7 @@ export function PrivacyTab({
   handleExport,
   setAutoLockTimeout,
 }: PrivacyTabProps) {
-  const { isAndroid } = usePlatform();
+  const { isAndroid, isBrowser } = usePlatform();
 
   const [show2FASetup, setShow2FASetup] = useState<'totp' | 'webauthn' | null>(null);
   const [showBackupCodes, setShowBackupCodes] = useState(false);
@@ -235,7 +235,7 @@ export function PrivacyTab({
                         Add Authenticator App
                       </button>
                     )}
-                    {twoFactorStatus.method !== 'webauthn' && (
+                    {twoFactorStatus.method !== 'webauthn' && !isBrowser && (
                       <button
                         type="button"
                         onClick={() => setShow2FASetup('webauthn')}
@@ -287,6 +287,7 @@ export function PrivacyTab({
                   </svg>
                 </button>
 
+                {!isBrowser && (
                 <button
                   type="button"
                   onClick={() => setShow2FASetup('webauthn')}
@@ -307,6 +308,7 @@ export function PrivacyTab({
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
                 </button>
+                )}
               </div>
             </div>
           )}

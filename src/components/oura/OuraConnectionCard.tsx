@@ -9,6 +9,7 @@ import { useState, useEffect } from 'react';
 import { savePAT, disconnect, getStatus, syncToday, backfill } from '../../lib/services/ouraService';
 import type { OuraStatusResponse } from '../../types/oura';
 import { useAppStore } from '../../stores/appStore';
+import { usePlatform } from '../../hooks/usePlatform';
 
 interface OuraConnectionCardProps {
   onConnected?: () => void;
@@ -17,6 +18,7 @@ interface OuraConnectionCardProps {
 
 export function OuraConnectionCard({ onConnected, onDisconnected }: OuraConnectionCardProps) {
   const sessionPassword = useAppStore((s) => s.sessionPassword);
+  const { isBrowser } = usePlatform();
   const [status, setStatus] = useState<OuraStatusResponse | null>(null);
   const [pat, setPat] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -112,7 +114,7 @@ export function OuraConnectionCard({ onConnected, onDisconnected }: OuraConnecti
             <button
               type="button"
               onClick={handleSync}
-              disabled={isSyncing}
+              disabled={isSyncing || isBrowser}
               className="flex-1 px-3 py-2 text-sm font-medium rounded-lg bg-violet-500 hover:bg-violet-600 text-white transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {isSyncing ? (

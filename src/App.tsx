@@ -69,7 +69,7 @@ function MainApp() {
   const [sealingEntryId, setSealingEntryId] = useState<string | null>(null);
   const [timelineRefresh, setTimelineRefresh] = useState(0);
 
-  const { isAndroid } = usePlatform();
+  const { isAndroid, isBrowser } = usePlatform();
 
   // Schedule reminder notifications (hook checks enabled state internally)
   useReminderScheduler();
@@ -88,7 +88,8 @@ function MainApp() {
 
   // Peer-to-peer sync — initializes device identity and starts mDNS discovery.
   // Runs for the entire app lifetime; discovery state lives in peerSyncStore.
-  usePeerSync();
+  // Not available in browser (no mDNS, no raw TCP).
+  usePeerSync({ enabled: !isBrowser });
 
   // Time capsule — polls once per session on unlock for due capsules.
   const { pendingCapsule, revealCapsule, dismissCapsule } = useTimeCapsule({

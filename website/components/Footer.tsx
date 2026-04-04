@@ -46,7 +46,7 @@ export default function Footer() {
         >
           {[
             { href: "https://moodhaven.substack.com", icon: <FaRss />, title: "Substack" },
-            { href: "https://github.com/kenlacroix/MoodHavenJournal-Community", icon: <FaGithub />, title: "GitHub" },
+            { href: "https://github.com/kenlacroix/moodhaven-journal", icon: <FaGithub />, title: "GitHub" },
             { href: "https://x.com/moodhavenapp", icon: <FaTwitter />, title: "X (Twitter)" },
             { href: "https://bsky.app/profile/moodhavenapp.bsky.social", icon: <SiBluesky />, title: "Bluesky" },
             { href: "https://www.linkedin.com/company/moodhavenapp/", icon: <FaLinkedin />, title: "LinkedIn" },

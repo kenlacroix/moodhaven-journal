@@ -77,7 +77,7 @@ export default function FoundersPage() {
                 <button onClick={() => setIsModalOpen(true)} className="mt-2 bg-orange-500 text-white font-medium text-center px-4 py-2 rounded-full shadow hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-300">
                   Join the Waitlist
                 </button>
-                <a href="https://github.com/kenlacroix/MoodHavenJournal-Community" target="_blank" className="mt-2 border border-orange-500 text-orange-500 text-center px-4 py-2 rounded-full shadow hover:bg-orange-50 focus:outline-none focus:ring-2 focus:ring-orange-300">
+                <a href="https://github.com/kenlacroix/moodhaven-journal" target="_blank" className="mt-2 border border-orange-500 text-orange-500 text-center px-4 py-2 rounded-full shadow hover:bg-orange-50 focus:outline-none focus:ring-2 focus:ring-orange-300">
                   Contribute on GitHub
                 </a>
               </div>

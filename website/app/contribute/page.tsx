@@ -14,7 +14,7 @@ export default function ContributePage() {
           <p>
             We welcome pull requests, bug reports, and feature ideas. Check out the open issues or start with a good-first-issue on 
             <a
-              href="https://github.com/kenlacroix/MoodHavenJournal-Community"
+              href="https://github.com/kenlacroix/moodhaven-journal"
               className="text-blue-600 underline ml-1"
               target="_blank"
             >
@@ -40,7 +40,7 @@ export default function ContributePage() {
 
       <div className="text-center pt-8">
         <a
-          href="https://github.com/kenlacroix/MoodHavenJournal-Community"
+          href="https://github.com/kenlacroix/moodhaven-journal"
           className="inline-block bg-blue-600 text-white px-6 py-3 rounded-full hover:bg-blue-700 transition"
           target="_blank"
         >

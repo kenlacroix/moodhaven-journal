@@ -38,7 +38,7 @@ export default function FAQPage() {
         <div>
           <h2 className="font-semibold text-lg text-blue-600">🤝 How do I contribute?</h2>
           <p>
-            We'd love your help! You can <a href="https://github.com/kenlacroix/MoodHavenJournal-Community" className="text-blue-600 underline" target="_blank">visit our GitHub repo</a>, suggest features, report issues, or join the discussion on shaping the future of MoodHaven.
+            We'd love your help! You can <a href="https://github.com/kenlacroix/moodhaven-journal" className="text-blue-600 underline" target="_blank">visit our GitHub repo</a>, suggest features, report issues, or join the discussion on shaping the future of MoodHaven.
           </p>
         </div>
 

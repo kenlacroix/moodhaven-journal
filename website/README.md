@@ -38,7 +38,7 @@ This site aims to:
 
 ## 📂 Repository Structure
 
-This site lives in the `/website` subdirectory of the main [MoodHavenJournal-Community](https://github.com/kenlacroix/MoodHavenJournal-Community) monorepo.
+This site lives in the `/website` subdirectory of the main [moodhaven-journal](https://github.com/kenlacroix/moodhaven-journal) monorepo.
 
 ```
 /
@@ -55,8 +55,8 @@ This site lives in the `/website` subdirectory of the main [MoodHavenJournal-Com
 ## 🛠️ Getting Started Locally
 
 ```bash
-git clone https://github.com/kenlacroix/MoodHavenJournal-Community.git
-cd MoodHavenJournal-Community/website
+git clone https://github.com/kenlacroix/moodhaven-journal.git
+cd moodhaven-journal/website
 npm install
 npm run dev
 ```
@@ -75,7 +75,7 @@ npx @cloudflare/next-on-pages@1
 
 - 🌐 [Live site](https://moodhaven.app)  
 - 📰 [Substack](https://moodhaven.substack.com/)  
-- 🧑‍💻 [GitHub](https://github.com/kenlacroix/MoodHavenJournal-Community)  
+- 🧑‍💻 [GitHub](https://github.com/kenlacroix/moodhaven-journal)  
 - 🐦 [X (Twitter)](https://x.com/moodhavenapp)  
 - 🌐 [Bluesky](https://bsky.app/profile/moodhavenapp.bsky.social)  
 - 🔗 [LinkedIn](https://www.linkedin.com/company/moodhavenapp/)

@@ -170,11 +170,16 @@ async function dispatch(command: string, p: Params): Promise<any> {
           last_entry_date: lastDate,
         },
         mood_distribution: await dbGetMoodDistribution(),
-        day_of_week_stats: await dbGetDayOfWeekStats(),
-        trend_data: await dbGetMoodStatistics(
+        day_of_week_stats: (await dbGetDayOfWeekStats()).map((r) => ({
+          day_of_week: r.dayOfWeek,
+          day_name: ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][r.dayOfWeek],
+          average_mood: r.avgMood,
+          entry_count: r.count,
+        })),
+        trend_data: (await dbGetMoodStatistics(
           new Date(Date.now() - (p.trendDays as number) * 86400000).toISOString().slice(0, 10),
           new Date().toISOString().slice(0, 10)
-        ),
+        )).map((r) => ({ date: r.date, average_mood: r.avgMood, entry_count: r.count })),
       };
     }
     case 'get_insights_metadata': {

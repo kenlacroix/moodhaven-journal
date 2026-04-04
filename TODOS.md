@@ -5,6 +5,39 @@
 
 ---
 
+## Website Design Debt (from design-unification autoplan review, 2026-04-04)
+
+### DESIGN-DEBT-001: Hero background photo
+**What:** The rain photo hero is blue-toned and conflicts with the violet brand after the token sweep. Replace with app screenshot, branded illustration, or violet-tinted editorial layout.
+**Why:** Both CEO and Design review models flagged it as "beautiful image, weak brand" — visitors remember ambiance, not product. No screenshot exists yet so this is deferred.
+**Fix options:** (a) App screenshot split-layout hero once UI stabilizes, (b) Clean cream/violet layout with no background image (CSS-only, no new assets).
+**Effort:** human ~2h / CC+gstack ~30min once screenshot exists
+
+### DESIGN-DEBT-002: Newsletter carousel on homepage
+**What:** The auto-scrolling Substack carousel in HomeClient.tsx distracts from the conversion flow and has no narrative purpose on the homepage.
+**Why:** Both design models flagged it. It attracts attention away from the CTAs and does not advance the purchase/usage decision.
+**Fix:** Remove from homepage or demote it below product proof. Keep component, just don't render on `app/page.tsx`.
+**Effort:** human ~30min / CC+gstack ~5min
+
+### DESIGN-DEBT-003: Value props → proof-based modules
+**What:** The Privacy / Calm Interface / Cross-Platform three-icon section repeats the hero mood claims without adding concrete proof.
+**Why:** Codex design review: "Sections repeating same mood statement" is a hard rejection signal. Three proof-based modules would be more convincing: Privacy (local encryption details), Insight (mood tracking + AI), Availability (platforms).
+**Depends on:** screenshots or feature art
+**Effort:** human ~2h / CC+gstack ~30min
+
+### DESIGN-DEBT-004: Social proof on homepage
+**What:** No testimonials, user count, GitHub star count, or press mentions. Visitors have no signal the app is used by real people.
+**Why:** CEO and design models both flag this as a conversion gap. A GitHub star badge is 30 minutes.
+**Quick win:** Add `[![GitHub Stars](https://img.shields.io/github/stars/kenlacroix/moodhaven-journal)](...)` to the footer or above the fold.
+**Effort:** human ~30min / CC+gstack ~5min
+
+### DESIGN-DEBT-005: Pricing section on homepage
+**What:** The website never states that the app is free. Visitors don't know if it's free, freemium, or subscription.
+**Why:** Flagged by both CEO models. "Free to download. Pro for AI and cloud." is one line that converts.
+**Effort:** human ~30min / CC+gstack ~5min (part of a hero or FAQ update)
+
+---
+
 ## Design System
 
 ### D-001: Create DESIGN.md (design source of truth)
@@ -203,5 +236,33 @@ wearApp(project(":wear"))
 **Why:** Settings is loaded lazily already at the page level; per-tab lazy loading would be a micro-optimization. Deferred until bundle analysis shows it matters.
 **Context:** Deferred from settings refactor plan (2026-04-01).
 **Effort:** human ~30min / CC+gstack ~5min
+
+---
+
+## Web Port (feat/web-port — Phase 2+)
+
+### WP-001: LAN sync bridge daemon (Phase 2)
+**What:** Small native binary that runs on the user's machine, exposes a WebSocket, bridges mDNS discovery and TCP sync to the browser. Allows the browser version to participate in LAN sync.
+**Why:** Browser has no raw TCP or mDNS access. Bridge daemon is the least-bad option for preserving the zero-knowledge LAN sync model in a browser context.
+**Context:** Deferred from web port plan (2026-04-04). Phase 1 ships without sync. Validate demand first.
+**Effort:** human ~2w / CC+gstack ~4h
+
+### WP-002: whisper.wasm STT in browser (Phase 2+)
+**What:** Port whisper.cpp STT to run in the browser via WASM. `@nicolo-ribaudo/whisper-wasm` or compile from source. Stream audio from getUserMedia → WASM → insert at cursor.
+**Why:** Deferred from Phase 1. The WASM port exists upstream but integration is non-trivial.
+**Context:** Deferred from web port plan (2026-04-04).
+**Effort:** human ~1w / CC+gstack ~2h
+
+### WP-003: Delta WebDAV sync (Phase 2)
+**What:** Replace full-snapshot upload with delta format (only changed entries since last sync). Currently cloudSyncService.ts uploads a complete re-encryption of all entries on every save. For 1000+ entries this is slow.
+**Why:** Performance concern flagged in web port eng review. Acceptable for Phase 1 but needs fixing before wide launch.
+**Context:** Deferred from web port plan (2026-04-04). Needs protocol design (snapshot header + delta manifest).
+**Effort:** human ~1w / CC+gstack ~2h
+
+### WP-004: WebAuthn hardware key for browser mode (Phase 2+)
+**What:** The desktop app uses native CTAP2/HID for hardware keys. The browser version should use WebAuthn (navigator.credentials.get). This is actually BETTER in browser — gets Face ID, Windows Hello, YubiKey all for free via the WebAuthn API.
+**Why:** Upgrade, not workaround. Deferred from Phase 1 scope.
+**Context:** Deferred from web port plan (2026-04-04).
+**Effort:** human ~3d / CC+gstack ~1h
 
 ---

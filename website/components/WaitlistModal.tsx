@@ -125,7 +125,7 @@ export default function WaitlistModal({ isOpen, onClose }: WaitlistModalProps) {
                       variants={fieldVariants}
                     >
                       Native apps for Windows, macOS, and Linux are in the works. Leave your email and we'll let you know when they're ready. The web app is available now at{' '}
-                      <a href="https://journal.moodhaven.app" className="text-[#3A6EA5] underline">journal.moodhaven.app</a>.
+                      <a href="https://journal.moodhaven.app" className="text-primary-700 underline">journal.moodhaven.app</a>.
                     </motion.p>
 
                     {/* Email */}

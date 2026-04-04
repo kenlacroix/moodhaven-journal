@@ -61,12 +61,12 @@ export default function NavBar() {
                 key={link.name}
                 href={link.href}
                 className={`relative text-sm font-medium transition-colors duration-200 ${
-                  active ? 'text-[#3A6EA5]' : 'text-neutral-800 hover:text-[#3A6EA5]'
+                  active ? 'text-primary-700' : 'text-neutral-800 hover:text-primary-700'
                 } group`}
               >
                 {link.name}
                 <span
-                  className={`absolute left-0 -bottom-0.5 h-[2px] w-full bg-[#3A6EA5] transition-transform duration-300 origin-left ${
+                  className={`absolute left-0 -bottom-0.5 h-[2px] w-full bg-primary-700 transition-transform duration-300 origin-left ${
                     active ? 'scale-x-100' : 'scale-x-0 group-hover:scale-x-100'
                   }`}
                 />
@@ -106,12 +106,12 @@ export default function NavBar() {
                 role="menuitem"
                 onClick={() => setMenuOpen(false)}
                 className={`relative text-base font-medium transition-colors duration-200 ${
-                  active ? 'text-[#3A6EA5]' : 'text-neutral-800 hover:text-[#3A6EA5]'
+                  active ? 'text-primary-700' : 'text-neutral-800 hover:text-primary-700'
                 } group`}
               >
                 {link.name}
                 <span
-                  className={`absolute left-0 -bottom-0.5 h-[2px] w-full bg-[#3A6EA5] transition-transform duration-300 origin-left ${
+                  className={`absolute left-0 -bottom-0.5 h-[2px] w-full bg-primary-700 transition-transform duration-300 origin-left ${
                     active ? 'scale-x-100' : 'scale-x-0 group-hover:scale-x-100'
                   }`}
                 />

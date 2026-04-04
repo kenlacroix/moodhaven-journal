@@ -64,7 +64,7 @@ export default function Footer() {
         {/* App + Legal Links */}
         <AnimatedReveal delay={0.5}>
           <div className="mb-4 text-sm text-neutral-500 flex flex-wrap justify-center gap-4">
-            <Link href="https://journal.moodhaven.app" className="hover:underline text-[#3A6EA5] font-medium">
+            <Link href="https://journal.moodhaven.app" className="hover:underline text-primary-700 font-medium">
               Open Journal App
             </Link>
             <span className="text-neutral-300">·</span>
@@ -85,7 +85,7 @@ export default function Footer() {
               href="https://www.kennethlacroix.me"
               target="_blank"
               rel="noopener noreferrer"
-              className="underline hover:text-[#3A6EA5]"
+              className="underline hover:text-primary-700"
             >
               Ken LaCroix
             </Link>
@@ -106,7 +106,7 @@ export default function Footer() {
             exit={{ opacity: 0, y: 20 }}
             transition={{ duration: 0.3 }}
             title="Back to top"
-            className="fixed bottom-[5.5rem] sm:bottom-6 right-4 sm:right-6 w-11 h-11 rounded-full bg-white border border-neutral-300 text-[#3A6EA5] shadow-md hover:bg-blue-50 transition-transform hover:scale-105 z-50 flex items-center justify-center"
+            className="fixed bottom-[5.5rem] sm:bottom-6 right-4 sm:right-6 w-11 h-11 rounded-full bg-white border border-neutral-300 text-primary-700 shadow-md hover:bg-primary-50 transition-transform hover:scale-105 z-50 flex items-center justify-center"
             aria-label="Scroll to top"
           >
             <FaChevronUp size={16} aria-hidden />
@@ -132,7 +132,7 @@ function SocialIcon({
       target="_blank"
       rel="noopener noreferrer"
       title={title}
-      className="w-11 h-11 flex items-center justify-center rounded-full bg-white border border-neutral-200 shadow-sm text-[var(--foreground)] hover:text-[#3A6EA5] hover:bg-blue-50 transition-transform transform hover:scale-110 duration-200"
+      className="w-11 h-11 flex items-center justify-center rounded-full bg-white border border-neutral-200 shadow-sm text-[var(--foreground)] hover:text-primary-700 hover:bg-primary-50 transition-transform transform hover:scale-110 duration-200"
     >
       <span className="sr-only">{title}</span>
       {children}

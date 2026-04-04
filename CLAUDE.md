@@ -55,7 +55,11 @@ Platforms: Windows, Linux, macOS.
 | `src/lib/services/logger.ts` | Structured logger wrapper around @tauri-apps/plugin-log |
 | `src/lib/services/crypto.ts` | AES-256-GCM encryption (PBKDF2 key derivation) |
 | `src/lib/services/cloudSyncService.ts` | WebDAV sync orchestration |
+| `src/lib/services/http.ts` | Conditional fetch: `@tauri-apps/plugin-http` in Tauri, `window.fetch` in browser |
 | `src/lib/services/peerSyncEngineService.ts` | P2P sync IPC wrappers |
+| `src/lib/backend/browser.ts` | IndexedDB backend — all IDB operations for browser mode |
+| `src/lib/backend/browser-invoke.ts` | Browser invoke shim — routes Tauri command names to IndexedDB |
+| `src/lib/backend/browser-stubs.ts` | No-op stubs for Tauri-only plugins in browser builds |
 | `src/types/settings.ts` | App settings type definitions |
 | `src/lib/services/timeCapsuleService.ts` | Time capsule IPC wrappers |
 | `src/hooks/useTimeCapsule.ts` | Time capsule state + logic |
@@ -71,6 +75,8 @@ Platforms: Windows, Linux, macOS.
 ```bash
 npm run tauri dev          # dev server with hot reload
 npm run tauri build        # production build
+npm run dev:web            # browser dev server (no Rust needed)
+npm run build:web          # browser build → dist-web/
 npm test                   # run all tests
 npm run test:watch         # watch mode
 npm run typecheck          # tsc --noEmit

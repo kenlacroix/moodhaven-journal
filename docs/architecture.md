@@ -1,6 +1,6 @@
 # MoodHaven Journal — Architecture Reference
 
-> **Version:** v0.7.11 | **Last Updated:** 2026-03-28
+> **Version:** v0.8.0 | **Last Updated:** 2026-04-04
 
 ---
 
@@ -66,7 +66,7 @@ MoodHaven Journal is a **local-first desktop application** built on Tauri v2 (Ru
 | 2FA | totp-rs + native CTAP2/HID | TOTP + hardware keys |
 | Charts | Custom SVG | No charting library |
 | Logging | tauri-plugin-log + `src/lib/services/logger.ts` | Rotating file (prod), stderr (dev); `set_log_level` at runtime |
-| Testing | Vitest + Testing Library | 550 tests |
+| Testing | Vitest + Testing Library | 629 tests |
 | Build | Vite 5 + Tauri CLI | |
 
 ---
@@ -93,6 +93,11 @@ moodbloom-tauri/
 │   ├── hooks/                  # React hooks (business logic)
 │   ├── stores/                 # Zustand stores
 │   ├── lib/                    # Service modules + utilities
+│   │   ├── services/           # IPC wrappers, crypto, sync, AI, STT, …
+│   │   └── backend/            # Browser-mode IndexedDB backend
+│   │       ├── browser.ts      # All IDB operations
+│   │       ├── browser-invoke.ts  # invoke() shim routing Tauri commands → IDB
+│   │       └── browser-stubs.ts   # No-op stubs for Tauri-only plugins
 │   ├── types/                  # TypeScript type definitions
 │   └── test/                   # Test setup and mocks
 │

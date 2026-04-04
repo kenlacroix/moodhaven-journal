@@ -18,6 +18,7 @@ import {
 } from '../../../lib/services/speechToTextService';
 import { sendTestNotification } from '../../../lib/services/reminderService';
 import { CloudConsentModal } from '../../transcript/CloudConsentModal';
+import { usePlatform } from '../../../hooks/usePlatform';
 
 interface GeneralTabProps {
   settings: AppSettings;
@@ -72,6 +73,7 @@ export function GeneralTab({
   setHasSeenTutorial,
   setTimeCapsuleSettings,
 }: GeneralTabProps) {
+  const { isBrowser } = usePlatform();
   const [sttDownloading, setSTTDownloading] = useState(false);
   const [sttDownloadError, setSTTDownloadError] = useState<string | null>(null);
   const [sttSidecarAvailable, setSTTSidecarAvailable] = useState<boolean | null>(null);
@@ -301,7 +303,7 @@ export function GeneralTab({
         )}
       </SettingSection>
 
-      <div ref={sttSectionRef}>
+      {!isBrowser && <div ref={sttSectionRef}>
         <SettingSection
           title="Speech to Text"
           description="Dictate journal entries using your voice"
@@ -523,7 +525,7 @@ export function GeneralTab({
             </>
           )}
         </SettingSection>
-      </div>
+      </div>}
 
       {/* Cloud consent modal */}
       <CloudConsentModal

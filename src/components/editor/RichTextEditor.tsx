@@ -26,6 +26,7 @@ import { EmojiPicker } from './EmojiPicker';
 import { SlashCommands } from './slashCommands';
 import { useSpeechToText, type STTState } from '../../hooks/useSpeechToText';
 import { useSettingsStore } from '../../stores/settingsStore';
+import { usePlatform } from '../../hooks/usePlatform';
 import { TranscriptPreviewOverlay } from '../transcript/TranscriptPreviewOverlay';
 import { MicrophonePermissionModal } from '../stt/MicrophonePermissionModal';
 import { MicrophoneBlockedModal } from '../stt/MicrophoneBlockedModal';
@@ -71,6 +72,8 @@ export function RichTextEditor({
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const [linkDialogInitialUrl, setLinkDialogInitialUrl] = useState('');
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
+
+  const { isBrowser } = usePlatform();
 
   // Speech-to-text
   const sttSettings = useSettingsStore((s) => s.settings.speechToText);
@@ -306,7 +309,7 @@ export function RichTextEditor({
   }, [editor]);
 
   // Check if STT is ready (enabled and model downloaded)
-  const sttReady = sttSettings.enabled && sttSettings.modelDownloaded;
+  const sttReady = !isBrowser && sttSettings.enabled && sttSettings.modelDownloaded;
 
   // Handle mic button click for speech-to-text
   const handleMicClick = useCallback(async () => {

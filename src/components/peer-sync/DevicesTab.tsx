@@ -12,6 +12,7 @@
 import { useState, useCallback } from 'react';
 import { usePeerSyncStore } from '../../stores/peerSyncStore';
 import { useSettingsStore } from '../../stores/settingsStore';
+import { usePlatform } from '../../hooks/usePlatform';
 import { renameDevice, startDiscovery, stopDiscovery } from '../../lib/services/peerDiscoveryService';
 import { peerSyncNow } from '../../lib/services/peerSyncEngineService';
 import { PairingModal } from './PairingModal';
@@ -338,6 +339,7 @@ const INTERVAL_OPTIONS = [
 ];
 
 export function DevicesTab() {
+  const { isBrowser } = usePlatform();
   const { identity, identityLoading, isDiscovering, nearbyPeers, setDiscovering, clearPeers } =
     usePeerSyncStore();
 
@@ -367,6 +369,32 @@ export function DevicesTab() {
       setTogglingDiscovery(false);
     }
   }, [isDiscovering, setDiscovering, clearPeers]);
+
+  if (isBrowser) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 gap-4 text-center px-4">
+        <div className="w-14 h-14 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+          <svg className="w-7 h-7 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+          </svg>
+        </div>
+        <div>
+          <p className="font-medium text-slate-800 dark:text-slate-100">LAN Sync requires the desktop app</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+            Peer discovery and device pairing use mDNS and native TCP — not available in the browser.
+          </p>
+        </div>
+        <a
+          href="https://github.com/kenlacroix/moodhaven-journal/releases/latest"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-sm text-violet-600 dark:text-violet-400 underline"
+        >
+          Download the desktop app
+        </a>
+      </div>
+    );
+  }
 
   if (identityLoading) {
     return (

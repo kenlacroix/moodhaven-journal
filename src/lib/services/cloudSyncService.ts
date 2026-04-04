@@ -11,9 +11,14 @@ import {
   testConnection,
   ensureDirectory,
   uploadFile,
+  uploadFileWithETagRetry,
   downloadFile,
   listFiles,
 } from './webdavService';
+import { dbGetWebDAVState, dbSetWebDAVState } from '../backend/browser';
+
+const IS_BROWSER = typeof window !== 'undefined' && !window.__TAURI_INTERNALS__;
+const BROWSER_SYNC_FILENAME = 'moodhaven-sync.moodhaven';
 
 export interface SyncResult {
   success: boolean;
@@ -55,8 +60,22 @@ export async function uploadBackup(
 
     const encryptedData = await encryptedExport(password);
 
-    const filename = generateBackupFilename();
-    const uploadResult = await uploadFile(webdavConfig, filename, encryptedData);
+    let filename: string;
+    let uploadResult: Awaited<ReturnType<typeof uploadFile>>;
+
+    if (IS_BROWSER) {
+      // Browser: fixed filename + ETag-guarded upload to prevent data loss on concurrent edits
+      filename = BROWSER_SYNC_FILENAME;
+      const state = await dbGetWebDAVState();
+      uploadResult = await uploadFileWithETagRetry(webdavConfig, filename, encryptedData, state?.etag ?? null);
+      if (uploadResult.success && 'etag' in uploadResult) {
+        await dbSetWebDAVState(filename, uploadResult.etag ?? null);
+      }
+    } else {
+      filename = generateBackupFilename();
+      uploadResult = await uploadFile(webdavConfig, filename, encryptedData);
+    }
+
     if (!uploadResult.success) {
       return { success: false, error: uploadResult.error || 'Upload failed' };
     }
@@ -87,15 +106,23 @@ export async function downloadBackup(
   try {
     let targetFile = filename;
     if (!targetFile) {
-      const listResult = await listFiles(webdavConfig);
-      if (!listResult.success || !listResult.files || listResult.files.length === 0) {
-        return { success: false, error: 'No backups found on server' };
+      if (IS_BROWSER) {
+        // Browser: always use fixed filename
+        targetFile = BROWSER_SYNC_FILENAME;
+      } else {
+        const listResult = await listFiles(webdavConfig);
+        if (!listResult.success || !listResult.files || listResult.files.length === 0) {
+          return { success: false, error: 'No backups found on server' };
+        }
+        // Sort by name (date-based names sort chronologically) — take latest
+        targetFile = listResult.files.sort().reverse()[0];
       }
-      // Sort by name (date-based names sort chronologically) — take latest
-      targetFile = listResult.files.sort().reverse()[0];
     }
 
     const downloadResult = await downloadFile(webdavConfig, targetFile);
+    if (IS_BROWSER && downloadResult.success && 'etag' in downloadResult) {
+      await dbSetWebDAVState(targetFile, (downloadResult as { etag?: string }).etag ?? null);
+    }
     if (!downloadResult.success || !downloadResult.data) {
       return { success: false, error: downloadResult.error || 'Download failed' };
     }

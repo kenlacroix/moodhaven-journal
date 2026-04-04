@@ -38,7 +38,7 @@ function isLanAddress(host: string): boolean {
   );
 }
 
-export function usePeerSync() {
+export function usePeerSync({ enabled = true }: { enabled?: boolean } = {}) {
   const {
     setIdentity,
     setIdentityLoading,
@@ -70,6 +70,8 @@ export function usePeerSync() {
   const myDeviceIdRef = useRef<string>('');
 
   useEffect(() => {
+    if (!enabled) return;
+
     let unlistenDiscovered: (() => void) | null = null;
     let unlistenLost: (() => void) | null = null;
     let unlistenPaired: (() => void) | null = null;
@@ -235,5 +237,5 @@ export function usePeerSync() {
       unlistenRevokedUs?.();
       // Note: discovery runs for app lifetime — not stopped on unmount
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [enabled]); // eslint-disable-line react-hooks/exhaustive-deps
 }

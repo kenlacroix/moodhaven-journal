@@ -5,7 +5,7 @@
  * Uses @tauri-apps/plugin-http for HTTP requests that bypass CSP restrictions.
  */
 
-import { fetch } from '@tauri-apps/plugin-http';
+import { httpFetch as fetch } from './http';
 import type { WebDAVConfig } from '../../types/settings';
 import { logger } from './logger';
 
@@ -110,25 +110,35 @@ export async function ensureDirectory(config: WebDAVConfig): Promise<WebDAVRespo
 
 /**
  * Upload a file to WebDAV (PUT)
+ *
+ * Pass `etag` to enable conditional PUT (If-Match header).
+ * Returns `{ success: false, status: 412 }` on ETag mismatch — caller
+ * should fetch the current version, merge (LWW by updated_at), then retry.
  */
 export async function uploadFile(
   config: WebDAVConfig,
   filename: string,
   content: string,
-): Promise<WebDAVResponse> {
+  etag?: string | null,
+): Promise<WebDAVResponse & { etag?: string }> {
   try {
     const fileUrl = buildFilePath(config.url, filename);
-    const response = await fetch(fileUrl, {
-      method: 'PUT',
-      headers: {
-        'Authorization': buildAuthHeader(config.username, config.password),
-        'Content-Type': 'application/octet-stream',
-      },
-      body: content,
-    });
+    const headers: Record<string, string> = {
+      'Authorization': buildAuthHeader(config.username, config.password),
+      'Content-Type': 'application/octet-stream',
+    };
+    if (etag) {
+      headers['If-Match'] = etag;
+    }
+    const response = await fetch(fileUrl, { method: 'PUT', headers, body: content });
+
+    if (response.status === 412) {
+      return { success: false, status: 412, error: 'ETag mismatch — remote was modified' };
+    }
 
     if (response.status === 201 || response.status === 204 || response.status === 200) {
-      return { success: true, status: response.status };
+      const newEtag = response.headers.get('ETag') ?? undefined;
+      return { success: true, status: response.status, etag: newEtag };
     }
 
     return { success: false, status: response.status, error: `Upload failed: ${response.status}` };
@@ -141,12 +151,57 @@ export async function uploadFile(
 }
 
 /**
- * Download a file from WebDAV (GET)
+ * Upload with ETag-guarded retry.
+ *
+ * On 412 Precondition Failed: download the current remote, merge by
+ * updated_at LWW (remote wins for newer entries), then retry the PUT.
+ * At most 2 attempts — if it fails again, surface the error to the caller.
+ */
+export async function uploadFileWithETagRetry(
+  config: WebDAVConfig,
+  filename: string,
+  content: string,
+  etag: string | null,
+): Promise<WebDAVResponse & { etag?: string }> {
+  const result = await uploadFile(config, filename, content, etag);
+  if (result.status !== 412) return result;
+
+  // Remote changed — download, merge LWW, retry once
+  const remote = await downloadFile(config, filename);
+  if (!remote.success || !remote.data) {
+    return { success: false, error: 'ETag conflict and remote download failed' };
+  }
+
+  try {
+    const localEntries: Array<{ id: string; updated_at: string }> = JSON.parse(content)?.entries ?? [];
+    const remoteEntries: Array<{ id: string; updated_at: string }> = JSON.parse(remote.data)?.entries ?? [];
+
+    const merged = new Map<string, (typeof localEntries)[number]>();
+    for (const entry of remoteEntries) merged.set(entry.id, entry);
+    for (const entry of localEntries) {
+      const existing = merged.get(entry.id);
+      if (!existing || entry.updated_at >= existing.updated_at) {
+        merged.set(entry.id, entry);
+      }
+    }
+
+    const mergedContent = JSON.stringify({ entries: Array.from(merged.values()), mergedAt: new Date().toISOString() });
+    // Retry without If-Match (unconditional overwrite after merge)
+    return uploadFile(config, filename, mergedContent, undefined);
+  } catch {
+    // Content isn't structured JSON entries — just overwrite
+    return uploadFile(config, filename, content, undefined);
+  }
+}
+
+/**
+ * Download a file from WebDAV (GET).
+ * Returns the ETag header value in the response as `etag` when present.
  */
 export async function downloadFile(
   config: WebDAVConfig,
   filename: string,
-): Promise<WebDAVResponse> {
+): Promise<WebDAVResponse & { etag?: string }> {
   try {
     const fileUrl = buildFilePath(config.url, filename);
     const response = await fetch(fileUrl, {
@@ -158,7 +213,8 @@ export async function downloadFile(
 
     if (response.ok) {
       const data = await response.text();
-      return { success: true, status: response.status, data };
+      const etag = response.headers.get('ETag') ?? undefined;
+      return { success: true, status: response.status, data, etag };
     }
 
     if (response.status === 404) {

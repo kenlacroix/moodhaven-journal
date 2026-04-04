@@ -13,6 +13,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { useAppStore } from '../stores/appStore';
 import { useSettingsStore } from '../stores/settingsStore';
 import { usePeerSyncStore } from '../stores/peerSyncStore';
+import { usePlatform } from '../hooks/usePlatform';
 import { readBackupFile, encryptedImport } from '../lib/services/dataManagementService';
 import { startDiscovery, stopDiscovery } from '../lib/services/peerDiscoveryService';
 import { onRestoreProgress, onRestoreReady, onRestoreError, type RestoreProgressEvent } from '../lib/services/peerSyncEngineService';
@@ -85,8 +86,11 @@ export function SetupScreen() {
   const nearbyPeers = usePeerSyncStore((s) => s.nearbyPeers);
   const isDiscovering = usePeerSyncStore((s) => s.isDiscovering);
   const trustedDevices = usePeerSyncStore((s) => s.trustedDevices);
+  const { isBrowser } = usePlatform();
 
-  const STEPS = setupMode === 'sync' ? SYNC_STEPS : FRESH_STEPS;
+  const STEPS = (setupMode === 'sync' ? SYNC_STEPS : FRESH_STEPS).filter(
+    (s) => !isBrowser || (s.id !== 'devices' && s.id !== 'sync_from_peer'),
+  );
 
   // Start/stop discovery when entering the devices or sync_from_peer step
   useEffect(() => {

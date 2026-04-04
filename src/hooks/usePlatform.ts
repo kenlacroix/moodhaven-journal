@@ -11,9 +11,12 @@
 const IS_ANDROID = typeof navigator !== 'undefined' &&
   /android/i.test(navigator.userAgent);
 
+const IS_BROWSER = typeof window !== 'undefined' && !window.__TAURI_INTERNALS__;
+
 export function usePlatform() {
   return {
     isAndroid: IS_ANDROID,
-    isDesktop: !IS_ANDROID,
+    isBrowser: IS_BROWSER,
+    isDesktop: !IS_ANDROID && !IS_BROWSER,
   };
 }

@@ -1,4 +1,5 @@
 import { TotpSetup, HardwareKeySetup } from '../two-factor';
+import { usePlatform } from '../../hooks/usePlatform';
 
 interface SecurityStepProps {
   onBack: () => void;
@@ -17,6 +18,7 @@ export function SecurityStep({
   twoFactorComplete,
   onTwoFactorComplete,
 }: SecurityStepProps) {
+  const { isBrowser } = usePlatform();
   return (
     <div className="space-y-6">
       {twoFactorSetupMode === 'totp' && (
@@ -88,21 +90,23 @@ export function SecurityStep({
                   </div>
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() => onSetupModeChange('hardwarekey')}
-                  className="w-full flex items-center gap-3 p-4 rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-violet-300 dark:hover:border-violet-600 text-left transition-colors"
-                >
-                  <div className="w-10 h-10 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center flex-shrink-0">
-                    <span className="text-xl">🔑</span>
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-medium text-slate-700 dark:text-slate-200">Hardware Security Key</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      Use a YubiKey or similar FIDO2 device (native)
-                    </p>
-                  </div>
-                </button>
+                {!isBrowser && (
+                  <button
+                    type="button"
+                    onClick={() => onSetupModeChange('hardwarekey')}
+                    className="w-full flex items-center gap-3 p-4 rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-violet-300 dark:hover:border-violet-600 text-left transition-colors"
+                  >
+                    <div className="w-10 h-10 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center flex-shrink-0">
+                      <span className="text-xl">🔑</span>
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-medium text-slate-700 dark:text-slate-200">Hardware Security Key</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        Use a YubiKey or similar FIDO2 device (native)
+                      </p>
+                    </div>
+                  </button>
+                )}
               </div>
 
               <p className="text-xs text-center text-slate-400 dark:text-slate-500">

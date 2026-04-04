@@ -79,3 +79,4 @@ ceo-plans/
 .claude/worktrees/
 /.agents
 /active-plans
+dist-web/

@@ -205,3 +205,31 @@ wearApp(project(":wear"))
 **Effort:** human ~30min / CC+gstack ~5min
 
 ---
+
+## Web Port (feat/web-port — Phase 2+)
+
+### WP-001: LAN sync bridge daemon (Phase 2)
+**What:** Small native binary that runs on the user's machine, exposes a WebSocket, bridges mDNS discovery and TCP sync to the browser. Allows the browser version to participate in LAN sync.
+**Why:** Browser has no raw TCP or mDNS access. Bridge daemon is the least-bad option for preserving the zero-knowledge LAN sync model in a browser context.
+**Context:** Deferred from web port plan (2026-04-04). Phase 1 ships without sync. Validate demand first.
+**Effort:** human ~2w / CC+gstack ~4h
+
+### WP-002: whisper.wasm STT in browser (Phase 2+)
+**What:** Port whisper.cpp STT to run in the browser via WASM. `@nicolo-ribaudo/whisper-wasm` or compile from source. Stream audio from getUserMedia → WASM → insert at cursor.
+**Why:** Deferred from Phase 1. The WASM port exists upstream but integration is non-trivial.
+**Context:** Deferred from web port plan (2026-04-04).
+**Effort:** human ~1w / CC+gstack ~2h
+
+### WP-003: Delta WebDAV sync (Phase 2)
+**What:** Replace full-snapshot upload with delta format (only changed entries since last sync). Currently cloudSyncService.ts uploads a complete re-encryption of all entries on every save. For 1000+ entries this is slow.
+**Why:** Performance concern flagged in web port eng review. Acceptable for Phase 1 but needs fixing before wide launch.
+**Context:** Deferred from web port plan (2026-04-04). Needs protocol design (snapshot header + delta manifest).
+**Effort:** human ~1w / CC+gstack ~2h
+
+### WP-004: WebAuthn hardware key for browser mode (Phase 2+)
+**What:** The desktop app uses native CTAP2/HID for hardware keys. The browser version should use WebAuthn (navigator.credentials.get). This is actually BETTER in browser — gets Face ID, Windows Hello, YubiKey all for free via the WebAuthn API.
+**Why:** Upgrade, not workaround. Deferred from Phase 1 scope.
+**Context:** Deferred from web port plan (2026-04-04).
+**Effort:** human ~3d / CC+gstack ~1h
+
+---

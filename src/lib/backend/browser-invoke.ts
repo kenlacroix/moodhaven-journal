@@ -244,7 +244,9 @@ async function dispatch(command: string, p: Params): Promise<any> {
       return true;
     }
     case 'exit_app': {
-      window.close();
+      // window.close() is blocked by browsers unless the tab was opened by script.
+      // Reload instead so the app restarts cleanly (e.g. after factory reset).
+      window.location.reload();
       return;
     }
     case 'write_text_file': {

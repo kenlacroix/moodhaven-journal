@@ -78,3 +78,4 @@ ceo-plans/
 .claude/settings.local.json
 .claude/worktrees/
 /.agents
+/active-plans

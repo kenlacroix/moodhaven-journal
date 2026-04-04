@@ -677,7 +677,7 @@ export function TimelineView({ onSelectEntry, onNewEntry, onSealEntry, refreshTr
 
                         {/* Preview */}
                         <p className="text-sm font-normal text-slate-500 dark:text-slate-400 line-clamp-2">
-                          {entry.content}
+                          {entry.content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()}
                         </p>
 
                         {/* Tags */}

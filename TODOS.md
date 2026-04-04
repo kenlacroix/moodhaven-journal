@@ -5,6 +5,39 @@
 
 ---
 
+## Website Design Debt (from design-unification autoplan review, 2026-04-04)
+
+### DESIGN-DEBT-001: Hero background photo
+**What:** The rain photo hero is blue-toned and conflicts with the violet brand after the token sweep. Replace with app screenshot, branded illustration, or violet-tinted editorial layout.
+**Why:** Both CEO and Design review models flagged it as "beautiful image, weak brand" — visitors remember ambiance, not product. No screenshot exists yet so this is deferred.
+**Fix options:** (a) App screenshot split-layout hero once UI stabilizes, (b) Clean cream/violet layout with no background image (CSS-only, no new assets).
+**Effort:** human ~2h / CC+gstack ~30min once screenshot exists
+
+### DESIGN-DEBT-002: Newsletter carousel on homepage
+**What:** The auto-scrolling Substack carousel in HomeClient.tsx distracts from the conversion flow and has no narrative purpose on the homepage.
+**Why:** Both design models flagged it. It attracts attention away from the CTAs and does not advance the purchase/usage decision.
+**Fix:** Remove from homepage or demote it below product proof. Keep component, just don't render on `app/page.tsx`.
+**Effort:** human ~30min / CC+gstack ~5min
+
+### DESIGN-DEBT-003: Value props → proof-based modules
+**What:** The Privacy / Calm Interface / Cross-Platform three-icon section repeats the hero mood claims without adding concrete proof.
+**Why:** Codex design review: "Sections repeating same mood statement" is a hard rejection signal. Three proof-based modules would be more convincing: Privacy (local encryption details), Insight (mood tracking + AI), Availability (platforms).
+**Depends on:** screenshots or feature art
+**Effort:** human ~2h / CC+gstack ~30min
+
+### DESIGN-DEBT-004: Social proof on homepage
+**What:** No testimonials, user count, GitHub star count, or press mentions. Visitors have no signal the app is used by real people.
+**Why:** CEO and design models both flag this as a conversion gap. A GitHub star badge is 30 minutes.
+**Quick win:** Add `[![GitHub Stars](https://img.shields.io/github/stars/kenlacroix/moodhaven-journal)](...)` to the footer or above the fold.
+**Effort:** human ~30min / CC+gstack ~5min
+
+### DESIGN-DEBT-005: Pricing section on homepage
+**What:** The website never states that the app is free. Visitors don't know if it's free, freemium, or subscription.
+**Why:** Flagged by both CEO models. "Free to download. Pro for AI and cloud." is one line that converts.
+**Effort:** human ~30min / CC+gstack ~5min (part of a hero or FAQ update)
+
+---
+
 ## Design System
 
 ### D-001: Create DESIGN.md (design source of truth)

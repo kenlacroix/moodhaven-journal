@@ -10,6 +10,32 @@ module.exports = {
   ],
   theme: {
     extend: {
+      colors: {
+        primary: {
+          50: '#f5f3ff',
+          100: '#ede9fe',
+          200: '#ddd6fe',
+          300: '#c4b5fd',
+          400: '#a78bfa',
+          500: '#8b5cf6',
+          600: '#7c3aed',
+          700: '#6d28d9',
+          800: '#5b21b6',
+          900: '#4c1d95',
+          950: '#2e1065',
+        },
+        accent: {
+          cta: '#F28C38',
+          ctaDecor: '#F28C38',
+        },
+        mood: {
+          struggling: '#f43f5e',
+          low: '#fb923c',
+          okay: '#fbbf24',
+          good: '#a3e635',
+          great: '#10b981',
+        },
+      },
       backdropBlur: {
         xs: '2px',
       },

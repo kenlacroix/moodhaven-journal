@@ -156,6 +156,44 @@ async function dispatch(command: string, p: Params): Promise<any> {
     case 'get_monthly_mood_data': {
       return dbGetMonthlyMoodData(p.year as number, p.month as number);
     }
+    case 'get_full_analytics_bundle': {
+      const [averageMood, totalEntries] = await dbGetOverallStatistics();
+      const streakRaw = await dbGetStreakStats();
+      const allForBundle = await dbGetAllEntries();
+      const lastDate = allForBundle.length > 0 ? allForBundle[0].created_at.slice(0, 10) : null;
+      return {
+        average_mood: averageMood,
+        total_entries: totalEntries,
+        streak_stats: {
+          current_streak: streakRaw.currentStreak,
+          longest_streak: streakRaw.longestStreak,
+          last_entry_date: lastDate,
+        },
+        mood_distribution: await dbGetMoodDistribution(),
+        day_of_week_stats: await dbGetDayOfWeekStats(),
+        trend_data: await dbGetMoodStatistics(
+          new Date(Date.now() - (p.trendDays as number) * 86400000).toISOString().slice(0, 10),
+          new Date().toISOString().slice(0, 10)
+        ),
+      };
+    }
+    case 'get_insights_metadata': {
+      const allEntries = await dbGetAllEntries();
+      const now = new Date();
+      const weekAgo = new Date(now.getTime() - 7 * 86400000);
+      const entriesThisWeek = allEntries.filter(
+        (e: { created_at: string }) => new Date(e.created_at) >= weekAgo
+      ).length;
+      return {
+        entries_this_week: entriesThisWeek,
+        total_entries: allEntries.length,
+        top_tags: [],
+        last_entry_date: allEntries.length > 0 ? allEntries[0].created_at : null,
+      };
+    }
+    case 'list_all_media': {
+      return [];
+    }
 
     // -----------------------------------------------------------------------
     // Settings

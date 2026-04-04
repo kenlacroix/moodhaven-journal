@@ -1,6 +1,7 @@
 import type { AppSettings } from '../../../types/settings';
 import { SettingSection, SettingToggle } from '../index';
 import { OuraConnectionCard } from '../../oura/OuraConnectionCard';
+import { usePlatform } from '../../../hooks/usePlatform';
 
 interface HealthTabProps {
   settings: AppSettings;
@@ -15,55 +16,66 @@ export function HealthTab({
   setOuraEnabled,
   setOuraSettings,
 }: HealthTabProps) {
+  const { isBrowser } = usePlatform();
+
   return (
     <div id="panel-health" role="tabpanel" className="space-y-6">
       <SettingSection
         title="Oura Ring"
         description="Connect your Oura Ring to enrich journal writing prompts with today's sleep, readiness, and stress context. Health data stays on your device."
       >
-        <SettingToggle
-          label="Enable Oura Integration"
-          description="Show health context in the writing view and optionally enrich AI prompts"
-          checked={settings.oura.enabled}
-          onChange={(v) => {
-            setOuraEnabled(v);
-            void saveSettings();
-          }}
-        />
-
-        {settings.oura.enabled && (
-          <div className="mt-4 space-y-4">
-            <OuraConnectionCard
-              onConnected={() => {
-                setOuraSettings({ connectedAt: new Date().toISOString() });
-                void saveSettings();
-              }}
-              onDisconnected={() => {
-                setOuraSettings({ connectedAt: null, lastSyncAt: null });
-                void saveSettings();
-              }}
-            />
-
-            <SettingToggle
-              label="Auto-sync on open"
-              description="Fetch today's health data automatically when you open the app"
-              checked={settings.oura.autoSyncOnOpen}
-              onChange={(v) => {
-                setOuraSettings({ autoSyncOnOpen: v });
-                void saveSettings();
-              }}
-            />
-
-            <SettingToggle
-              label="Enrich writing prompts"
-              description="Include health context when generating AI writing prompts (qualitative labels only — no raw biometrics sent)"
-              checked={settings.oura.enrichPrompts}
-              onChange={(v) => {
-                setOuraSettings({ enrichPrompts: v });
-                void saveSettings();
-              }}
-            />
+        {isBrowser ? (
+          <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 text-sm">
+            Oura Ring integration requires the desktop app. It uses a native HTTP plugin to connect to Oura's API securely.{' '}
+            <a href="https://github.com/kenlacroix/moodhaven-journal/releases/latest" target="_blank" rel="noopener noreferrer" className="text-violet-600 dark:text-violet-400 underline">Download the desktop app</a>.
           </div>
+        ) : (
+          <>
+            <SettingToggle
+              label="Enable Oura Integration"
+              description="Show health context in the writing view and optionally enrich AI prompts"
+              checked={settings.oura.enabled}
+              onChange={(v) => {
+                setOuraEnabled(v);
+                void saveSettings();
+              }}
+            />
+
+            {settings.oura.enabled && (
+              <div className="mt-4 space-y-4">
+                <OuraConnectionCard
+                  onConnected={() => {
+                    setOuraSettings({ connectedAt: new Date().toISOString() });
+                    void saveSettings();
+                  }}
+                  onDisconnected={() => {
+                    setOuraSettings({ connectedAt: null, lastSyncAt: null });
+                    void saveSettings();
+                  }}
+                />
+
+                <SettingToggle
+                  label="Auto-sync on open"
+                  description="Fetch today's health data automatically when you open the app"
+                  checked={settings.oura.autoSyncOnOpen}
+                  onChange={(v) => {
+                    setOuraSettings({ autoSyncOnOpen: v });
+                    void saveSettings();
+                  }}
+                />
+
+                <SettingToggle
+                  label="Enrich writing prompts"
+                  description="Include health context when generating AI writing prompts (qualitative labels only — no raw biometrics sent)"
+                  checked={settings.oura.enrichPrompts}
+                  onChange={(v) => {
+                    setOuraSettings({ enrichPrompts: v });
+                    void saveSettings();
+                  }}
+                />
+              </div>
+            )}
+          </>
         )}
       </SettingSection>
 

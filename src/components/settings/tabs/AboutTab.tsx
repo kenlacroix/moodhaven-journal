@@ -5,6 +5,7 @@ import type { UseUpdateCheckReturn } from '../../../hooks/useUpdateCheck';
 import { invoke } from '@tauri-apps/api/core';
 import { logger } from '../../../lib/services/logger';
 import type { LogLevel } from '../../../lib/services/logger';
+import { usePlatform } from '../../../hooks/usePlatform';
 
 interface AboutTabProps {
   settings: AppSettings;
@@ -21,6 +22,7 @@ export function AboutTab({
   logPath,
   handleLogLevelChange,
 }: AboutTabProps) {
+  const { isBrowser } = usePlatform();
   return (
     <div id="panel-about" role="tabpanel" className="space-y-6">
 
@@ -58,40 +60,44 @@ export function AboutTab({
             </p>
           </div>
 
-          <div className="flex items-center justify-between py-3 border-b border-slate-100 dark:border-slate-700">
-            <div>
-              <p className="text-slate-700 dark:text-slate-200">Log Level</p>
-              <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Debug is verbose — use only for troubleshooting</p>
-            </div>
-            <select
-              aria-label="Log level"
-              value={settings.logLevel ?? 'warn'}
-              onChange={(e) => handleLogLevelChange(e.target.value as LogLevel)}
-              className="px-3 py-1 text-sm rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 border-0 cursor-pointer"
-            >
-              <option value="error">Error</option>
-              <option value="warn">Warn</option>
-              <option value="info">Info</option>
-              <option value="debug">Debug</option>
-            </select>
-          </div>
+          {!isBrowser && (
+            <>
+              <div className="flex items-center justify-between py-3 border-b border-slate-100 dark:border-slate-700">
+                <div>
+                  <p className="text-slate-700 dark:text-slate-200">Log Level</p>
+                  <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Debug is verbose — use only for troubleshooting</p>
+                </div>
+                <select
+                  aria-label="Log level"
+                  value={settings.logLevel ?? 'warn'}
+                  onChange={(e) => handleLogLevelChange(e.target.value as LogLevel)}
+                  className="px-3 py-1 text-sm rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 border-0 cursor-pointer"
+                >
+                  <option value="error">Error</option>
+                  <option value="warn">Warn</option>
+                  <option value="info">Info</option>
+                  <option value="debug">Debug</option>
+                </select>
+              </div>
 
-          <div className="flex items-center justify-between py-3 border-b border-slate-100 dark:border-slate-700">
-            <p className="text-slate-700 dark:text-slate-200">Log File</p>
-            <button
-              onClick={() => {
-                if (logPath) {
-                  invoke('open_log_folder').catch((e: unknown) => {
-                    logger.error('open_log_folder failed', { err: String(e) });
-                  });
-                }
-              }}
-              disabled={!logPath}
-              className="px-3 py-1 text-sm rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            >
-              Open Log Folder
-            </button>
-          </div>
+              <div className="flex items-center justify-between py-3 border-b border-slate-100 dark:border-slate-700">
+                <p className="text-slate-700 dark:text-slate-200">Log File</p>
+                <button
+                  onClick={() => {
+                    if (logPath) {
+                      invoke('open_log_folder').catch((e: unknown) => {
+                        logger.error('open_log_folder failed', { err: String(e) });
+                      });
+                    }
+                  }}
+                  disabled={!logPath}
+                  className="px-3 py-1 text-sm rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  Open Log Folder
+                </button>
+              </div>
+            </>
+          )}
 
           <div className="pt-4">
             <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">

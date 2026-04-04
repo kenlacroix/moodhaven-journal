@@ -29,6 +29,4 @@ npm run build    # production build
 ## Non-Obvious Notes
 - Blog posts with `publishDate` in the future are hidden (`notFound()`)
 - Substack RSS is fetched at build time (static) — redeploy to refresh
-- `WaitlistModal` Formspree endpoint is hardcoded in the component
-- GitHub URL in Footer still points to the old community repo — update when public repo is ready
-- No `/privacy` or `/terms` routes exist yet — those footer links 404
+- `WaitlistModal` Formspree endpoint is hardcoded in the component (`xeogkzgz`)

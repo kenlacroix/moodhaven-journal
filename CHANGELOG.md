@@ -7,6 +7,22 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.8.0] — 2026-04-04
+
+### Added
+- **Browser (web) port.** MoodHaven Journal now runs in any modern browser. Open it from a corporate laptop, a borrowed machine, or any device without installing anything. Your journal stays encrypted end-to-end: the zero-knowledge model is unchanged — your password never leaves the browser tab.
+- **IndexedDB backend.** In the browser, entries, settings, and books are stored in IndexedDB (the browser's built-in local database). The same encryption used on the desktop protects every entry.
+- **WebDAV sync for browser.** The browser build uses a fixed-filename sync file (`moodhaven-sync.moodhaven`) with `If-Match` ETag headers to prevent concurrent desktop + browser writes from silently overwriting each other.
+- **PWA (installable).** The web build includes a `manifest.webmanifest` so browsers can offer "Install to home screen" — works on Android Chrome and desktop Chrome/Edge.
+- **`npm run dev:web` / `build:web` scripts.** Set `VITE_TARGET=web` to switch the build into browser mode. Tauri plugin imports are replaced at build time via Vite module aliasing — no changes to existing service files.
+- **`isBrowser` flag in `usePlatform()`.** Components can branch on `isBrowser` to show/hide features that require the desktop app (peer sync, STT, hardware keys).
+
+### Fixed
+- **IndexedDB `dbDeleteBook`: race condition.** Book deletion and entry reassignment now run in a single multi-store IDB transaction, closing a window where concurrent writes could leave entries pointing to a deleted book.
+- **Monthly mood analytics: wrong date range.** `getMonthlyMoodData` was using day 31 for all months. February entries were silently missing; March entries appeared in February stats. Now computes the actual last day of each month.
+
+---
+
 ## [0.7.15] — 2026-04-02
 
 ### Fixed

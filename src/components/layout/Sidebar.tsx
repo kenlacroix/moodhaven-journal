@@ -17,6 +17,7 @@ import { NewBookModal } from '../books/NewBookModal';
 import { UpdateBanner } from '../updater/UpdateBanner';
 import { PeerSyncBadge } from '../peer-sync/PeerSyncBadge';
 import type { UseUpdateCheckReturn } from '../../hooks/useUpdateCheck';
+import { usePlatform } from '../../hooks/usePlatform';
 
 export type ViewType = 'writing' | 'timeline' | 'onthisday' | 'insights' | 'calendar' | 'settings' | 'journalOverview';
 
@@ -53,6 +54,16 @@ export function Sidebar({ currentView, onNavigate, onOpenSync, onNavigateToJourn
   const dismissSupportPrompt = useCallback(() => {
     setShowSupportPrompt(false);
     try { localStorage.setItem('mb_support_prompt_shown', 'true'); } catch { /* ignore */ }
+  }, []);
+
+  const { isBrowser } = usePlatform();
+  const [showDownloadPrompt, setShowDownloadPrompt] = useState(() => {
+    try { return localStorage.getItem('mh_web_download_prompt_dismissed') !== 'true'; }
+    catch { return true; }
+  });
+  const dismissDownloadPrompt = useCallback(() => {
+    setShowDownloadPrompt(false);
+    try { localStorage.setItem('mh_web_download_prompt_dismissed', 'true'); } catch { /* ignore */ }
   }, []);
 
   const { books, activeBookId, loadBooks, setActiveBook, addBook } = useBooksStore();
@@ -307,6 +318,54 @@ export function Sidebar({ currentView, onNavigate, onOpenSync, onNavigateToJourn
           >
             Buy Me a Coffee ↗
           </a>
+        </div>
+      )}
+
+      {/* Download desktop / Android app — browser only */}
+      {isBrowser && showDownloadPrompt && !collapsed && (
+        <div className="mx-3 mb-2 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
+          <div className="flex items-start justify-between gap-2 mb-2">
+            <p className="text-xs font-medium text-slate-700 dark:text-slate-200 leading-snug">
+              Get the full app
+            </p>
+            <button
+              type="button"
+              onClick={dismissDownloadPrompt}
+              aria-label="Dismiss"
+              className="flex-shrink-0 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <p className="text-xs text-slate-500 dark:text-slate-400 leading-snug mb-2.5">
+            Peer sync, speech-to-text, and hardware keys require the desktop app.
+          </p>
+          <div className="flex flex-col gap-1.5">
+            <a
+              href="https://github.com/kenlacroix/moodhaven-journal/releases/latest"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 text-xs font-medium text-violet-600 dark:text-violet-400 hover:underline"
+            >
+              <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Desktop (Windows / macOS / Linux) ↗
+            </a>
+            <a
+              href="https://github.com/kenlacroix/moodhaven-journal/releases/latest"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 text-xs font-medium text-violet-600 dark:text-violet-400 hover:underline"
+            >
+              <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z" />
+              </svg>
+              Android (phone + Wear OS) ↗
+            </a>
+          </div>
         </div>
       )}
 

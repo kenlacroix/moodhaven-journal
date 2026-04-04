@@ -64,22 +64,21 @@ export default function HomeClient({ posts }: Props) {
             Your Private, Calm Space to Reflect
           </h1>
           <p className="text-lg md:text-xl text-blue-100 mt-2">
-            MoodHaven Journal gives you a warm, secure corner of the web — where your thoughts stay yours.
+            MoodHaven Journal — encrypted, local-first journaling with mood tracking. Your thoughts stay yours, always.
           </p>
           <div className="flex flex-col sm:flex-row justify-center gap-4 pt-6">
-            <button
-              onClick={() => setIsModalOpen(true)}
+            <a
+              href="https://journal.moodhaven.app"
               className="w-full sm:w-auto text-center rounded-full bg-white text-[#3A6EA5] px-6 py-4 text-sm font-semibold shadow transition-all duration-200 ease-out hover:bg-blue-100 hover:scale-105 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#3A6EA5]/60"
             >
-              Join the Waitlist
-            </button>
-            <a
-              href="https://github.com/kenlacroix/MoodHavenJournal-Community"
-              target="_blank"
+              Try the Web App
+            </a>
+            <button
+              onClick={() => setIsModalOpen(true)}
               className="w-full sm:w-auto text-center rounded-full bg-[#F28C38] text-white px-6 py-4 text-sm font-semibold shadow transition-all duration-200 ease-out hover:bg-orange-500 hover:scale-105 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300"
             >
-              Contribute on GitHub
-            </a>
+              Get Desktop App
+            </button>
           </div>
         </AnimatedReveal>
       </section>
@@ -87,7 +86,7 @@ export default function HomeClient({ posts }: Props) {
       {/* Value Props Section */}
       <section className="pt-14 pb-14 bg-[var(--background)] -mt-2">
         <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-16 text-center">
-          {['Privacy', 'Calm Interface', 'Community'].map((label, i) => (
+          {['Privacy', 'Calm Interface', 'Cross-Platform'].map((label, i) => (
             <AnimatedReveal
               key={label}
               delay={i * 0.2}
@@ -96,7 +95,7 @@ export default function HomeClient({ posts }: Props) {
               <div className="h-20 flex items-end justify-center">
                 {label === 'Privacy' && <Lock className="w-16 h-16 text-[#3A6EA5]" />}
                 {label === 'Calm Interface' && <Feather className="w-16 h-16 text-[#4A90E2]" />}
-                {label === 'Community' && <Heart className="w-16 h-16 text-[#F28C38]" />}
+                {label === 'Cross-Platform' && <Heart className="w-16 h-16 text-[#F28C38]" />}
               </div>
               <h3 className="text-xl font-semibold text-neutral-800 tracking-tight">{label}</h3>
               <p className="text-sm text-neutral-600 leading-relaxed">
@@ -104,7 +103,8 @@ export default function HomeClient({ posts }: Props) {
                   'Your entries stay with you. Encrypted and local-first — no cloud, no leaks.'}
                 {label === 'Calm Interface' &&
                   'A soothing, distraction-free design that helps you breathe and reflect.'}
-                {label === 'Community' && 'Connect with others on a similar path.'}
+                {label === 'Cross-Platform' &&
+                  'Use in your browser today. Native desktop apps for Windows, macOS, and Linux coming soon.'}
               </p>
             </AnimatedReveal>
           ))}

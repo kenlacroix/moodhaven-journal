@@ -61,9 +61,13 @@ export default function Footer() {
 
         <hr className="border-neutral-200 w-3/4 mx-auto my-6 sm:hidden" />
 
-        {/* Legal Links */}
+        {/* App + Legal Links */}
         <AnimatedReveal delay={0.5}>
           <div className="mb-4 text-sm text-neutral-500 flex flex-wrap justify-center gap-4">
+            <Link href="https://journal.moodhaven.app" className="hover:underline text-[#3A6EA5] font-medium">
+              Open Journal App
+            </Link>
+            <span className="text-neutral-300">·</span>
             <Link href="/privacy" className="hover:underline">
               Privacy
             </Link>

@@ -114,7 +114,7 @@ export default function WaitlistModal({ isOpen, onClose }: WaitlistModalProps) {
                       custom={0}
                       variants={fieldVariants}
                     >
-                      Join the MoodHaven Waitlist
+                      Get Notified When Desktop Ships
                     </motion.h2>
 
                     <motion.p
@@ -124,7 +124,8 @@ export default function WaitlistModal({ isOpen, onClose }: WaitlistModalProps) {
                       custom={1}
                       variants={fieldVariants}
                     >
-                      Be the first to try our private, peaceful journaling app.
+                      Native apps for Windows, macOS, and Linux are in the works. Leave your email and we'll let you know when they're ready. The web app is available now at{' '}
+                      <a href="https://journal.moodhaven.app" className="text-[#3A6EA5] underline">journal.moodhaven.app</a>.
                     </motion.p>
 
                     {/* Email */}

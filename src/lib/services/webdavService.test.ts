@@ -162,7 +162,7 @@ describe('webdavService', () => {
   });
 
   describe('uploadFile ETag support', () => {
-    beforeEach(() => vi.clearAllMocks());
+    beforeEach(() => { vi.clearAllMocks(); });
 
     it('succeeds and returns etag from response', async () => {
       mockFetch.mockResolvedValue({
@@ -199,7 +199,7 @@ describe('webdavService', () => {
   });
 
   describe('uploadFileWithETagRetry', () => {
-    beforeEach(() => vi.clearAllMocks());
+    beforeEach(() => { vi.clearAllMocks(); });
 
     it('succeeds on first attempt if no conflict', async () => {
       mockFetch.mockResolvedValue({
@@ -239,7 +239,7 @@ describe('webdavService', () => {
   });
 
   describe('downloadFile ETag capture', () => {
-    beforeEach(() => vi.clearAllMocks());
+    beforeEach(() => { vi.clearAllMocks(); });
 
     it('returns etag from response headers', async () => {
       mockFetch.mockResolvedValue({

@@ -145,7 +145,12 @@ export function OuraConnectionCard({ onConnected, onDisconnected }: OuraConnecti
       ) : (
         /* Disconnected state — PAT entry */
         <div className="space-y-3">
-          <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-700 text-sm text-slate-500 dark:text-slate-400 space-y-2">
+          {isBrowser && (
+            <p className="text-xs text-slate-400 dark:text-slate-500 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-700">
+              Oura Ring sync requires the desktop app.
+            </p>
+          )}
+          <div className={`p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-700 text-sm text-slate-500 dark:text-slate-400 space-y-2 ${isBrowser ? 'opacity-50 pointer-events-none' : ''}`}>
             <p className="font-medium text-slate-700 dark:text-slate-300">How to connect:</p>
             <ol className="list-decimal list-inside space-y-1 text-xs">
               <li>
@@ -172,7 +177,7 @@ export function OuraConnectionCard({ onConnected, onDisconnected }: OuraConnecti
             <button
               type="button"
               onClick={handleConnect}
-              disabled={isSaving || !pat.trim()}
+              disabled={isSaving || !pat.trim() || isBrowser}
               className="px-4 py-2 text-sm font-medium rounded-lg bg-violet-500 hover:bg-violet-600 text-white transition-colors disabled:opacity-50"
             >
               {isSaving ? 'Connecting…' : 'Connect'}

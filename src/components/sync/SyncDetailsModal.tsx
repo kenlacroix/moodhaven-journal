@@ -6,8 +6,8 @@
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { appDataDir } from '@tauri-apps/api/path';
 import { useSettingsStore } from '../../stores/settingsStore';
+import { usePlatform } from '../../hooks/usePlatform';
 import { useAppStore } from '../../stores/appStore';
 import { usePeerSyncStore } from '../../stores/peerSyncStore';
 import { getAllEntries } from '../../lib/services/journalService';
@@ -68,6 +68,7 @@ interface SyncDetailsModalProps {
 }
 
 export function SyncDetailsModal({ onClose, onNavigateToSettings }: SyncDetailsModalProps) {
+  const { isBrowser } = usePlatform();
   const storage = useSettingsStore((s) => s.settings.storage);
   const syncSettings = useSettingsStore((s) => s.settings.sync);
   const lastAutoSaved = useSettingsStore((s) => s.lastAutoSaved);
@@ -99,13 +100,17 @@ export function SyncDetailsModal({ onClose, onNavigateToSettings }: SyncDetailsM
 
   useEffect(() => {
     getAllEntries().then((e) => setEntryCount(e.length)).catch(() => setEntryCount(null));
-    appDataDir().then((dir) => {
-      const sep = dir.includes('\\') ? '\\' : '/';
-      const trimmed = dir.endsWith(sep) ? dir.slice(0, -1) : dir;
-      setDbPath(`${trimmed}${sep}moodhaven.db`);
-    }).catch(() => setDbPath(null));
+    if (!isBrowser) {
+      import('@tauri-apps/api/path').then(({ appDataDir }) =>
+        appDataDir().then((dir) => {
+          const sep = dir.includes('\\') ? '\\' : '/';
+          const trimmed = dir.endsWith(sep) ? dir.slice(0, -1) : dir;
+          setDbPath(`${trimmed}${sep}moodhaven.db`);
+        })
+      ).catch(() => setDbPath(null));
+    }
     getDeviceName().then(setDeviceName).catch(() => {});
-  }, []);
+  }, [isBrowser]);
 
   const handleBackdropClick = useCallback((e: React.MouseEvent) => {
     if (e.target === backdropRef.current) onClose();
@@ -326,7 +331,9 @@ export function SyncDetailsModal({ onClose, onNavigateToSettings }: SyncDetailsM
             </p>
           )}
 
-          {/* LAN Sync section */}
+          {/* LAN Sync section — desktop only */}
+          {!isBrowser && (
+          <>
           <div className="h-px bg-slate-100 dark:bg-slate-800" />
           <div className="space-y-2.5">
             <div className="flex items-center justify-between">
@@ -446,6 +453,9 @@ export function SyncDetailsModal({ onClose, onNavigateToSettings }: SyncDetailsM
               onClose={() => setPairingPeer(null)}
             />
           )}
+          </>
+          )}
+
 
           {/* Settings link */}
           <button

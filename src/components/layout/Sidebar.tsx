@@ -274,13 +274,15 @@ export function Sidebar({ currentView, onNavigate, onOpenSync, onNavigateToJourn
         </div>
       </div>
 
-      {/* Peer sync badge — shown when discovery is active or peers are found */}
-      <div className="px-3 pb-1">
-        <PeerSyncBadge
-          collapsed={collapsed}
-          onOpenDevices={() => onNavigate('settings')}
-        />
-      </div>
+      {/* Peer sync badge — desktop only */}
+      {!isBrowser && (
+        <div className="px-3 pb-1">
+          <PeerSyncBadge
+            collapsed={collapsed}
+            onOpenDevices={() => onNavigate('settings')}
+          />
+        </div>
+      )}
 
       {/* Update available banner — shown only when an update exists */}
       <div className="px-3 pb-1">

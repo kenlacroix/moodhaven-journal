@@ -336,9 +336,14 @@ async function dispatch(command: string, p: Params): Promise<any> {
 
     case 'oura_get_status':
       return { connected: false, connectedAt: null };
+    case 'oura_validate_pat':
     case 'oura_sync_today':
     case 'oura_backfill':
       throw new Error('Oura sync requires the desktop app');
+    case 'oura_disconnect': {
+      await dbDeleteSetting('oura_pat');
+      return;
+    }
     case 'oura_get_context':
     case 'oura_get_history':
       return null;

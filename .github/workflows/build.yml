@@ -267,6 +267,7 @@ jobs:
     name: Build Android phone APK
     runs-on: ubuntu-latest
     if: github.event_name == 'push'
+    continue-on-error: true
     permissions:
       contents: write
 

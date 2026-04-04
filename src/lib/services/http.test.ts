@@ -16,14 +16,14 @@ describe('httpFetch', () => {
     const fetchSpy = vi.spyOn(window, 'fetch').mockResolvedValue(mockResponse);
 
     // Ensure no Tauri internals
-    const original = (window as Record<string, unknown>).__TAURI_INTERNALS__;
-    delete (window as Record<string, unknown>).__TAURI_INTERNALS__;
+    const original = (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__;
+    delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__;
 
     const result = await httpFetch(url, { method: 'GET' });
     expect(fetchSpy).toHaveBeenCalledWith(url, { method: 'GET' });
     expect(result.status).toBe(200);
 
-    (window as Record<string, unknown>).__TAURI_INTERNALS__ = original;
+    (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = original;
     fetchSpy.mockRestore();
   });
 
@@ -34,12 +34,12 @@ describe('httpFetch', () => {
     mockTauriFetch.mockResolvedValue(mockResponse as never);
 
     // Simulate Tauri environment
-    (window as Record<string, unknown>).__TAURI_INTERNALS__ = {};
+    (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {};
 
     const result = await httpFetch(url);
     expect(mockTauriFetch).toHaveBeenCalledWith(url, undefined);
     expect(result.status).toBe(200);
 
-    delete (window as Record<string, unknown>).__TAURI_INTERNALS__;
+    delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__;
   });
 });

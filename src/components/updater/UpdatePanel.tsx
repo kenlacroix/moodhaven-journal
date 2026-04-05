@@ -274,6 +274,10 @@ export function UpdatePanel({ hook, currentVersion }: UpdatePanelProps) {
               </p>
               <div
                 className="prose-sm"
+                // nosemgrep: react-dangerouslysetinnerhtml
+                // Safe: renderMarkdown() HTML-escapes all input before substitution;
+                // only hardcoded tags (<strong>,<em>,<code>,<h2>,<h3>,<ul>,<li>,<p>) are injected.
+                // Source is GitHub release notes (developer-controlled).
                 dangerouslySetInnerHTML={{ __html: renderMarkdown(updateInfo.notes) }}
               />
             </div>

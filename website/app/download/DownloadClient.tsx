@@ -225,14 +225,14 @@ export default function DownloadClient({ release }: { release: LatestRelease | n
                   {primaryAsset.name} · {primaryAsset.sizeLabel} · SHA-256 verified
                 </p>
               )}
-              {os === "macos" && arch !== "x64" && macSecondaryAsset && (
+              {os === "macos" && macSecondaryAsset && (
                 <p className="mt-1 text-xs text-neutral-500">
-                  Older Mac?{" "}
+                  On an Intel Mac?{" "}
                   <a
                     href={macSecondaryAsset.downloadUrl}
                     className="underline hover:text-neutral-700"
                   >
-                    Download for Intel
+                    Download the Intel build
                   </a>
                 </p>
               )}

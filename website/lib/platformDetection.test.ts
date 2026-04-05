@@ -55,8 +55,9 @@ describe("detectArch", () => {
     expect(detectArch("Mozilla/5.0 (Macintosh; arm64)")).toBe("arm64");
   });
 
-  it("returns unknown for ambiguous Mac UA", () => {
-    expect(detectArch("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)")).toBe("unknown");
+  it("returns unknown for Mac UA (both Intel and Apple Silicon report identical UA strings)", () => {
+    // Browsers on macOS report "Intel Mac OS X" regardless of actual chip — cannot distinguish via UA
+    expect(detectArch("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36")).toBe("unknown");
   });
 });
 

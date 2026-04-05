@@ -56,7 +56,7 @@ function renderMarkdown(md: string): string {
       out.push(`<li>${inline(line.slice(2))}</li>`);
     } else if (line === '') {
       if (inList) { out.push('</ul>'); inList = false; }
-      out.push('<div class="h-2" />');
+      out.push('<div class="h-2"></div>');
     } else {
       if (inList) { out.push('</ul>'); inList = false; }
       out.push(`<p class="text-sm text-slate-600 dark:text-slate-300 mb-1">${inline(line)}</p>`);

@@ -21,7 +21,8 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ### Tests
 - Added `recoveryKeyService`: spy test verifying `crypto.getRandomValues()` is called and `Math.random` is never called during key generation.
-- Test count: 637 (was 633).
+- Added `UpdatePanel`: 3 tests verifying DOMPurify is applied to release notes HTML before render.
+- Test count: 640 (was 633).
 
 ---
 

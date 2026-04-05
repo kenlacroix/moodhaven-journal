@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { getLatestRelease } from "@/lib/getLatestRelease";
 import DownloadClient from "./DownloadClient";
 
+export const runtime = "edge";
+
 export const metadata: Metadata = {
   title: "Download MoodHaven Journal",
   description:

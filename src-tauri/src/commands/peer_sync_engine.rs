@@ -1375,29 +1375,24 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
     }
     write_msg_enc(&mut stream, &key, &Msg::Done { sent: entries_sent })?;
 
-    // Step 7: Receive entries from client until DONE
-    let mut entries_received = 0usize;
+    // Step 7: Receive entries from client until DONE — collect, don't upsert yet
+    let mut recv_entries: Vec<JournalEntryRow> = Vec::new();
     loop {
         let msg = read_msg_enc(&mut stream, &key)?;
         match msg {
             Msg::Entry { row } => {
-                let db = app
-                    .try_state::<Database>()
-                    .ok_or_else(|| "No DB state".to_string())?;
-                let conn = db.conn.lock().map_err(|e| e.to_string())?;
-                if db_upsert_entry(&conn, &row)? {
-                    entries_received += 1;
-                }
+                recv_entries.push(row);
             }
             Msg::Done { sent } => {
                 log::info!(
-                    "[sync] Server: client sent {sent} entries, we received {entries_received} new"
+                    "[sync] Server: client sent {sent} entries, we received {} new",
+                    recv_entries.len()
                 );
                 break;
             }
             other => return Err(format!("Unexpected msg in entry recv: {other:?}")),
         }
-        if entries_received > need_entries_by_me.len() + 1000 {
+        if recv_entries.len() > need_entries_by_me.len() + 1000 {
             return Err("Received more entries than expected".into());
         }
     }
@@ -1406,7 +1401,7 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
         &mut stream,
         &key,
         &Msg::DoneAck {
-            recv: entries_received,
+            recv: recv_entries.len(),
         },
     )?;
 
@@ -1425,25 +1420,19 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
     }
     write_msg_enc(&mut stream, &key, &Msg::BooksDone { sent: books_sent })?;
 
-    let mut books_received = 0usize;
+    let mut recv_books: Vec<SyncBookRow> = Vec::new();
     loop {
         match read_msg_enc(&mut stream, &key)? {
             Msg::Book { row } => {
-                let db = app
-                    .try_state::<Database>()
-                    .ok_or_else(|| "No DB state".to_string())?;
-                let conn = db.conn.lock().map_err(|e| e.to_string())?;
-                if db_upsert_book(&conn, &row)? {
-                    books_received += 1;
-                }
+                recv_books.push(row);
             }
             Msg::BooksDone { sent } => {
-                log::info!("[sync] Server: client sent {sent} books, we received {books_received} new/updated");
+                log::info!("[sync] Server: client sent {sent} books, we received {} new/updated", recv_books.len());
                 break;
             }
             other => return Err(format!("Unexpected msg in books recv: {other:?}")),
         }
-        if books_received > need_books_by_me.len() + 500 {
+        if recv_books.len() > need_books_by_me.len() + 500 {
             return Err("Received more books than expected".into());
         }
     }
@@ -1451,7 +1440,7 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
         &mut stream,
         &key,
         &Msg::BooksAck {
-            recv: books_received,
+            recv: recv_books.len(),
         },
     )?;
 
@@ -1470,27 +1459,22 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
     }
     write_msg_enc(&mut stream, &key, &Msg::SignalsDone { sent: signals_sent })?;
 
-    let mut signals_received = 0usize;
+    let mut recv_signals: Vec<SyncSignalRow> = Vec::new();
     loop {
         match read_msg_enc(&mut stream, &key)? {
             Msg::Signal { row } => {
-                let db = app
-                    .try_state::<Database>()
-                    .ok_or_else(|| "No DB state".to_string())?;
-                let conn = db.conn.lock().map_err(|e| e.to_string())?;
-                if db_insert_signal_if_new(&conn, &row)? {
-                    signals_received += 1;
-                }
+                recv_signals.push(row);
             }
             Msg::SignalsDone { sent } => {
                 log::info!(
-                    "[sync] Server: client sent {sent} signals, we received {signals_received} new"
+                    "[sync] Server: client sent {sent} signals, we received {} new",
+                    recv_signals.len()
                 );
                 break;
             }
             other => return Err(format!("Unexpected msg in signals recv: {other:?}")),
         }
-        if signals_received > need_signals_by_me.len() + 10_000 {
+        if recv_signals.len() > need_signals_by_me.len() + 10_000 {
             return Err("Received more signals than expected".into());
         }
     }
@@ -1498,7 +1482,7 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
         &mut stream,
         &key,
         &Msg::SignalsAck {
-            recv: signals_received,
+            recv: recv_signals.len(),
         },
     )?;
 
@@ -1537,7 +1521,7 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
         },
     )?;
 
-    let mut settings_received = 0usize;
+    let mut recv_settings: Vec<(String, String, String)> = Vec::new();
     loop {
         match read_msg_enc(&mut stream, &key)? {
             Msg::Setting {
@@ -1545,21 +1529,15 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
                 value: v,
                 updated_at: ua,
             } => {
-                let db = app
-                    .try_state::<Database>()
-                    .ok_or_else(|| "No DB state".to_string())?;
-                let conn = db.conn.lock().map_err(|e| e.to_string())?;
-                if db_upsert_setting(&conn, &k, &v, &ua)? {
-                    settings_received += 1;
-                }
+                recv_settings.push((k, v, ua));
             }
             Msg::SettingsDone { sent } => {
-                log::info!("[sync] Server: client sent {sent} settings, we received {settings_received} updated");
+                log::info!("[sync] Server: client sent {sent} settings, we received {} updated", recv_settings.len());
                 break;
             }
             other => return Err(format!("Unexpected msg in settings recv: {other:?}")),
         }
-        if settings_received > need_settings_by_me.len() + 100 {
+        if recv_settings.len() > need_settings_by_me.len() + 100 {
             return Err("Received more settings than expected".into());
         }
     }
@@ -1567,9 +1545,46 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
         &mut stream,
         &key,
         &Msg::SettingsAck {
-            recv: settings_received,
+            recv: recv_settings.len(),
         },
     )?;
+
+    // Apply all received data in one atomic transaction — TCP drop before COMMIT
+    // leaves the DB untouched; partial state is impossible.
+    {
+        let db = app
+            .try_state::<Database>()
+            .ok_or_else(|| "No DB state".to_string())?;
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        conn.execute_batch("BEGIN IMMEDIATE")
+            .map_err(|e| format!("sync tx begin: {e}"))?;
+        let result: Result<(), String> = (|| {
+            for row in &recv_entries {
+                db_upsert_entry(&conn, row)?;
+            }
+            for row in &recv_books {
+                db_upsert_book(&conn, row)?;
+            }
+            for row in &recv_signals {
+                db_insert_signal_if_new(&conn, row)?;
+            }
+            for (k, v, ua) in &recv_settings {
+                db_upsert_setting(&conn, k, v, ua)?;
+            }
+            Ok(())
+        })();
+        if let Err(e) = result {
+            let _ = conn.execute_batch("ROLLBACK");
+            return Err(e);
+        }
+        conn.execute_batch("COMMIT")
+            .map_err(|e| format!("sync tx commit: {e}"))?;
+    }
+
+    let entries_received = recv_entries.len();
+    let books_received = recv_books.len();
+    let signals_received = recv_signals.len();
+    let settings_received = recv_settings.len();
 
     // Close write-half cleanly — all phases complete.
     let _ = stream.shutdown(std::net::Shutdown::Write);
@@ -1890,29 +1905,24 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
 
     // ── Entry phase ──────────────────────────────────────────────────────────
 
-    // Step 6: Receive entries from server until DONE
-    let mut entries_received = 0usize;
+    // Step 6: Receive entries from server until DONE — collect, don't upsert yet
+    let mut recv_entries: Vec<JournalEntryRow> = Vec::new();
     loop {
         let msg = read_msg_enc(&mut stream, &key)?;
         match msg {
             Msg::Entry { row } => {
-                let db = app
-                    .try_state::<Database>()
-                    .ok_or_else(|| "No DB state".to_string())?;
-                let conn = db.conn.lock().map_err(|e| e.to_string())?;
-                if db_upsert_entry(&conn, &row)? {
-                    entries_received += 1;
-                }
+                recv_entries.push(row);
             }
             Msg::Done { sent } => {
                 log::info!(
-                    "[sync] Client: server sent {sent} entries, we received {entries_received} new"
+                    "[sync] Client: server sent {sent} entries, we received {} new",
+                    recv_entries.len()
                 );
                 break;
             }
             other => return Err(format!("Unexpected msg in entry recv: {other:?}")),
         }
-        if entries_received > need_entries_by_me.len() + 1000 {
+        if recv_entries.len() > need_entries_by_me.len() + 1000 {
             return Err("Received more entries than expected".into());
         }
     }
@@ -1941,26 +1951,20 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
 
     // ── Books phase ──────────────────────────────────────────────────────────
 
-    // Receive books from server
-    let mut books_received = 0usize;
+    // Receive books from server — collect, don't upsert yet
+    let mut recv_books: Vec<SyncBookRow> = Vec::new();
     loop {
         match read_msg_enc(&mut stream, &key)? {
             Msg::Book { row } => {
-                let db = app
-                    .try_state::<Database>()
-                    .ok_or_else(|| "No DB state".to_string())?;
-                let conn = db.conn.lock().map_err(|e| e.to_string())?;
-                if db_upsert_book(&conn, &row)? {
-                    books_received += 1;
-                }
+                recv_books.push(row);
             }
             Msg::BooksDone { sent } => {
-                log::info!("[sync] Client: server sent {sent} books, we received {books_received} new/updated");
+                log::info!("[sync] Client: server sent {sent} books, we received {} new/updated", recv_books.len());
                 break;
             }
             other => return Err(format!("Unexpected msg in books recv: {other:?}")),
         }
-        if books_received > need_books_by_me.len() + 500 {
+        if recv_books.len() > need_books_by_me.len() + 500 {
             return Err("Received more books than expected".into());
         }
     }
@@ -1988,28 +1992,23 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
 
     // ── Signals phase ────────────────────────────────────────────────────────
 
-    // Receive signals from server
-    let mut signals_received = 0usize;
+    // Receive signals from server — collect, don't upsert yet
+    let mut recv_signals: Vec<SyncSignalRow> = Vec::new();
     loop {
         match read_msg_enc(&mut stream, &key)? {
             Msg::Signal { row } => {
-                let db = app
-                    .try_state::<Database>()
-                    .ok_or_else(|| "No DB state".to_string())?;
-                let conn = db.conn.lock().map_err(|e| e.to_string())?;
-                if db_insert_signal_if_new(&conn, &row)? {
-                    signals_received += 1;
-                }
+                recv_signals.push(row);
             }
             Msg::SignalsDone { sent } => {
                 log::info!(
-                    "[sync] Client: server sent {sent} signals, we received {signals_received} new"
+                    "[sync] Client: server sent {sent} signals, we received {} new",
+                    recv_signals.len()
                 );
                 break;
             }
             other => return Err(format!("Unexpected msg in signals recv: {other:?}")),
         }
-        if signals_received > need_signals_by_me.len() + 10_000 {
+        if recv_signals.len() > need_signals_by_me.len() + 10_000 {
             return Err("Received more signals than expected".into());
         }
     }
@@ -2037,8 +2036,8 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
 
     // ── Settings phase ───────────────────────────────────────────────────────
 
-    // Receive settings from server
-    let mut settings_received = 0usize;
+    // Receive settings from server — collect, don't upsert yet
+    let mut recv_settings: Vec<(String, String, String)> = Vec::new();
     loop {
         match read_msg_enc(&mut stream, &key)? {
             Msg::Setting {
@@ -2046,21 +2045,15 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
                 value: v,
                 updated_at: ua,
             } => {
-                let db = app
-                    .try_state::<Database>()
-                    .ok_or_else(|| "No DB state".to_string())?;
-                let conn = db.conn.lock().map_err(|e| e.to_string())?;
-                if db_upsert_setting(&conn, &k, &v, &ua)? {
-                    settings_received += 1;
-                }
+                recv_settings.push((k, v, ua));
             }
             Msg::SettingsDone { sent } => {
-                log::info!("[sync] Client: server sent {sent} settings, we received {settings_received} updated");
+                log::info!("[sync] Client: server sent {sent} settings, we received {} updated", recv_settings.len());
                 break;
             }
             other => return Err(format!("Unexpected msg in settings recv: {other:?}")),
         }
-        if settings_received > need_settings_by_me.len() + 100 {
+        if recv_settings.len() > need_settings_by_me.len() + 100 {
             return Err("Received more settings than expected".into());
         }
     }
@@ -2118,6 +2111,43 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
 
     // Close both halves promptly.
     let _ = stream.shutdown(std::net::Shutdown::Both);
+
+    // Apply all received data in one atomic transaction — TCP drop before COMMIT
+    // leaves the DB untouched; partial state is impossible.
+    {
+        let db = app
+            .try_state::<Database>()
+            .ok_or_else(|| "No DB state".to_string())?;
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        conn.execute_batch("BEGIN IMMEDIATE")
+            .map_err(|e| format!("sync tx begin: {e}"))?;
+        let result: Result<(), String> = (|| {
+            for row in &recv_entries {
+                db_upsert_entry(&conn, row)?;
+            }
+            for row in &recv_books {
+                db_upsert_book(&conn, row)?;
+            }
+            for row in &recv_signals {
+                db_insert_signal_if_new(&conn, row)?;
+            }
+            for (k, v, ua) in &recv_settings {
+                db_upsert_setting(&conn, k, v, ua)?;
+            }
+            Ok(())
+        })();
+        if let Err(e) = result {
+            let _ = conn.execute_batch("ROLLBACK");
+            return Err(e);
+        }
+        conn.execute_batch("COMMIT")
+            .map_err(|e| format!("sync tx commit: {e}"))?;
+    }
+
+    let entries_received = recv_entries.len();
+    let books_received = recv_books.len();
+    let signals_received = recv_signals.len();
+    let settings_received = recv_settings.len();
 
     // ── Finalise ─────────────────────────────────────────────────────────────
 

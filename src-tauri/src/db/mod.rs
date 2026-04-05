@@ -1959,6 +1959,8 @@ pub fn delete_voice_memo(db: &Database, id: &str) -> Result<(), String> {
 }
 
 /// Patch the transcription text for a voice memo.
+/// On first write (raw_transcription IS NULL), also populates raw_transcription
+/// so the original whisper output is preserved even if transcription is later edited.
 pub fn patch_voice_memo_transcription(
     db: &Database,
     id: &str,
@@ -1967,7 +1969,10 @@ pub fn patch_voice_memo_transcription(
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
     conn.execute(
-        "UPDATE voice_memos SET transcription = ?1 WHERE id = ?2",
+        "UPDATE voice_memos
+         SET transcription = ?1,
+             raw_transcription = CASE WHEN raw_transcription IS NULL THEN ?1 ELSE raw_transcription END
+         WHERE id = ?2",
         params![transcription, id],
     )
     .map_err(|e| format!("Failed to patch transcription: {}", e))?;

@@ -36,13 +36,13 @@ describe('dataManagementService encryption', () => {
       expect(parsed.payload).toEqual(fakeEncryptedData);
     });
 
-    it('calls export_data with empty password and no filter', async () => {
+    it('calls export_data with no filter', async () => {
       mockInvoke.mockResolvedValueOnce('dGVzdA==');
       mockEncrypt.mockResolvedValueOnce({ success: true, data: fakeEncryptedData });
 
       await encryptedExport('my-password');
 
-      expect(mockInvoke).toHaveBeenCalledWith('export_data', { password: '', filter: null });
+      expect(mockInvoke).toHaveBeenCalledWith('export_data', { filter: null });
     });
 
     it('encrypts the base64 data with the provided password', async () => {
@@ -66,10 +66,9 @@ describe('dataManagementService encryption', () => {
     it('G2-1: passes tags + moodRange filter params to invoke', async () => {
       mockInvoke.mockResolvedValueOnce('base64result');
 
-      await exportData('pw', { tags: ['work'], moodMin: 1, moodMax: 3 });
+      await exportData({ tags: ['work'], moodMin: 1, moodMax: 3 });
 
       expect(mockInvoke).toHaveBeenCalledWith('export_data', {
-        password: 'pw',
         filter: { tags: ['work'], moodMin: 1, moodMax: 3 },
       });
     });
@@ -77,10 +76,9 @@ describe('dataManagementService encryption', () => {
     it('G2-2: exportData() with no filters passes filter: null — WebDAV regression', async () => {
       mockInvoke.mockResolvedValueOnce('base64result');
 
-      await exportData('');
+      await exportData();
 
       expect(mockInvoke).toHaveBeenCalledWith('export_data', {
-        password: '',
         filter: null,
       });
     });
@@ -105,7 +103,6 @@ describe('dataManagementService encryption', () => {
       expect(mockDecrypt).toHaveBeenCalledWith(fakeEncryptedData, 'test-password');
       expect(mockInvoke).toHaveBeenCalledWith('import_data', {
         data: 'decrypted-base64-data',
-        password: '',
       });
     });
 
@@ -135,7 +132,6 @@ describe('dataManagementService encryption', () => {
       expect(mockDecrypt).not.toHaveBeenCalled();
       expect(mockInvoke).toHaveBeenCalledWith('import_data', {
         data: legacyBase64,
-        password: '',
       });
     });
 
@@ -149,7 +145,6 @@ describe('dataManagementService encryption', () => {
       expect(mockDecrypt).not.toHaveBeenCalled();
       expect(mockInvoke).toHaveBeenCalledWith('import_data', {
         data: legacyJson,
-        password: '',
       });
     });
   });

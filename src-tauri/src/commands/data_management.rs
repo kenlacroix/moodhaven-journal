@@ -179,9 +179,10 @@ pub async fn factory_reset(app: AppHandle, lock: State<'_, AppLockState>) -> Res
 #[tauri::command]
 pub async fn export_data(
     app: AppHandle,
-    _password: String,
     filter: Option<ExportFilter>,
 ) -> Result<String, String> {
+    let lock = app.state::<AppLockState>();
+    require_unlocked(&lock)?;
     let db = app.state::<Database>();
 
     // Flush any pending WAL frames before reading, so the export is consistent
@@ -348,7 +349,9 @@ pub async fn export_data(
 
 /// Import entries from backup file
 #[tauri::command]
-pub async fn import_data(app: AppHandle, data: String, _password: String) -> Result<i32, String> {
+pub async fn import_data(app: AppHandle, data: String) -> Result<i32, String> {
+    let lock = app.state::<AppLockState>();
+    require_unlocked(&lock)?;
     let db = app.state::<Database>();
 
     use base64::{engine::general_purpose, Engine as _};

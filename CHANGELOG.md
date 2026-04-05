@@ -7,6 +7,21 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [website-0.2.0] — 2026-04-05
+
+### Added (website)
+- **`/download` page.** OS-aware CTA detects Windows/macOS/Linux and surfaces the right installer. Falls back to a GitHub releases link when no build is available for the detected platform. Full platform grid below the fold covers all six supported targets.
+- **`/about` page.** Product-focused about page covering the privacy-first mission, zero-knowledge architecture, and open-source model. `/founders` redirects here.
+- **`/faq` page.** Technical FAQ accordion (12 questions) covering encryption, sync, AI, and offline use.
+- **Three-column footer.** Product / Resources / Community link grid with `FooterColumns` component.
+- **`sitemap.xml`.** Covers all public pages for search indexing.
+
+### Fixed (website)
+- **WCAG AA contrast.** Three `text-neutral-400` instances replaced with `text-neutral-500` (contrast 4.6:1, passing AA) in footer headings, copyright, and download page iOS tile sublabel.
+- **Missing `metadataBase`.** Added `metadataBase: new URL("https://www.moodhaven.app")` to layout metadata — fixes broken OG/Twitter image resolution in production.
+
+---
+
 ## [0.8.0] — 2026-04-04
 
 ### Added

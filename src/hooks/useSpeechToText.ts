@@ -194,6 +194,8 @@ export function useSpeechToText(): UseSpeechToTextResult {
       setIsFormatting(false);
       if (err instanceof Error && err.message === 'CONSENT_REQUIRED') {
         setTranscribeError('Cloud formatting requires consent. Enable it in Settings → Speech to Text.');
+      } else if (err instanceof Error && err.message === 'INVALID_KEY') {
+        setTranscribeError('OpenAI key is invalid or revoked. Update it in Settings → Speech to Text.');
       }
       // Fall back to raw on any error
       return rawText;

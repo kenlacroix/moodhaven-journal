@@ -738,8 +738,7 @@ export async function formatTranscript(
     clearTimeout(timeoutId);
 
     if (response.status === 401) {
-      // Bad key — fall back to L1 silently
-      return { formatted: cleanTranscript(text), source: 'local' };
+      throw new Error('INVALID_KEY');
     }
 
     if (!response.ok) {

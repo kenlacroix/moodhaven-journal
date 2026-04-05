@@ -7,6 +7,14 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [Unreleased] — tooling
+
+### Added
+- **Automated pentest harness** (`scripts/pentest.sh`). Six-phase local security scan: static analysis (cargo-audit, npm audit, semgrep), DAST (OWASP ZAP + ffuf with dynamic Vite port detection), IPC fuzzer (119 Tauri commands, 1 558 cases via Playwright browser-invoke shim), AES-256-GCM crypto oracle prober, peer sync TCP fuzzer, and finding aggregator. Results written to `pentest-results/YYYYMMDD_HHMMSS/` as JSON + Markdown. Each tool is skipped gracefully with install hint when not present. Sync fuzzer uses concurrent port scanning (100 workers) across the full 44 000–44 999 range and validates that a port speaks the MoodHaven protocol before fuzzing it.
+- **Daily/weekly remote security scan** (`trig_01BqvwYxK23odvmEhfuQqWhm`). Scheduled Claude Code remote agent: cargo-audit + npm audit daily at 08:00 Boise, semgrep static analysis added on Mondays. Opens a GitHub issue labelled `security` only on HIGH/CRITICAL findings; deduplicates to avoid re-opening issues for the same day.
+
+### Fixed
+- **`UpdatePanel.tsx` semgrep false positive.** Added `nosemgrep` suppression with inline justification on the `dangerouslySetInnerHTML` usage in the release-notes renderer. The `renderMarkdown` function HTML-escapes all input before substitution; source is developer-controlled GitHub release notes.
 ## [0.8.2] — 2026-04-04
 
 ### Security

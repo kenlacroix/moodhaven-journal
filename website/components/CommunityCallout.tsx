@@ -1,0 +1,73 @@
+"use client";
+
+import { useState } from "react";
+import Link from "next/link";
+import AnimatedReveal from "./AnimatedReveal";
+
+export default function CommunityCallout() {
+  const [badgeFailed, setBadgeFailed] = useState(false);
+
+  return (
+    <section className="bg-[var(--background)] px-4 py-14">
+      <AnimatedReveal>
+        <div className="max-w-3xl mx-auto bg-white/90 rounded-2xl px-8 py-10 text-center shadow-sm ring-1 ring-neutral-200">
+          <h2 className="text-xl font-bold text-neutral-900 mb-3">
+            MoodHaven is open source
+          </h2>
+
+          <div className="flex justify-center mb-4" aria-label="GitHub repository stars">
+            {badgeFailed ? (
+              <span className="text-sm text-neutral-500">Open source on GitHub</span>
+            ) : (
+              <img
+                src="https://img.shields.io/github/stars/kenlacroix/moodhaven-journal?style=social"
+                alt="GitHub stars count"
+                onError={() => setBadgeFailed(true)}
+                className="h-5"
+              />
+            )}
+          </div>
+
+          <p className="text-sm text-neutral-600 mb-8 max-w-sm mx-auto leading-relaxed">
+            Built in public. Every line of code visible to you. MIT licensed.
+          </p>
+
+          <div className="flex flex-wrap justify-center gap-3">
+            <a
+              href="https://github.com/kenlacroix/moodhaven-journal"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-full bg-neutral-900 text-white px-5 py-2.5 text-sm font-medium hover:bg-neutral-700 transition duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/60"
+            >
+              View on GitHub <span aria-hidden="true">↗</span>
+            </a>
+            <Link
+              href="/contribute"
+              className="rounded-full bg-white text-neutral-900 px-5 py-2.5 text-sm font-medium border border-neutral-300 hover:bg-neutral-50 transition duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-300"
+            >
+              How to Contribute
+            </Link>
+            <Link
+              href="/blog"
+              className="rounded-full bg-white text-neutral-900 px-5 py-2.5 text-sm font-medium border border-neutral-300 hover:bg-neutral-50 transition duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-300"
+            >
+              Read the Blog
+            </Link>
+          </div>
+
+          <p className="mt-6 text-xs text-neutral-400">
+            View all articles on{" "}
+            <a
+              href="https://moodhaven.substack.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline hover:text-neutral-600"
+            >
+              Substack <span aria-hidden="true">→</span>
+            </a>
+          </p>
+        </div>
+      </AnimatedReveal>
+    </section>
+  );
+}

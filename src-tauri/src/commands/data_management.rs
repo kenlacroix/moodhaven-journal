@@ -3,9 +3,34 @@
 //! Provides factory reset, export, and import functionality.
 
 use std::fs;
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Manager, State};
 
 use crate::db::{self, Database};
+use crate::AppLockState;
+
+/// Mark the session as unlocked. Called by the frontend after successful
+/// password verification. Sensitive commands gate on this state.
+#[tauri::command]
+pub fn unlock_app(lock: State<'_, AppLockState>) -> Result<(), String> {
+    *lock.0.lock().map_err(|e| e.to_string())? = false;
+    Ok(())
+}
+
+/// Mark the session as locked. Called by the frontend on manual lock or app exit.
+#[tauri::command]
+pub fn lock_app(lock: State<'_, AppLockState>) -> Result<(), String> {
+    *lock.0.lock().map_err(|e| e.to_string())? = true;
+    Ok(())
+}
+
+/// Helper used by guarded commands — returns Err if the session is locked.
+fn require_unlocked(lock: &State<'_, AppLockState>) -> Result<(), String> {
+    if lock.is_locked() {
+        Err("Session is locked".to_string())
+    } else {
+        Ok(())
+    }
+}
 
 /// Optional filters for selective export.
 /// All fields are optional; absent means "no filter" (export all).
@@ -93,7 +118,8 @@ pub fn exit_app() {
 
 /// Factory reset - wipe all app data and return to first-run state
 #[tauri::command]
-pub async fn factory_reset(app: AppHandle) -> Result<bool, String> {
+pub async fn factory_reset(app: AppHandle, lock: State<'_, AppLockState>) -> Result<bool, String> {
+    require_unlocked(&lock)?;
     // Get database path
     let db_path = db::get_db_path(&app)?;
 
@@ -535,11 +561,63 @@ pub async fn import_data(app: AppHandle, data: String, _password: String) -> Res
     Ok(imported_count)
 }
 
+/// Blocked path prefixes — never allow writing to these locations even if the
+/// parent directory exists. This defends against XSS → IPC write-primitive abuse.
+const BLOCKED_PREFIXES: &[&str] = &[
+    ".ssh",
+    ".bashrc",
+    ".bash_profile",
+    ".zshrc",
+    ".profile",
+    ".config/autostart",
+    ".config/systemd",
+    "/etc/",
+    "/usr/",
+    "/bin/",
+    "/sbin/",
+    "/lib",
+];
+
 /// Write text to a file and verify it was written correctly.
 /// Used instead of the FS plugin which has scope restrictions on user-selected paths.
+/// Rejects paths that traverse into sensitive system or shell-config locations.
 #[tauri::command]
-pub async fn write_text_file(path: String, contents: String) -> Result<u64, String> {
+pub async fn write_text_file(
+    path: String,
+    contents: String,
+    lock: State<'_, AppLockState>,
+) -> Result<u64, String> {
+    require_unlocked(&lock)?;
     let file_path = std::path::Path::new(&path);
+
+    // Resolve to an absolute, canonical path (resolves `..` components).
+    // If the file doesn't exist yet, canonicalize the parent instead.
+    let canonical = if file_path.exists() {
+        file_path
+            .canonicalize()
+            .map_err(|e| format!("Cannot resolve path: {}", e))?
+    } else if let Some(parent) = file_path.parent() {
+        let canonical_parent = parent
+            .canonicalize()
+            .map_err(|_| format!("Directory does not exist: {}", parent.display()))?;
+        canonical_parent.join(file_path.file_name().ok_or("Invalid filename")?)
+    } else {
+        return Err("Invalid path".to_string());
+    };
+
+    let canonical_str = canonical.to_string_lossy().to_lowercase();
+
+    // Block writes to sensitive system and shell-config paths.
+    for blocked in BLOCKED_PREFIXES {
+        if canonical_str.contains(blocked) {
+            return Err(format!(
+                "Writing to '{}' is not permitted",
+                canonical.display()
+            ));
+        }
+    }
+
+    let file_path = canonical.as_path();
 
     // Ensure parent directory exists
     if let Some(parent) = file_path.parent() {

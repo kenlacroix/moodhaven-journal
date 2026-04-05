@@ -4,7 +4,16 @@
 //! Backend only stores/retrieves encrypted blobs.
 
 use crate::db::{self, Database, EncryptedContent, JournalEntryRow, UserSettings};
+use crate::AppLockState;
 use tauri::State;
+
+fn require_unlocked(lock: &State<'_, AppLockState>) -> Result<(), String> {
+    if lock.is_locked() {
+        Err("Session is locked".to_string())
+    } else {
+        Ok(())
+    }
+}
 
 /// Check if user has set up their password
 #[tauri::command]
@@ -68,9 +77,11 @@ pub fn get_journal_entry(
 /// Get all journal entries (encrypted)
 #[tauri::command]
 pub fn get_all_journal_entries(
-    db: State<Database>,
+    db: State<'_, Database>,
+    lock: State<'_, AppLockState>,
     limit: Option<i32>,
 ) -> Result<Vec<JournalEntryRow>, String> {
+    require_unlocked(&lock)?;
     db::get_all_entries(&db, limit)
 }
 

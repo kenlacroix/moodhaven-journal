@@ -61,13 +61,39 @@ function generateRandomBytes(length: number): Uint8Array {
   return crypto.getRandomValues(new Uint8Array(length));
 }
 
-// Session-scoped key cache: salt (base64) → derived CryptoKey
-// Avoids re-running 600k PBKDF2 iterations for the same entry within a session.
+// Session-scoped key cache: `salt:passwordHash` → derived CryptoKey
+// Avoids re-running 600k PBKDF2 iterations for the same (password, salt) pair.
 // Cleared on lockJournal() via clearKeyCache().
+// The cache key uses a fast djb2 hash of the password rather than the plaintext
+// password string, so the plaintext is not retained as a Map key in the JS heap.
 const sessionKeyCache = new Map<string, CryptoKey>();
+
+/** djb2 hash — fast, synchronous, avoids storing plaintext password in the Map key. */
+function djb2Hash(s: string): number {
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) {
+    h = (((h << 5) + h) + s.charCodeAt(i)) | 0;
+  }
+  return h >>> 0; // unsigned 32-bit
+}
 
 export function clearKeyCache(): void {
   sessionKeyCache.clear();
+}
+
+/**
+ * Constant-time string comparison to prevent timing-based hash oracle attacks.
+ * Returns true only if a and b are equal in length and content.
+ */
+function timingSafeEqual(a: string, b: string): boolean {
+  const ab = new TextEncoder().encode(a);
+  const bb = new TextEncoder().encode(b);
+  if (ab.length !== bb.length) return false;
+  let diff = 0;
+  for (let i = 0; i < ab.length; i++) {
+    diff |= ab[i] ^ bb[i];
+  }
+  return diff === 0;
 }
 
 /**
@@ -78,7 +104,7 @@ async function deriveKey(
   password: string,
   salt: Uint8Array
 ): Promise<CryptoKey> {
-  const saltKey = `${bufferToBase64(salt.buffer as ArrayBuffer)}:${password}`;
+  const saltKey = `${bufferToBase64(salt.buffer as ArrayBuffer)}:${djb2Hash(password)}`;
   const cached = sessionKeyCache.get(saltKey);
   if (cached) return cached;
 
@@ -269,5 +295,5 @@ export async function verifyPasswordHash(
 ): Promise<boolean> {
   const salt = new Uint8Array(base64ToBuffer(storedSalt));
   const { hash } = await hashPassword(password, salt);
-  return hash === storedHash;
+  return timingSafeEqual(hash, storedHash);
 }

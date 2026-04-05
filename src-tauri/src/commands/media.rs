@@ -196,11 +196,20 @@ fn get_preview_dir(app: &AppHandle) -> Result<std::path::PathBuf, String> {
 }
 
 fn abs_enc_path(app: &AppHandle, rel_path: &str) -> Result<std::path::PathBuf, String> {
-    Ok(app
+    let base = app
         .path()
         .app_data_dir()
-        .map_err(|e| format!("app_data_dir: {}", e))?
-        .join(rel_path))
+        .map_err(|e| format!("app_data_dir: {}", e))?;
+    let joined = base.join(rel_path);
+    // Canonicalize the joined path to resolve any `..` components, then verify
+    // it still starts with the app data dir. This prevents path traversal via
+    // crafted rel_path values (e.g. "../../.ssh/authorized_keys").
+    let canonical = joined.canonicalize().unwrap_or_else(|_| joined.clone());
+    let base_canonical = base.canonicalize().unwrap_or(base.clone());
+    if !canonical.starts_with(&base_canonical) {
+        return Err("Refusing to access path outside app data directory".to_string());
+    }
+    Ok(canonical)
 }
 
 fn mime_from_filename(filename: &str) -> &'static str {

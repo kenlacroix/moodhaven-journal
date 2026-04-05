@@ -107,6 +107,10 @@ export async function unlockJournal(password: string): Promise<boolean> {
 
   if (isValid) {
     sessionPassword = password;
+    // Notify Rust backend so sensitive commands become callable.
+    await (invoke('unlock_app') as Promise<void> | undefined)?.catch(() => {
+      // Non-fatal: desktop-only command, not available in browser mode.
+    });
     return true;
   }
 
@@ -119,6 +123,10 @@ export async function unlockJournal(password: string): Promise<boolean> {
 export function lockJournal(): void {
   sessionPassword = null;
   clearKeyCache();
+  // Notify Rust backend — sensitive commands will reject until next unlock.
+  (invoke('lock_app') as Promise<void> | undefined)?.catch(() => {
+    // Non-fatal: browser mode / test environment.
+  });
 }
 
 /** Dev-only: set session password without DB verification. Never call in production. */

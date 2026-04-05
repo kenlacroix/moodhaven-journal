@@ -371,8 +371,15 @@ fn run_pairing_server(
                     }),
                 );
 
-                // Constant-time PIN comparison (short strings, good enough)
-                if req.pin != expected_pin {
+                // Constant-time PIN comparison — prevents timing-based PIN oracle.
+                let pin_match = req.pin.len() == expected_pin.len()
+                    && req
+                        .pin
+                        .bytes()
+                        .zip(expected_pin.bytes())
+                        .fold(0u8, |acc, (a, b)| acc | (a ^ b))
+                        == 0;
+                if !pin_match {
                     failed_attempts += 1;
                     let remaining = MAX_PIN_ATTEMPTS.saturating_sub(failed_attempts);
                     log::warn!(

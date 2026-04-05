@@ -5,6 +5,23 @@
 pub mod commands;
 pub mod db;
 
+use std::sync::Mutex;
+
+/// Tracks whether the user has authenticated this session.
+/// Starts locked (true). Set to false by `unlock_app` after the frontend
+/// verifies the password. Resets to true on `lock_app`.
+/// Sensitive Tauri commands check this state before executing.
+pub struct AppLockState(pub Mutex<bool>);
+
+impl AppLockState {
+    pub fn new() -> Self {
+        AppLockState(Mutex::new(true))
+    }
+    pub fn is_locked(&self) -> bool {
+        *self.0.lock().unwrap_or_else(|e| e.into_inner())
+    }
+}
+
 use commands::peer_discovery::PeerDiscoveryState;
 use commands::peer_pairing::PairingServerState;
 use commands::peer_sync_engine::SyncEngineState;
@@ -99,6 +116,9 @@ pub fn run() {
                 log::set_max_level(filter);
             }
 
+            // Session lock state — starts locked, set to unlocked after auth
+            app.manage(AppLockState::new());
+
             // One-shot session bridge for breakout writer password hand-off
             app.manage(SessionBridge::new());
 
@@ -164,6 +184,9 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            // Session lock / unlock (set by frontend after auth, checked by sensitive commands)
+            commands::unlock_app,
+            commands::lock_app,
             // Password management
             commands::check_password_exists,
             commands::store_password_hash,

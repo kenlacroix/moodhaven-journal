@@ -56,14 +56,29 @@ pub fn seal_entry(
 pub fn get_due_capsules(
     db: State<Database>,
     include_anniversary: bool,
+    local_date: Option<String>,
 ) -> Result<Option<JournalEntryRow>, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
+    // Use the caller-supplied local date (YYYY-MM-DD) so comparisons match the
+    // user's wall-clock date rather than the UTC date from SQLite's 'now'.
+    // Falls back to SQLite 'now' if not provided.
+    let today_expr = match &local_date {
+        Some(d) if !d.is_empty() => format!("date('{}')", d.replace('\'', "")),
+        _ => "date('now')".to_string(),
+    };
+    let now_expr = match &local_date {
+        Some(d) if !d.is_empty() => format!("datetime('{} 23:59:59')", d.replace('\'', "")),
+        _ => "datetime('now')".to_string(),
+    };
+
     let anniversary_clause = if include_anniversary {
-        "OR (je.sealed_until IS NULL AND je.capsule_type IS NULL
-             AND date(je.created_at) <= date('now', '-365 days'))"
+        format!(
+            "OR (je.sealed_until IS NULL AND je.capsule_type IS NULL
+             AND date(je.created_at) <= date({today_expr}, '-365 days'))"
+        )
     } else {
-        ""
+        String::new()
     };
 
     let sql = format!(
@@ -76,10 +91,10 @@ pub fn get_due_capsules(
          LEFT JOIN tags t ON t.id = et.tag_id
          WHERE je.unsealed_at IS NULL
            AND (
-             (je.sealed_until IS NOT NULL AND datetime(je.sealed_until) <= datetime('now'))
+             (je.sealed_until IS NOT NULL AND datetime(je.sealed_until) <= {now_expr})
              {anniversary_clause}
            )
-           AND NOT (strftime('%m-%d', je.created_at) = strftime('%m-%d', 'now'))
+           AND NOT (strftime('%m-%d', je.created_at) = strftime('%m-%d', {today_expr}))
          GROUP BY je.id
          ORDER BY
            CASE WHEN je.sealed_until IS NOT NULL THEN 0 ELSE 1 END,

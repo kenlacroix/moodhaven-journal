@@ -42,7 +42,10 @@ export async function sealEntry(
  * Entries that are today's On-This-Day anniversary are excluded.
  */
 export async function getDueCapsules(includeAnniversary = true): Promise<CapsuleEntryRow | null> {
-  return invoke('get_due_capsules', { includeAnniversary });
+  // Pass the local wall-clock date (YYYY-MM-DD) so the Rust command compares
+  // against the user's timezone rather than UTC ('now' in SQLite).
+  const localDate = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
+  return invoke('get_due_capsules', { includeAnniversary, localDate });
 }
 
 /**

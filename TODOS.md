@@ -244,6 +244,7 @@ wearApp(project(":wear"))
 ### WP-001: LAN sync bridge daemon (Phase 2)
 **What:** Small native binary that runs on the user's machine, exposes a WebSocket, bridges mDNS discovery and TCP sync to the browser. Allows the browser version to participate in LAN sync.
 **Why:** Browser has no raw TCP or mDNS access. Bridge daemon is the least-bad option for preserving the zero-knowledge LAN sync model in a browser context.
+**Security requirements:** Must bind loopback-only (127.0.0.1, not 0.0.0.0). Must validate `Origin` header on every WebSocket handshake (CSWSH defense). Must require client auth token (generated at daemon start, passed to browser via URL param). Malicious websites can reach `ws://localhost:<port>` without these defenses.
 **Context:** Deferred from web port plan (2026-04-04). Phase 1 ships without sync. Validate demand first.
 **Effort:** human ~2w / CC+gstack ~4h
 
@@ -255,7 +256,7 @@ wearApp(project(":wear"))
 
 ### WP-003: Delta WebDAV sync (Phase 2)
 **What:** Replace full-snapshot upload with delta format (only changed entries since last sync). Currently cloudSyncService.ts uploads a complete re-encryption of all entries on every save. For 1000+ entries this is slow.
-**Why:** Performance concern flagged in web port eng review. Acceptable for Phase 1 but needs fixing before wide launch.
+**Why:** Two P0 blockers flagged in web port eng review: (1) concurrent desktop+browser writes without ETag/If-Match will silently destroy data; (2) browser `fetch()` to WebDAV is blocked by CORS on most self-hosted servers. Phase 1 must document CORS requirements and add ETag conditional PUT before launch. The full-snapshot performance issue (slow at 1000+ entries) is the Phase 2 motivator for the delta format.
 **Context:** Deferred from web port plan (2026-04-04). Needs protocol design (snapshot header + delta manifest).
 **Effort:** human ~1w / CC+gstack ~2h
 

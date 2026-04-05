@@ -334,7 +334,7 @@ export default function DownloadClient({ release }: { release: LatestRelease | n
                 <AppleIcon className={`${iconClass} text-slate-400 mt-1`} />
                 <div>
                   <p className="text-sm font-semibold text-neutral-400">iOS</p>
-                  <p className="text-[11px] text-neutral-400 mt-0.5">iPhone / iPad</p>
+                  <p className="text-[11px] text-neutral-500 mt-0.5">iPhone / iPad</p>
                 </div>
                 <a
                   href="https://journal.moodhaven.app"

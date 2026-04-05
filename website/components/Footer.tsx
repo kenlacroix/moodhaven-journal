@@ -65,7 +65,7 @@ export default function Footer() {
 
         {/* Copyright */}
         <AnimatedReveal delay={0.4}>
-          <small className="block text-xs text-neutral-400 text-center tracking-wide">
+          <small className="block text-xs text-neutral-500 text-center tracking-wide">
             © {currentYear} MoodHaven Journal. Open source, privacy-first journaling.{" "}
             Built by{" "}
             <Link

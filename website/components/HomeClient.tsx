@@ -63,9 +63,7 @@ export default function HomeClient({ posts }: Props) {
           </p>
           <div className="flex flex-col sm:flex-row justify-center gap-4 pt-6">
             <a
-              href="https://github.com/kenlacroix/moodhaven-journal/releases/latest"
-              target="_blank"
-              rel="noopener noreferrer"
+              href="/download"
               className="w-full sm:w-auto text-center rounded-full bg-accent-cta text-neutral-900 px-6 py-4 text-sm font-semibold shadow transition-all duration-200 ease-out hover:bg-accent-cta/90 hover:scale-105 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-cta/60"
             >
               Download Desktop App

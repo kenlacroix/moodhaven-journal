@@ -694,7 +694,25 @@ export async function formatTranscript(
         throw new Error(`Ollama returned ${response.status}`);
       }
 
-      const data = await response.json() as { response: string };
+      const MAX_BYTES = 1_048_576; // 1 MB
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error('No response body');
+      const chunks: Uint8Array[] = [];
+      let received = 0;
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done || !value) break;
+        if (received + value.byteLength > MAX_BYTES) {
+          await reader.cancel();
+          throw new Error('Ollama response exceeded 1 MB size limit');
+        }
+        received += value.byteLength;
+        chunks.push(value);
+      }
+      const body = new TextDecoder().decode(
+        chunks.reduce((acc, c) => { const merged = new Uint8Array(acc.length + c.length); merged.set(acc); merged.set(c, acc.length); return merged; }, new Uint8Array(0))
+      );
+      const data = JSON.parse(body) as { response: string };
       return { formatted: data.response.trim(), source: 'ollama' };
     } catch {
       clearTimeout(ollamaTimeoutId);

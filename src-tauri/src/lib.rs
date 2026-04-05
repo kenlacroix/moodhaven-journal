@@ -234,6 +234,7 @@ pub fn run() {
             commands::stt_delete_model,
             commands::stt_transcribe,
             commands::stt_transcribe_timestamped,
+            commands::stt_cancel_download,
             // Books (named journals)
             commands::list_books,
             commands::create_book,

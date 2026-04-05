@@ -379,11 +379,44 @@ pub async fn import_data(app: AppHandle, data: String, _password: String) -> Res
             .unwrap_or(0)
             .clamp(0, 2);
 
+        let location_weather = entry
+            .get("location_weather")
+            .and_then(|v| v.as_str());
+
+        let book_id = entry
+            .get("book_id")
+            .and_then(|v| v.as_str());
+
         // Try to create entry (skip if already exists)
-        match db::create_entry(&db, id, &ec, mood, privacy_mode, None, None) {
+        match db::create_entry(&db, id, &ec, mood, privacy_mode, location_weather, book_id) {
             Ok(_) => imported_count += 1,
             Err(e) if e.contains("UNIQUE constraint") => continue,
             Err(e) => return Err(e),
+        }
+
+        // Restore fields that create_entry does not write: timestamps, pinned, capsule columns.
+        let created_at = entry.get("created_at").and_then(|v| v.as_str()).unwrap_or("");
+        let updated_at = entry.get("updated_at").and_then(|v| v.as_str()).unwrap_or("");
+        let pinned: i32 = if entry.get("pinned").and_then(|v| v.as_bool()).unwrap_or(false) { 1 } else { 0 };
+        let sealed_until = entry.get("sealed_until").and_then(|v| v.as_str());
+        let capsule_type = entry.get("capsule_type").and_then(|v| v.as_str());
+        let linked_original_id = entry.get("linked_original_id").and_then(|v| v.as_str());
+        let unsealed_at = entry.get("unsealed_at").and_then(|v| v.as_str());
+
+        {
+            let conn = db.conn.lock().map_err(|e| e.to_string())?;
+            conn.execute(
+                "UPDATE journal_entries
+                 SET created_at = ?2, updated_at = ?3, pinned = ?4,
+                     sealed_until = ?5, capsule_type = ?6,
+                     linked_original_id = ?7, unsealed_at = ?8
+                 WHERE id = ?1",
+                rusqlite::params![
+                    id, created_at, updated_at, pinned,
+                    sealed_until, capsule_type, linked_original_id, unsealed_at
+                ],
+            )
+            .map_err(|e| format!("Failed to restore entry metadata: {}", e))?;
         }
     }
 

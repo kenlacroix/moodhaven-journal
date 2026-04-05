@@ -13,6 +13,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import type { STTModel } from '../../types/settings';
 import type { WhisperOutput } from '../utils/transcriptFormatter';
 import { logger } from './logger';
@@ -53,6 +54,9 @@ export interface DownloadProgress {
   downloaded: number; // bytes
   total: number; // bytes
   percentage: number; // 0-100
+  state: string; // "connecting" | "downloading" | "complete" | "error" | "cancelled"
+  speed: number; // bytes per second
+  error?: string;
 }
 
 export interface TranscriptionResult {
@@ -75,8 +79,8 @@ export async function checkModelStatus(model: STTModel): Promise<ModelStatus> {
 }
 
 /**
- * Download a whisper.cpp model
- * Returns a function to cancel the download
+ * Download a whisper.cpp model.
+ * Wires real progress from the Rust `stt-download-progress` Tauri event.
  */
 export async function downloadModel(
   model: STTModel,
@@ -84,18 +88,47 @@ export async function downloadModel(
 ): Promise<void> {
   const filename = MODEL_FILENAMES[model];
 
-  try {
-    // url is derived from the allowlist inside the Rust command — do not pass it
-    await invoke('stt_download_model', {
-      filename,
-    });
+  // Set up progress listener before starting the download so no events are missed.
+  const unlisten = onProgress
+    ? await listen<{
+        state: string;
+        downloaded: number;
+        total: number;
+        percentage: number;
+        speed: number;
+        error?: string;
+      }>('stt-download-progress', (event) => {
+        onProgress({
+          downloaded: event.payload.downloaded,
+          total: event.payload.total,
+          percentage: event.payload.percentage,
+          state: event.payload.state,
+          speed: event.payload.speed,
+          error: event.payload.error,
+        });
+      })
+    : null;
 
-    // For now, we don't have streaming progress from Rust
-    // In a full implementation, we'd use Tauri events for progress updates
-    onProgress?.({ downloaded: 100, total: 100, percentage: 100 });
+  try {
+    await invoke('stt_download_model', { filename });
   } catch (error) {
     logger.error('Failed to download model:', { error: String(error) });
     throw new Error(`Failed to download model: ${error}`);
+  } finally {
+    unlisten?.();
+  }
+}
+
+/**
+ * Cancel an active model download.
+ */
+export async function cancelDownload(model: STTModel): Promise<void> {
+  const filename = MODEL_FILENAMES[model];
+  try {
+    await invoke('stt_cancel_download', { filename });
+  } catch (error) {
+    // Ignore "no active download" — caller may have already completed
+    logger.warn('cancelDownload: no active download or already finished', { error: String(error) });
   }
 }
 

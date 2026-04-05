@@ -1,4 +1,4 @@
-package com.moodbloom.app
+package com.moodhaven.app
 
 import android.os.Bundle
 import androidx.activity.enableEdgeToEdge

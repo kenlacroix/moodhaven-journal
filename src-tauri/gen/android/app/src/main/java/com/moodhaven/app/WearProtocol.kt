@@ -1,4 +1,4 @@
-package com.moodbloom.app
+package com.moodhaven.app
 
 /**
  * WearProtocol — canonical path constants for the Wear OS Data Layer wire protocol.

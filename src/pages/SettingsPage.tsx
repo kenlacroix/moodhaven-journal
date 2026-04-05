@@ -374,7 +374,7 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
       pendingExportFilter.current = null;
       let data: string;
       if (filter !== null) {
-        const base64 = await exportData(syncPassword, filter);
+        const base64 = await exportData(filter);
         const encrypted = await encrypt(base64, syncPassword);
         if (!encrypted.success || !encrypted.data) throw new Error(encrypted.error || 'Encryption failed');
         data = JSON.stringify({ format: 'moodhaven-encrypted-v1', payload: encrypted.data });

@@ -30,6 +30,7 @@ import {
   formatDuration,
   type RateLimitState,
 } from '../lib/services/rateLimitService';
+import { logger } from '../lib/services/logger';
 
 type LockScreenStep = 'password' | '2fa' | 'erase-confirm' | 'recovery-key' | 'biometric-enroll-offer';
 
@@ -176,11 +177,6 @@ export function LockScreen() {
           return;
         }
 
-        // Password is valid — reset rate limit
-        await resetRateLimit();
-        setRateLimitState({ failedAttempts: 0, lockoutUntil: null, lastFailedAt: null });
-        setLockoutRemaining(0);
-
         // Check if 2FA is enabled
         if (twoFactorStatus?.enabled) {
           // Store password for later use after 2FA verification
@@ -193,7 +189,12 @@ export function LockScreen() {
         } else {
           // No 2FA, no biometric offer — unlock directly
           const success = await unlock(password);
-          if (!success) {
+          if (success) {
+            // Reset rate limit only after the session is unlocked (delete_setting requires unlock)
+            await resetRateLimit().catch((err) => logger.warn('resetRateLimit failed', { error: String(err) }));
+            setRateLimitState({ failedAttempts: 0, lockoutUntil: null, lastFailedAt: null });
+            setLockoutRemaining(0);
+          } else {
             setError('Failed to unlock. Please try again.');
             setPassword('');
           }
@@ -217,7 +218,12 @@ export function LockScreen() {
     setIsLoading(true);
     try {
       const success = await unlock(verifiedPassword);
-      if (!success) {
+      if (success) {
+        // Reset rate limit only after the session is unlocked (delete_setting requires unlock)
+        await resetRateLimit().catch((err) => logger.warn('resetRateLimit failed', { error: String(err) }));
+        setRateLimitState({ failedAttempts: 0, lockoutUntil: null, lastFailedAt: null });
+        setLockoutRemaining(0);
+      } else {
         setError('Failed to unlock. Please try again.');
         setStep('password');
         setVerifiedPassword(null);
@@ -230,7 +236,7 @@ export function LockScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, [verifiedPassword, unlock]);
+  }, [verifiedPassword, unlock, resetRateLimit, setRateLimitState]);
 
   // Handle 2FA cancellation - go back to password entry
   const handle2FACancel = useCallback(() => {
@@ -297,11 +303,6 @@ export function LockScreen() {
           return;
         }
 
-        // Recovery key is valid — reset rate limit
-        await resetRateLimit();
-        setRateLimitState({ failedAttempts: 0, lockoutUntil: null, lastFailedAt: null });
-        setLockoutRemaining(0);
-
         // Check if 2FA is enabled
         if (twoFactorStatus?.enabled) {
           // Store the recovered password for use after 2FA verification
@@ -310,7 +311,12 @@ export function LockScreen() {
         } else {
           // No 2FA, unlock directly using the recovered password
           const success = await unlock(recoveredPassword);
-          if (!success) {
+          if (success) {
+            // Reset rate limit only after the session is unlocked (delete_setting requires unlock)
+            await resetRateLimit().catch((err) => logger.warn('resetRateLimit failed', { error: String(err) }));
+            setRateLimitState({ failedAttempts: 0, lockoutUntil: null, lastFailedAt: null });
+            setLockoutRemaining(0);
+          } else {
             setError('Failed to unlock. Please try again.');
             setRecoveryKeyInput('');
           }
@@ -371,9 +377,14 @@ export function LockScreen() {
       }
     }
     // Proceed to unlock regardless of enrollment outcome
-    await unlock(password);
+    const success = await unlock(password);
     pendingPasswordRef.current = null;
-  }, [unlock]);
+    if (success) {
+      await resetRateLimit().catch((err) => logger.warn('resetRateLimit failed', { error: String(err) }));
+      setRateLimitState({ failedAttempts: 0, lockoutUntil: null, lastFailedAt: null });
+      setLockoutRemaining(0);
+    }
+  }, [unlock, resetRateLimit, setRateLimitState]);
 
   // Derived UI helpers
   const freeAttemptsLeft = getRemainingFreeAttempts(rateLimitState);

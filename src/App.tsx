@@ -32,6 +32,7 @@ import { useTimeCapsule } from './hooks/useTimeCapsule';
 import { TimeCapsuleRevealModal } from './components/timecapsule/TimeCapsuleRevealModal';
 import { SealEntryModal } from './components/timecapsule/SealEntryModal';
 import { logger } from './lib/services/logger';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 // Detect special dev modes outside the component so hooks order is stable.
 const IS_BREAKOUT = new URLSearchParams(window.location.search).get('mode') === 'writer';
@@ -212,7 +213,7 @@ function MainApp() {
   // Main app — MobileLayout on Android, MainLayout on desktop
   const Layout = isAndroid ? MobileLayout : MainLayout;
   return (
-    <>
+    <ErrorBoundary>
       <Layout
         currentView={currentView}
         onNavigate={handleNavigate}
@@ -227,47 +228,59 @@ function MainApp() {
         <div key={currentView} className="h-full animate-view-enter">
           {/* Writing View - calm writing space (default) */}
           {currentView === 'writing' && (
-            <WritingView
-              key={selectedEntryId ?? `new-${writingKey}`}
-              entryId={selectedEntryId}
-              onEntrySaved={() => {/* timeline refreshes on next navigation */}}
-              onNewEntry={handleNewEntry}
-              onNavigateToSTTSettings={() => handleNavigateToSettings('speech-to-text')}
-            />
+            <ErrorBoundary>
+              <WritingView
+                key={selectedEntryId ?? `new-${writingKey}`}
+                entryId={selectedEntryId}
+                onEntrySaved={() => {/* timeline refreshes on next navigation */}}
+                onNewEntry={handleNewEntry}
+                onNavigateToSTTSettings={() => handleNavigateToSettings('speech-to-text')}
+              />
+            </ErrorBoundary>
           )}
 
           {/* Timeline View - chronological entry list */}
           {currentView === 'timeline' && (
-            <TimelineView
-              onSelectEntry={handleSelectEntry}
-              onNewEntry={handleNewEntry}
-              onSealEntry={(id) => setSealingEntryId(id)}
-              refreshTrigger={timelineRefresh}
-            />
+            <ErrorBoundary>
+              <TimelineView
+                onSelectEntry={handleSelectEntry}
+                onNewEntry={handleNewEntry}
+                onSealEntry={(id) => setSealingEntryId(id)}
+                refreshTrigger={timelineRefresh}
+              />
+            </ErrorBoundary>
           )}
 
           {/* On This Day View */}
           {currentView === 'onthisday' && (
-            <OnThisDayView onSelectEntry={handleSelectEntry} />
+            <ErrorBoundary>
+              <OnThisDayView onSelectEntry={handleSelectEntry} />
+            </ErrorBoundary>
           )}
 
           {/* Insights View - AI insights + local analytics merged */}
           {currentView === 'insights' && (
-            <InsightsView onNavigateToSettings={handleNavigateToSettings} />
+            <ErrorBoundary>
+              <InsightsView onNavigateToSettings={handleNavigateToSettings} />
+            </ErrorBoundary>
           )}
 
           {/* Calendar View */}
           {currentView === 'calendar' && (
-            <CalendarPage onSelectEntry={handleSelectEntry} />
+            <ErrorBoundary>
+              <CalendarPage onSelectEntry={handleSelectEntry} />
+            </ErrorBoundary>
           )}
 
           {/* Journal Overview */}
           {currentView === 'journalOverview' && journalOverviewBookId && (
-            <JournalOverviewPage
-              bookId={journalOverviewBookId}
-              onViewEntries={() => handleNavigate('timeline')}
-              onBack={() => handleNavigate('timeline')}
-            />
+            <ErrorBoundary>
+              <JournalOverviewPage
+                bookId={journalOverviewBookId}
+                onViewEntries={() => handleNavigate('timeline')}
+                onBack={() => handleNavigate('timeline')}
+              />
+            </ErrorBoundary>
           )}
         </div>
       </Layout>
@@ -292,7 +305,7 @@ function MainApp() {
           onCancel={() => setSealingEntryId(null)}
         />
       )}
-    </>
+    </ErrorBoundary>
   );
 }
 

@@ -35,8 +35,10 @@ pub fn get_password_hash(db: State<Database>) -> Result<Option<UserSettings>, St
 
 /// Create a new encrypted journal entry
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub fn create_journal_entry(
     db: State<Database>,
+    lock: State<'_, AppLockState>,
     id: String,
     encrypted_content: EncryptedContent,
     mood: i32,
@@ -44,6 +46,7 @@ pub fn create_journal_entry(
     location_weather: Option<String>,
     book_id: Option<String>,
 ) -> Result<JournalEntryRow, String> {
+    require_unlocked(&lock)?;
     // Validate mood range
     if !(1..=5).contains(&mood) {
         return Err("Mood must be between 1 and 5".to_string());
@@ -69,8 +72,10 @@ pub fn create_journal_entry(
 #[tauri::command]
 pub fn get_journal_entry(
     db: State<Database>,
+    lock: State<'_, AppLockState>,
     id: String,
 ) -> Result<Option<JournalEntryRow>, String> {
+    require_unlocked(&lock)?;
     db::get_entry(&db, &id)
 }
 
@@ -89,9 +94,11 @@ pub fn get_all_journal_entries(
 #[tauri::command]
 pub fn get_journal_entries_by_date(
     db: State<Database>,
+    lock: State<'_, AppLockState>,
     start_date: String,
     end_date: String,
 ) -> Result<Vec<JournalEntryRow>, String> {
+    require_unlocked(&lock)?;
     db::get_entries_by_date_range(&db, &start_date, &end_date)
 }
 
@@ -99,11 +106,13 @@ pub fn get_journal_entries_by_date(
 #[tauri::command]
 pub fn update_journal_entry(
     db: State<Database>,
+    lock: State<'_, AppLockState>,
     id: String,
     encrypted_content: EncryptedContent,
     mood: i32,
     privacy_mode: Option<i32>,
 ) -> Result<JournalEntryRow, String> {
+    require_unlocked(&lock)?;
     if !(1..=5).contains(&mood) {
         return Err("Mood must be between 1 and 5".to_string());
     }
@@ -118,7 +127,12 @@ pub fn update_journal_entry(
 
 /// Delete a journal entry
 #[tauri::command]
-pub fn delete_journal_entry(db: State<Database>, id: String) -> Result<bool, String> {
+pub fn delete_journal_entry(
+    db: State<Database>,
+    lock: State<'_, AppLockState>,
+    id: String,
+) -> Result<bool, String> {
+    require_unlocked(&lock)?;
     db::delete_entry(&db, &id)
 }
 
@@ -127,33 +141,58 @@ pub fn delete_journal_entry(db: State<Database>, id: String) -> Result<bool, Str
 #[tauri::command]
 pub fn patch_entry_location_weather(
     db: State<Database>,
+    lock: State<'_, AppLockState>,
     id: String,
     location_weather: String,
 ) -> Result<(), String> {
+    require_unlocked(&lock)?;
     db::patch_entry_location_weather(&db, &id, &location_weather)
 }
 
 /// Toggle the pinned/favourite state of an entry.
 #[tauri::command]
-pub fn patch_entry_pinned(db: State<Database>, id: String, pinned: bool) -> Result<(), String> {
+pub fn patch_entry_pinned(
+    db: State<Database>,
+    lock: State<'_, AppLockState>,
+    id: String,
+    pinned: bool,
+) -> Result<(), String> {
+    require_unlocked(&lock)?;
     db::patch_entry_pinned(&db, &id, pinned)
 }
 
 /// Set the status of an entry ('thinking' | 'complete' | 'revisit').
 #[tauri::command]
-pub fn patch_entry_status(db: State<Database>, id: String, status: String) -> Result<(), String> {
+pub fn patch_entry_status(
+    db: State<Database>,
+    lock: State<'_, AppLockState>,
+    id: String,
+    status: String,
+) -> Result<(), String> {
+    require_unlocked(&lock)?;
     db::patch_entry_status(&db, &id, &status)
 }
 
 /// Sync tags for an entry (replaces all existing tags).
 #[tauri::command]
-pub fn sync_entry_tags(db: State<Database>, id: String, tags: Vec<String>) -> Result<(), String> {
+pub fn sync_entry_tags(
+    db: State<Database>,
+    lock: State<'_, AppLockState>,
+    id: String,
+    tags: Vec<String>,
+) -> Result<(), String> {
+    require_unlocked(&lock)?;
     db::sync_entry_tags(&db, &id, &tags)
 }
 
 /// Get all unique tag names used in a book.
 #[tauri::command]
-pub fn get_book_tags(db: State<Database>, book_id: String) -> Result<Vec<String>, String> {
+pub fn get_book_tags(
+    db: State<Database>,
+    lock: State<'_, AppLockState>,
+    book_id: String,
+) -> Result<Vec<String>, String> {
+    require_unlocked(&lock)?;
     db::get_book_tags(&db, &book_id)
 }
 
@@ -161,14 +200,20 @@ pub fn get_book_tags(db: State<Database>, book_id: String) -> Result<Vec<String>
 #[tauri::command]
 pub fn get_mood_statistics(
     db: State<Database>,
+    lock: State<'_, AppLockState>,
     start_date: String,
     end_date: String,
 ) -> Result<Vec<db::DailyStats>, String> {
+    require_unlocked(&lock)?;
     db::get_mood_stats(&db, &start_date, &end_date)
 }
 
 /// Get overall statistics (average mood, total entries)
 #[tauri::command]
-pub fn get_overall_statistics(db: State<Database>) -> Result<(f64, i32), String> {
+pub fn get_overall_statistics(
+    db: State<Database>,
+    lock: State<'_, AppLockState>,
+) -> Result<(f64, i32), String> {
+    require_unlocked(&lock)?;
     db::get_overall_stats(&db)
 }

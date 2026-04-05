@@ -208,13 +208,17 @@ pub async fn stt_download_model(
     // Register cancellation token
     let cancel_token = Arc::new(AtomicBool::new(false));
     {
-        let mut downloads = state.active_downloads.lock().unwrap();
+        let mut downloads = state
+            .active_downloads
+            .lock()
+            .map_err(|_| "STT download state lock poisoned".to_string())?;
         downloads.insert(filename.clone(), cancel_token.clone());
     }
 
     let cleanup = |state: &State<'_, DownloadState>, filename: &str| {
-        let mut downloads = state.active_downloads.lock().unwrap();
-        downloads.remove(filename);
+        if let Ok(mut downloads) = state.active_downloads.lock() {
+            downloads.remove(filename);
+        }
     };
 
     let display_url = url
@@ -420,7 +424,10 @@ pub async fn stt_cancel_download(
     state: State<'_, DownloadState>,
     filename: String,
 ) -> Result<(), String> {
-    let downloads = state.active_downloads.lock().unwrap();
+    let downloads = state
+        .active_downloads
+        .lock()
+        .map_err(|_| "STT download state lock poisoned".to_string())?;
     if let Some(token) = downloads.get(&filename) {
         token.store(true, Ordering::Relaxed);
         Ok(())

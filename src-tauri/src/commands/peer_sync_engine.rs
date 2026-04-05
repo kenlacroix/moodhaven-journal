@@ -447,34 +447,30 @@ fn db_get_books_full(conn: &Connection, ids: &[String]) -> Result<Vec<SyncBookRo
     if ids.is_empty() {
         return Ok(vec![]);
     }
-    let mut result = Vec::with_capacity(ids.len());
-    for id in ids {
-        let row: Option<SyncBookRow> = conn
-            .query_row(
-                "SELECT id, name, emoji, color, sort_order, description, settings,
-                        created_at, COALESCE(updated_at, created_at)
-                 FROM books WHERE id = ?1",
-                rusqlite::params![id],
-                |r| {
-                    Ok(SyncBookRow {
-                        id: r.get(0)?,
-                        name: r.get(1)?,
-                        emoji: r.get(2)?,
-                        color: r.get(3)?,
-                        sort_order: r.get(4)?,
-                        description: r.get(5)?,
-                        settings: r.get(6)?,
-                        created_at: r.get(7)?,
-                        updated_at: r.get(8)?,
-                    })
-                },
-            )
-            .ok();
-        if let Some(r) = row {
-            result.push(r);
-        }
-    }
-    Ok(result)
+    let placeholders = ids.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
+    let sql = format!(
+        "SELECT id, name, emoji, color, sort_order, description, settings, \
+                created_at, COALESCE(updated_at, created_at) \
+         FROM books WHERE id IN ({placeholders})"
+    );
+    conn.prepare(&sql)
+        .map_err(|e| format!("prepare books full: {e}"))?
+        .query_map(rusqlite::params_from_iter(ids.iter()), |r| {
+            Ok(SyncBookRow {
+                id: r.get(0)?,
+                name: r.get(1)?,
+                emoji: r.get(2)?,
+                color: r.get(3)?,
+                sort_order: r.get(4)?,
+                description: r.get(5)?,
+                settings: r.get(6)?,
+                created_at: r.get(7)?,
+                updated_at: r.get(8)?,
+            })
+        })
+        .map_err(|e| format!("query books full: {e}"))?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(|e| format!("collect books full: {e}"))
 }
 
 fn db_upsert_book(conn: &Connection, row: &SyncBookRow) -> Result<bool, String> {
@@ -528,30 +524,26 @@ fn db_get_signals_full(conn: &Connection, ids: &[String]) -> Result<Vec<SyncSign
     if ids.is_empty() {
         return Ok(vec![]);
     }
-    let mut result = Vec::with_capacity(ids.len());
-    for id in ids {
-        let row: Option<SyncSignalRow> = conn
-            .query_row(
-                "SELECT id, timestamp, type, source, payload, created_at
-                 FROM signals WHERE id = ?1",
-                rusqlite::params![id],
-                |r| {
-                    Ok(SyncSignalRow {
-                        id: r.get(0)?,
-                        timestamp: r.get(1)?,
-                        signal_type: r.get(2)?,
-                        source: r.get(3)?,
-                        payload: r.get(4)?,
-                        created_at: r.get(5)?,
-                    })
-                },
-            )
-            .ok();
-        if let Some(r) = row {
-            result.push(r);
-        }
-    }
-    Ok(result)
+    let placeholders = ids.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
+    let sql = format!(
+        "SELECT id, timestamp, type, source, payload, created_at \
+         FROM signals WHERE id IN ({placeholders})"
+    );
+    conn.prepare(&sql)
+        .map_err(|e| format!("prepare signals full: {e}"))?
+        .query_map(rusqlite::params_from_iter(ids.iter()), |r| {
+            Ok(SyncSignalRow {
+                id: r.get(0)?,
+                timestamp: r.get(1)?,
+                signal_type: r.get(2)?,
+                source: r.get(3)?,
+                payload: r.get(4)?,
+                created_at: r.get(5)?,
+            })
+        })
+        .map_err(|e| format!("query signals full: {e}"))?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(|e| format!("collect signals full: {e}"))
 }
 
 /// Signals are immutable — INSERT OR IGNORE; returns true if a new row was inserted.
@@ -662,63 +654,58 @@ fn db_get_entries_full(conn: &Connection, ids: &[String]) -> Result<Vec<JournalE
     if ids.is_empty() {
         return Ok(vec![]);
     }
-    let mut result = Vec::with_capacity(ids.len());
-    for id in ids {
-        let row: Option<JournalEntryRow> = conn
-            .query_row(
-                "SELECT je.id, je.encrypted_content, je.mood, je.privacy_mode,
-                        je.location_weather, je.book_id, je.pinned,
-                        je.created_at, je.updated_at,
-                        je.sealed_until, je.capsule_type, je.linked_original_id, je.unsealed_at,
-                        COALESCE(GROUP_CONCAT(t.name, ','), '') AS tags
-                 FROM journal_entries je
-                 LEFT JOIN entry_tags et ON et.entry_id = je.id
-                 LEFT JOIN tags t ON t.id = et.tag_id
-                 WHERE je.id = ?1
-                 GROUP BY je.id",
-                rusqlite::params![id],
-                |r| {
-                    let ec_json: String = r.get(1)?;
-                    let tags_str: Option<String> = r.get(13)?;
-                    let tags = crate::db::parse_tags(tags_str);
-                    let ec: crate::db::EncryptedContent =
-                        serde_json::from_str(&ec_json).map_err(|e| {
-                            rusqlite::Error::FromSqlConversionFailure(
-                                1,
-                                rusqlite::types::Type::Text,
-                                Box::new(std::io::Error::new(
-                                    std::io::ErrorKind::InvalidData,
-                                    e.to_string(),
-                                )),
-                            )
-                        })?;
-                    Ok(JournalEntryRow {
-                        id: r.get(0)?,
-                        encrypted_content: Some(ec),
-                        mood: r.get(2)?,
-                        privacy_mode: r.get(3)?,
-                        location_weather: r.get(4)?,
-                        book_id: r
-                            .get::<_, Option<String>>(5)?
-                            .unwrap_or_else(|| "default".to_string()),
-                        pinned: r.get::<_, i32>(6)? != 0,
-                        created_at: r.get(7)?,
-                        updated_at: r.get(8)?,
-                        sealed_until: r.get(9)?,
-                        capsule_type: r.get(10)?,
-                        linked_original_id: r.get(11)?,
-                        unsealed_at: r.get(12)?,
-                        tags,
-                        status: None,
-                    })
-                },
-            )
-            .ok();
-        if let Some(r) = row {
-            result.push(r);
-        }
-    }
-    Ok(result)
+    let placeholders = ids.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
+    let sql = format!(
+        "SELECT je.id, je.encrypted_content, je.mood, je.privacy_mode, \
+                je.location_weather, je.book_id, je.pinned, \
+                je.created_at, je.updated_at, \
+                je.sealed_until, je.capsule_type, je.linked_original_id, je.unsealed_at, \
+                COALESCE(GROUP_CONCAT(t.name, ','), '') AS tags \
+         FROM journal_entries je \
+         LEFT JOIN entry_tags et ON et.entry_id = je.id \
+         LEFT JOIN tags t ON t.id = et.tag_id \
+         WHERE je.id IN ({placeholders}) \
+         GROUP BY je.id"
+    );
+    conn.prepare(&sql)
+        .map_err(|e| format!("prepare entries full: {e}"))?
+        .query_map(rusqlite::params_from_iter(ids.iter()), |r| {
+            let ec_json: String = r.get(1)?;
+            let tags_str: Option<String> = r.get(13)?;
+            let tags = crate::db::parse_tags(tags_str);
+            let ec: crate::db::EncryptedContent = serde_json::from_str(&ec_json).map_err(|e| {
+                rusqlite::Error::FromSqlConversionFailure(
+                    1,
+                    rusqlite::types::Type::Text,
+                    Box::new(std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        e.to_string(),
+                    )),
+                )
+            })?;
+            Ok(JournalEntryRow {
+                id: r.get(0)?,
+                encrypted_content: Some(ec),
+                mood: r.get(2)?,
+                privacy_mode: r.get(3)?,
+                location_weather: r.get(4)?,
+                book_id: r
+                    .get::<_, Option<String>>(5)?
+                    .unwrap_or_else(|| "default".to_string()),
+                pinned: r.get::<_, i32>(6)? != 0,
+                created_at: r.get(7)?,
+                updated_at: r.get(8)?,
+                sealed_until: r.get(9)?,
+                capsule_type: r.get(10)?,
+                linked_original_id: r.get(11)?,
+                unsealed_at: r.get(12)?,
+                tags,
+                status: None,
+            })
+        })
+        .map_err(|e| format!("query entries full: {e}"))?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(|e| format!("collect entries full: {e}"))
 }
 
 fn db_upsert_tags(conn: &Connection, entry_id: &str, tags: &[String]) -> Result<(), String> {
@@ -1375,29 +1362,24 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
     }
     write_msg_enc(&mut stream, &key, &Msg::Done { sent: entries_sent })?;
 
-    // Step 7: Receive entries from client until DONE
-    let mut entries_received = 0usize;
+    // Step 7: Receive entries from client until DONE — collect, don't upsert yet
+    let mut recv_entries: Vec<JournalEntryRow> = Vec::new();
     loop {
         let msg = read_msg_enc(&mut stream, &key)?;
         match msg {
             Msg::Entry { row } => {
-                let db = app
-                    .try_state::<Database>()
-                    .ok_or_else(|| "No DB state".to_string())?;
-                let conn = db.conn.lock().map_err(|e| e.to_string())?;
-                if db_upsert_entry(&conn, &row)? {
-                    entries_received += 1;
-                }
+                recv_entries.push(row);
             }
             Msg::Done { sent } => {
                 log::info!(
-                    "[sync] Server: client sent {sent} entries, we received {entries_received} new"
+                    "[sync] Server: client sent {sent} entries, we received {} new",
+                    recv_entries.len()
                 );
                 break;
             }
             other => return Err(format!("Unexpected msg in entry recv: {other:?}")),
         }
-        if entries_received > need_entries_by_me.len() + 1000 {
+        if recv_entries.len() > need_entries_by_me.len() + 1000 {
             return Err("Received more entries than expected".into());
         }
     }
@@ -1406,7 +1388,7 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
         &mut stream,
         &key,
         &Msg::DoneAck {
-            recv: entries_received,
+            recv: recv_entries.len(),
         },
     )?;
 
@@ -1425,25 +1407,22 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
     }
     write_msg_enc(&mut stream, &key, &Msg::BooksDone { sent: books_sent })?;
 
-    let mut books_received = 0usize;
+    let mut recv_books: Vec<SyncBookRow> = Vec::new();
     loop {
         match read_msg_enc(&mut stream, &key)? {
             Msg::Book { row } => {
-                let db = app
-                    .try_state::<Database>()
-                    .ok_or_else(|| "No DB state".to_string())?;
-                let conn = db.conn.lock().map_err(|e| e.to_string())?;
-                if db_upsert_book(&conn, &row)? {
-                    books_received += 1;
-                }
+                recv_books.push(row);
             }
             Msg::BooksDone { sent } => {
-                log::info!("[sync] Server: client sent {sent} books, we received {books_received} new/updated");
+                log::info!(
+                    "[sync] Server: client sent {sent} books, we received {} new/updated",
+                    recv_books.len()
+                );
                 break;
             }
             other => return Err(format!("Unexpected msg in books recv: {other:?}")),
         }
-        if books_received > need_books_by_me.len() + 500 {
+        if recv_books.len() > need_books_by_me.len() + 500 {
             return Err("Received more books than expected".into());
         }
     }
@@ -1451,7 +1430,7 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
         &mut stream,
         &key,
         &Msg::BooksAck {
-            recv: books_received,
+            recv: recv_books.len(),
         },
     )?;
 
@@ -1470,27 +1449,22 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
     }
     write_msg_enc(&mut stream, &key, &Msg::SignalsDone { sent: signals_sent })?;
 
-    let mut signals_received = 0usize;
+    let mut recv_signals: Vec<SyncSignalRow> = Vec::new();
     loop {
         match read_msg_enc(&mut stream, &key)? {
             Msg::Signal { row } => {
-                let db = app
-                    .try_state::<Database>()
-                    .ok_or_else(|| "No DB state".to_string())?;
-                let conn = db.conn.lock().map_err(|e| e.to_string())?;
-                if db_insert_signal_if_new(&conn, &row)? {
-                    signals_received += 1;
-                }
+                recv_signals.push(row);
             }
             Msg::SignalsDone { sent } => {
                 log::info!(
-                    "[sync] Server: client sent {sent} signals, we received {signals_received} new"
+                    "[sync] Server: client sent {sent} signals, we received {} new",
+                    recv_signals.len()
                 );
                 break;
             }
             other => return Err(format!("Unexpected msg in signals recv: {other:?}")),
         }
-        if signals_received > need_signals_by_me.len() + 10_000 {
+        if recv_signals.len() > need_signals_by_me.len() + 10_000 {
             return Err("Received more signals than expected".into());
         }
     }
@@ -1498,7 +1472,7 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
         &mut stream,
         &key,
         &Msg::SignalsAck {
-            recv: signals_received,
+            recv: recv_signals.len(),
         },
     )?;
 
@@ -1537,7 +1511,7 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
         },
     )?;
 
-    let mut settings_received = 0usize;
+    let mut recv_settings: Vec<(String, String, String)> = Vec::new();
     loop {
         match read_msg_enc(&mut stream, &key)? {
             Msg::Setting {
@@ -1545,21 +1519,18 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
                 value: v,
                 updated_at: ua,
             } => {
-                let db = app
-                    .try_state::<Database>()
-                    .ok_or_else(|| "No DB state".to_string())?;
-                let conn = db.conn.lock().map_err(|e| e.to_string())?;
-                if db_upsert_setting(&conn, &k, &v, &ua)? {
-                    settings_received += 1;
-                }
+                recv_settings.push((k, v, ua));
             }
             Msg::SettingsDone { sent } => {
-                log::info!("[sync] Server: client sent {sent} settings, we received {settings_received} updated");
+                log::info!(
+                    "[sync] Server: client sent {sent} settings, we received {} updated",
+                    recv_settings.len()
+                );
                 break;
             }
             other => return Err(format!("Unexpected msg in settings recv: {other:?}")),
         }
-        if settings_received > need_settings_by_me.len() + 100 {
+        if recv_settings.len() > need_settings_by_me.len() + 100 {
             return Err("Received more settings than expected".into());
         }
     }
@@ -1567,9 +1538,59 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
         &mut stream,
         &key,
         &Msg::SettingsAck {
-            recv: settings_received,
+            recv: recv_settings.len(),
         },
     )?;
+
+    // Apply all received data in one atomic transaction — TCP drop before COMMIT
+    // leaves the DB untouched; partial state is impossible.
+    // Count actual upserts (not total received) so ack/log reflect new-or-updated rows only.
+    let (entries_received, books_received, signals_received, settings_received);
+    {
+        let db = app
+            .try_state::<Database>()
+            .ok_or_else(|| "No DB state".to_string())?;
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        conn.execute_batch("BEGIN IMMEDIATE")
+            .map_err(|e| format!("sync tx begin: {e}"))?;
+        let mut e_count = 0usize;
+        let mut b_count = 0usize;
+        let mut s_count = 0usize;
+        let mut set_count = 0usize;
+        let result: Result<(), String> = (|| {
+            for row in &recv_entries {
+                if db_upsert_entry(&conn, row)? {
+                    e_count += 1;
+                }
+            }
+            for row in &recv_books {
+                if db_upsert_book(&conn, row)? {
+                    b_count += 1;
+                }
+            }
+            for row in &recv_signals {
+                if db_insert_signal_if_new(&conn, row)? {
+                    s_count += 1;
+                }
+            }
+            for (k, v, ua) in &recv_settings {
+                if db_upsert_setting(&conn, k, v, ua)? {
+                    set_count += 1;
+                }
+            }
+            Ok(())
+        })();
+        if let Err(e) = result {
+            let _ = conn.execute_batch("ROLLBACK");
+            return Err(e);
+        }
+        conn.execute_batch("COMMIT")
+            .map_err(|e| format!("sync tx commit: {e}"))?;
+        entries_received = e_count;
+        books_received = b_count;
+        signals_received = s_count;
+        settings_received = set_count;
+    }
 
     // Close write-half cleanly — all phases complete.
     let _ = stream.shutdown(std::net::Shutdown::Write);
@@ -1890,29 +1911,24 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
 
     // ── Entry phase ──────────────────────────────────────────────────────────
 
-    // Step 6: Receive entries from server until DONE
-    let mut entries_received = 0usize;
+    // Step 6: Receive entries from server until DONE — collect, don't upsert yet
+    let mut recv_entries: Vec<JournalEntryRow> = Vec::new();
     loop {
         let msg = read_msg_enc(&mut stream, &key)?;
         match msg {
             Msg::Entry { row } => {
-                let db = app
-                    .try_state::<Database>()
-                    .ok_or_else(|| "No DB state".to_string())?;
-                let conn = db.conn.lock().map_err(|e| e.to_string())?;
-                if db_upsert_entry(&conn, &row)? {
-                    entries_received += 1;
-                }
+                recv_entries.push(row);
             }
             Msg::Done { sent } => {
                 log::info!(
-                    "[sync] Client: server sent {sent} entries, we received {entries_received} new"
+                    "[sync] Client: server sent {sent} entries, we received {} new",
+                    recv_entries.len()
                 );
                 break;
             }
             other => return Err(format!("Unexpected msg in entry recv: {other:?}")),
         }
-        if entries_received > need_entries_by_me.len() + 1000 {
+        if recv_entries.len() > need_entries_by_me.len() + 1000 {
             return Err("Received more entries than expected".into());
         }
     }
@@ -1941,26 +1957,23 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
 
     // ── Books phase ──────────────────────────────────────────────────────────
 
-    // Receive books from server
-    let mut books_received = 0usize;
+    // Receive books from server — collect, don't upsert yet
+    let mut recv_books: Vec<SyncBookRow> = Vec::new();
     loop {
         match read_msg_enc(&mut stream, &key)? {
             Msg::Book { row } => {
-                let db = app
-                    .try_state::<Database>()
-                    .ok_or_else(|| "No DB state".to_string())?;
-                let conn = db.conn.lock().map_err(|e| e.to_string())?;
-                if db_upsert_book(&conn, &row)? {
-                    books_received += 1;
-                }
+                recv_books.push(row);
             }
             Msg::BooksDone { sent } => {
-                log::info!("[sync] Client: server sent {sent} books, we received {books_received} new/updated");
+                log::info!(
+                    "[sync] Client: server sent {sent} books, we received {} new/updated",
+                    recv_books.len()
+                );
                 break;
             }
             other => return Err(format!("Unexpected msg in books recv: {other:?}")),
         }
-        if books_received > need_books_by_me.len() + 500 {
+        if recv_books.len() > need_books_by_me.len() + 500 {
             return Err("Received more books than expected".into());
         }
     }
@@ -1988,28 +2001,23 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
 
     // ── Signals phase ────────────────────────────────────────────────────────
 
-    // Receive signals from server
-    let mut signals_received = 0usize;
+    // Receive signals from server — collect, don't upsert yet
+    let mut recv_signals: Vec<SyncSignalRow> = Vec::new();
     loop {
         match read_msg_enc(&mut stream, &key)? {
             Msg::Signal { row } => {
-                let db = app
-                    .try_state::<Database>()
-                    .ok_or_else(|| "No DB state".to_string())?;
-                let conn = db.conn.lock().map_err(|e| e.to_string())?;
-                if db_insert_signal_if_new(&conn, &row)? {
-                    signals_received += 1;
-                }
+                recv_signals.push(row);
             }
             Msg::SignalsDone { sent } => {
                 log::info!(
-                    "[sync] Client: server sent {sent} signals, we received {signals_received} new"
+                    "[sync] Client: server sent {sent} signals, we received {} new",
+                    recv_signals.len()
                 );
                 break;
             }
             other => return Err(format!("Unexpected msg in signals recv: {other:?}")),
         }
-        if signals_received > need_signals_by_me.len() + 10_000 {
+        if recv_signals.len() > need_signals_by_me.len() + 10_000 {
             return Err("Received more signals than expected".into());
         }
     }
@@ -2037,8 +2045,8 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
 
     // ── Settings phase ───────────────────────────────────────────────────────
 
-    // Receive settings from server
-    let mut settings_received = 0usize;
+    // Receive settings from server — collect, don't upsert yet
+    let mut recv_settings: Vec<(String, String, String)> = Vec::new();
     loop {
         match read_msg_enc(&mut stream, &key)? {
             Msg::Setting {
@@ -2046,21 +2054,18 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
                 value: v,
                 updated_at: ua,
             } => {
-                let db = app
-                    .try_state::<Database>()
-                    .ok_or_else(|| "No DB state".to_string())?;
-                let conn = db.conn.lock().map_err(|e| e.to_string())?;
-                if db_upsert_setting(&conn, &k, &v, &ua)? {
-                    settings_received += 1;
-                }
+                recv_settings.push((k, v, ua));
             }
             Msg::SettingsDone { sent } => {
-                log::info!("[sync] Client: server sent {sent} settings, we received {settings_received} updated");
+                log::info!(
+                    "[sync] Client: server sent {sent} settings, we received {} updated",
+                    recv_settings.len()
+                );
                 break;
             }
             other => return Err(format!("Unexpected msg in settings recv: {other:?}")),
         }
-        if settings_received > need_settings_by_me.len() + 100 {
+        if recv_settings.len() > need_settings_by_me.len() + 100 {
             return Err("Received more settings than expected".into());
         }
     }
@@ -2118,6 +2123,56 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
 
     // Close both halves promptly.
     let _ = stream.shutdown(std::net::Shutdown::Both);
+
+    // Apply all received data in one atomic transaction — TCP drop before COMMIT
+    // leaves the DB untouched; partial state is impossible.
+    // Count actual upserts (not total received) so ack/log reflect new-or-updated rows only.
+    let (entries_received, books_received, signals_received, settings_received);
+    {
+        let db = app
+            .try_state::<Database>()
+            .ok_or_else(|| "No DB state".to_string())?;
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        conn.execute_batch("BEGIN IMMEDIATE")
+            .map_err(|e| format!("sync tx begin: {e}"))?;
+        let mut e_count = 0usize;
+        let mut b_count = 0usize;
+        let mut s_count = 0usize;
+        let mut set_count = 0usize;
+        let result: Result<(), String> = (|| {
+            for row in &recv_entries {
+                if db_upsert_entry(&conn, row)? {
+                    e_count += 1;
+                }
+            }
+            for row in &recv_books {
+                if db_upsert_book(&conn, row)? {
+                    b_count += 1;
+                }
+            }
+            for row in &recv_signals {
+                if db_insert_signal_if_new(&conn, row)? {
+                    s_count += 1;
+                }
+            }
+            for (k, v, ua) in &recv_settings {
+                if db_upsert_setting(&conn, k, v, ua)? {
+                    set_count += 1;
+                }
+            }
+            Ok(())
+        })();
+        if let Err(e) = result {
+            let _ = conn.execute_batch("ROLLBACK");
+            return Err(e);
+        }
+        conn.execute_batch("COMMIT")
+            .map_err(|e| format!("sync tx commit: {e}"))?;
+        entries_received = e_count;
+        books_received = b_count;
+        signals_received = s_count;
+        settings_received = set_count;
+    }
 
     // ── Finalise ─────────────────────────────────────────────────────────────
 
@@ -2322,4 +2377,178 @@ pub fn peer_apply_and_restart(app: AppHandle) -> Result<(), String> {
 
     log::info!("[restore] Triggering restart to apply pending DB restore");
     app.restart();
+}
+
+// ── Unit tests ────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::{EncryptedContent, JournalEntryRow};
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    fn open_test_db() -> Connection {
+        let conn = Connection::open_in_memory().expect("in-memory db");
+        conn.execute_batch(
+            "CREATE TABLE journal_entries (
+                id TEXT PRIMARY KEY,
+                encrypted_content TEXT NOT NULL,
+                mood INTEGER NOT NULL,
+                privacy_mode INTEGER NOT NULL DEFAULT 0,
+                location_weather TEXT,
+                book_id TEXT NOT NULL DEFAULT 'default',
+                pinned INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                sealed_until TEXT,
+                capsule_type TEXT,
+                linked_original_id TEXT,
+                unsealed_at TEXT
+            );
+            CREATE TABLE tags (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT UNIQUE NOT NULL
+            );
+            CREATE TABLE entry_tags (
+                entry_id TEXT NOT NULL,
+                tag_id INTEGER NOT NULL,
+                PRIMARY KEY (entry_id, tag_id)
+            );",
+        )
+        .expect("schema");
+        conn
+    }
+
+    fn make_entry(id: &str, updated_at: &str) -> JournalEntryRow {
+        JournalEntryRow {
+            id: id.to_string(),
+            encrypted_content: Some(EncryptedContent {
+                ciphertext: "abc".to_string(),
+                iv: "iv".to_string(),
+                salt: "salt".to_string(),
+                version: 1,
+            }),
+            mood: 3,
+            privacy_mode: 0,
+            location_weather: None,
+            book_id: "default".to_string(),
+            pinned: false,
+            created_at: "2026-01-01T00:00:00Z".to_string(),
+            updated_at: updated_at.to_string(),
+            tags: vec![],
+            sealed_until: None,
+            capsule_type: None,
+            linked_original_id: None,
+            unsealed_at: None,
+            status: None,
+        }
+    }
+
+    // ── Key derivation ────────────────────────────────────────────────────────
+
+    #[test]
+    fn key_derivation_static_symmetric() {
+        let key_ab = derive_sync_key_static("pubkey_a", "pubkey_b");
+        let key_ba = derive_sync_key_static("pubkey_b", "pubkey_a");
+        assert_eq!(key_ab, key_ba, "static key must be symmetric");
+    }
+
+    #[test]
+    fn key_derivation_different_peers_differ() {
+        let key_ab = derive_sync_key_static("pubkey_a", "pubkey_b");
+        let key_ac = derive_sync_key_static("pubkey_a", "pubkey_c");
+        assert_ne!(
+            key_ab, key_ac,
+            "different peer keys must yield different transport keys"
+        );
+    }
+
+    // ── LWW upsert logic ──────────────────────────────────────────────────────
+
+    #[test]
+    fn lww_insert_new_entry() {
+        let conn = open_test_db();
+        let entry = make_entry("e1", "2026-03-01T10:00:00Z");
+        let inserted = db_upsert_entry(&conn, &entry).expect("upsert");
+        assert!(inserted, "new entry should be inserted");
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM journal_entries WHERE id = 'e1'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn lww_older_remote_no_overwrite() {
+        let conn = open_test_db();
+        // Insert a local entry with a newer timestamp
+        let local = make_entry("e2", "2026-03-10T10:00:00Z");
+        db_upsert_entry(&conn, &local).expect("initial insert");
+
+        // Remote has an older timestamp — should be skipped
+        let remote = make_entry("e2", "2026-03-05T10:00:00Z");
+        let updated = db_upsert_entry(&conn, &remote).expect("upsert older");
+        assert!(!updated, "older remote must not overwrite local");
+
+        let stored_at: String = conn
+            .query_row(
+                "SELECT updated_at FROM journal_entries WHERE id = 'e2'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(
+            stored_at, "2026-03-10T10:00:00Z",
+            "local timestamp must be preserved"
+        );
+    }
+
+    #[test]
+    fn lww_same_timestamp_no_overwrite() {
+        let conn = open_test_db();
+        let entry = make_entry("e3", "2026-03-10T10:00:00Z");
+        db_upsert_entry(&conn, &entry).expect("initial insert");
+
+        // Second upsert with identical timestamp — should be a no-op
+        let same = make_entry("e3", "2026-03-10T10:00:00Z");
+        let updated = db_upsert_entry(&conn, &same).expect("upsert same ts");
+        assert!(!updated, "same timestamp must not overwrite");
+    }
+
+    // ── Transaction rollback ──────────────────────────────────────────────────
+
+    #[test]
+    fn sync_tx_rollback_leaves_db_clean() {
+        let conn = open_test_db();
+
+        // Start a transaction, insert one valid entry, then trigger an error
+        conn.execute_batch("BEGIN IMMEDIATE").expect("begin");
+        let result: Result<(), String> = (|| {
+            let entry = make_entry("e4", "2026-03-01T00:00:00Z");
+            db_upsert_entry(&conn, &entry)?;
+            // Simulate a second operation that fails
+            conn.execute(
+                "INSERT INTO journal_entries (id) VALUES (?1)",
+                rusqlite::params!["e4"],
+            )
+            .map_err(|e| format!("forced error: {e}"))?;
+            Ok(())
+        })();
+
+        assert!(result.is_err(), "inner closure must have returned an error");
+        conn.execute_batch("ROLLBACK").expect("rollback");
+
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM journal_entries WHERE id = 'e4'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, 0, "rollback must leave no partial data");
+    }
 }

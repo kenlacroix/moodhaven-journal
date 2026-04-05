@@ -39,18 +39,17 @@ export interface ExportFilter {
  * Export journal data to encrypted backup.
  * Pass `filter` for selective export; omit for full export (WebDAV-safe).
  */
-export async function exportData(password: string, filter?: ExportFilter): Promise<string> {
-  return invoke<string>('export_data', { password, filter: filter ?? null });
+export async function exportData(filter?: ExportFilter): Promise<string> {
+  return invoke<string>('export_data', { filter: filter ?? null });
 }
 
 /**
  * Import data from backup
  * @param data - Base64-encoded backup string
- * @param password - Password to decrypt the backup
  * @returns Number of entries imported
  */
-export async function importData(data: string, password: string): Promise<number> {
-  return invoke<number>('import_data', { data, password });
+export async function importData(data: string): Promise<number> {
+  return invoke<number>('import_data', { data });
 }
 
 /**
@@ -144,7 +143,7 @@ interface FullExportPayload {
  * Used by WebDAV cloud sync which has its own media sync path.
  */
 export async function encryptedExport(password: string): Promise<string> {
-  const base64Data = await exportData('');
+  const base64Data = await exportData();
   const result = await encrypt(base64Data, password);
   if (!result.success || !result.data) {
     throw new Error(result.error || 'Encryption failed');
@@ -163,7 +162,7 @@ export async function exportWithMedia(
   password: string,
   onProgress?: (done: number, total: number) => void,
 ): Promise<string> {
-  const [entriesBase64, allMedia] = await Promise.all([exportData(''), listAllMedia()]);
+  const [entriesBase64, allMedia] = await Promise.all([exportData(), listAllMedia()]);
 
   const mediaPayloads: MediaSyncPayload[] = [];
   for (let i = 0; i < allMedia.length; i++) {
@@ -205,7 +204,7 @@ export async function encryptedImport(data: string, password: string): Promise<n
         throw new Error(result.error || 'Decryption failed — wrong password?');
       }
       const fullExport: FullExportPayload = JSON.parse(result.data);
-      const entries = await importData(fullExport.entriesData, '');
+      const entries = await importData(fullExport.entriesData);
 
       for (const m of fullExport.media ?? []) {
         await invoke('write_media_from_sync', {
@@ -240,5 +239,5 @@ export async function encryptedImport(data: string, password: string): Promise<n
     }
   }
 
-  return importData(base64Data, '');
+  return importData(base64Data);
 }

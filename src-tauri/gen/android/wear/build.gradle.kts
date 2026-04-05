@@ -42,6 +42,10 @@ android {
         jvmTarget = "17"
     }
 
+    buildFeatures {
+        buildConfig = true
+    }
+
     signingConfigs {
         if (keystoreFile != null) {
             create("release") {

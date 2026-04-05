@@ -291,9 +291,15 @@ describe('aiService', () => {
     });
 
     it('L2 Ollama happy path returns formatted text with source "ollama"', async () => {
+      const ollamaBody = JSON.stringify({ response: 'I went to the store and bought groceries.' });
       const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve({ response: 'I went to the store and bought groceries.' }),
+        body: new ReadableStream({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode(ollamaBody));
+            controller.close();
+          },
+        }),
       } as Response);
       try {
         const result = await formatTranscript(rawText, 'standard', {

@@ -9,6 +9,14 @@ use serde::{Deserialize, Serialize};
 use std::sync::PoisonError;
 use tauri::State;
 
+fn require_unlocked(lock: &State<'_, AppLockState>) -> Result<(), String> {
+    if lock.is_locked() {
+        Err("Session is locked".to_string())
+    } else {
+        Ok(())
+    }
+}
+
 /// Settings stored in the database
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StoredSettings {
@@ -47,7 +55,13 @@ pub fn get_setting(db: State<Database>, key: String) -> Result<Option<String>, S
 
 /// Set a setting by key
 #[tauri::command]
-pub fn set_setting(db: State<Database>, key: String, value: String) -> Result<(), String> {
+pub fn set_setting(
+    db: State<Database>,
+    lock: State<'_, AppLockState>,
+    key: String,
+    value: String,
+) -> Result<(), String> {
+    require_unlocked(&lock)?;
     let conn = db.conn.lock().map_err(|e: PoisonError<_>| e.to_string())?;
 
     // Create settings table if it doesn't exist
@@ -72,7 +86,12 @@ pub fn set_setting(db: State<Database>, key: String, value: String) -> Result<()
 
 /// Delete a setting by key
 #[tauri::command]
-pub fn delete_setting(db: State<Database>, key: String) -> Result<(), String> {
+pub fn delete_setting(
+    db: State<Database>,
+    lock: State<'_, AppLockState>,
+    key: String,
+) -> Result<(), String> {
+    require_unlocked(&lock)?;
     let conn = db.conn.lock().map_err(|e: PoisonError<_>| e.to_string())?;
 
     conn.execute("DELETE FROM settings WHERE key = ?1", [&key])

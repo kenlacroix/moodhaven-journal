@@ -182,23 +182,14 @@
 
 ## Play Store (CI / Android — v0.7.15+)
 
-### PS-001: Sign APKs with upload keystore (P2)
-**What:** Generate a release keystore once, store as `ANDROID_KEYSTORE_BASE64` + `ANDROID_KEY_ALIAS` + `ANDROID_KEY_PASSWORD` GitHub secrets, wire signing config into both `wear/build.gradle.kts` and `app/build.gradle.kts`. Swap `assembleDebug` / `--debug` for `assembleRelease` / (no flag) in CI.
-**Why:** Play Store requires consistently signed APKs/AABs. Debug-signed builds can only be sideloaded.
-**Effort:** human ~1h / CC ~15min
+### ~~PS-001: Sign APKs with upload keystore~~ ✅ RESOLVED (2026-04-04)
+Signing config wired into both `wear/build.gradle.kts` and `app/build.gradle.kts`. Keystore decoded from `ANDROID_KEYSTORE_BASE64`; passwords/alias from CI secrets. Gracefully no-ops when secrets absent.
 
-### PS-002: Switch to AAB for Play Store submission (P2)
-**What:** Replace `assembleRelease` with `bundleRelease` (Gradle) and `--debug` removal with no flag (Tauri CLI) in CI. Output is `.aab` instead of `.apk`.
-**Why:** Play Store requires Android App Bundle (AAB) format, not APK, for new apps since 2021.
-**Effort:** human ~15min / CC ~5min
+### ~~PS-002: Switch to AAB for Play Store submission~~ ✅ RESOLVED (2026-04-04)
+CI switched from `assembleDebug`/`--debug` to `bundleRelease`. Artifacts renamed `wear-aab`/`phone-aab`. `latest-release.json` updated to match.
 
-### PS-003: Add `wearApp { uses ':wear' }` to phone app/build.gradle.kts (P2)
-**What:** Add the following inside the `dependencies {}` block of `src-tauri/gen/android/app/build.gradle.kts`:
-```kotlin
-wearApp(project(":wear"))
-```
-**Why:** This is what makes the Play Store treat the phone and watch apps as a linked pair — the watch app auto-installs when the phone app is installed. Without it they are independent unlinked listings.
-**Effort:** human ~5min / CC ~2min
+### ~~PS-003: Add `wearApp` link to phone app/build.gradle.kts~~ ✅ RESOLVED (2026-04-04)
+`wearApp(project(":wear"))` added to `app/build.gradle.kts` dependencies. Play Store now treats phone + watch apps as a linked pair.
 
 ---
 

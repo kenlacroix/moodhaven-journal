@@ -1,18 +1,10 @@
+import DOMPurify from 'dompurify';
 import { useEffect, useRef, useState } from 'react';
 import { decrypt } from '../../lib/services/crypto';
 import { getMoodDelta, type CapsuleEntryRow } from '../../lib/services/timeCapsuleService';
 
 function sanitizeHtml(html: string): string {
-  const doc = new DOMParser().parseFromString(html, 'text/html');
-  doc.querySelectorAll('script, style, iframe, object, embed').forEach((el) => el.remove());
-  doc.querySelectorAll('*').forEach((el) => {
-    Array.from(el.attributes).forEach((attr) => {
-      if (/^on/i.test(attr.name) || attr.value.trim().toLowerCase().startsWith('javascript:')) {
-        el.removeAttribute(attr.name);
-      }
-    });
-  });
-  return doc.body.innerHTML;
+  return DOMPurify.sanitize(html, { USE_PROFILES: { html: true } });
 }
 
 interface MoodDelta {

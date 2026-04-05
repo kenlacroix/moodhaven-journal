@@ -3,6 +3,7 @@
 //! Handles persisting and loading user settings using the database.
 
 use crate::db::Database;
+use crate::AppLockState;
 use rusqlite::Row;
 use serde::{Deserialize, Serialize};
 use std::sync::PoisonError;
@@ -80,9 +81,15 @@ pub fn delete_setting(db: State<Database>, key: String) -> Result<(), String> {
     Ok(())
 }
 
-/// Get all settings
+/// Get all settings — requires an unlocked session (exposes API keys, PATs, credentials)
 #[tauri::command]
-pub fn get_all_settings(db: State<Database>) -> Result<Vec<StoredSettings>, String> {
+pub fn get_all_settings(
+    db: State<'_, Database>,
+    lock: State<'_, AppLockState>,
+) -> Result<Vec<StoredSettings>, String> {
+    if lock.is_locked() {
+        return Err("Session is locked".to_string());
+    }
     let conn = db.conn.lock().map_err(|e: PoisonError<_>| e.to_string())?;
 
     // Create settings table if it doesn't exist

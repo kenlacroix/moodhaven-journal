@@ -155,13 +155,13 @@ jobs:
         uses: actions/cache@v4
         with:
           path: src-tauri/binaries/${{ matrix.whisper_binary }}
-          key: whisper-${{ matrix.whisper_binary }}-v1.8.4
+          key: whisper-${{ matrix.whisper_binary }}-v1.7.4
 
       - name: Build whisper-cli sidecar
         if: steps.whisper_cache.outputs.cache-hit != 'true'
         shell: bash
         run: |
-          git clone --depth 1 --branch v1.8.4 https://github.com/ggerganov/whisper.cpp /tmp/whisper
+          git clone --depth 1 --branch v1.7.4 https://github.com/ggerganov/whisper.cpp /tmp/whisper
           cd /tmp/whisper
           cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DGGML_NATIVE=OFF ${{ matrix.cmake_extra }}
           cmake --build build --config Release --target whisper-cli -j4

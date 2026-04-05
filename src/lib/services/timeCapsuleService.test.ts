@@ -24,13 +24,19 @@ describe('timeCapsuleService', () => {
     it('passes includeAnniversary=true by default', async () => {
       mockInvoke.mockResolvedValue(null);
       await getDueCapsules();
-      expect(mockInvoke).toHaveBeenCalledWith('get_due_capsules', { includeAnniversary: true });
+      expect(mockInvoke).toHaveBeenCalledWith('get_due_capsules', {
+        includeAnniversary: true,
+        localDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+      });
     });
 
     it('passes includeAnniversary=false when disabled', async () => {
       mockInvoke.mockResolvedValue(null);
       await getDueCapsules(false);
-      expect(mockInvoke).toHaveBeenCalledWith('get_due_capsules', { includeAnniversary: false });
+      expect(mockInvoke).toHaveBeenCalledWith('get_due_capsules', {
+        includeAnniversary: false,
+        localDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+      });
     });
 
     it('returns null when no capsule is due', async () => {

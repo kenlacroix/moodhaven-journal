@@ -118,10 +118,7 @@ pub fn exit_app() {
 
 /// Factory reset - wipe all app data and return to first-run state
 #[tauri::command]
-pub async fn factory_reset(
-    app: AppHandle,
-    lock: State<'_, AppLockState>,
-) -> Result<bool, String> {
+pub async fn factory_reset(app: AppHandle, lock: State<'_, AppLockState>) -> Result<bool, String> {
     require_unlocked(&lock)?;
     // Get database path
     let db_path = db::get_db_path(&app)?;
@@ -613,7 +610,10 @@ pub async fn write_text_file(
     // Block writes to sensitive system and shell-config paths.
     for blocked in BLOCKED_PREFIXES {
         if canonical_str.contains(blocked) {
-            return Err(format!("Writing to '{}' is not permitted", canonical.display()));
+            return Err(format!(
+                "Writing to '{}' is not permitted",
+                canonical.display()
+            ));
         }
     }
 

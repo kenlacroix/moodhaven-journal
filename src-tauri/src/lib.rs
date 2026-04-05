@@ -22,6 +22,12 @@ impl AppLockState {
     }
 }
 
+impl Default for AppLockState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 use commands::peer_discovery::PeerDiscoveryState;
 use commands::peer_pairing::PairingServerState;
 use commands::peer_sync_engine::SyncEngineState;

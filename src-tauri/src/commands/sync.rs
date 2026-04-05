@@ -44,7 +44,10 @@ fn validate_timestamp(s: &str, field: &str) -> Result<(), String> {
     if s.len() < 19 || s.len() > 35 {
         return Err(format!("Invalid {field} timestamp length"));
     }
-    if !s.chars().all(|c| c.is_ascii_alphanumeric() || ":-+TZ.".contains(c)) {
+    if !s
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || ":-+TZ.".contains(c))
+    {
         return Err(format!("Invalid characters in {field}"));
     }
     Ok(())

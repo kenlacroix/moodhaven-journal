@@ -13,6 +13,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://www.moodhaven.app"),
   title: "MoodHaven Journal",
   description: "A privacy-first journaling app for clarity and calm.",
   openGraph: {

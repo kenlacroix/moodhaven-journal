@@ -30,6 +30,7 @@ import {
   formatDuration,
   type RateLimitState,
 } from '../lib/services/rateLimitService';
+import { logger } from '../lib/services/logger';
 
 type LockScreenStep = 'password' | '2fa' | 'erase-confirm' | 'recovery-key' | 'biometric-enroll-offer';
 
@@ -190,7 +191,7 @@ export function LockScreen() {
           const success = await unlock(password);
           if (success) {
             // Reset rate limit only after the session is unlocked (delete_setting requires unlock)
-            await resetRateLimit().catch(() => {});
+            await resetRateLimit().catch((err) => logger.warn('resetRateLimit failed', { error: String(err) }));
             setRateLimitState({ failedAttempts: 0, lockoutUntil: null, lastFailedAt: null });
             setLockoutRemaining(0);
           } else {
@@ -219,7 +220,7 @@ export function LockScreen() {
       const success = await unlock(verifiedPassword);
       if (success) {
         // Reset rate limit only after the session is unlocked (delete_setting requires unlock)
-        await resetRateLimit().catch(() => {});
+        await resetRateLimit().catch((err) => logger.warn('resetRateLimit failed', { error: String(err) }));
         setRateLimitState({ failedAttempts: 0, lockoutUntil: null, lastFailedAt: null });
         setLockoutRemaining(0);
       } else {
@@ -312,7 +313,7 @@ export function LockScreen() {
           const success = await unlock(recoveredPassword);
           if (success) {
             // Reset rate limit only after the session is unlocked (delete_setting requires unlock)
-            await resetRateLimit().catch(() => {});
+            await resetRateLimit().catch((err) => logger.warn('resetRateLimit failed', { error: String(err) }));
             setRateLimitState({ failedAttempts: 0, lockoutUntil: null, lastFailedAt: null });
             setLockoutRemaining(0);
           } else {
@@ -379,7 +380,7 @@ export function LockScreen() {
     const success = await unlock(password);
     pendingPasswordRef.current = null;
     if (success) {
-      await resetRateLimit().catch(() => {});
+      await resetRateLimit().catch((err) => logger.warn('resetRateLimit failed', { error: String(err) }));
       setRateLimitState({ failedAttempts: 0, lockoutUntil: null, lastFailedAt: null });
       setLockoutRemaining(0);
     }

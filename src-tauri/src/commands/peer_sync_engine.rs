@@ -1539,6 +1539,8 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
 
     // Apply all received data in one atomic transaction — TCP drop before COMMIT
     // leaves the DB untouched; partial state is impossible.
+    // Count actual upserts (not total received) so ack/log reflect new-or-updated rows only.
+    let (entries_received, books_received, signals_received, settings_received);
     {
         let db = app
             .try_state::<Database>()
@@ -1546,18 +1548,22 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
         conn.execute_batch("BEGIN IMMEDIATE")
             .map_err(|e| format!("sync tx begin: {e}"))?;
+        let mut e_count = 0usize;
+        let mut b_count = 0usize;
+        let mut s_count = 0usize;
+        let mut set_count = 0usize;
         let result: Result<(), String> = (|| {
             for row in &recv_entries {
-                db_upsert_entry(&conn, row)?;
+                if db_upsert_entry(&conn, row)? { e_count += 1; }
             }
             for row in &recv_books {
-                db_upsert_book(&conn, row)?;
+                if db_upsert_book(&conn, row)? { b_count += 1; }
             }
             for row in &recv_signals {
-                db_insert_signal_if_new(&conn, row)?;
+                if db_insert_signal_if_new(&conn, row)? { s_count += 1; }
             }
             for (k, v, ua) in &recv_settings {
-                db_upsert_setting(&conn, k, v, ua)?;
+                if db_upsert_setting(&conn, k, v, ua)? { set_count += 1; }
             }
             Ok(())
         })();
@@ -1567,12 +1573,11 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
         }
         conn.execute_batch("COMMIT")
             .map_err(|e| format!("sync tx commit: {e}"))?;
+        entries_received = e_count;
+        books_received = b_count;
+        signals_received = s_count;
+        settings_received = set_count;
     }
-
-    let entries_received = recv_entries.len();
-    let books_received = recv_books.len();
-    let signals_received = recv_signals.len();
-    let settings_received = recv_settings.len();
 
     // Close write-half cleanly — all phases complete.
     let _ = stream.shutdown(std::net::Shutdown::Write);
@@ -2102,6 +2107,8 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
 
     // Apply all received data in one atomic transaction — TCP drop before COMMIT
     // leaves the DB untouched; partial state is impossible.
+    // Count actual upserts (not total received) so ack/log reflect new-or-updated rows only.
+    let (entries_received, books_received, signals_received, settings_received);
     {
         let db = app
             .try_state::<Database>()
@@ -2109,18 +2116,22 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
         conn.execute_batch("BEGIN IMMEDIATE")
             .map_err(|e| format!("sync tx begin: {e}"))?;
+        let mut e_count = 0usize;
+        let mut b_count = 0usize;
+        let mut s_count = 0usize;
+        let mut set_count = 0usize;
         let result: Result<(), String> = (|| {
             for row in &recv_entries {
-                db_upsert_entry(&conn, row)?;
+                if db_upsert_entry(&conn, row)? { e_count += 1; }
             }
             for row in &recv_books {
-                db_upsert_book(&conn, row)?;
+                if db_upsert_book(&conn, row)? { b_count += 1; }
             }
             for row in &recv_signals {
-                db_insert_signal_if_new(&conn, row)?;
+                if db_insert_signal_if_new(&conn, row)? { s_count += 1; }
             }
             for (k, v, ua) in &recv_settings {
-                db_upsert_setting(&conn, k, v, ua)?;
+                if db_upsert_setting(&conn, k, v, ua)? { set_count += 1; }
             }
             Ok(())
         })();
@@ -2130,12 +2141,11 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
         }
         conn.execute_batch("COMMIT")
             .map_err(|e| format!("sync tx commit: {e}"))?;
+        entries_received = e_count;
+        books_received = b_count;
+        signals_received = s_count;
+        settings_received = set_count;
     }
-
-    let entries_received = recv_entries.len();
-    let books_received = recv_books.len();
-    let signals_received = recv_signals.len();
-    let settings_received = recv_settings.len();
 
     // ── Finalise ─────────────────────────────────────────────────────────────
 

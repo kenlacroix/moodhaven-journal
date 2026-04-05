@@ -447,34 +447,30 @@ fn db_get_books_full(conn: &Connection, ids: &[String]) -> Result<Vec<SyncBookRo
     if ids.is_empty() {
         return Ok(vec![]);
     }
-    let mut result = Vec::with_capacity(ids.len());
-    for id in ids {
-        let row: Option<SyncBookRow> = conn
-            .query_row(
-                "SELECT id, name, emoji, color, sort_order, description, settings,
-                        created_at, COALESCE(updated_at, created_at)
-                 FROM books WHERE id = ?1",
-                rusqlite::params![id],
-                |r| {
-                    Ok(SyncBookRow {
-                        id: r.get(0)?,
-                        name: r.get(1)?,
-                        emoji: r.get(2)?,
-                        color: r.get(3)?,
-                        sort_order: r.get(4)?,
-                        description: r.get(5)?,
-                        settings: r.get(6)?,
-                        created_at: r.get(7)?,
-                        updated_at: r.get(8)?,
-                    })
-                },
-            )
-            .ok();
-        if let Some(r) = row {
-            result.push(r);
-        }
-    }
-    Ok(result)
+    let placeholders = ids.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
+    let sql = format!(
+        "SELECT id, name, emoji, color, sort_order, description, settings, \
+                created_at, COALESCE(updated_at, created_at) \
+         FROM books WHERE id IN ({placeholders})"
+    );
+    conn.prepare(&sql)
+        .map_err(|e| format!("prepare books full: {e}"))?
+        .query_map(rusqlite::params_from_iter(ids.iter()), |r| {
+            Ok(SyncBookRow {
+                id: r.get(0)?,
+                name: r.get(1)?,
+                emoji: r.get(2)?,
+                color: r.get(3)?,
+                sort_order: r.get(4)?,
+                description: r.get(5)?,
+                settings: r.get(6)?,
+                created_at: r.get(7)?,
+                updated_at: r.get(8)?,
+            })
+        })
+        .map_err(|e| format!("query books full: {e}"))?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(|e| format!("collect books full: {e}"))
 }
 
 fn db_upsert_book(conn: &Connection, row: &SyncBookRow) -> Result<bool, String> {
@@ -528,30 +524,26 @@ fn db_get_signals_full(conn: &Connection, ids: &[String]) -> Result<Vec<SyncSign
     if ids.is_empty() {
         return Ok(vec![]);
     }
-    let mut result = Vec::with_capacity(ids.len());
-    for id in ids {
-        let row: Option<SyncSignalRow> = conn
-            .query_row(
-                "SELECT id, timestamp, type, source, payload, created_at
-                 FROM signals WHERE id = ?1",
-                rusqlite::params![id],
-                |r| {
-                    Ok(SyncSignalRow {
-                        id: r.get(0)?,
-                        timestamp: r.get(1)?,
-                        signal_type: r.get(2)?,
-                        source: r.get(3)?,
-                        payload: r.get(4)?,
-                        created_at: r.get(5)?,
-                    })
-                },
-            )
-            .ok();
-        if let Some(r) = row {
-            result.push(r);
-        }
-    }
-    Ok(result)
+    let placeholders = ids.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
+    let sql = format!(
+        "SELECT id, timestamp, type, source, payload, created_at \
+         FROM signals WHERE id IN ({placeholders})"
+    );
+    conn.prepare(&sql)
+        .map_err(|e| format!("prepare signals full: {e}"))?
+        .query_map(rusqlite::params_from_iter(ids.iter()), |r| {
+            Ok(SyncSignalRow {
+                id: r.get(0)?,
+                timestamp: r.get(1)?,
+                signal_type: r.get(2)?,
+                source: r.get(3)?,
+                payload: r.get(4)?,
+                created_at: r.get(5)?,
+            })
+        })
+        .map_err(|e| format!("query signals full: {e}"))?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(|e| format!("collect signals full: {e}"))
 }
 
 /// Signals are immutable — INSERT OR IGNORE; returns true if a new row was inserted.
@@ -662,63 +654,59 @@ fn db_get_entries_full(conn: &Connection, ids: &[String]) -> Result<Vec<JournalE
     if ids.is_empty() {
         return Ok(vec![]);
     }
-    let mut result = Vec::with_capacity(ids.len());
-    for id in ids {
-        let row: Option<JournalEntryRow> = conn
-            .query_row(
-                "SELECT je.id, je.encrypted_content, je.mood, je.privacy_mode,
-                        je.location_weather, je.book_id, je.pinned,
-                        je.created_at, je.updated_at,
-                        je.sealed_until, je.capsule_type, je.linked_original_id, je.unsealed_at,
-                        COALESCE(GROUP_CONCAT(t.name, ','), '') AS tags
-                 FROM journal_entries je
-                 LEFT JOIN entry_tags et ON et.entry_id = je.id
-                 LEFT JOIN tags t ON t.id = et.tag_id
-                 WHERE je.id = ?1
-                 GROUP BY je.id",
-                rusqlite::params![id],
-                |r| {
-                    let ec_json: String = r.get(1)?;
-                    let tags_str: Option<String> = r.get(13)?;
-                    let tags = crate::db::parse_tags(tags_str);
-                    let ec: crate::db::EncryptedContent =
-                        serde_json::from_str(&ec_json).map_err(|e| {
-                            rusqlite::Error::FromSqlConversionFailure(
-                                1,
-                                rusqlite::types::Type::Text,
-                                Box::new(std::io::Error::new(
-                                    std::io::ErrorKind::InvalidData,
-                                    e.to_string(),
-                                )),
-                            )
-                        })?;
-                    Ok(JournalEntryRow {
-                        id: r.get(0)?,
-                        encrypted_content: Some(ec),
-                        mood: r.get(2)?,
-                        privacy_mode: r.get(3)?,
-                        location_weather: r.get(4)?,
-                        book_id: r
-                            .get::<_, Option<String>>(5)?
-                            .unwrap_or_else(|| "default".to_string()),
-                        pinned: r.get::<_, i32>(6)? != 0,
-                        created_at: r.get(7)?,
-                        updated_at: r.get(8)?,
-                        sealed_until: r.get(9)?,
-                        capsule_type: r.get(10)?,
-                        linked_original_id: r.get(11)?,
-                        unsealed_at: r.get(12)?,
-                        tags,
-                        status: None,
-                    })
-                },
-            )
-            .ok();
-        if let Some(r) = row {
-            result.push(r);
-        }
-    }
-    Ok(result)
+    let placeholders = ids.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
+    let sql = format!(
+        "SELECT je.id, je.encrypted_content, je.mood, je.privacy_mode, \
+                je.location_weather, je.book_id, je.pinned, \
+                je.created_at, je.updated_at, \
+                je.sealed_until, je.capsule_type, je.linked_original_id, je.unsealed_at, \
+                COALESCE(GROUP_CONCAT(t.name, ','), '') AS tags \
+         FROM journal_entries je \
+         LEFT JOIN entry_tags et ON et.entry_id = je.id \
+         LEFT JOIN tags t ON t.id = et.tag_id \
+         WHERE je.id IN ({placeholders}) \
+         GROUP BY je.id"
+    );
+    conn.prepare(&sql)
+        .map_err(|e| format!("prepare entries full: {e}"))?
+        .query_map(rusqlite::params_from_iter(ids.iter()), |r| {
+            let ec_json: String = r.get(1)?;
+            let tags_str: Option<String> = r.get(13)?;
+            let tags = crate::db::parse_tags(tags_str);
+            let ec: crate::db::EncryptedContent =
+                serde_json::from_str(&ec_json).map_err(|e| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        1,
+                        rusqlite::types::Type::Text,
+                        Box::new(std::io::Error::new(
+                            std::io::ErrorKind::InvalidData,
+                            e.to_string(),
+                        )),
+                    )
+                })?;
+            Ok(JournalEntryRow {
+                id: r.get(0)?,
+                encrypted_content: Some(ec),
+                mood: r.get(2)?,
+                privacy_mode: r.get(3)?,
+                location_weather: r.get(4)?,
+                book_id: r
+                    .get::<_, Option<String>>(5)?
+                    .unwrap_or_else(|| "default".to_string()),
+                pinned: r.get::<_, i32>(6)? != 0,
+                created_at: r.get(7)?,
+                updated_at: r.get(8)?,
+                sealed_until: r.get(9)?,
+                capsule_type: r.get(10)?,
+                linked_original_id: r.get(11)?,
+                unsealed_at: r.get(12)?,
+                tags,
+                status: None,
+            })
+        })
+        .map_err(|e| format!("query entries full: {e}"))?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(|e| format!("collect entries full: {e}"))
 }
 
 fn db_upsert_tags(conn: &Connection, entry_id: &str, tags: &[String]) -> Result<(), String> {

@@ -9,7 +9,7 @@ import { Menu, X } from 'lucide-react';
 
 const navLinks = [
   { name: 'Home', href: '/' },
-  { name: 'Founders', href: '/founders' },
+  { name: 'Download', href: '/download' },
   { name: 'Blog', href: '/blog' },
   { name: 'FAQ', href: '/faq' },
   { name: 'Contribute', href: '/contribute' },
@@ -52,8 +52,8 @@ export default function NavBar() {
           />
         </Link>
 
-        {/* Desktop Nav Links */}
-        <div className="hidden md:flex space-x-6 pr-2">
+        {/* Desktop Nav Links + CTA */}
+        <div className="hidden md:flex items-center gap-6">
           {navLinks.map((link) => {
             const active = pathname === link.href;
             return (
@@ -73,6 +73,14 @@ export default function NavBar() {
               </Link>
             );
           })}
+          <a
+            href="https://journal.moodhaven.app"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded-full bg-accent-cta text-neutral-900 px-4 py-2 text-sm font-semibold shadow-sm transition-all duration-200 ease-out hover:bg-accent-cta/90 hover:scale-105 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-cta/60 whitespace-nowrap"
+          >
+            Try Free <span aria-hidden="true">→</span>
+          </a>
         </div>
 
         {/* Mobile Toggle */}
@@ -97,6 +105,15 @@ export default function NavBar() {
         }`}
       >
         <div className="flex flex-col p-6 space-y-4">
+          <a
+            href="https://journal.moodhaven.app"
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => setMenuOpen(false)}
+            className="block text-center rounded-full bg-accent-cta text-neutral-900 px-4 py-3 text-sm font-semibold shadow-sm hover:bg-accent-cta/90 transition duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-cta/60"
+          >
+            Try Free <span aria-hidden="true">→</span>
+          </a>
           {navLinks.map((link) => {
             const active = pathname === link.href;
             return (

@@ -13,6 +13,7 @@ import {
 import { SiBluesky } from "react-icons/si";
 import { motion, AnimatePresence } from "framer-motion";
 import AnimatedReveal from "./AnimatedReveal";
+import FooterColumns from "./FooterColumns";
 
 export default function Footer() {
   const [showTop, setShowTop] = useState(false);
@@ -24,10 +25,6 @@ export default function Footer() {
   }, []);
 
   const currentYear = new Date().getFullYear();
-  const copyright =
-    currentYear === 2023
-      ? `© 2023 MoodHaven Journal. Built with care by `
-      : `© 2023–${currentYear} MoodHaven Journal. Built with care by `;
 
   return (
     <motion.footer
@@ -37,12 +34,19 @@ export default function Footer() {
       transition={{ duration: 0.5 }}
       className="relative w-full bg-[var(--background)] border-t border-neutral-200 pt-10 pb-14 text-[var(--foreground)]"
     >
-      <div className="max-w-4xl mx-auto px-6 text-center">
+      <div className="max-w-4xl mx-auto px-6">
+        {/* Three-column link grid */}
+        <AnimatedReveal>
+          <FooterColumns />
+        </AnimatedReveal>
+
+        <hr className="border-neutral-200 mb-6" />
+
         {/* Social Icons */}
         <nav
           role="navigation"
           aria-label="Social media links"
-          className="flex justify-center items-center flex-wrap gap-6 mb-10"
+          className="flex justify-center items-center flex-wrap gap-5 mb-6"
         >
           {[
             { href: "https://moodhaven.substack.com", icon: <FaRss />, title: "Substack" },
@@ -59,37 +63,20 @@ export default function Footer() {
           ))}
         </nav>
 
-        <hr className="border-neutral-200 w-3/4 mx-auto my-6 sm:hidden" />
-
-        {/* App + Legal Links */}
-        <AnimatedReveal delay={0.5}>
-          <div className="mb-4 text-sm text-neutral-500 flex flex-wrap justify-center gap-4">
-            <Link href="https://journal.moodhaven.app" className="hover:underline text-primary-700 font-medium">
-              Open Journal App
-            </Link>
-            <span className="text-neutral-300">·</span>
-            <Link href="/privacy" className="hover:underline">
-              Privacy
-            </Link>
-            <Link href="/terms" className="hover:underline">
-              Terms
-            </Link>
-          </div>
-        </AnimatedReveal>
-
-        {/* Copyright with external link */}
-        <AnimatedReveal delay={0.6}>
-          <small className="block text-xs sm:text-sm text-neutral-500 tracking-wide">
-            {copyright}
+        {/* Copyright */}
+        <AnimatedReveal delay={0.4}>
+          <small className="block text-xs text-neutral-500 text-center tracking-wide">
+            © {currentYear} MoodHaven Journal. Open source, privacy-first journaling.{" "}
+            Built by{" "}
             <Link
               href="https://www.kennethlacroix.me"
               target="_blank"
               rel="noopener noreferrer"
-              className="underline hover:text-primary-700"
+              className="underline hover:text-neutral-600"
             >
               Ken LaCroix
             </Link>
-            .
+            {" "}· MIT License
           </small>
         </AnimatedReveal>
       </div>

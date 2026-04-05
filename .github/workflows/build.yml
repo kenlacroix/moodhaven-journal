@@ -334,6 +334,56 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: node scripts/generate-checksums.cjs
 
+      - name: Generate latest-release.json and attach to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          VERSION="${TAG#v}"
+          BASE="https://github.com/${{ github.repository }}/releases/download/${TAG}"
+          PUBLISHED_AT=$(gh release view "$TAG" --json publishedAt -q '.publishedAt')
+
+          build_asset() {
+            local name="$1"
+            local size_bytes
+            size_bytes=$(gh release view "$TAG" --json assets -q ".assets[] | select(.name == \"$name\") | .size" 2>/dev/null || echo "")
+            if [ -z "$size_bytes" ]; then return; fi
+            local size_mb
+            size_mb=$(echo "scale=1; $size_bytes / 1048576" | bc)
+            printf '    {"name":"%s","downloadUrl":"%s/%s","sizeLabel":"%s MB"}' \
+              "$name" "$BASE" "$name" "$size_mb"
+          }
+
+          ASSETS=()
+          for name in \
+            "MoodHaven_${VERSION}_amd64.AppImage" \
+            "MoodHaven_${VERSION}_amd64.deb" \
+            "MoodHaven-${VERSION}-1.x86_64.rpm" \
+            "MoodHaven_${VERSION}_x64-setup.exe" \
+            "MoodHaven_${VERSION}_x64_en-US.msi" \
+            "MoodHaven_${VERSION}_aarch64.dmg" \
+            "MoodHaven_${VERSION}_x64.dmg" \
+            "app-universal-debug.apk" \
+            "wear-debug.apk"; do
+            entry=$(build_asset "$name")
+            [ -n "$entry" ] && ASSETS+=("$entry")
+          done
+
+          ASSETS_JSON=$(printf '%s\n' "${ASSETS[@]}" | paste -sd ',' -)
+
+          cat > latest-release.json << JSON
+          {
+            "version": "${VERSION}",
+            "releaseUrl": "https://github.com/${{ github.repository }}/releases/tag/${TAG}",
+            "publishedAt": "${PUBLISHED_AT}",
+            "assets": [
+          ${ASSETS_JSON}
+            ]
+          }
+          JSON
+
+          gh release upload "$TAG" latest-release.json --clobber
+
       - name: Update release notes from tag annotation
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

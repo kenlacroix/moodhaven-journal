@@ -7,6 +7,20 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.8.2] — 2026-04-04
+
+### Security
+- **Crypto key cache no longer stores plaintext password.** The session key cache now uses a djb2 hash of the password as the Map key instead of the raw password string, preventing the user's password from persisting in the JS heap beyond the unlock operation.
+- **Constant-time hash comparison.** `verifyPasswordHash` now uses a byte-level XOR comparison instead of `===`, closing a timing-based password oracle.
+- **DOMPurify replaces custom HTML sanitizer.** `TimeCapsuleRevealModal` now uses DOMPurify to sanitize decrypted journal HTML, closing SVG/CSS/link injection vectors that the hand-rolled sanitizer missed.
+- **Path traversal blocked in media commands.** `abs_enc_path` canonicalizes and validates that resolved paths stay within the app data directory, blocking `../`-style traversal from database-stored file paths.
+- **`write_text_file` restricted.** The command now requires an unlocked session and rejects writes to `.ssh`, shell config files, and system directories after canonicalization.
+- **Session lock gate on sensitive commands.** `factory_reset`, `write_text_file`, `get_all_journal_entries`, and `get_all_settings` now require the session to be unlocked before executing. `AppLockState` is managed in the Rust backend, toggled via new `unlock_app` / `lock_app` commands wired to `unlockJournal` / `lockJournal` in the frontend.
+- **Constant-time PIN comparison in peer pairing.** The 6-digit pairing PIN is now compared via a byte-level XOR fold instead of Rust's short-circuit `!=`, removing a timing oracle for LAN attackers.
+- **Peer sync entry validation.** `upsert_entry_from_sync` now validates UUID format, ISO 8601 timestamps, `capsule_type` enum membership, `book_id` length, and tag count/length before writing, blocking a malicious trusted peer from injecting forged field values.
+
+---
+
 ## [0.8.1] — 2026-04-04
 
 ### Fixed

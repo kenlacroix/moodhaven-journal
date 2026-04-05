@@ -153,7 +153,8 @@ pub fn unseal_entry(db: State<Database>, id: String) -> Result<(), String> {
             "UPDATE journal_entries
              SET unsealed_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'),
                  capsule_type = COALESCE(capsule_type, 'anniversary'),
-                 sealed_until = NULL
+                 sealed_until = NULL,
+                 updated_at   = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
              WHERE id = ?1
                AND unsealed_at IS NULL",
             rusqlite::params![id],

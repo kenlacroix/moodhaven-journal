@@ -14,6 +14,7 @@ import {
   lockJournal,
   devBypassUnlock,
 } from '../lib/services/journalService';
+import { seedDevEntries } from '../lib/devSeed';
 
 interface AppState {
   // Authentication
@@ -42,9 +43,12 @@ export const useAppStore = create<AppState>((set) => ({
 
   // Check if user has set up password
   checkInitialization: async () => {
-    if (import.meta.env.DEV && import.meta.env.VITE_DEV_MODE === 'bypass') {
+    if (import.meta.env.DEV && (import.meta.env.VITE_DEV_MODE === 'bypass' || import.meta.env.VITE_DEV_MODE === 'seeded')) {
       devBypassUnlock('dev-bypass');
       set({ isInitialized: true, isUnlocked: true, sessionPassword: 'dev-bypass' });
+      if (import.meta.env.VITE_DEV_MODE === 'seeded') {
+        seedDevEntries().catch(() => {/* non-fatal */});
+      }
       return;
     }
     try {

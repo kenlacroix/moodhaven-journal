@@ -93,21 +93,18 @@
 **What:** `isAvailable` is computed as `settings.enabled && settings.modelDownloaded`. The `modelDownloaded` flag in settings can drift from reality (e.g. user deletes the model file manually).
 **Fix:** `isAvailable` now reads from `availabilityResultRef.current` (populated by `checkAvailability()`) instead of the settings flag.
 
-### A-12: `stt_cancel_download` not registered in `lib.rs`; download progress events never wired (P2)
-**What:** The `stt_cancel_download` Tauri command exists in Rust but is never added to `generate_handler![]` in `lib.rs`, so it's unreachable from the frontend. Download progress events emitted by the Rust side are also not listened to in any frontend hook.
-**Fix:** Register `commands::speech_to_text::stt_cancel_download` in `lib.rs`. Add a `listen('stt-download-progress', …)` call in `useSpeechToText` or a dedicated `useModelDownload` hook.
+### ~~A-12: `stt_cancel_download` not registered in `lib.rs`; download progress events never wired~~ ✅ RESOLVED 2026-04-04
+**Fix:** Registered `commands::stt_cancel_download` in `lib.rs`. Rewrote `downloadModel()` in `speechToTextService.ts` to set up a `listen('stt-download-progress', …)` listener before invoking, clean it up in `finally`. Added `cancelDownload()` export. Extended `DownloadProgress` interface with `state`, `speed`, `error` fields to match Rust struct.
 
-### A-13: `raw_transcription` DB column added but never written to (P2)
-**What:** A `raw_transcription TEXT` column was added to the schema but the `create_journal_entry` / `update_journal_entry` commands never populate it. The column is always NULL.
-**Fix:** Pass the raw transcript text from `useSpeechToText` through to the save path and include it in the INSERT/UPDATE SQL.
+### ~~A-13: `raw_transcription` DB column added but never written to~~ ✅ RESOLVED 2026-04-04
+**Fix:** `patch_voice_memo_transcription` in `db/mod.rs` now sets `raw_transcription = transcription` when `raw_transcription IS NULL` (first write from whisper.cpp). Subsequent calls leave `raw_transcription` intact.
 
 ### ~~A-14: `stt_download_model` URL is attacker-controllable from the WebView — no allowlist in Rust~~ → fix/security-hardening
 **What:** The download URL for Whisper models is constructed from a `model_name` parameter passed by the frontend. A compromised WebView could supply an arbitrary URL and cause the Rust sidecar to fetch from an attacker-controlled server.
 **Fix:** Maintain an allowlist of valid model names in Rust, map each name to its canonical Hugging Face URL, and reject any model name not in the allowlist.
 
-### A-15: OpenAI 401 silently falls back to local formatting without user feedback (P2)
-**What:** When the OpenAI API returns 401 (invalid/revoked key), `formatTranscript` silently returns L1-formatted text with `source: 'local'`. The user believes they're using OpenAI but silently gets local quality.
-**Fix:** Return an error result (e.g. `{ error: 'INVALID_KEY' }`) and surface it in the UI as an amber error on the mic button, prompting the user to update their OpenAI key in Settings.
+### ~~A-15: OpenAI 401 silently falls back to local formatting without user feedback~~ ✅ RESOLVED 2026-04-04
+**Fix:** `formatTranscript` in `aiService.ts` now throws `Error('INVALID_KEY')` on 401 instead of returning `source: 'local'`. `useSpeechToText` catches it and sets `transcribeError` prompting the user to update their key in Settings.
 
 ### A-16: Ollama response body has no size limit — vulnerable to rogue server DoS (P3)
 **What:** `response.json()` buffers the entire Ollama response in memory. A misconfigured or adversarial Ollama endpoint could return a 500MB body, causing OOM in the renderer process.
@@ -128,27 +125,19 @@
 
 ## Time Layer (feat/time-layer)
 
-### TL-005: get_due_capsules On-This-Day exclusion uses UTC not local date (P2)
-**What:** `strftime('%m-%d', 'now')` returns today's UTC date. For users in UTC+12/UTC-12, their local calendar day differs by up to ±14 hours, causing wrong On-This-Day exclusions. Fix: pass local date from frontend as a parameter, same pattern as `get_monthly_mood_data`.
-**Context:** Adversarial review of feat/time-layer (2026-03-26).
-**Effort:** human ~1h / CC+gstack ~15min
+### ~~TL-005: get_due_capsules On-This-Day exclusion uses UTC not local date~~ ✅ RESOLVED 2026-04-04
+**Fix:** `get_due_capsules` now accepts an optional `local_date: Option<String>` (YYYY-MM-DD). Frontend `getDueCapsules()` passes `new Date().toLocaleDateString('en-CA')`. Falls back to `date('now')` when not provided.
 
 ### TL-006: Anniversary entries visible in timeline before reveal (P2)
 **What:** Anniversary entries (capsule_type IS NULL, sealed_until IS NULL) have `encrypted_content` populated and appear in the timeline like normal entries — they are not hidden. Clarify product intent: should anniversary entries be hidden until the reveal modal triggers, or just highlighted?
 **Context:** Adversarial review of feat/time-layer (2026-03-26).
 **Effort:** product decision first, then ~30min CC
 
-### TL-007: Peer sync: unsealed_at LWW can re-queue already-revealed capsule (P2)
-**What:** `updated_at` drives LWW in peer sync but `unsealed_at` is not reflected in `updated_at`. If Device A reveals a capsule while offline, then syncs to Device B, Device B's LWW may overwrite its local `unsealed_at` with the older (unrevealed) row — re-queueing the capsule.
-**Context:** Adversarial review of feat/time-layer (2026-03-26).
-**Effort:** ~1h — update `upsert_entry_from_sync` to preserve `unsealed_at` if already set
+### ~~TL-007: Peer sync: unsealed_at LWW can re-queue already-revealed capsule~~ ✅ RESOLVED 2026-04-04
+**Fix:** `unseal_entry` now also sets `updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')` so the LWW timestamp reflects the reveal and peer sync propagates the unsealed state correctly.
 
-### TL-004: Export/import does not preserve capsule columns (P1)
-**What:** `import_data` calls `db::create_entry()` which only writes `(id, ec, mood, privacy_mode, location_weather, book_id)`. The four capsule columns (`sealed_until`, `capsule_type`, `linked_original_id`, `unsealed_at`) are silently dropped. A user who exports and re-imports loses all sealed/revealed capsule state.
-**Fix:** Extend `import_data` to read and write the capsule columns from the JSON export payload.
-**Priority:** P1 — time capsule feature is shipping in this PR; backup fidelity should follow in the next patch.
-**Context:** Identified in pre-landing review of feat/time-layer (2026-03-26). Deferred to follow-up.
-**Effort:** human ~1h / CC+gstack ~30min
+### ~~TL-004: Export/import does not preserve capsule columns~~ ✅ RESOLVED 2026-04-04
+**Fix:** `import_data` in `data_management.rs` now passes `location_weather` and `book_id` to `db::create_entry()`, then runs a follow-up SQL UPDATE to restore `created_at`, `updated_at`, `pinned`, `sealed_until`, `capsule_type`, `linked_original_id`, `unsealed_at` from the JSON payload.
 
 ---
 

@@ -80,3 +80,6 @@ ceo-plans/
 /.agents
 /active-plans
 dist-web/
+
+# Android CI signing — keystore files decoded from secrets at build time
+keystore*.jks

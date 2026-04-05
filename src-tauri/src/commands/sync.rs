@@ -7,6 +7,49 @@ use crate::db::Database;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
+// ── Sync field validation ─────────────────────────────────────────────────────
+
+const ALLOWED_CAPSULE_TYPES: &[&str] = &["letter", "vault", "anniversary"];
+const MAX_TAG_COUNT: usize = 50;
+const MAX_TAG_LEN: usize = 64;
+const MAX_BOOK_ID_LEN: usize = 64;
+const UUID_LEN: usize = 36; // xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+
+/// Returns Err if `s` doesn't look like a UUID (length + hyphen positions only —
+/// no regex dep required). This blocks path-style or SQL-injection IDs.
+fn validate_id(s: &str) -> Result<(), String> {
+    if s.len() != UUID_LEN {
+        return Err(format!("Invalid id length: {}", s.len()));
+    }
+    for (i, c) in s.chars().enumerate() {
+        match i {
+            8 | 13 | 18 | 23 => {
+                if c != '-' {
+                    return Err("Invalid id format".to_string());
+                }
+            }
+            _ => {
+                if !c.is_ascii_hexdigit() {
+                    return Err("Invalid id character".to_string());
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Returns Err if `s` doesn't look like an ISO 8601 timestamp (basic length / char check).
+fn validate_timestamp(s: &str, field: &str) -> Result<(), String> {
+    // Minimum: "2006-01-02T15:04:05" = 19 chars; maximum reasonable length = 35
+    if s.len() < 19 || s.len() > 35 {
+        return Err(format!("Invalid {field} timestamp length"));
+    }
+    if !s.chars().all(|c| c.is_ascii_alphanumeric() || ":-+TZ.".contains(c)) {
+        return Err(format!("Invalid characters in {field}"));
+    }
+    Ok(())
+}
+
 /// Lightweight entry metadata used by the sync engine manifest diff.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SyncEntryMeta {
@@ -53,12 +96,33 @@ pub fn upsert_entry_from_sync(db: State<Database>, entry_json: String) -> Result
         serde_json::from_str(&entry_json).map_err(|e| format!("Invalid entry JSON: {}", e))?;
 
     let id = v["id"].as_str().ok_or("Missing id")?;
+    validate_id(id)?;
+
     let updated_at = v["updated_at"].as_str().ok_or("Missing updated_at")?;
+    validate_timestamp(updated_at, "updated_at")?;
+
     let created_at = v["created_at"].as_str().ok_or("Missing created_at")?;
+    validate_timestamp(created_at, "created_at")?;
+
     let mood = v["mood"].as_i64().unwrap_or(3).clamp(1, 5) as i32;
     let privacy_mode = v["privacy_mode"].as_i64().unwrap_or(0).clamp(0, 2) as i32;
     let pinned = v["pinned"].as_bool().unwrap_or(false) as i32;
+
     let book_id = v["book_id"].as_str().unwrap_or("default");
+    if book_id.len() > MAX_BOOK_ID_LEN {
+        return Err(format!("book_id exceeds max length ({})", MAX_BOOK_ID_LEN));
+    }
+
+    if let Some(ct) = v["capsule_type"].as_str() {
+        if !ct.is_empty() && !ALLOWED_CAPSULE_TYPES.contains(&ct) {
+            return Err(format!("Invalid capsule_type: {:?}", ct));
+        }
+    }
+
+    if let Some(su) = v["sealed_until"].as_str() {
+        validate_timestamp(su, "sealed_until")?;
+    }
+
     let location_weather = v["location_weather"].as_str();
 
     // Re-serialize encrypted_content as compact JSON for storage
@@ -74,10 +138,13 @@ pub fn upsert_entry_from_sync(db: State<Database>, entry_json: String) -> Result
         .map(|arr| {
             arr.iter()
                 .filter_map(|t| t.as_str().map(|s| s.to_string()))
-                .filter(|s| !s.is_empty())
+                .filter(|s| !s.is_empty() && s.len() <= MAX_TAG_LEN)
                 .collect()
         })
         .unwrap_or_default();
+    if tags.len() > MAX_TAG_COUNT {
+        return Err(format!("Too many tags (max {})", MAX_TAG_COUNT));
+    }
 
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 

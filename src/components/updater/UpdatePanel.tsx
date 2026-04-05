@@ -14,6 +14,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
+import DOMPurify from 'dompurify';
 import { listen } from '@tauri-apps/api/event';
 import { open } from '@tauri-apps/plugin-shell';
 import { downloadAndInstallUpdate } from '../../lib/services/updaterService';
@@ -274,11 +275,7 @@ export function UpdatePanel({ hook, currentVersion }: UpdatePanelProps) {
               </p>
               <div
                 className="prose-sm"
-                // nosemgrep: react-dangerouslysetinnerhtml
-                // Safe: renderMarkdown() HTML-escapes all input before substitution;
-                // only hardcoded tags (<strong>,<em>,<code>,<h2>,<h3>,<ul>,<li>,<p>) are injected.
-                // Source is GitHub release notes (developer-controlled).
-                dangerouslySetInnerHTML={{ __html: renderMarkdown(updateInfo.notes) }}
+                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(renderMarkdown(updateInfo.notes)) }}
               />
             </div>
           )}

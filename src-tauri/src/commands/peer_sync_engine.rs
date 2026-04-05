@@ -673,17 +673,16 @@ fn db_get_entries_full(conn: &Connection, ids: &[String]) -> Result<Vec<JournalE
             let ec_json: String = r.get(1)?;
             let tags_str: Option<String> = r.get(13)?;
             let tags = crate::db::parse_tags(tags_str);
-            let ec: crate::db::EncryptedContent =
-                serde_json::from_str(&ec_json).map_err(|e| {
-                    rusqlite::Error::FromSqlConversionFailure(
-                        1,
-                        rusqlite::types::Type::Text,
-                        Box::new(std::io::Error::new(
-                            std::io::ErrorKind::InvalidData,
-                            e.to_string(),
-                        )),
-                    )
-                })?;
+            let ec: crate::db::EncryptedContent = serde_json::from_str(&ec_json).map_err(|e| {
+                rusqlite::Error::FromSqlConversionFailure(
+                    1,
+                    rusqlite::types::Type::Text,
+                    Box::new(std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        e.to_string(),
+                    )),
+                )
+            })?;
             Ok(JournalEntryRow {
                 id: r.get(0)?,
                 encrypted_content: Some(ec),
@@ -1415,7 +1414,10 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
                 recv_books.push(row);
             }
             Msg::BooksDone { sent } => {
-                log::info!("[sync] Server: client sent {sent} books, we received {} new/updated", recv_books.len());
+                log::info!(
+                    "[sync] Server: client sent {sent} books, we received {} new/updated",
+                    recv_books.len()
+                );
                 break;
             }
             other => return Err(format!("Unexpected msg in books recv: {other:?}")),
@@ -1520,7 +1522,10 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
                 recv_settings.push((k, v, ua));
             }
             Msg::SettingsDone { sent } => {
-                log::info!("[sync] Server: client sent {sent} settings, we received {} updated", recv_settings.len());
+                log::info!(
+                    "[sync] Server: client sent {sent} settings, we received {} updated",
+                    recv_settings.len()
+                );
                 break;
             }
             other => return Err(format!("Unexpected msg in settings recv: {other:?}")),
@@ -1554,16 +1559,24 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
         let mut set_count = 0usize;
         let result: Result<(), String> = (|| {
             for row in &recv_entries {
-                if db_upsert_entry(&conn, row)? { e_count += 1; }
+                if db_upsert_entry(&conn, row)? {
+                    e_count += 1;
+                }
             }
             for row in &recv_books {
-                if db_upsert_book(&conn, row)? { b_count += 1; }
+                if db_upsert_book(&conn, row)? {
+                    b_count += 1;
+                }
             }
             for row in &recv_signals {
-                if db_insert_signal_if_new(&conn, row)? { s_count += 1; }
+                if db_insert_signal_if_new(&conn, row)? {
+                    s_count += 1;
+                }
             }
             for (k, v, ua) in &recv_settings {
-                if db_upsert_setting(&conn, k, v, ua)? { set_count += 1; }
+                if db_upsert_setting(&conn, k, v, ua)? {
+                    set_count += 1;
+                }
             }
             Ok(())
         })();
@@ -1952,7 +1965,10 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
                 recv_books.push(row);
             }
             Msg::BooksDone { sent } => {
-                log::info!("[sync] Client: server sent {sent} books, we received {} new/updated", recv_books.len());
+                log::info!(
+                    "[sync] Client: server sent {sent} books, we received {} new/updated",
+                    recv_books.len()
+                );
                 break;
             }
             other => return Err(format!("Unexpected msg in books recv: {other:?}")),
@@ -2041,7 +2057,10 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
                 recv_settings.push((k, v, ua));
             }
             Msg::SettingsDone { sent } => {
-                log::info!("[sync] Client: server sent {sent} settings, we received {} updated", recv_settings.len());
+                log::info!(
+                    "[sync] Client: server sent {sent} settings, we received {} updated",
+                    recv_settings.len()
+                );
                 break;
             }
             other => return Err(format!("Unexpected msg in settings recv: {other:?}")),
@@ -2122,16 +2141,24 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
         let mut set_count = 0usize;
         let result: Result<(), String> = (|| {
             for row in &recv_entries {
-                if db_upsert_entry(&conn, row)? { e_count += 1; }
+                if db_upsert_entry(&conn, row)? {
+                    e_count += 1;
+                }
             }
             for row in &recv_books {
-                if db_upsert_book(&conn, row)? { b_count += 1; }
+                if db_upsert_book(&conn, row)? {
+                    b_count += 1;
+                }
             }
             for row in &recv_signals {
-                if db_insert_signal_if_new(&conn, row)? { s_count += 1; }
+                if db_insert_signal_if_new(&conn, row)? {
+                    s_count += 1;
+                }
             }
             for (k, v, ua) in &recv_settings {
-                if db_upsert_setting(&conn, k, v, ua)? { set_count += 1; }
+                if db_upsert_setting(&conn, k, v, ua)? {
+                    set_count += 1;
+                }
             }
             Ok(())
         })();
@@ -2431,7 +2458,10 @@ mod tests {
     fn key_derivation_different_peers_differ() {
         let key_ab = derive_sync_key_static("pubkey_a", "pubkey_b");
         let key_ac = derive_sync_key_static("pubkey_a", "pubkey_c");
-        assert_ne!(key_ab, key_ac, "different peer keys must yield different transport keys");
+        assert_ne!(
+            key_ab, key_ac,
+            "different peer keys must yield different transport keys"
+        );
     }
 
     // ── LWW upsert logic ──────────────────────────────────────────────────────
@@ -2443,7 +2473,11 @@ mod tests {
         let inserted = db_upsert_entry(&conn, &entry).expect("upsert");
         assert!(inserted, "new entry should be inserted");
         let count: i64 = conn
-            .query_row("SELECT COUNT(*) FROM journal_entries WHERE id = 'e1'", [], |r| r.get(0))
+            .query_row(
+                "SELECT COUNT(*) FROM journal_entries WHERE id = 'e1'",
+                [],
+                |r| r.get(0),
+            )
             .unwrap();
         assert_eq!(count, 1);
     }
@@ -2461,9 +2495,16 @@ mod tests {
         assert!(!updated, "older remote must not overwrite local");
 
         let stored_at: String = conn
-            .query_row("SELECT updated_at FROM journal_entries WHERE id = 'e2'", [], |r| r.get(0))
+            .query_row(
+                "SELECT updated_at FROM journal_entries WHERE id = 'e2'",
+                [],
+                |r| r.get(0),
+            )
             .unwrap();
-        assert_eq!(stored_at, "2026-03-10T10:00:00Z", "local timestamp must be preserved");
+        assert_eq!(
+            stored_at, "2026-03-10T10:00:00Z",
+            "local timestamp must be preserved"
+        );
     }
 
     #[test]
@@ -2490,8 +2531,11 @@ mod tests {
             let entry = make_entry("e4", "2026-03-01T00:00:00Z");
             db_upsert_entry(&conn, &entry)?;
             // Simulate a second operation that fails
-            conn.execute("INSERT INTO journal_entries (id) VALUES (?1)", rusqlite::params!["e4"])
-                .map_err(|e| format!("forced error: {e}"))?;
+            conn.execute(
+                "INSERT INTO journal_entries (id) VALUES (?1)",
+                rusqlite::params!["e4"],
+            )
+            .map_err(|e| format!("forced error: {e}"))?;
             Ok(())
         })();
 
@@ -2499,7 +2543,11 @@ mod tests {
         conn.execute_batch("ROLLBACK").expect("rollback");
 
         let count: i64 = conn
-            .query_row("SELECT COUNT(*) FROM journal_entries WHERE id = 'e4'", [], |r| r.get(0))
+            .query_row(
+                "SELECT COUNT(*) FROM journal_entries WHERE id = 'e4'",
+                [],
+                |r| r.get(0),
+            )
             .unwrap();
         assert_eq!(count, 0, "rollback must leave no partial data");
     }

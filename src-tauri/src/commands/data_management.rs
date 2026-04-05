@@ -177,10 +177,7 @@ pub async fn factory_reset(app: AppHandle, lock: State<'_, AppLockState>) -> Res
 /// Accepts optional filters (tags, mood range, date range) for selective export.
 /// When no filters are provided, exports all entries — WebDAV compat path unchanged.
 #[tauri::command]
-pub async fn export_data(
-    app: AppHandle,
-    filter: Option<ExportFilter>,
-) -> Result<String, String> {
+pub async fn export_data(app: AppHandle, filter: Option<ExportFilter>) -> Result<String, String> {
     let lock = app.state::<AppLockState>();
     require_unlocked(&lock)?;
     let db = app.state::<Database>();

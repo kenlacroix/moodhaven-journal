@@ -35,6 +35,7 @@ pub fn get_password_hash(db: State<Database>) -> Result<Option<UserSettings>, St
 
 /// Create a new encrypted journal entry
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub fn create_journal_entry(
     db: State<Database>,
     lock: State<'_, AppLockState>,

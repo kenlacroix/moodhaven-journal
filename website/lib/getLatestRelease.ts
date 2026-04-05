@@ -34,7 +34,10 @@ function isValidRelease(data: unknown): data is LatestRelease {
 
 export async function getLatestRelease(): Promise<LatestRelease | null> {
   try {
-    const res = await fetch(RELEASE_JSON_URL, { cache: "no-store" });
+    const res = await fetch(RELEASE_JSON_URL, {
+      redirect: "follow",
+      headers: { "Cache-Control": "no-store" },
+    });
     if (!res.ok) return null;
     const data: unknown = await res.json();
     if (!isValidRelease(data)) return null;

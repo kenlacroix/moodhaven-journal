@@ -127,7 +127,7 @@ jobs:
 
       - name: Cargo deny (supply chain)
         if: matrix.os == 'ubuntu-latest'
-        uses: EmbarkStudios/cargo-deny-action@d6d27f1b02f0c07f9db6ffc34e7871bba5ab5816  # v2.0.9
+        uses: EmbarkStudios/cargo-deny-action@44db170f6a7d12a6e90340e9e0fca1f650d34b14  # v2.0.15
         with:
           manifest-path: src-tauri/Cargo.toml
 

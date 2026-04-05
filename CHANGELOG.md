@@ -15,6 +15,25 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 - **`UpdatePanel.tsx` semgrep false positive.** Added `nosemgrep` suppression with inline justification on the `dangerouslySetInnerHTML` usage in the release-notes renderer. The `renderMarkdown` function HTML-escapes all input before substitution; source is developer-controlled GitHub release notes.
+## [0.8.3] — 2026-04-05
+
+### Security
+- All journal, settings, and data management commands now enforce the session lock gate (`require_unlocked`). Calling any protected command while the app is locked returns an error instead of silently succeeding.
+- `export_data` and `import_data` removed their dead `_password` parameters. Encryption was always client-side; the server parameter was never used.
+- `resetRateLimit` (which calls `delete_setting`) is now called only after a successful unlock, not before. Fixes a pre-existing ordering bug where `delete_setting` would be called on a locked session.
+- `resetRateLimit` failures are now logged via `logger.warn` instead of silently swallowed; prevents silent lockout on next launch if the DB operation fails.
+
+### Fixed
+- Peer sync `DONE_ACK` now reports the count of actually inserted/updated rows rather than total received. LWW-skipped duplicates no longer inflate the logged recv count.
+- `speech_to_text.rs`: mutex lock poisoning now returns an error instead of panicking the process.
+- Peer sync upserts are now applied in a single atomic `BEGIN IMMEDIATE`/`COMMIT` transaction. A dropped TCP connection mid-sync leaves the DB fully clean or fully applied.
+
+### Added
+- `ErrorBoundary` component wraps each view and the root layout. Rendering crashes are caught, logged, and present a "Reload" button instead of a blank screen.
+- Batch `WHERE id IN (?)` queries in peer sync engine (`db_get_entries_full`, `db_get_books_full`, `db_get_signals_full`) replace per-ID `query_row` loops. Sync phases now issue 1 DB query per object type instead of N.
+- 9 new Rust `#[cfg(test)]` tests for the peer sync engine: key derivation symmetry, LWW semantics, and transaction rollback.
+- 3 new tests for `ErrorBoundary` (no-error render, default fallback, custom fallback).
+
 ## [0.8.2] — 2026-04-04
 
 ### Security

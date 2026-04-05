@@ -336,6 +336,48 @@ describe('aiService', () => {
       }
     });
 
+    it('L2 Ollama body > 1 MB falls back to L1 with source "local"', async () => {
+      const bigChunk = new Uint8Array(1_048_577); // 1 MB + 1 byte
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+        ok: true,
+        body: new ReadableStream({
+          start(controller) {
+            controller.enqueue(bigChunk);
+            controller.close();
+          },
+        }),
+      } as Response);
+      try {
+        const result = await formatTranscript(rawText, 'standard', {
+          layer: 'ollama',
+          cloudConsentGiven: false,
+          ollamaEndpoint: 'http://localhost:11434',
+          ollamaModel: 'llama2',
+        });
+        expect(result.source).toBe('local');
+      } finally {
+        fetchSpy.mockRestore();
+      }
+    });
+
+    it('L2 Ollama null response body falls back to L1 with source "local"', async () => {
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+        ok: true,
+        body: null,
+      } as unknown as Response);
+      try {
+        const result = await formatTranscript(rawText, 'standard', {
+          layer: 'ollama',
+          cloudConsentGiven: false,
+          ollamaEndpoint: 'http://localhost:11434',
+          ollamaModel: 'llama2',
+        });
+        expect(result.source).toBe('local');
+      } finally {
+        fetchSpy.mockRestore();
+      }
+    });
+
     it('L2 Ollama AbortError (timeout) falls back to L1 with source "local"', async () => {
       const fetchSpy = vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(
         new DOMException('The operation was aborted.', 'AbortError')

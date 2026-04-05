@@ -701,12 +701,12 @@ export async function formatTranscript(
       let received = 0;
       while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
-        received += value.byteLength;
-        if (received > MAX_BYTES) {
-          reader.cancel();
+        if (done || !value) break;
+        if (received + value.byteLength > MAX_BYTES) {
+          await reader.cancel();
           throw new Error('Ollama response exceeded 1 MB size limit');
         }
+        received += value.byteLength;
         chunks.push(value);
       }
       const body = new TextDecoder().decode(

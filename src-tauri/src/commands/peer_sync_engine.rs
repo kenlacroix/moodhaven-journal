@@ -2353,3 +2353,156 @@ pub fn peer_apply_and_restart(app: AppHandle) -> Result<(), String> {
     log::info!("[restore] Triggering restart to apply pending DB restore");
     app.restart();
 }
+
+// ── Unit tests ────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::{EncryptedContent, JournalEntryRow};
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    fn open_test_db() -> Connection {
+        let conn = Connection::open_in_memory().expect("in-memory db");
+        conn.execute_batch(
+            "CREATE TABLE journal_entries (
+                id TEXT PRIMARY KEY,
+                encrypted_content TEXT NOT NULL,
+                mood INTEGER NOT NULL,
+                privacy_mode INTEGER NOT NULL DEFAULT 0,
+                location_weather TEXT,
+                book_id TEXT NOT NULL DEFAULT 'default',
+                pinned INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                sealed_until TEXT,
+                capsule_type TEXT,
+                linked_original_id TEXT,
+                unsealed_at TEXT
+            );
+            CREATE TABLE tags (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT UNIQUE NOT NULL
+            );
+            CREATE TABLE entry_tags (
+                entry_id TEXT NOT NULL,
+                tag_id INTEGER NOT NULL,
+                PRIMARY KEY (entry_id, tag_id)
+            );",
+        )
+        .expect("schema");
+        conn
+    }
+
+    fn make_entry(id: &str, updated_at: &str) -> JournalEntryRow {
+        JournalEntryRow {
+            id: id.to_string(),
+            encrypted_content: Some(EncryptedContent {
+                ciphertext: "abc".to_string(),
+                iv: "iv".to_string(),
+                salt: "salt".to_string(),
+                version: 1,
+            }),
+            mood: 3,
+            privacy_mode: 0,
+            location_weather: None,
+            book_id: "default".to_string(),
+            pinned: false,
+            created_at: "2026-01-01T00:00:00Z".to_string(),
+            updated_at: updated_at.to_string(),
+            tags: vec![],
+            sealed_until: None,
+            capsule_type: None,
+            linked_original_id: None,
+            unsealed_at: None,
+            status: None,
+        }
+    }
+
+    // ── Key derivation ────────────────────────────────────────────────────────
+
+    #[test]
+    fn key_derivation_static_symmetric() {
+        let key_ab = derive_sync_key_static("pubkey_a", "pubkey_b");
+        let key_ba = derive_sync_key_static("pubkey_b", "pubkey_a");
+        assert_eq!(key_ab, key_ba, "static key must be symmetric");
+    }
+
+    #[test]
+    fn key_derivation_different_peers_differ() {
+        let key_ab = derive_sync_key_static("pubkey_a", "pubkey_b");
+        let key_ac = derive_sync_key_static("pubkey_a", "pubkey_c");
+        assert_ne!(key_ab, key_ac, "different peer keys must yield different transport keys");
+    }
+
+    // ── LWW upsert logic ──────────────────────────────────────────────────────
+
+    #[test]
+    fn lww_insert_new_entry() {
+        let conn = open_test_db();
+        let entry = make_entry("e1", "2026-03-01T10:00:00Z");
+        let inserted = db_upsert_entry(&conn, &entry).expect("upsert");
+        assert!(inserted, "new entry should be inserted");
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM journal_entries WHERE id = 'e1'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn lww_older_remote_no_overwrite() {
+        let conn = open_test_db();
+        // Insert a local entry with a newer timestamp
+        let local = make_entry("e2", "2026-03-10T10:00:00Z");
+        db_upsert_entry(&conn, &local).expect("initial insert");
+
+        // Remote has an older timestamp — should be skipped
+        let remote = make_entry("e2", "2026-03-05T10:00:00Z");
+        let updated = db_upsert_entry(&conn, &remote).expect("upsert older");
+        assert!(!updated, "older remote must not overwrite local");
+
+        let stored_at: String = conn
+            .query_row("SELECT updated_at FROM journal_entries WHERE id = 'e2'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(stored_at, "2026-03-10T10:00:00Z", "local timestamp must be preserved");
+    }
+
+    #[test]
+    fn lww_same_timestamp_no_overwrite() {
+        let conn = open_test_db();
+        let entry = make_entry("e3", "2026-03-10T10:00:00Z");
+        db_upsert_entry(&conn, &entry).expect("initial insert");
+
+        // Second upsert with identical timestamp — should be a no-op
+        let same = make_entry("e3", "2026-03-10T10:00:00Z");
+        let updated = db_upsert_entry(&conn, &same).expect("upsert same ts");
+        assert!(!updated, "same timestamp must not overwrite");
+    }
+
+    // ── Transaction rollback ──────────────────────────────────────────────────
+
+    #[test]
+    fn sync_tx_rollback_leaves_db_clean() {
+        let conn = open_test_db();
+
+        // Start a transaction, insert one valid entry, then trigger an error
+        conn.execute_batch("BEGIN IMMEDIATE").expect("begin");
+        let result: Result<(), String> = (|| {
+            let entry = make_entry("e4", "2026-03-01T00:00:00Z");
+            db_upsert_entry(&conn, &entry)?;
+            // Simulate a second operation that fails
+            conn.execute("INSERT INTO journal_entries (id) VALUES (?1)", rusqlite::params!["e4"])
+                .map_err(|e| format!("forced error: {e}"))?;
+            Ok(())
+        })();
+
+        assert!(result.is_err(), "inner closure must have returned an error");
+        conn.execute_batch("ROLLBACK").expect("rollback");
+
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM journal_entries WHERE id = 'e4'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 0, "rollback must leave no partial data");
+    }
+}

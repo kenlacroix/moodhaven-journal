@@ -127,10 +127,8 @@ Replaced `response.json()` with a streaming reader that aborts and falls back to
 ### ~~TL-005: get_due_capsules On-This-Day exclusion uses UTC not local date~~ ✅ RESOLVED 2026-04-04
 **Fix:** `get_due_capsules` now accepts an optional `local_date: Option<String>` (YYYY-MM-DD). Frontend `getDueCapsules()` passes `new Date().toLocaleDateString('en-CA')`. Falls back to `date('now')` when not provided.
 
-### TL-006: Anniversary entries visible in timeline before reveal (P2)
-**What:** Anniversary entries (capsule_type IS NULL, sealed_until IS NULL) have `encrypted_content` populated and appear in the timeline like normal entries — they are not hidden. Clarify product intent: should anniversary entries be hidden until the reveal modal triggers, or just highlighted?
-**Context:** Adversarial review of feat/time-layer (2026-03-26).
-**Effort:** product decision first, then ~30min CC
+### ~~TL-006: Anniversary entries visible in timeline before reveal~~ ✅ RESOLVED (2026-04-05)
+**Decision:** Show in timeline, marked with a badge (option B). Anniversary entries are regular past entries — hiding them would confuse users who can't find their own writing. Added rose "Anniversary" badge and indigo "Time Capsule" badge (for actively sealed entries) to both the main entry list and the pinned entries section in `TimelineView.tsx`.
 
 ### ~~TL-007: Peer sync: unsealed_at LWW can re-queue already-revealed capsule~~ ✅ RESOLVED 2026-04-04
 **Fix:** `unseal_entry` now also sets `updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')` so the LWW timestamp reflects the reveal and peer sync propagates the unsealed state correctly.
@@ -169,11 +167,8 @@ Replaced `response.json()` with a streaming reader that aborts and falls back to
 
 ## Dev Mode / QA (feat/dev-bypass-unlock — v0.7.6)
 
-### D-DEV-001: Implement VITE_DEV_MODE=seeded (P2)
-**What:** When `VITE_DEV_MODE=seeded`, create 3–5 encrypted journal entries with realistic mood data using the dev password (`'dev-bypass'`), then call `refresh()` on journal hooks so the UI starts with populated data. Useful for testing Timeline, Insights, Calendar, and On This Day views without manual data entry.
-**Fix:** Add `src/lib/devSeed.ts` module. Call it after the bypass state is set in `checkInitialization()`, guarded by `import.meta.env.VITE_DEV_MODE === 'seeded'`.
-**Context:** Deferred from feat/dev-bypass-unlock plan (2026-03-26). "bypass" mode shipped; "seeded" needs seed data design.
-**Effort:** human ~2h / CC+gstack ~20min
+### ~~D-DEV-001: Implement VITE_DEV_MODE=seeded~~ ✅ RESOLVED (2026-04-05)
+Added `src/lib/devSeed.ts` with 5 realistic entries (moods 2–5, varied tags). `checkInitialization()` in `appStore.ts` triggers `seedDevEntries()` when `VITE_DEV_MODE=seeded`. Entries all land today (no custom `created_at` support in `create_journal_entry` — acceptable for layout/interaction testing).
 
 ---
 

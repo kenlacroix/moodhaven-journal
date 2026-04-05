@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { UpdatePanel } from './UpdatePanel';
 import type { UseUpdateCheckReturn } from '../../hooks/useUpdateCheck';
+import type { UpdateInfo } from '../../lib/services/updaterService';
 
 vi.mock('dompurify', () => ({
   default: { sanitize: vi.fn((html: string) => html) },
@@ -50,22 +51,27 @@ describe('UpdatePanel', () => {
     expect(screen.getByText('Check now')).toBeInTheDocument();
   });
 
+  function makeUpdateInfo(overrides: Partial<UpdateInfo> = {}): UpdateInfo {
+    return {
+      is_available: true,
+      version: '0.9.0',
+      current_version: '0.8.4',
+      notes: '',
+      pub_date: '2026-04-05T00:00:00Z',
+      release_url: 'https://github.com',
+      can_self_update: false,
+      asset: null,
+      platform: 'linux',
+      ...overrides,
+    };
+  }
+
   it('applies DOMPurify.sanitize to release notes HTML before render', () => {
     const sanitize = mockSanitize;
     const notes = '## What is new\n- Fixed a bug';
     render(
       <UpdatePanel
-        hook={makeHook({
-          updateInfo: {
-            is_available: true,
-            version: '0.9.0',
-            notes,
-            can_self_update: false,
-            asset: null,
-            release_url: null,
-            pub_date: null,
-          } as Parameters<typeof makeHook>[0]['updateInfo'] & object,
-        })}
+        hook={makeHook({ updateInfo: makeUpdateInfo({ notes }) })}
         currentVersion="0.8.4"
       />
     );
@@ -76,17 +82,7 @@ describe('UpdatePanel', () => {
     const notes = '## Title\n**bold text**';
     render(
       <UpdatePanel
-        hook={makeHook({
-          updateInfo: {
-            is_available: true,
-            version: '0.9.0',
-            notes,
-            can_self_update: false,
-            asset: null,
-            release_url: null,
-            pub_date: null,
-          } as Parameters<typeof makeHook>[0]['updateInfo'] & object,
-        })}
+        hook={makeHook({ updateInfo: makeUpdateInfo({ notes }) })}
         currentVersion="0.8.4"
       />
     );
@@ -98,17 +94,7 @@ describe('UpdatePanel', () => {
     const sanitize = mockSanitize;
     render(
       <UpdatePanel
-        hook={makeHook({
-          updateInfo: {
-            is_available: true,
-            version: '0.9.0',
-            notes: null,
-            can_self_update: false,
-            asset: null,
-            release_url: null,
-            pub_date: null,
-          } as Parameters<typeof makeHook>[0]['updateInfo'] & object,
-        })}
+        hook={makeHook({ updateInfo: makeUpdateInfo({ notes: '' }) })}
         currentVersion="0.8.4"
       />
     );

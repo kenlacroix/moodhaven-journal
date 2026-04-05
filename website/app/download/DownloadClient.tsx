@@ -238,16 +238,29 @@ export default function DownloadClient({ release }: { release: LatestRelease | n
               )}
             </div>
           ) : (
-            /* No matching asset — GitHub fallback */
+            /* No matching asset — no release published yet */
             <div className="text-center">
+              <p className="text-sm text-neutral-600 mb-3">
+                No installer available yet for {OS_LABELS[os]}.
+              </p>
               <a
-                href="https://github.com/kenlacroix/moodhaven-journal/releases/latest"
-                target="_blank"
-                rel="noopener noreferrer"
+                href="https://journal.moodhaven.app"
                 className="inline-block rounded-full bg-accent-cta text-neutral-900 px-6 py-4 text-sm font-semibold shadow transition-all duration-200 ease-out hover:bg-accent-cta/90 hover:scale-105 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-cta/60"
               >
-                View releases on GitHub <span aria-hidden="true">↗</span>
+                Use the web app in the meantime <span aria-hidden="true">→</span>
               </a>
+              <p className="mt-2 text-xs text-neutral-500">
+                Or{" "}
+                <a
+                  href="https://github.com/kenlacroix/moodhaven-journal/releases"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline hover:text-neutral-700"
+                >
+                  watch GitHub releases
+                </a>{" "}
+                to be notified when a build ships.
+              </p>
             </div>
           )}
 
@@ -390,23 +403,6 @@ export default function DownloadClient({ release }: { release: LatestRelease | n
             )}
           </div>
         </section>
-
-        {/* No release fallback */}
-        {!release && (
-          <AnimatedReveal delay={0.2} className="mt-10 text-center">
-            <p className="text-sm text-neutral-500 mb-4">
-              No release data available yet.
-            </p>
-            <a
-              href="https://github.com/kenlacroix/moodhaven-journal/releases"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-block rounded-full bg-accent-cta text-neutral-900 px-6 py-4 text-sm font-semibold shadow transition-all duration-200 ease-out hover:bg-accent-cta/90 hover:scale-105 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-cta/60"
-            >
-              View all releases on GitHub <span aria-hidden="true">↗</span>
-            </a>
-          </AnimatedReveal>
-        )}
 
         {/* Trust signals */}
         <AnimatedReveal delay={0.3} className="mt-14 text-center text-xs text-neutral-400 flex flex-wrap justify-center gap-3">

@@ -12,6 +12,15 @@ val tauriProperties = Properties().apply {
     if (propFile.exists()) propFile.inputStream().use { load(it) }
 }
 
+// Release signing — reads keystore from environment variables set in CI.
+// Falls back gracefully so debug builds work without any env vars.
+val keystoreBase64 = System.getenv("ANDROID_KEYSTORE_BASE64")
+val keystoreFile = if (keystoreBase64 != null) {
+    val f = rootProject.file("keystore-wear.jks")
+    f.writeBytes(android.util.Base64.decode(keystoreBase64, android.util.Base64.DEFAULT))
+    f
+} else null
+
 android {
     namespace = "com.moodbloom.wear"
     compileSdk = 34
@@ -33,6 +42,21 @@ android {
         jvmTarget = "17"
     }
 
+    buildFeatures {
+        buildConfig = true
+    }
+
+    signingConfigs {
+        if (keystoreFile != null) {
+            create("release") {
+                storeFile = keystoreFile
+                storePassword = System.getenv("ANDROID_STORE_PASSWORD") ?: ""
+                keyAlias = System.getenv("ANDROID_KEY_ALIAS") ?: ""
+                keyPassword = System.getenv("ANDROID_KEY_PASSWORD") ?: ""
+            }
+        }
+    }
+
     buildTypes {
         debug {
             isDebuggable = true
@@ -43,6 +67,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+            if (keystoreFile != null) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 }

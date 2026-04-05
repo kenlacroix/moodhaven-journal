@@ -215,15 +215,20 @@ jobs:
           key: gradle-${{ hashFiles('src-tauri/gen/android/**/*.gradle*', 'src-tauri/gen/android/**/gradle-wrapper.properties') }}
           restore-keys: gradle-
 
-      - name: Build Wear OS debug APK
+      - name: Build Wear OS release AAB
         working-directory: src-tauri/gen/android
-        run: ./gradlew :wear:assembleDebug --no-daemon -Dorg.gradle.java.home=$JAVA_HOME
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: ./gradlew :wear:bundleRelease --no-daemon -Dorg.gradle.java.home=$JAVA_HOME
 
-      - name: Upload APK artifact (for release attachment in update-manifest)
+      - name: Upload AAB artifact (for release attachment in update-manifest)
         uses: actions/upload-artifact@v4
         with:
-          name: wear-apk
-          path: src-tauri/gen/android/wear/build/outputs/apk/debug/wear-debug.apk
+          name: wear-aab
+          path: src-tauri/gen/android/wear/build/outputs/bundle/release/wear-release.aab
           retention-days: 1
 
   # ── Android: Phone app APK (Tauri + Rust, arm64 only, debug-signed) ─────────
@@ -268,7 +273,12 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Build Android phone debug APK (arm64)
+      - name: Build Android phone release AAB (arm64)
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           # tauri-build requires the whisper sidecar to exist for each target. Sidecars
           # are desktop-only on Android (Android cannot exec arbitrary binaries) so we
@@ -277,13 +287,13 @@ jobs:
           touch src-tauri/binaries/whisper-aarch64-linux-android
           # NDK_HOME must be exported from the shell env, not ${{ env.* }}
           export NDK_HOME="${ANDROID_NDK_LATEST_HOME:-$ANDROID_NDK_HOME}"
-          npm run tauri android build -- --target aarch64 --debug
+          npm run tauri android build -- --target aarch64
 
-      - name: Upload phone APK artifact (for release attachment in update-manifest)
+      - name: Upload phone AAB artifact (for release attachment in update-manifest)
         uses: actions/upload-artifact@v4
         with:
-          name: phone-apk
-          path: src-tauri/gen/android/app/build/outputs/apk/**/*.apk
+          name: phone-aab
+          path: src-tauri/gen/android/app/build/outputs/bundle/release/*.aab
           retention-days: 1
 
   # ── Post-build: checksums + release notes ──────────────────────────────────
@@ -310,22 +320,22 @@ jobs:
         with:
           path: artifacts/
 
-      - name: Attach Wear OS APK to release
+      - name: Attach Wear OS AAB to release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          APK=$(find artifacts/wear-apk -name "*.apk" | head -1)
-          if [ -n "$APK" ]; then
-            gh release upload "${{ github.ref_name }}" "$APK" --clobber
+          AAB=$(find artifacts/wear-aab -name "*.aab" | head -1)
+          if [ -n "$AAB" ]; then
+            gh release upload "${{ github.ref_name }}" "$AAB" --clobber
           fi
 
-      - name: Attach phone APK to release
+      - name: Attach phone AAB to release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          APK=$(find artifacts/phone-apk -name "*.apk" | head -1)
-          if [ -n "$APK" ]; then
-            gh release upload "${{ github.ref_name }}" "$APK" --clobber
+          AAB=$(find artifacts/phone-aab -name "*.aab" | head -1)
+          if [ -n "$AAB" ]; then
+            gh release upload "${{ github.ref_name }}" "$AAB" --clobber
           fi
 
       - name: Generate checksums.txt and attach to release
@@ -363,8 +373,8 @@ jobs:
             "MoodHaven_${VERSION}_x64_en-US.msi" \
             "MoodHaven_${VERSION}_aarch64.dmg" \
             "MoodHaven_${VERSION}_x64.dmg" \
-            "app-universal-debug.apk" \
-            "wear-debug.apk"; do
+            "app-release.aab" \
+            "wear-release.aab"; do
             entry=$(build_asset "$name")
             [ -n "$entry" ] && ASSETS+=("$entry")
           done

@@ -7,6 +7,19 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.8.1] — 2026-04-04
+
+### Fixed
+- **Ollama response size cap.** The Ollama formatting layer (L2 STT pipeline) now streams `response.body` and aborts with L1 fallback if a response exceeds 1 MB, preventing a rogue or misconfigured endpoint from causing OOM in the renderer. Single oversized chunks are rejected before accumulation. `reader.cancel()` is now awaited to prevent unhandled promise rejections.
+- **Android release keystore path race.** Phone (`keystore-app.jks`) and wear (`keystore-wear.jks`) CI builds now write to module-specific paths, eliminating a parallel Gradle evaluation race on the shared `keystore.jks` file.
+- **Keystore files gitignored.** Added `keystore*.jks` to both root `.gitignore` and `src-tauri/gen/android/.gitignore` so CI-decoded keystores cannot be accidentally committed.
+
+### Changed
+- **Android wear tile service.** `MoodTileService` now uses `BuildConfig.APPLICATION_ID` instead of a hardcoded string, so a future `applicationId` rename will produce a compile error instead of a silent breakage.
+- **Android build features.** Enabled `buildConfig` generation in the wear module (`wear/build.gradle.kts`).
+
+---
+
 ## [website-0.2.0] — 2026-04-05
 
 ### Added (website)

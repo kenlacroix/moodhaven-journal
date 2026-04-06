@@ -27,7 +27,7 @@ android {
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.moodbloom.app"
+        applicationId = "com.moodhaven.app"
         minSdk = 30
         targetSdk = 34
         versionCode = tauriProperties.getProperty("tauri.android.versionCode", "1").toInt()

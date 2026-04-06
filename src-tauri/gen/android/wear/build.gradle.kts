@@ -17,7 +17,7 @@ val tauriProperties = Properties().apply {
 val keystoreBase64 = System.getenv("ANDROID_KEYSTORE_BASE64")
 val keystoreFile = if (keystoreBase64 != null) {
     val f = rootProject.file("keystore-wear.jks")
-    f.writeBytes(android.util.Base64.decode(keystoreBase64, android.util.Base64.DEFAULT))
+    f.writeBytes(java.util.Base64.getDecoder().decode(keystoreBase64))
     f
 } else null
 

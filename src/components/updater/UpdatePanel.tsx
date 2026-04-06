@@ -14,6 +14,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
+import DOMPurify from 'dompurify';
 import { listen } from '@tauri-apps/api/event';
 import { open } from '@tauri-apps/plugin-shell';
 import { downloadAndInstallUpdate } from '../../lib/services/updaterService';
@@ -55,7 +56,7 @@ function renderMarkdown(md: string): string {
       out.push(`<li>${inline(line.slice(2))}</li>`);
     } else if (line === '') {
       if (inList) { out.push('</ul>'); inList = false; }
-      out.push('<div class="h-2" />');
+      out.push('<div class="h-2"></div>');
     } else {
       if (inList) { out.push('</ul>'); inList = false; }
       out.push(`<p class="text-sm text-slate-600 dark:text-slate-300 mb-1">${inline(line)}</p>`);
@@ -274,11 +275,7 @@ export function UpdatePanel({ hook, currentVersion }: UpdatePanelProps) {
               </p>
               <div
                 className="prose-sm"
-                // nosemgrep: react-dangerouslysetinnerhtml
-                // Safe: renderMarkdown() HTML-escapes all input before substitution;
-                // only hardcoded tags (<strong>,<em>,<code>,<h2>,<h3>,<ul>,<li>,<p>) are injected.
-                // Source is GitHub release notes (developer-controlled).
-                dangerouslySetInnerHTML={{ __html: renderMarkdown(updateInfo.notes) }}
+                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(renderMarkdown(updateInfo.notes)) }}
               />
             </div>
           )}

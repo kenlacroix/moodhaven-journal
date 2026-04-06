@@ -259,3 +259,19 @@ Added `buildFeatures { buildConfig = true }` to `wear/build.gradle.kts`. Replace
 **Effort:** human ~3d / CC+gstack ~1h
 
 ---
+
+## Completed
+
+### SEC-DEP-001: Upgrade vite@8 + vitest@4 (GHSA-67mh-4wv8-2f99)
+**Completed:** v0.8.4 (2026-04-05) — vite 5.4.21 → 8.0.3, vitest 1.6.1 → 4.1.2. Zero vulnerabilities. esbuild CORS CVE resolved.
+
+---
+
+## Packaging Debt
+
+### PKG-001: Move @types/dompurify to devDependencies
+**What:** `@types/dompurify` is currently in `dependencies` (package.json:44) instead of `devDependencies`. Type-only packages should not be in production deps.
+**Why:** Produces a misleading dependency graph; inflates npm audit surface area. No runtime impact (Vite tree-shakes it out).
+**Fix:** `npm install --save-dev @types/dompurify && npm uninstall @types/dompurify` (effectively just move it). Verify `npm run typecheck` passes.
+**Priority:** P4 (cosmetic)
+**Effort:** human ~5min / CC+gstack ~5min

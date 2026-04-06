@@ -7,6 +7,25 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.8.4] — 2026-04-05
+
+### Security
+- **SEC-DEP-001**: Upgraded `vite` 5.4.21 → 8.0.3 and `vitest` 1.6.1 → 4.1.2. Resolves GHSA-67mh-4wv8-2f99 (esbuild ≤0.24.2 devServer CORS bypass). The vulnerability was dev-tooling only; shipped Tauri binaries were never affected.
+- **DOMPurify on release notes**: `UpdatePanel` now passes rendered release note HTML through `DOMPurify.sanitize()` before `dangerouslySetInnerHTML`. Defense-in-depth on top of the existing `renderMarkdown()` HTML escaping.
+- **CI supply chain hardening**: All GitHub Actions in `.github/workflows/` pinned to immutable commit SHAs. Previously `actions/checkout`, `actions/setup-node`, `actions/cache`, `actions/upload-artifact`, `actions/download-artifact`, and `actions/setup-java` used mutable version tags. Note: `tauri-apps/tauri-action` (which runs with `TAURI_SIGNING_PRIVATE_KEY`) was already pinned; this commit pins the remaining six.
+
+### Changed
+- `@vitejs/plugin-react` bumped from 4.3.1 → 6.0.1 to match vite 8 peer requirements.
+- `@testing-library/dom` added as an explicit dev dependency (required by `@testing-library/react` with vitest 4; was previously a transitive dep).
+- `.npmrc` audit-level exception for GHSA-67mh-4wv8-2f99 removed — vulnerability resolved.
+
+### Tests
+- Added `recoveryKeyService`: spy test verifying `crypto.getRandomValues()` is called and `Math.random` is never called during key generation.
+- Added `UpdatePanel`: 3 tests verifying DOMPurify is applied to release notes HTML before render.
+- Test count: 640 (was 633).
+
+---
+
 ## [Unreleased] — tooling
 
 ### Added

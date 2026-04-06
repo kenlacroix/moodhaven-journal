@@ -2,6 +2,17 @@ import { generateRecoveryKey } from './recoveryKeyService';
 
 describe('recoveryKeyService', () => {
   describe('generateRecoveryKey', () => {
+    it('uses crypto.getRandomValues, not Math.random', () => {
+      const spy = vi.spyOn(crypto, 'getRandomValues');
+      const mathSpy = vi.spyOn(Math, 'random');
+      generateRecoveryKey();
+      expect(spy).toHaveBeenCalled();
+      expect(mathSpy).not.toHaveBeenCalled();
+      spy.mockRestore();
+      mathSpy.mockRestore();
+    });
+
+
     it('returns string in XXXX-XXXX-XXXX-XXXX-XXXX-XXXX format', () => {
       const key = generateRecoveryKey();
       expect(key).toMatch(

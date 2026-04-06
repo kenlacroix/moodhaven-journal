@@ -7,11 +7,11 @@
 <p><strong>A calm, encrypted journal with mood tracking, AI insights, local peer sync, and a Wear OS wrist companion</strong></p>
 
 <p>
-<a href="https://github.com/kenlacroix/moodhaven-journal/releases"><img src="https://img.shields.io/badge/version-0.8.0-7c3aed?style=flat-square" alt="Version"></a>
+<a href="https://github.com/kenlacroix/moodhaven-journal/releases"><img src="https://img.shields.io/badge/version-0.8.4-7c3aed?style=flat-square" alt="Version"></a>
 <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-22c55e?style=flat-square" alt="License"></a>
 <a href="#installation"><img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Web-0ea5e9?style=flat-square" alt="Platform"></a>
 <a href="#watch--phone-companion-beta"><img src="https://img.shields.io/badge/companion-Wear%20OS%20%7C%20Android-f97316?style=flat-square" alt="Companion: Wear OS + Android"></a>
-<a href="#tech-stack"><img src="https://img.shields.io/badge/tests-629%20passing-22c55e?style=flat-square" alt="Tests"></a>
+<a href="#tech-stack"><img src="https://img.shields.io/badge/tests-641%20passing-22c55e?style=flat-square" alt="Tests"></a>
 <a href="https://tauri.app"><img src="https://img.shields.io/badge/built%20with-Tauri%202-ffd866?style=flat-square" alt="Built with Tauri"></a>
 <a href="#security--privacy"><img src="https://img.shields.io/badge/encryption-AES--256--GCM-ef4444?style=flat-square" alt="Encryption"></a>
 </p>
@@ -84,10 +84,10 @@ Grab the latest build from the [Releases](https://github.com/kenlacroix/moodhave
 
 | Platform | Installer | Minimum Version |
 |:---|:---|:---|
-| **Windows** | `MoodHaven_0.8.0_x64-setup.exe` | Windows 10 |
-| **macOS** | `MoodHaven_0.8.0_x64.dmg` | macOS 10.15 Catalina |
-| **Linux** | `moodhaven_0.8.0_amd64.AppImage` | Any modern distro |
-| **Linux (Debian)** | `moodhaven_0.8.0_amd64.deb` | Ubuntu 22.04+ |
+| **Windows** | `MoodHaven_0.8.4_x64-setup.exe` | Windows 10 |
+| **macOS** | `MoodHaven_0.8.4_x64.dmg` | macOS 10.15 Catalina |
+| **Linux** | `moodhaven_0.8.4_amd64.AppImage` | Any modern distro |
+| **Linux (Debian)** | `moodhaven_0.8.4_amd64.deb` | Ubuntu 22.04+ |
 | **Web** | `npm run build:web` → serve `dist-web/` | Any modern browser |
 
 ### First Launch
@@ -347,8 +347,8 @@ Full cross-platform build guide: [docs/build.md](docs/build.md)
 | **Peer discovery** | mDNS/DNS-SD ([mdns-sd](https://github.com/keepsimple1/mdns-sd)) |
 | **2FA** | [totp-rs](https://github.com/constantoine/totp-rs) + native CTAP2/HID |
 | **Charts** | Custom SVG (no charting library dependency) |
-| **Testing** | [Vitest](https://vitest.dev) + Testing Library (629 tests) |
-| **Build** | Vite 5 + `npm run tauri build` |
+| **Testing** | [Vitest](https://vitest.dev) + Testing Library (641 tests) |
+| **Build** | Vite 8 + `npm run tauri build` |
 | **Android bridge** | Kotlin + Wear OS Data Layer (MessageAPI + ChannelAPI) |
 | **Wear OS app** | Kotlin + Wear OS Compose-free (XML layouts, Wearable widgets) |
 
@@ -398,7 +398,7 @@ npm run tauri dev
 ```
 
 ```bash
-npm test                          # Run 629 tests
+npm test                          # Run 641 tests
 npm run typecheck                 # TypeScript strict check
 cd src-tauri && cargo check       # Rust compilation check
 ```
@@ -409,6 +409,7 @@ See [CLAUDE.md](CLAUDE.md) for architectural decisions, security guidelines, and
 
 ## Recent Changes
 
+**v0.8.4** — Security housekeeping: vite 5→8 resolves GHSA-67mh-4wv8-2f99 (esbuild CORS CVE), DOMPurify added to update panel release notes as a second XSS defense layer, all CI GitHub Actions pinned to immutable commit SHAs. 641 tests.
 **v0.8.0** — Browser (web) port: MoodHaven Journal now runs in any modern browser with zero install. IndexedDB stores entries locally. WebDAV sync uses ETag-guarded conditional uploads to prevent desktop/browser write conflicts. PWA manifest enables "Install to home screen". `npm run dev:web` / `build:web` scripts added. `isBrowser` flag in `usePlatform()`. Fixed `dbDeleteBook` race condition (now a single atomic IDB transaction) and monthly mood date range bug (short months incorrectly included the 31st). 629 tests.
 **v0.7.15** — Android Wear OS companion + phone bridge polish: AudioFrameParser extracted as single parsing source of truth, WearProtocol constants object, BreatheSession busy-wait replaced with AtomicBoolean + Channel(CONFLATED), OfflineQueue O(1) eviction, SignalSender exponential backoff retries, MoodComplicationService 30s cache, MoodHistoryAdapter extracted; 5 adversarial review fixes (path traversal guard, @Volatile cache, neutral mood fallback)
 **v0.7.14** — SettingsPage split from 2239-line monolith into 7 focused tab components (GeneralTab, PrivacyTab, SyncTab, AITab, HealthTab, ExportTab, AboutTab); 6 Rust `#[cfg(test)]` unit tests for time capsule seal/unseal logic

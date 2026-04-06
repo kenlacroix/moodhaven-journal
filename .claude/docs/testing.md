@@ -72,7 +72,7 @@ For heavy crypto files, use Node environment: `// @vitest-environment node` at t
 - E2E, visual regression (future work)
 - React hooks in isolation — test through components
 
-## Current Coverage (as of v0.8.1)
+## Current Coverage (as of v0.8.4)
 | Test File | Tests |
 |-----------|-------|
 | `backend/browser.test.ts` | 43 |
@@ -87,6 +87,7 @@ For heavy crypto files, use Node environment: `// @vitest-environment node` at t
 | `components/timecapsule/TimeCapsuleRevealModal.test.tsx` | 9 |
 | `components/transcript/CloudConsentModal.test.tsx` | 7 |
 | `components/transcript/TranscriptPreviewOverlay.test.tsx` | 11 |
+| `components/updater/UpdatePanel.test.tsx` | 4 |
 | `hooks/useInsights.test.ts` | 7 |
 | `hooks/useSpeechToText.test.ts` | 7 |
 | `lib/aiService.test.ts` | 28 |
@@ -101,7 +102,7 @@ For heavy crypto files, use Node environment: `// @vitest-environment node` at t
 | `lib/logger.test.ts` | 15 |
 | `lib/metadataExtractor.test.ts` | 84 |
 | `lib/rateLimitService.test.ts` | 41 |
-| `lib/recoveryKeyService.test.ts` | 7 |
+| `lib/recoveryKeyService.test.ts` | 8 |
 | `lib/reminderService.test.ts` | 25 |
 | `lib/secureStorage.test.ts` | 10 |
 | `lib/timeCapsuleService.test.ts` | 6 |
@@ -110,4 +111,4 @@ For heavy crypto files, use Node environment: `// @vitest-environment node` at t
 | `lib/writingUtils.test.ts` | 10 |
 | `stores/appStore.test.ts` | 18 |
 | `stores/settingsStore.test.ts` | 18 |
-| **Total** | **633** |
+| **Total** | **641** |

@@ -53,8 +53,8 @@ mod protocol;
 use conflict::*;
 use connection::*;
 use crypto::*;
-use protocol::*;
 pub use protocol::sync_port_for_device;
+use protocol::*;
 
 use chrono::Utc;
 use serde::Serialize;

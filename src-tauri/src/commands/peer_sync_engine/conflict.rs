@@ -106,7 +106,10 @@ pub fn db_get_books_full(conn: &Connection, ids: &[String]) -> Result<Vec<SyncBo
         .map_err(|e| format!("collect books full: {e}"))
 }
 
-pub fn db_get_signals_full(conn: &Connection, ids: &[String]) -> Result<Vec<SyncSignalRow>, String> {
+pub fn db_get_signals_full(
+    conn: &Connection,
+    ids: &[String],
+) -> Result<Vec<SyncSignalRow>, String> {
     if ids.is_empty() {
         return Ok(vec![]);
     }
@@ -132,7 +135,10 @@ pub fn db_get_signals_full(conn: &Connection, ids: &[String]) -> Result<Vec<Sync
         .map_err(|e| format!("collect signals full: {e}"))
 }
 
-pub fn db_get_entries_full(conn: &Connection, ids: &[String]) -> Result<Vec<JournalEntryRow>, String> {
+pub fn db_get_entries_full(
+    conn: &Connection,
+    ids: &[String],
+) -> Result<Vec<JournalEntryRow>, String> {
     if ids.is_empty() {
         return Ok(vec![]);
     }

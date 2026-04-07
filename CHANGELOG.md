@@ -7,6 +7,14 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.8.5] — 2026-04-07
+
+### Refactored
+- **Peer sync engine module split**: `peer_sync_engine.rs` (2 554 lines) decomposed into a proper Rust module directory. Sub-modules: `protocol.rs` (wire types + port formula), `crypto.rs` (ECDH key derivation + AES-GCM helpers), `connection.rs` (TCP frame I/O), `conflict.rs` (DB helpers + LWW upsert logic). `mod.rs` retains the orchestration layer, Tauri commands, and unit tests. Wire format, transport key derivation, and session protocol sequence are bit-for-bit identical to 0.8.4 — no user-visible behaviour change.
+- Internal types (`Msg`, `SyncMeta`, `SyncBookRow`, `SyncSignalRow`) are encapsulated within the module; only `sync_port_for_device`, `SyncEngineState`, and the four Tauri commands remain on the public API surface.
+
+---
+
 ## [0.8.4] — 2026-04-05
 
 ### Security

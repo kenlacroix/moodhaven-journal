@@ -78,7 +78,7 @@ object HealthSnapshot {
                 cont.invokeOnCancellation { sm.unregisterListener(listener) }
             }
         }.also { hr ->
-            if (hr == null) Log.d(TAG, "HR timeout — no reading in ${HR_TIMEOUT_MS}ms")
+            if (hr == null) Log.i(TAG, "HR timeout — no reading in ${HR_TIMEOUT_MS}ms")
             else Log.d(TAG, "HR snapshot: $hr bpm")
         }
     }

@@ -116,7 +116,7 @@ class MoodTileService : TileService() {
                                             .setAndroidActivity(
                                                 ActionBuilders.AndroidActivity.Builder()
                                                     .setPackageName(BuildConfig.APPLICATION_ID)
-                                                    .setClassName("com.moodbloom.wear.TileActionActivity")
+                                                    .setClassName("${BuildConfig.APPLICATION_ID}.TileActionActivity")
                                                     .addKeyToExtraMapping(
                                                         "mood_level",
                                                         ActionBuilders.AndroidStringExtra.Builder()

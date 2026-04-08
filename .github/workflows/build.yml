@@ -165,7 +165,7 @@ jobs:
       # Upload artifacts for the checksum job
       - name: Upload artifacts
         if: github.event_name == 'push'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7.0.0
         with:
           name: bundle-${{ matrix.target }}
           path: |
@@ -225,7 +225,7 @@ jobs:
         run: ./gradlew :wear:bundleRelease --no-daemon -Dorg.gradle.java.home=$JAVA_HOME
 
       - name: Upload AAB artifact (for release attachment in update-manifest)
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7.0.0
         with:
           name: wear-aab
           path: src-tauri/gen/android/wear/build/outputs/bundle/release/wear-release.aab
@@ -290,7 +290,7 @@ jobs:
           npm run tauri android build -- --target aarch64
 
       - name: Upload phone AAB artifact (for release attachment in update-manifest)
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7.0.0
         with:
           name: phone-aab
           path: src-tauri/gen/android/app/build/outputs/bundle/release/*.aab

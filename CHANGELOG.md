@@ -17,9 +17,16 @@ Versions follow [Semantic Versioning](https://semver.org/).
 ### Added
 - **Speech to Text settings tab**: A dedicated "Speech to Text" tab is now the 9th settings tab. Currently shows a placeholder; model download UI ships in v0.9.1.
 
+### Changed
+- **Settings tab split**: Appearance settings (theme, compact mode, animations) extracted from `GeneralTab` into a dedicated `AppearanceTab` component. No user-visible behaviour change.
+
+### Fixed
+- **Browser mode `get_data_stats` shape**: The browser-invoke shim was returning `{entryCount, totalSizeBytes, lastModified}` instead of the Rust shape `{totalEntries, averageMood}`, crashing the Privacy tab's average mood display in browser/dev mode.
+
 ### For contributors
 - `verify_password` Rust command added to `journal.rs` with `#[cfg(test)]` unit tests. Browser-invoke shim routes to frontend crypto for browser mode.
 - `require_unlocked` guard pattern is now consistent across all sensitive command modules.
+- `browser-invoke.test.ts` added: 5 tests covering `verify_password` (correct/wrong/no-hash) and `get_data_stats` (empty/with-entries).
 
 ---
 

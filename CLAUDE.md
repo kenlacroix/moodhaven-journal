@@ -48,7 +48,7 @@ Platforms: Windows, Linux, macOS.
 | `src-tauri/tauri.conf.json` | App config, sidecar binaries |
 | `src-tauri/Cargo.toml` | Rust dependencies |
 | `src-tauri/capabilities/default.json` | Tauri ACL — permitted commands + plugins |
-| `src-tauri/src/lib.rs` | All ~100 Tauri command registrations |
+| `src-tauri/src/lib.rs` | All ~101 Tauri command registrations |
 | `src-tauri/src/db/mod.rs` | SQLite schema, migrations, Database struct |
 | `src/App.tsx` | React root |
 | `src/stores/` | 4 Zustand stores (app, settings, books, …) |

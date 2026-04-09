@@ -32,7 +32,7 @@ MoodHaven Journal is a **local-first desktop application** built on Tauri v2 (Ru
 │  Only ciphertext crosses the Tauri IPC boundary                      │
 └───────────────────────────┬─────────────────────────────────────────┘
                             │  Tauri IPC (invoke / emit)
-                            │  ~96 Tauri commands
+                            │  ~101 Tauri commands
 ┌───────────────────────────▼─────────────────────────────────────────┐
 │                        Rust Backend (Tauri)                          │
 │  Command handlers · Database (rusqlite) · Peer sync engine           │
@@ -104,7 +104,7 @@ moodbloom-tauri/
 ├── src-tauri/                  # Rust backend
 │   ├── src/
 │   │   ├── lib.rs              # Tauri builder + command registration
-│   │   ├── commands/           # ~21 command modules (~96 commands)
+│   │   ├── commands/           # ~21 command modules (~101 commands)
 │   │   ├── db/
 │   │   │   └── mod.rs          # SQLite schema, migrations, Database struct
 │   │   └── crypto/             # Rust-side crypto helpers (if any)

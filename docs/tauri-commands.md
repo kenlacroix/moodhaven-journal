@@ -1,6 +1,6 @@
 # Tauri Command Reference
 
-> **Version:** v0.7.12 | **Total commands:** ~100
+> **Version:** v0.9.0 | **Total commands:** ~101
 >
 > This document lists all `#[tauri::command]` functions exposed by MoodHaven Journal's Rust backend.
 > Commands are registered in `src-tauri/src/lib.rs` and permitted in `src-tauri/capabilities/default.json`.
@@ -77,6 +77,20 @@ Retrieve the stored password hash and salt for verification.
 
 ```typescript
 invoke('get_password_hash') → Promise<{ hash: string; salt: string } | null>
+```
+
+---
+
+### `verify_password`
+
+Verify a password against the stored PBKDF2 hash. Runs entirely in Rust — the hash never leaves the backend. Uses PBKDF2-HMAC-SHA-256 with 600,000 iterations and standard base64-encoded salt, matching the frontend `hashPassword` parameters exactly.
+
+Returns `true` on match, `false` on mismatch. Returns an error (not `false`) on empty password or invalid salt encoding — callers should treat errors as a failed unlock, not a soft mismatch.
+
+```typescript
+invoke('verify_password', {
+  password: string,
+}) → Promise<boolean>
 ```
 
 ---

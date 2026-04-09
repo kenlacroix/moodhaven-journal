@@ -7,7 +7,7 @@
 <p><strong>A calm, encrypted journal with mood tracking, AI insights, local peer sync, and a Wear OS wrist companion</strong></p>
 
 <p>
-<a href="https://github.com/kenlacroix/moodhaven-journal/releases"><img src="https://img.shields.io/badge/version-0.8.4-7c3aed?style=flat-square" alt="Version"></a>
+<a href="https://github.com/kenlacroix/moodhaven-journal/releases"><img src="https://img.shields.io/badge/version-0.9.0-7c3aed?style=flat-square" alt="Version"></a>
 <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-22c55e?style=flat-square" alt="License"></a>
 <a href="#installation"><img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Web-0ea5e9?style=flat-square" alt="Platform"></a>
 <a href="#watch--phone-companion-beta"><img src="https://img.shields.io/badge/companion-Wear%20OS%20%7C%20Android-f97316?style=flat-square" alt="Companion: Wear OS + Android"></a>
@@ -84,10 +84,10 @@ Grab the latest build from the [Releases](https://github.com/kenlacroix/moodhave
 
 | Platform | Installer | Minimum Version |
 |:---|:---|:---|
-| **Windows** | `MoodHaven_0.8.4_x64-setup.exe` | Windows 10 |
-| **macOS** | `MoodHaven_0.8.4_x64.dmg` | macOS 10.15 Catalina |
-| **Linux** | `moodhaven_0.8.4_amd64.AppImage` | Any modern distro |
-| **Linux (Debian)** | `moodhaven_0.8.4_amd64.deb` | Ubuntu 22.04+ |
+| **Windows** | `MoodHaven_0.9.0_x64-setup.exe` | Windows 10 |
+| **macOS** | `MoodHaven_0.9.0_x64.dmg` | macOS 10.15 Catalina |
+| **Linux** | `moodhaven_0.9.0_amd64.AppImage` | Any modern distro |
+| **Linux (Debian)** | `moodhaven_0.9.0_amd64.deb` | Ubuntu 22.04+ |
 | **Web** | `npm run build:web` → serve `dist-web/` | Any modern browser |
 
 ### First Launch
@@ -409,6 +409,7 @@ See [CLAUDE.md](CLAUDE.md) for architectural decisions, security guidelines, and
 
 ## Recent Changes
 
+**v0.9.0** — Password verification moved to Rust (SEC-DEFER-001): PBKDF2 hash check now runs entirely in the backend — the hash never leaves Rust. Analytics, time capsule, Oura, and settings commands now require an unlocked session. SpeechToTextTab added as the 9th settings tab (model download UI coming v0.9.1). 641 tests.
 **v0.8.4** — Security housekeeping: vite 5→8 resolves GHSA-67mh-4wv8-2f99 (esbuild CORS CVE), DOMPurify added to update panel release notes as a second XSS defense layer, all CI GitHub Actions pinned to immutable commit SHAs. 641 tests.
 **v0.8.0** — Browser (web) port: MoodHaven Journal now runs in any modern browser with zero install. IndexedDB stores entries locally. WebDAV sync uses ETag-guarded conditional uploads to prevent desktop/browser write conflicts. PWA manifest enables "Install to home screen". `npm run dev:web` / `build:web` scripts added. `isBrowser` flag in `usePlatform()`. Fixed `dbDeleteBook` race condition (now a single atomic IDB transaction) and monthly mood date range bug (short months incorrectly included the 31st). 629 tests.
 **v0.7.15** — Android Wear OS companion + phone bridge polish: AudioFrameParser extracted as single parsing source of truth, WearProtocol constants object, BreatheSession busy-wait replaced with AtomicBoolean + Channel(CONFLATED), OfflineQueue O(1) eviction, SignalSender exponential backoff retries, MoodComplicationService 30s cache, MoodHistoryAdapter extracted; 5 adversarial review fixes (path traversal guard, @Volatile cache, neutral mood fallback)

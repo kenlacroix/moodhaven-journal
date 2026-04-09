@@ -79,7 +79,10 @@ fn constant_time_eq(a: &str, b: &str) -> bool {
     if a.len() != b.len() {
         return false;
     }
-    a.iter().zip(b.iter()).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
+    a.iter()
+        .zip(b.iter())
+        .fold(0u8, |acc, (x, y)| acc | (x ^ y))
+        == 0
 }
 
 /// Create a new encrypted journal entry
@@ -289,7 +292,10 @@ mod tests {
         if a.len() != b.len() {
             return false;
         }
-        a.iter().zip(b.iter()).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
+        a.iter()
+            .zip(b.iter())
+            .fold(0u8, |acc, (x, y)| acc | (x ^ y))
+            == 0
     }
 
     /// ASCII password round-trip: hash and verify must agree.
@@ -297,41 +303,60 @@ mod tests {
     fn test_verify_ascii_password_correct() {
         let password = "test123";
         // Use a fixed 16-byte salt (raw) — matches the 16-byte SALT_LENGTH in crypto.ts
-        let salt_bytes = [0x61u8, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68,
-                          0x69, 0x6a, 0x6b, 0x6c, 0x6d, 0x6e, 0x6f, 0x70];
+        let salt_bytes = [
+            0x61u8, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68, 0x69, 0x6a, 0x6b, 0x6c, 0x6d, 0x6e,
+            0x6f, 0x70,
+        ];
         let stored_salt = base64::engine::general_purpose::STANDARD.encode(salt_bytes);
         let stored_hash = derive(password, &salt_bytes);
 
         // Simulate verify_password logic
-        let decoded_salt = base64::engine::general_purpose::STANDARD.decode(&stored_salt).unwrap();
+        let decoded_salt = base64::engine::general_purpose::STANDARD
+            .decode(&stored_salt)
+            .unwrap();
         let candidate_hash = derive(password, &decoded_salt);
-        assert!(ct_eq(&candidate_hash, &stored_hash), "ASCII password should verify");
+        assert!(
+            ct_eq(&candidate_hash, &stored_hash),
+            "ASCII password should verify"
+        );
     }
 
     /// Unicode password round-trip — non-ASCII critical path.
     #[test]
     fn test_verify_unicode_password_correct() {
         let password = "日記📝";
-        let salt_bytes = [0xdeu8, 0xad, 0xbe, 0xef, 0x01, 0x23, 0x45, 0x67,
-                          0x89, 0xab, 0xcd, 0xef, 0xfe, 0xdc, 0xba, 0x98];
+        let salt_bytes = [
+            0xdeu8, 0xad, 0xbe, 0xef, 0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef, 0xfe, 0xdc,
+            0xba, 0x98,
+        ];
         let stored_salt = base64::engine::general_purpose::STANDARD.encode(salt_bytes);
         let stored_hash = derive(password, &salt_bytes);
 
-        let decoded_salt = base64::engine::general_purpose::STANDARD.decode(&stored_salt).unwrap();
+        let decoded_salt = base64::engine::general_purpose::STANDARD
+            .decode(&stored_salt)
+            .unwrap();
         let candidate_hash = derive(password, &decoded_salt);
-        assert!(ct_eq(&candidate_hash, &stored_hash), "Unicode password should verify");
+        assert!(
+            ct_eq(&candidate_hash, &stored_hash),
+            "Unicode password should verify"
+        );
     }
 
     /// Wrong password must not match.
     #[test]
     fn test_verify_wrong_password_returns_false() {
         let correct = "correct-horse-battery-staple";
-        let wrong   = "wrong-password";
-        let salt_bytes = [0x11u8, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88,
-                          0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x00];
+        let wrong = "wrong-password";
+        let salt_bytes = [
+            0x11u8, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee,
+            0xff, 0x00,
+        ];
         let stored_hash = derive(correct, &salt_bytes);
         let candidate_hash = derive(wrong, &salt_bytes);
-        assert!(!ct_eq(&candidate_hash, &stored_hash), "Wrong password must not match");
+        assert!(
+            !ct_eq(&candidate_hash, &stored_hash),
+            "Wrong password must not match"
+        );
     }
 
     /// Base64 salt decode — passing raw salt bytes directly (not the base64 string bytes)
@@ -339,29 +364,40 @@ mod tests {
     #[test]
     fn test_salt_must_be_decoded_before_derive() {
         let password = "parity-check";
-        let salt_bytes = [0xaau8, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x00, 0x11,
-                          0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99];
+        let salt_bytes = [
+            0xaau8, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
+            0x88, 0x99,
+        ];
         let stored_salt_b64 = base64::engine::general_purpose::STANDARD.encode(salt_bytes);
 
         // Correct: decode base64 first
-        let decoded = base64::engine::general_purpose::STANDARD.decode(&stored_salt_b64).unwrap();
+        let decoded = base64::engine::general_purpose::STANDARD
+            .decode(&stored_salt_b64)
+            .unwrap();
         let correct_hash = derive(password, &decoded);
 
         // Wrong: use the base64 string bytes directly (should differ)
         let wrong_hash = derive(password, stored_salt_b64.as_bytes());
 
-        assert!(!ct_eq(&correct_hash, &wrong_hash),
-            "Decoded salt must produce a different hash than raw base64 bytes");
+        assert!(
+            !ct_eq(&correct_hash, &wrong_hash),
+            "Decoded salt must produce a different hash than raw base64 bytes"
+        );
         // And the decoded path matches direct raw bytes
         let direct_hash = derive(password, &salt_bytes);
-        assert!(ct_eq(&correct_hash, &direct_hash),
-            "Decoded salt path must match direct raw-bytes path");
+        assert!(
+            ct_eq(&correct_hash, &direct_hash),
+            "Decoded salt path must match direct raw-bytes path"
+        );
     }
 
     /// Invalid base64 salt must return Err, not panic.
     #[test]
     fn test_invalid_base64_salt_returns_err() {
         let result = base64::engine::general_purpose::STANDARD.decode("not-valid-base64!!!");
-        assert!(result.is_err(), "Truncated/invalid base64 salt must fail to decode");
+        assert!(
+            result.is_err(),
+            "Truncated/invalid base64 salt must fail to decode"
+        );
     }
 }

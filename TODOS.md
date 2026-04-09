@@ -192,10 +192,9 @@ CI switched from `assembleDebug`/`--debug` to `bundleRelease`. Artifacts renamed
 ### ~~WEAR-001: Enable BuildConfig generation in wear module~~ ✅ RESOLVED (2026-04-04)
 Added `buildFeatures { buildConfig = true }` to `wear/build.gradle.kts`. Replaced hardcoded `"com.moodbloom.app"` in `MoodTileService.kt:118` with `BuildConfig.APPLICATION_ID`.
 
-### WEAR-002: Align phone/wear applicationId for Play Store auto-install (P2)
-**What:** `app/build.gradle.kts` uses `applicationId = "com.moodhaven.app"` (phone), `wear/build.gradle.kts` uses `applicationId = "com.moodbloom.app"` (wear). Android requires the wear app's applicationId to begin with the phone app's applicationId for `wearApp` Play Store pairing to work. They need to be aligned on one consistent ID.
-**Why:** Until this is fixed, the `wearApp(project(":wear"))` link added in PS-003 will not enable Play Store automatic watch app installation with the phone app.
-**Effort:** human ~30min (decide canonical ID, update Play Console listings) / CC ~5min
+### ~~WEAR-002: Align phone/wear applicationId for Play Store auto-install~~ ✅ RESOLVED (2026-04-09)
+`wear/build.gradle.kts` now uses `applicationId = "com.moodhaven.app"` (aligned with phone). Fixed in commit `a4ab1a7`.
+**Completed:** v0.8.3.1 (2026-04-09)
 
 ### PS-004: Add checksums for Android AAB artifacts (P3)
 **What:** `scripts/generate-checksums.cjs` only hashes `.AppImage`, `.exe`, `.dmg`, and `.msi`. The new `app-release.aab` and `wear-release.aab` artifacts (added in PS-002) have no integrity metadata in `latest-release.json`.

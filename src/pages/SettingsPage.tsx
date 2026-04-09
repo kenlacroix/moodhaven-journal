@@ -32,6 +32,7 @@ import { logger, setLevel } from '../lib/services/logger';
 import type { LogLevel } from '../lib/services/logger';
 import {
   GeneralTab,
+  AppearanceTab,
   PrivacyTab,
   SyncTab,
   AITab,
@@ -41,7 +42,7 @@ import {
   SpeechToTextTab,
 } from '../components/settings/tabs';
 
-type SettingsTab = 'general' | 'privacy' | 'sync' | 'ai' | 'health' | 'devices' | 'export' | 'about' | 'speech';
+type SettingsTab = 'general' | 'appearance' | 'privacy' | 'sync' | 'ai' | 'health' | 'devices' | 'export' | 'about' | 'speech';
 
 interface TabConfig {
   id: SettingsTab;
@@ -55,7 +56,13 @@ const TABS: TabConfig[] = [
     id: 'general',
     label: 'General',
     icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z',
-    keywords: ['appearance', 'theme', 'dark', 'light', 'compact', 'animations', 'journal', 'prompts', 'auto-save', 'reminders', 'notifications', 'tutorial', 'help', 'tour', 'speech', 'voice', 'dictation', 'whisper', 'microphone', 'transcription', 'location', 'weather', 'city', 'time capsule', 'capsule', 'seal', 'reveal', 'anniversary'],
+    keywords: ['journal', 'prompts', 'auto-save', 'reminders', 'notifications', 'tutorial', 'help', 'tour', 'speech', 'voice', 'dictation', 'whisper', 'microphone', 'transcription', 'location', 'weather', 'city', 'time capsule', 'capsule', 'seal', 'reveal', 'anniversary'],
+  },
+  {
+    id: 'appearance',
+    label: 'Appearance',
+    icon: 'M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z',
+    keywords: ['appearance', 'theme', 'dark', 'light', 'compact', 'animations', 'display', 'color scheme'],
   },
   {
     id: 'privacy',
@@ -555,9 +562,6 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
                     settings={settings}
                     saveSettings={saveSettings}
                     sttSectionRef={sttSectionRef}
-                    setTheme={setTheme}
-                    setCompactMode={setCompactMode}
-                    setAnimationsEnabled={setAnimationsEnabled}
                     setShowPrompts={setShowPrompts}
                     setAutoLocationWeather={setAutoLocationWeather}
                     setTemperatureUnit={setTemperatureUnit}
@@ -576,6 +580,15 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
                     setSttCloudConsent={setSttCloudConsent}
                     setHasSeenTutorial={setHasSeenTutorial}
                     setTimeCapsuleSettings={setTimeCapsuleSettings}
+                  />
+                )}
+
+                {activeTab === 'appearance' && (
+                  <AppearanceTab
+                    settings={settings}
+                    setTheme={setTheme}
+                    setCompactMode={setCompactMode}
+                    setAnimationsEnabled={setAnimationsEnabled}
                   />
                 )}
 

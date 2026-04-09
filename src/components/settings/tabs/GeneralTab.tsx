@@ -24,9 +24,6 @@ interface GeneralTabProps {
   settings: AppSettings;
   saveSettings: () => Promise<void>;
   sttSectionRef: RefObject<HTMLDivElement>;
-  setTheme: (theme: 'light' | 'dark' | 'system') => void;
-  setCompactMode: (v: boolean) => void;
-  setAnimationsEnabled: (v: boolean) => void;
   setShowPrompts: (v: boolean) => void;
   setAutoLocationWeather: (v: boolean) => void;
   setTemperatureUnit: (v: 'C' | 'F') => void;
@@ -51,9 +48,6 @@ export function GeneralTab({
   settings,
   saveSettings,
   sttSectionRef,
-  setTheme,
-  setCompactMode,
-  setAnimationsEnabled,
   setShowPrompts,
   setAutoLocationWeather,
   setTemperatureUnit,
@@ -145,37 +139,6 @@ export function GeneralTab({
 
   return (
     <div id="panel-general" role="tabpanel" className="space-y-6">
-      <SettingSection
-        title="Appearance"
-        description="Customize how MoodHaven Journal looks"
-      >
-        <SettingSelect
-          label="Theme"
-          description="Choose your preferred color scheme"
-          value={settings.appearance.theme}
-          options={[
-            { value: 'system', label: 'System' },
-            { value: 'light', label: 'Light' },
-            { value: 'dark', label: 'Dark' },
-          ]}
-          onChange={(v) => setTheme(v as 'light' | 'dark' | 'system')}
-        />
-
-        <SettingToggle
-          label="Compact mode"
-          description="Use less spacing for a denser layout"
-          checked={settings.appearance.compactMode}
-          onChange={setCompactMode}
-        />
-
-        <SettingToggle
-          label="Animations"
-          description="Enable smooth transitions and animations"
-          checked={settings.appearance.animationsEnabled}
-          onChange={setAnimationsEnabled}
-        />
-      </SettingSection>
-
       <SettingSection
         title="Journal"
         description="Configure your journaling experience"

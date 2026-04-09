@@ -7,6 +7,15 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.8.3.1] — 2026-04-09
+
+### Fixed
+- **Android Wear companion — tile tap regression**: `MoodTileService` was using `BuildConfig.APPLICATION_ID` (resolves to `com.moodhaven.app`) as the class path for `TileActionActivity`. The activity lives in package `com.moodbloom.wear`, so the correct fully-qualified name is `com.moodbloom.wear.TileActionActivity`. Tile mood taps work correctly again.
+- **Android Wear companion — feedback path constant**: `WearPlugin` now uses `WearProtocol.PATH_FEEDBACK` for the `/feedback` MessageAPI path, consistent with all other paths in the file.
+- **Android Wear companion — HR timeout log level**: Heart-rate timeout in `HealthSnapshot` promoted from `Log.d` to `Log.i` so the event is visible in field logs without requiring debug logging to be enabled.
+
+---
+
 ## [0.8.5] — 2026-04-07
 
 ### Refactored

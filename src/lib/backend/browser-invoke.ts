@@ -73,7 +73,14 @@ async function dispatch(command: string, p: Params): Promise<any> {
       const hash = await dbGetSetting('password_hash');
       const salt = await dbGetSetting('password_salt');
       if (!hash || !salt) return null;
-      return { hash, salt };
+      return { password_hash: hash, password_salt: salt };
+    }
+    case 'verify_password': {
+      const hash = await dbGetSetting('password_hash');
+      const salt = await dbGetSetting('password_salt');
+      if (!hash || !salt) return false;
+      const { verifyPasswordHash } = await import('../services/crypto');
+      return verifyPasswordHash(p.password as string, hash, salt);
     }
 
     // -----------------------------------------------------------------------

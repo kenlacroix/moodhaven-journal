@@ -7,7 +7,7 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [0.8.3.1] — 2026-04-09
+## [0.8.5.1] — 2026-04-09
 
 ### Fixed
 - **Android Wear companion — tile tap regression**: `MoodTileService` was using `BuildConfig.APPLICATION_ID` (resolves to `com.moodhaven.app`) as the class path for `TileActionActivity`. The activity lives in package `com.moodbloom.wear`, so the correct fully-qualified name is `com.moodbloom.wear.TileActionActivity`. Tile mood taps work correctly again.

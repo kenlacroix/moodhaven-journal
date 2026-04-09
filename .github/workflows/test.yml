@@ -46,7 +46,7 @@ jobs:
 
       - name: Upload coverage
         if: matrix.node-version == 22
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7.0.0
         with:
           name: coverage
           path: coverage/
@@ -86,7 +86,7 @@ jobs:
           components: clippy, rustfmt
 
       - name: Cache Rust build artifacts
-        uses: Swatinem/rust-cache@23869a5bd66c73db3c0ac40331f3206eb23791dc  # v2.9.1
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
         with:
           workspaces: src-tauri
 
@@ -170,7 +170,7 @@ jobs:
           components: rustfmt
 
       - name: Cache Rust build artifacts
-        uses: Swatinem/rust-cache@23869a5bd66c73db3c0ac40331f3206eb23791dc  # v2.9.1
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
         with:
           workspaces: src-tauri
 

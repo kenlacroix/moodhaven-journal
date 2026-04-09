@@ -319,7 +319,7 @@ class WearPlugin(private val activity: Activity) : Plugin(activity) {
         }
 
         Wearable.getMessageClient(activity)
-            .sendMessage(nodeId, "/feedback", message.toByteArray(Charsets.UTF_8))
+            .sendMessage(nodeId, WearProtocol.PATH_FEEDBACK, message.toByteArray(Charsets.UTF_8))
             .addOnSuccessListener { msgId ->
                 Log.d(TAG, "Feedback sent to $nodeId: msgId=$msgId")
                 invoke.resolve(JSObject().apply { put("sent", true); put("messageId", msgId) })

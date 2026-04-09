@@ -26,7 +26,16 @@ Versions follow [Semantic Versioning](https://semver.org/).
 ### For contributors
 - `verify_password` Rust command added to `journal.rs` with `#[cfg(test)]` unit tests. Browser-invoke shim routes to frontend crypto for browser mode.
 - `require_unlocked` guard pattern is now consistent across all sensitive command modules.
-- `browser-invoke.test.ts` added: 5 tests covering `verify_password` (correct/wrong/no-hash) and `get_data_stats` (empty/with-entries).
+- `browser-invoke.test.ts` expanded: covers `check_password_exists`, `store_password_hash`, `get_password_hash`, `verify_password`, `get_data_stats`, `import_data`, and native-only no-ops.
+
+---
+
+## [0.8.5.1] — 2026-04-09
+
+### Fixed
+- **Android Wear companion — tile tap regression**: `MoodTileService` was using `BuildConfig.APPLICATION_ID` (resolves to `com.moodhaven.app`) as the class path for `TileActionActivity`. The activity lives in package `com.moodbloom.wear`, so the correct fully-qualified name is `com.moodbloom.wear.TileActionActivity`. Tile mood taps work correctly again.
+- **Android Wear companion — feedback path constant**: `WearPlugin` now uses `WearProtocol.PATH_FEEDBACK` for the `/feedback` MessageAPI path, consistent with all other paths in the file.
+- **Android Wear companion — HR timeout log level**: Heart-rate timeout in `HealthSnapshot` promoted from `Log.d` to `Log.i` so the event is visible in field logs without requiring debug logging to be enabled.
 
 ---
 

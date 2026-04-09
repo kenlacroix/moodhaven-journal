@@ -3,6 +3,11 @@ import react from '@vitejs/plugin-react';
 import { resolve } from 'path';
 
 const isWebBuild = process.env.VITE_TARGET === 'web';
+// True when Tauri CLI is driving the build/dev server (sets TAURI_ENV_PLATFORM).
+// When false (plain `npm run dev`), there is no Tauri runtime, so we activate the
+// browser shim so that invoke() calls route to IndexedDB instead of crashing.
+const isTauriContext = !!process.env.TAURI_ENV_PLATFORM;
+const useBrowserShim = isWebBuild || !isTauriContext;
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -27,7 +32,7 @@ export default defineConfig({
   },
 
   // Browser build: alias Tauri packages to browser shims so service files are unchanged
-  resolve: isWebBuild
+  resolve: useBrowserShim
     ? {
         alias: {
           '@tauri-apps/api/core': resolve(__dirname, 'src/lib/backend/browser-invoke.ts'),
@@ -57,7 +62,7 @@ export default defineConfig({
     sourcemap: !!process.env.TAURI_ENV_DEBUG,
   },
 
-  define: isWebBuild
+  define: useBrowserShim
     ? {
         // Stub out Tauri globals so runtime checks work correctly
         'window.__TAURI_INTERNALS__': 'undefined',

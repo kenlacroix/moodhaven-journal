@@ -38,9 +38,10 @@ import {
   HealthTab,
   ExportTab,
   AboutTab,
+  SpeechToTextTab,
 } from '../components/settings/tabs';
 
-type SettingsTab = 'general' | 'privacy' | 'sync' | 'ai' | 'health' | 'devices' | 'export' | 'about';
+type SettingsTab = 'general' | 'privacy' | 'sync' | 'ai' | 'health' | 'devices' | 'export' | 'about' | 'speech';
 
 interface TabConfig {
   id: SettingsTab;
@@ -91,6 +92,12 @@ const TABS: TabConfig[] = [
     label: 'Export',
     icon: 'M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3',
     keywords: ['export', 'backup', 'download', 'filter', 'tags', 'mood', 'selective', 'date range'],
+  },
+  {
+    id: 'speech',
+    label: 'Speech to Text',
+    icon: 'M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z',
+    keywords: ['speech', 'voice', 'dictation', 'whisper', 'microphone', 'transcription', 'stt', 'audio'],
   },
   {
     id: 'about',
@@ -632,6 +639,14 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
                     exportTags={exportTags}
                     handleSelectiveExport={handleSelectiveExport}
                     isExporting={isExporting}
+                  />
+                )}
+
+                {activeTab === 'speech' && (
+                  <SpeechToTextTab
+                    settings={settings}
+                    updateSettings={updateSettings}
+                    saveSettings={saveSettings}
                   />
                 )}
 

@@ -75,6 +75,13 @@ async function dispatch(command: string, p: Params): Promise<any> {
       if (!hash || !salt) return null;
       return { hash, salt };
     }
+    case 'verify_password': {
+      const storedHash = await dbGetSetting('password_hash');
+      const storedSalt = await dbGetSetting('password_salt');
+      if (!storedHash || !storedSalt) return false;
+      const { verifyPasswordHash } = await import('../services/crypto');
+      return verifyPasswordHash(p.password as string, storedHash, storedSalt);
+    }
 
     // -----------------------------------------------------------------------
     // Journal entries

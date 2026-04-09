@@ -11,7 +11,6 @@ import {
   decrypt,
   clearKeyCache,
   hashPassword,
-  verifyPasswordHash,
   type EncryptedData,
 } from './crypto';
 import { extractHashtags } from '../utils/markdownUtils';
@@ -45,10 +44,6 @@ interface EncryptedJournalEntryRow {
   unsealed_at?: string | null;
 }
 
-interface UserSettings {
-  password_hash: string;
-  password_salt: string;
-}
 
 interface DailyStats {
   date: string;
@@ -76,20 +71,11 @@ export async function setupPassword(password: string): Promise<void> {
 }
 
 /**
- * Verify user's password against stored hash
+ * Verify user's password against stored hash.
+ * Delegates to the Rust verify_password command (PBKDF2-HMAC-SHA-256, 600k iterations).
  */
 export async function verifyUserPassword(password: string): Promise<boolean> {
-  const settings = await invoke<UserSettings | null>('get_password_hash');
-
-  if (!settings) {
-    return false;
-  }
-
-  return verifyPasswordHash(
-    password,
-    settings.password_hash,
-    settings.password_salt
-  );
+  return invoke<boolean>('verify_password', { password });
 }
 
 // ============================================================================

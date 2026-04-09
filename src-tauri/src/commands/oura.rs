@@ -23,6 +23,7 @@
 //! - No data ever leaves the device except to the Oura API
 
 use crate::db::Database;
+use crate::AppLockState;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
 
@@ -296,6 +297,9 @@ pub async fn oura_validate_pat(_app: AppHandle, pat: String) -> Result<(), Strin
 /// Kept for backwards compatibility; new flow calls oura_validate_pat + secureStorage instead.
 #[tauri::command]
 pub async fn oura_save_pat(app: AppHandle, pat: String) -> Result<(), String> {
+    if app.state::<AppLockState>().is_locked() {
+        return Err("Session is locked".to_string());
+    }
     if pat.trim().is_empty() {
         return Err("Token cannot be empty".to_string());
     }
@@ -338,6 +342,9 @@ pub async fn oura_save_pat(app: AppHandle, pat: String) -> Result<(), String> {
 /// Remove PAT and all cached Oura data from the database.
 #[tauri::command]
 pub async fn oura_disconnect(app: AppHandle) -> Result<(), String> {
+    if app.state::<AppLockState>().is_locked() {
+        return Err("Session is locked".to_string());
+    }
     let db = app.state::<Database>();
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     ensure_settings_table(&conn)?;
@@ -356,6 +363,9 @@ pub async fn oura_disconnect(app: AppHandle) -> Result<(), String> {
 /// Return current connection status (whether PAT is stored).
 #[tauri::command]
 pub async fn oura_get_status(app: AppHandle) -> Result<OuraStatusResponse, String> {
+    if app.state::<AppLockState>().is_locked() {
+        return Err("Session is locked".to_string());
+    }
     let db = app.state::<Database>();
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     ensure_settings_table(&conn)?;
@@ -384,6 +394,9 @@ pub async fn oura_get_status(app: AppHandle) -> Result<OuraStatusResponse, Strin
 /// the database, so the credential never needs to be stored unencrypted in Rust.
 #[tauri::command]
 pub async fn oura_sync_today(app: AppHandle, pat: String) -> Result<OuraHealthContext, String> {
+    if app.state::<AppLockState>().is_locked() {
+        return Err("Session is locked".to_string());
+    }
     if pat.trim().is_empty() {
         return Err("Oura not connected — save a Personal Access Token first".to_string());
     }
@@ -422,6 +435,9 @@ pub async fn oura_get_context(
     app: AppHandle,
     date: String,
 ) -> Result<Option<OuraHealthContext>, String> {
+    if app.state::<AppLockState>().is_locked() {
+        return Err("Session is locked".to_string());
+    }
     let db = app.state::<Database>();
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     ensure_settings_table(&conn)?;
@@ -443,6 +459,9 @@ pub async fn oura_get_context(
 /// Prompt modifiers are gated by history depth (< 3 days → no modifiers).
 #[tauri::command]
 pub async fn oura_get_history(app: AppHandle, days: i32) -> Result<Vec<OuraHealthContext>, String> {
+    if app.state::<AppLockState>().is_locked() {
+        return Err("Session is locked".to_string());
+    }
     let db = app.state::<Database>();
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     ensure_settings_table(&conn)?;
@@ -483,6 +502,9 @@ pub async fn oura_get_history(app: AppHandle, days: i32) -> Result<Vec<OuraHealt
 /// `pat` is passed from the frontend (decrypted from secureStorage).
 #[tauri::command]
 pub async fn oura_backfill(app: AppHandle, days: i32, pat: String) -> Result<i32, String> {
+    if app.state::<AppLockState>().is_locked() {
+        return Err("Session is locked".to_string());
+    }
     if pat.trim().is_empty() {
         return Err("Oura not connected".to_string());
     }

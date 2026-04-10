@@ -112,4 +112,5 @@ For heavy crypto files, use Node environment: `// @vitest-environment node` at t
 | `stores/appStore.test.ts` | 18 |
 | `stores/settingsStore.test.ts` | 18 |
 | `backend/browser-invoke.test.ts` | 5 |
-| **Total** | **646** |
+| `lib/services/settingsService.test.ts` | 10 |
+| **Total** | **665** |

@@ -101,7 +101,7 @@ For heavy crypto files, use Node environment: `// @vitest-environment node` at t
 | `lib/journalTemplates.test.ts` | 10 |
 | `lib/logger.test.ts` | 15 |
 | `lib/metadataExtractor.test.ts` | 84 |
-| `lib/rateLimitService.test.ts` | 41 |
+| `lib/rateLimitService.test.ts` | 43 |
 | `lib/recoveryKeyService.test.ts` | 8 |
 | `lib/reminderService.test.ts` | 25 |
 | `lib/secureStorage.test.ts` | 10 |
@@ -113,4 +113,4 @@ For heavy crypto files, use Node environment: `// @vitest-environment node` at t
 | `stores/settingsStore.test.ts` | 18 |
 | `backend/browser-invoke.test.ts` | 5 |
 | `lib/services/settingsService.test.ts` | 10 |
-| **Total** | **665** |
+| **Total** | **667** |

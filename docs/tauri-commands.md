@@ -1,6 +1,6 @@
 # Tauri Command Reference
 
-> **Version:** v0.9.0 | **Total commands:** ~101
+> **Version:** v0.9.1 | **Total commands:** ~109
 >
 > This document lists all `#[tauri::command]` functions exposed by MoodHaven Journal's Rust backend.
 > Commands are registered in `src-tauri/src/lib.rs` and permitted in `src-tauri/capabilities/default.json`.
@@ -12,6 +12,8 @@ const result = await invoke('command_name', { param: value });
 ```
 
 Parameter names in TypeScript use **camelCase**; Rust receives them as **snake_case** (Tauri handles conversion).
+
+**Lock guards (v0.9.0+):** Many commands require the session to be unlocked. Calling them before `unlock_app` returns `"Session is locked"`. Affected sections: Analytics, Settings (`get_setting`, `set_setting`, `get_all_settings`), Oura Ring, Time Capsule. `factory_reset` explicitly does **not** require unlock (it is the "forgot password" escape hatch).
 
 ---
 
@@ -433,10 +435,64 @@ invoke('get_monthly_mood_data', {
 
 ---
 
+### `get_full_analytics_bundle`
+
+Fetch all analytics data in a single DB call (replaces 5 parallel IPC calls). Requires unlock.
+
+```typescript
+invoke('get_full_analytics_bundle', {
+  trendDays: number,   // number of days for trend data window
+}) → Promise<{
+  averageMood: number,
+  totalEntries: number,
+  streakStats: { currentStreak: number; longestStreak: number; totalDays: number },
+  moodDistribution: Array<{ mood: number; count: number }>,
+  dayOfWeekStats: Array<{ dayOfWeek: number; avgMood: number; count: number }>,
+  trendData: Array<{ date: string; avgMood: number; count: number }>,
+}>
+```
+
+---
+
+### `get_insights_metadata`
+
+Lightweight all-time stats that don't require decrypting entries. Requires unlock.
+
+```typescript
+invoke('get_insights_metadata') → Promise<{
+  entriesThisWeek: number,
+  totalEntries: number,
+  topTags: string[],
+  lastEntryDate: string | null,
+}>
+```
+
+---
+
 ## Data Management
 
 **Source:** `src-tauri/src/commands/data_management.rs`
 **IPC wrappers:** `src/lib/dataManagementService.ts`
+
+---
+
+### `unlock_app`
+
+Mark the session as unlocked. Called by the frontend after successful password (and optional 2FA) verification. Sensitive commands gate on this state — they return `"Session is locked"` until this is called.
+
+```typescript
+invoke('unlock_app') → Promise<void>
+```
+
+---
+
+### `lock_app`
+
+Mark the session as locked. Called on manual lock or app exit. Clears in-memory unlock state; the user must re-authenticate.
+
+```typescript
+invoke('lock_app') → Promise<void>
+```
 
 ---
 
@@ -827,6 +883,16 @@ invoke('oura_backfill', {
 
 ---
 
+### `oura_validate_pat`
+
+Validate a Personal Access Token by making a test request to the Oura API. Does **not** store the token — storage is handled separately via `oura_save_pat`. Returns an error if the token is empty, invalid (401), or the API is unreachable.
+
+```typescript
+invoke('oura_validate_pat', { pat: string }) → Promise<void>
+```
+
+---
+
 ## Media Attachments
 
 **Source:** `src-tauri/src/commands/media.rs`
@@ -1003,6 +1069,33 @@ invoke('stt_transcribe', {
   audioBase64: string,
   modelName: string,
 }) → Promise<string>
+```
+
+---
+
+### `stt_transcribe_timestamped`
+
+Transcribe base64-encoded WAV audio and return per-segment timestamps. Used by the 3-layer formatting pipeline for paragraph detection. Falls back to plain stdout if JSON output is unavailable.
+
+```typescript
+invoke('stt_transcribe_timestamped', {
+  audioBase64: string,
+  modelName: string,
+}) → Promise<{
+  text: string,
+  segments: Array<{ text: string; start: number; end: number }>,
+}>
+```
+
+---
+
+### `stt_cancel_download`
+
+Cancel an active model download. The download loop checks the cancellation token and stops gracefully; partial files are left in place (clean up with `stt_cleanup_partial` if needed).
+
+```typescript
+invoke('stt_cancel_download', { filename: string }) → Promise<void>
+// Errors if no download for `filename` is currently active
 ```
 
 ---

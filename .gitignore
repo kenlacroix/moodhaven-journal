@@ -78,7 +78,6 @@ ceo-plans/
 .claude/settings.local.json
 .claude/worktrees/
 /.agents
-/active-plans
 dist-web/
 /pentest-results
 scripts/pentest/wordlists/

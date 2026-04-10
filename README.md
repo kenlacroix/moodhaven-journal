@@ -11,7 +11,7 @@
 <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-22c55e?style=flat-square" alt="License"></a>
 <a href="#installation"><img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Web-0ea5e9?style=flat-square" alt="Platform"></a>
 <a href="#watch--phone-companion-beta"><img src="https://img.shields.io/badge/companion-Wear%20OS%20%7C%20Android-f97316?style=flat-square" alt="Companion"></a>
-<a href="#tech-stack"><img src="https://img.shields.io/badge/tests-654%20passing-22c55e?style=flat-square" alt="Tests"></a>
+<a href="#tech-stack"><img src="https://img.shields.io/badge/tests-667%20passing-22c55e?style=flat-square" alt="Tests"></a>
 <a href="https://tauri.app"><img src="https://img.shields.io/badge/built%20with-Tauri%202-ffd866?style=flat-square" alt="Built with Tauri"></a>
 <a href="#security--privacy"><img src="https://img.shields.io/badge/encryption-AES--256--GCM-ef4444?style=flat-square" alt="Encryption"></a>
 </p>
@@ -54,9 +54,9 @@
 
 | Platform | Installer |
 |:---|:---|
-| Windows | `MoodHaven_0.8.5_x64-setup.exe` |
-| macOS | `MoodHaven_0.8.5_x64.dmg` |
-| Linux | `moodhaven_0.8.5_amd64.AppImage` or `.deb` |
+| Windows | `MoodHaven_0.9.1_x64-setup.exe` |
+| macOS | `MoodHaven_0.9.1_x64.dmg` |
+| Linux | `moodhaven_0.9.1_amd64.AppImage` or `.deb` |
 
 **Browser** — Run directly in your browser or self-host with the `dist-web/` build. No Rust or install required.
 
@@ -260,7 +260,7 @@ Full architecture: [docs/watch-companion.md](docs/watch-companion.md)
 | **Encryption** | AES-256-GCM + PBKDF2 (WebCrypto API) |
 | **Peer identity** | Ed25519 ([ed25519-dalek](https://github.com/dalek-cryptography/curve25519-dalek)) |
 | **2FA** | [totp-rs](https://github.com/constantoine/totp-rs) + native CTAP2/HID |
-| **Testing** | [Vitest](https://vitest.dev) + Testing Library · 641 tests |
+| **Testing** | [Vitest](https://vitest.dev) + Testing Library · 667 tests |
 | **Build** | Vite 8 + Tauri CLI |
 | **Mobile** | Kotlin + Wear OS Data Layer (MessageAPI + ChannelAPI) |
 
@@ -343,7 +343,7 @@ Full cross-platform build guide: [docs/build.md](docs/build.md)
 | **Peer discovery** | mDNS/DNS-SD ([mdns-sd](https://github.com/keepsimple1/mdns-sd)) |
 | **2FA** | [totp-rs](https://github.com/constantoine/totp-rs) + native CTAP2/HID |
 | **Charts** | Custom SVG (no charting library dependency) |
-| **Testing** | [Vitest](https://vitest.dev) + Testing Library (654 tests) |
+| **Testing** | [Vitest](https://vitest.dev) + Testing Library (667 tests) |
 | **Build** | Vite 8 + `npm run tauri build` |
 | **Android bridge** | Kotlin + Wear OS Data Layer (MessageAPI + ChannelAPI) |
 | **Wear OS app** | Kotlin + Wear OS Compose-free (XML layouts, Wearable widgets) |
@@ -393,7 +393,7 @@ npm run tauri dev
 ```
 
 ```bash
-npm test                          # 654 tests
+npm test                          # 667 tests
 npm run typecheck                 # TypeScript strict check
 cd src-tauri && cargo check       # Rust compilation check
 ```
@@ -405,7 +405,7 @@ Additional docs: [Architecture](docs/architecture.md) · [Tauri Commands](docs/t
 
 ## Recent Changes
 
-**v0.9.1** — v0.9.0 regression fixes: unlock was blocked by missing ACL permissions, factory reset was blocked from the lock screen, wrong-password errors showed the generic message instead of attempt count. 665 tests.
+**v0.9.1** — v0.9.0 regression fixes: unlock was blocked by missing ACL permissions (`verify_password` and 9 others absent from ACL allow-list), factory reset was blocked from the lock screen, wrong-password errors showed the generic message instead of attempt count. Settings service now silently swallows `Session is locked` errors on startup. 667 tests.
 **v0.9.0** — Password verification moved to Rust (SEC-DEFER-001): PBKDF2 hash check now runs entirely in the backend — the hash never leaves Rust. Analytics, time capsule, Oura, and settings commands now require an unlocked session. SpeechToTextTab added as the 9th settings tab (model download UI coming v0.9.1). 654 tests.
 **v0.8.5.1** — Android Wear companion patch: tile tap regression fix, `WearProtocol.PATH_FEEDBACK` constant, HR timeout log level promoted to `Log.i`.
 **v0.8.5** — Peer sync engine refactored from a 2,554-line monolith into a proper Rust module directory (`protocol`, `crypto`, `connection`, `conflict`). Wire format and session protocol unchanged — no user-visible behaviour change.

@@ -110,7 +110,10 @@ export async function loadSettings(password?: string): Promise<AppSettings> {
     }
     return createDefaultSettings();
   } catch (error) {
-    logger.error('Failed to load settings:', { error: String(error) });
+    // "Session is locked" is expected when called pre-unlock; silently return defaults.
+    if (!String(error).includes('Session is locked')) {
+      logger.error('Failed to load settings:', { error: String(error) });
+    }
     return createDefaultSettings();
   }
 }
@@ -132,6 +135,10 @@ export async function saveSettings(settings: AppSettings, password?: string): Pr
       value: JSON.stringify(blob),
     });
   } catch (error) {
+    // "Session is locked" is expected when called pre-unlock; best-effort, don't rethrow.
+    if (String(error).includes('Session is locked')) {
+      return;
+    }
     logger.error('Failed to save settings:', { error: String(error) });
     throw error;
   }

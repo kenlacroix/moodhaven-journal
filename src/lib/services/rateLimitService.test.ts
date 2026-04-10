@@ -182,6 +182,13 @@ describe('rateLimitService', () => {
       const persisted = JSON.parse(persistedJson);
       expect(persisted.failedAttempts).toBe(3);
     });
+
+    it('does not throw when set_setting rejects (session locked)', async () => {
+      // Regression: before fix, a locked session caused recordFailedAttempt to throw,
+      // which propagated through handleFailedAttempt → outer catch → "An error occurred."
+      mockInvoke.mockRejectedValue(new Error('Session is locked'));
+      await expect(recordFailedAttempt(makeState())).resolves.not.toThrow();
+    });
   });
 
   // ── resetRateLimit ──────────────────────────────────────────

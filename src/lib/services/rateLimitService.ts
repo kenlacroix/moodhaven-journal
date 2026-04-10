@@ -73,7 +73,12 @@ export async function loadRateLimitState(): Promise<RateLimitState> {
 }
 
 async function persistState(state: RateLimitState): Promise<void> {
-  await invoke('set_setting', { key: RATE_LIMIT_KEY, value: JSON.stringify(state) });
+  try {
+    await invoke('set_setting', { key: RATE_LIMIT_KEY, value: JSON.stringify(state) });
+  } catch {
+    // set_setting requires unlock; state is best-effort while the session is locked.
+    // In-memory enforcement still applies for the current session.
+  }
 }
 
 // ── Actions ──────────────────────────────────────────────────

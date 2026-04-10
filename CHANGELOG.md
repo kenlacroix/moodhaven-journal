@@ -7,6 +7,19 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.9.1] — 2026-04-10
+
+### Fixed
+- **Unlock blocked on first launch (v0.9.0 regression)**: `verify_password`, `unlock_app`, and `lock_app` were registered in `invoke_handler!` but missing from `app-commands.toml`. Tauri's ACL blocked them before the Rust code ran, producing "An error occurred. Please try again." every time a user tried to unlock. Ten other commands were also missing from the ACL and are now added.
+- **Factory reset blocked from lock screen (v0.9.0 regression)**: `factory_reset` had a `require_unlocked()` guard, which prevented the "Erase & Start Fresh" escape hatch from working on the lock screen — the one place it must work.
+- **Wrong password error showed "An error occurred" instead of attempt count (v0.9.0 regression)**: `set_setting` now requires unlock, but `persistState` in `rateLimitService` called it unconditionally. The resulting "Session is locked" error propagated to the lock screen's outer catch and replaced the intended "Incorrect password" message. Rate-limit state is now persisted with a try-catch; in-memory enforcement still applies for the current session.
+- **Startup log spam**: `loadSettings` and `saveSettings` are called before unlock from `App.tsx` and `useUpdateCheck`. "Session is locked" errors from these pre-unlock calls are now silently swallowed rather than logged as errors.
+
+### For contributors
+- `LockScreen.tsx` catch block now logs uncaught errors via `logger.error` so future ACL omissions surface in logs immediately.
+- `settingsService.test.ts` added: 10 tests covering locked-state behaviour for `loadSettings` and `saveSettings`.
+- `rateLimitService.test.ts` regression test: `recordFailedAttempt` does not throw when `set_setting` rejects with "Session is locked".
+
 ## [0.9.0] — 2026-04-09
 
 ### Security

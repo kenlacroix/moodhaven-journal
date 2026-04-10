@@ -12,6 +12,10 @@
 identifier = "allow-all-app-commands"
 description = "Allow all MoodHaven Journal app-level commands registered in invoke_handler!."
 commands.allow = [
+  # Session lock/unlock (must be allowed pre-auth)
+  "verify_password",
+  "unlock_app",
+  "lock_app",
   # Password management
   "check_password_exists",
   "store_password_hash",
@@ -25,6 +29,7 @@ commands.allow = [
   "delete_journal_entry",
   "patch_entry_location_weather",
   "patch_entry_pinned",
+  "patch_entry_status",
   "sync_entry_tags",
   "get_book_tags",
   # Statistics
@@ -35,6 +40,8 @@ commands.allow = [
   "get_streak_stats",
   "get_day_of_week_stats",
   "get_monthly_mood_data",
+  "get_full_analytics_bundle",
+  "get_insights_metadata",
   # Settings
   "get_setting",
   "set_setting",
@@ -78,12 +85,15 @@ commands.allow = [
   "stt_download_model",
   "stt_delete_model",
   "stt_transcribe",
+  "stt_transcribe_timestamped",
+  "stt_cancel_download",
   # Books (named journals)
   "list_books",
   "create_book",
   "update_book",
   "delete_book",
   # Oura Ring health integration
+  "oura_validate_pat",
   "oura_save_pat",
   "oura_disconnect",
   "oura_get_status",
@@ -131,6 +141,7 @@ commands.allow = [
   "delete_voice_memo",
   "patch_voice_memo_transcription",
   "link_voice_memo_to_entry",
+  "transcribe_voice_memo",
   # Peer-to-peer sync — Phase 1: identity + discovery
   "peer_get_identity",
   "peer_rename_device",

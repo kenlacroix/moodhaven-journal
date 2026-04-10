@@ -114,10 +114,10 @@ Grab the latest build from the [Releases](https://github.com/kenlacroix/moodhave
 
 | Platform | Installer | Minimum Version |
 |:---|:---|:---|
-| **Windows** | `MoodHaven_0.9.0_x64-setup.exe` | Windows 10 |
-| **macOS** | `MoodHaven_0.9.0_x64.dmg` | macOS 10.15 Catalina |
-| **Linux** | `moodhaven_0.9.0_amd64.AppImage` | Any modern distro |
-| **Linux (Debian)** | `moodhaven_0.9.0_amd64.deb` | Ubuntu 22.04+ |
+| **Windows** | `MoodHaven_0.9.1_x64-setup.exe` | Windows 10 |
+| **macOS** | `MoodHaven_0.9.1_x64.dmg` | macOS 10.15 Catalina |
+| **Linux** | `moodhaven_0.9.1_amd64.AppImage` | Any modern distro |
+| **Linux (Debian)** | `moodhaven_0.9.1_amd64.deb` | Ubuntu 22.04+ |
 | **Web** | `npm run build:web` → serve `dist-web/` | Any modern browser |
 
 ### First Launch
@@ -405,6 +405,7 @@ Additional docs: [Architecture](docs/architecture.md) · [Tauri Commands](docs/t
 
 ## Recent Changes
 
+**v0.9.1** — v0.9.0 regression fixes: unlock was blocked by missing ACL permissions, factory reset was blocked from the lock screen, wrong-password errors showed the generic message instead of attempt count. 665 tests.
 **v0.9.0** — Password verification moved to Rust (SEC-DEFER-001): PBKDF2 hash check now runs entirely in the backend — the hash never leaves Rust. Analytics, time capsule, Oura, and settings commands now require an unlocked session. SpeechToTextTab added as the 9th settings tab (model download UI coming v0.9.1). 654 tests.
 **v0.8.5.1** — Android Wear companion patch: tile tap regression fix, `WearProtocol.PATH_FEEDBACK` constant, HR timeout log level promoted to `Log.i`.
 **v0.8.5** — Peer sync engine refactored from a 2,554-line monolith into a proper Rust module directory (`protocol`, `crypto`, `connection`, `conflict`). Wire format and session protocol unchanged — no user-visible behaviour change.

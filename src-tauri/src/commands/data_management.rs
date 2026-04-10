@@ -116,10 +116,11 @@ pub fn exit_app() {
     std::process::exit(0);
 }
 
-/// Factory reset - wipe all app data and return to first-run state
+/// Factory reset - wipe all app data and return to first-run state.
+/// Intentionally does NOT require unlock — this is the "forgot password / erase
+/// everything" escape hatch and must work from the lock screen.
 #[tauri::command]
-pub async fn factory_reset(app: AppHandle, lock: State<'_, AppLockState>) -> Result<bool, String> {
-    require_unlocked(&lock)?;
+pub async fn factory_reset(app: AppHandle) -> Result<bool, String> {
     // Get database path
     let db_path = db::get_db_path(&app)?;
 

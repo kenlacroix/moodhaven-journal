@@ -342,7 +342,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.ref_name }}
-        run: node scripts/generate-checksums.cjs
+        run: node scripts/ci/generate-checksums.cjs
 
       - name: Generate latest-release.json and attach to release
         env:

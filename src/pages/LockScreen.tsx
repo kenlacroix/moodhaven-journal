@@ -200,6 +200,7 @@ export function LockScreen() {
           }
         }
       } catch (err) {
+        logger.error('handlePasswordSubmit uncaught error', { error: String(err) });
         setError('An error occurred. Please try again.');
       } finally {
         setIsLoading(false);

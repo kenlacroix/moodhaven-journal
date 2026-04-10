@@ -1,30 +1,34 @@
+// @vitest-environment node
 /**
  * Tests for the browser-mode invoke shim, focused on the password-management
- * commands that were missing or incorrectly shaped (Sprint 1 / SEC-DEFER-001 fix).
+ * commands that were missing or incorrectly shaped (Sprint 1 / SEC-DEFER-001 fix),
+ * and get_data_stats shape fix.
  *
  * Uses fake-indexeddb (auto-imported in src/test/setup.ts) for in-memory IDB.
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { invoke } from './browser-invoke';
-import { openDB, dbGetSetting, dbSetSetting } from './browser';
+import { openDB, dbGetSetting, dbSetSetting, dbCreateEntry } from './browser';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-async function clearSettings() {
+async function clearAllStores() {
   const db = await openDB();
-  await new Promise<void>((resolve, reject) => {
-    const t = db.transaction('settings', 'readwrite');
-    const req = t.objectStore('settings').clear();
-    req.onsuccess = () => resolve();
-    req.onerror = () => reject(req.error);
-  });
+  for (const storeName of ['journal_entries', 'settings', 'books', 'webdav_state']) {
+    await new Promise<void>((resolve, reject) => {
+      const t = db.transaction(storeName, 'readwrite');
+      const req = t.objectStore(storeName).clear();
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+  }
 }
 
 beforeEach(async () => {
-  await clearSettings();
+  await clearAllStores();
 });
 
 // ---------------------------------------------------------------------------
@@ -109,6 +113,59 @@ describe('invoke("verify_password")', () => {
     await dbSetSetting('password_salt', salt);
 
     expect(await invoke<boolean>('verify_password', { password: 'wrong' })).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// get_data_stats — shape fix: must return {totalEntries, averageMood}
+// ---------------------------------------------------------------------------
+
+describe('invoke("get_data_stats")', () => {
+  it('returns {totalEntries:0, averageMood:0} for an empty DB', async () => {
+    const result = await invoke<{ totalEntries: number; averageMood: number }>('get_data_stats');
+    expect(result).toEqual({ totalEntries: 0, averageMood: 0 });
+  });
+
+  it('returns correct totalEntries and averageMood with entries', async () => {
+    const now = new Date().toISOString();
+    await dbCreateEntry({
+      id: 'a',
+      encrypted_content: { iv: '', data: '', salt: '' },
+      mood: 4,
+      privacy_mode: 0,
+      location_weather: null,
+      book_id: 'default',
+      pinned: 0,
+      created_at: now,
+      updated_at: now,
+      tags: [],
+      sealed_until: null,
+      capsule_type: null,
+      linked_original_id: null,
+      unsealed_at: null,
+      status: null,
+    });
+    await dbCreateEntry({
+      id: 'b',
+      encrypted_content: { iv: '', data: '', salt: '' },
+      mood: 2,
+      privacy_mode: 0,
+      location_weather: null,
+      book_id: 'default',
+      pinned: 0,
+      created_at: now,
+      updated_at: now,
+      tags: [],
+      sealed_until: null,
+      capsule_type: null,
+      linked_original_id: null,
+      unsealed_at: null,
+      status: null,
+    });
+
+    const result = await invoke<{ totalEntries: number; averageMood: number }>('get_data_stats');
+    expect(result.totalEntries).toBe(2);
+    expect(result.averageMood).toBe(3); // (4+2)/2
   });
 });
 

@@ -32,15 +32,17 @@ import { logger, setLevel } from '../lib/services/logger';
 import type { LogLevel } from '../lib/services/logger';
 import {
   GeneralTab,
+  AppearanceTab,
   PrivacyTab,
   SyncTab,
   AITab,
   HealthTab,
   ExportTab,
   AboutTab,
+  SpeechToTextTab,
 } from '../components/settings/tabs';
 
-type SettingsTab = 'general' | 'privacy' | 'sync' | 'ai' | 'health' | 'devices' | 'export' | 'about';
+type SettingsTab = 'general' | 'appearance' | 'privacy' | 'sync' | 'ai' | 'health' | 'devices' | 'export' | 'about' | 'speech';
 
 interface TabConfig {
   id: SettingsTab;
@@ -54,7 +56,13 @@ const TABS: TabConfig[] = [
     id: 'general',
     label: 'General',
     icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z',
-    keywords: ['appearance', 'theme', 'dark', 'light', 'compact', 'animations', 'journal', 'prompts', 'auto-save', 'reminders', 'notifications', 'tutorial', 'help', 'tour', 'speech', 'voice', 'dictation', 'whisper', 'microphone', 'transcription', 'location', 'weather', 'city', 'time capsule', 'capsule', 'seal', 'reveal', 'anniversary'],
+    keywords: ['journal', 'prompts', 'auto-save', 'reminders', 'notifications', 'tutorial', 'help', 'tour', 'speech', 'voice', 'dictation', 'whisper', 'microphone', 'transcription', 'location', 'weather', 'city', 'time capsule', 'capsule', 'seal', 'reveal', 'anniversary'],
+  },
+  {
+    id: 'appearance',
+    label: 'Appearance',
+    icon: 'M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z',
+    keywords: ['appearance', 'theme', 'dark', 'light', 'compact', 'animations', 'display', 'color scheme'],
   },
   {
     id: 'privacy',
@@ -91,6 +99,12 @@ const TABS: TabConfig[] = [
     label: 'Export',
     icon: 'M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3',
     keywords: ['export', 'backup', 'download', 'filter', 'tags', 'mood', 'selective', 'date range'],
+  },
+  {
+    id: 'speech',
+    label: 'Speech to Text',
+    icon: 'M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z',
+    keywords: ['speech', 'voice', 'dictation', 'whisper', 'microphone', 'transcription', 'stt', 'audio'],
   },
   {
     id: 'about',
@@ -548,9 +562,6 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
                     settings={settings}
                     saveSettings={saveSettings}
                     sttSectionRef={sttSectionRef}
-                    setTheme={setTheme}
-                    setCompactMode={setCompactMode}
-                    setAnimationsEnabled={setAnimationsEnabled}
                     setShowPrompts={setShowPrompts}
                     setAutoLocationWeather={setAutoLocationWeather}
                     setTemperatureUnit={setTemperatureUnit}
@@ -569,6 +580,15 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
                     setSttCloudConsent={setSttCloudConsent}
                     setHasSeenTutorial={setHasSeenTutorial}
                     setTimeCapsuleSettings={setTimeCapsuleSettings}
+                  />
+                )}
+
+                {activeTab === 'appearance' && (
+                  <AppearanceTab
+                    settings={settings}
+                    setTheme={setTheme}
+                    setCompactMode={setCompactMode}
+                    setAnimationsEnabled={setAnimationsEnabled}
                   />
                 )}
 
@@ -632,6 +652,14 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
                     exportTags={exportTags}
                     handleSelectiveExport={handleSelectiveExport}
                     isExporting={isExporting}
+                  />
+                )}
+
+                {activeTab === 'speech' && (
+                  <SpeechToTextTab
+                    settings={settings}
+                    updateSettings={updateSettings}
+                    saveSettings={saveSettings}
                   />
                 )}
 

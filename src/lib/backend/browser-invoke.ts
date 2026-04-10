@@ -34,7 +34,6 @@ import {
   dbCreateBook,
   dbUpdateBook,
   dbDeleteBook,
-  dbGetDataStats,
   dbImportEntries,
   dbExportAll,
   type BrowserEntryRow,
@@ -267,7 +266,11 @@ async function dispatch(command: string, p: Params): Promise<any> {
     // Data management
     // -----------------------------------------------------------------------
     case 'get_data_stats': {
-      return dbGetDataStats();
+      // Rust returns { totalEntries, averageMood } — match that shape
+      const allEntries = await dbGetAllEntries();
+      const moods = allEntries.map((e) => e.mood).filter((m) => m > 0);
+      const averageMood = moods.length > 0 ? moods.reduce((a, b) => a + b, 0) / moods.length : 0;
+      return { totalEntries: allEntries.length, averageMood };
     }
     case 'export_data': {
       // Returns entries as JSON string — cloudSyncService handles encryption

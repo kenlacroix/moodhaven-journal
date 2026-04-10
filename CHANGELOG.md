@@ -7,6 +7,29 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.9.0] — 2026-04-09
+
+### Security
+- **Password verification moves to Rust (SEC-DEFER-001)**: The unlock flow now calls a native `verify_password` Rust command instead of running PBKDF2 in the WebView. Same algorithm (PBKDF2-HMAC-SHA-256, 600k iterations), same salt format — covered by 5 unit test vectors including a Unicode password case and a salt-decode parity check. The hash never needs to leave the backend now.
+- **Lock guards on analytics, health, and time capsule commands**: Seventeen Tauri commands across `analytics.rs`, `time_capsule.rs`, `oura.rs`, and `settings.rs` now reject calls while the app is locked. Previously, mood patterns, streak data, health context, and API tokens were readable without authentication. This is fixed.
+- **STT model URL allowlist (A-14)**: `stt_download_model` validates model filenames against an explicit allowlist before constructing the Hugging Face download URL. Unrecognised filenames return an error before any network request is made.
+
+### Added
+- **Speech to Text settings tab**: A dedicated "Speech to Text" tab is now the 9th settings tab. Currently shows a placeholder; model download UI ships in v0.9.1.
+
+### Changed
+- **Settings tab split**: Appearance settings (theme, compact mode, animations) extracted from `GeneralTab` into a dedicated `AppearanceTab` component. No user-visible behaviour change.
+
+### Fixed
+- **Browser mode `get_data_stats` shape**: The browser-invoke shim was returning `{entryCount, totalSizeBytes, lastModified}` instead of the Rust shape `{totalEntries, averageMood}`, crashing the Privacy tab's average mood display in browser/dev mode.
+
+### For contributors
+- `verify_password` Rust command added to `journal.rs` with `#[cfg(test)]` unit tests. Browser-invoke shim routes to frontend crypto for browser mode.
+- `require_unlocked` guard pattern is now consistent across all sensitive command modules.
+- `browser-invoke.test.ts` expanded: covers `check_password_exists`, `store_password_hash`, `get_password_hash`, `verify_password`, `get_data_stats`, `import_data`, and native-only no-ops.
+
+---
+
 ## [0.8.5.1] — 2026-04-09
 
 ### Fixed

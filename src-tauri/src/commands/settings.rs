@@ -24,9 +24,14 @@ pub struct StoredSettings {
     pub value: String, // JSON string
 }
 
-/// Get a setting by key
+/// Get a setting by key — requires an unlocked session (values include API keys and PATs)
 #[tauri::command]
-pub fn get_setting(db: State<Database>, key: String) -> Result<Option<String>, String> {
+pub fn get_setting(
+    db: State<Database>,
+    lock: State<'_, AppLockState>,
+    key: String,
+) -> Result<Option<String>, String> {
+    require_unlocked(&lock)?;
     let conn = db.conn.lock().map_err(|e: PoisonError<_>| e.to_string())?;
 
     // Create settings table if it doesn't exist

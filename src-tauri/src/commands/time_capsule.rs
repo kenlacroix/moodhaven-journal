@@ -6,8 +6,17 @@
 //! - sealed vault           (capsule_type = 'vault')
 
 use crate::db::{parse_tags, Database, EncryptedContent, JournalEntryRow};
+use crate::AppLockState;
 use serde::{Deserialize, Serialize};
 use tauri::State;
+
+fn require_unlocked(lock: &State<'_, AppLockState>) -> Result<(), String> {
+    if lock.is_locked() {
+        Err("Session is locked".to_string())
+    } else {
+        Ok(())
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct MoodDelta {
@@ -20,10 +29,12 @@ pub struct MoodDelta {
 #[tauri::command]
 pub fn seal_entry(
     db: State<Database>,
+    lock: State<'_, AppLockState>,
     id: String,
     unlock_at: String,
     capsule_type: String,
 ) -> Result<(), String> {
+    require_unlocked(&lock)?;
     if !["letter", "vault"].contains(&capsule_type.as_str()) {
         return Err(format!("Invalid capsule_type: {capsule_type}"));
     }
@@ -55,9 +66,11 @@ pub fn seal_entry(
 #[tauri::command]
 pub fn get_due_capsules(
     db: State<Database>,
+    lock: State<'_, AppLockState>,
     include_anniversary: bool,
     local_date: Option<String>,
 ) -> Result<Option<JournalEntryRow>, String> {
+    require_unlocked(&lock)?;
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
     // Use the caller-supplied local date (YYYY-MM-DD) so comparisons match the
@@ -145,7 +158,12 @@ pub fn get_due_capsules(
 /// Sets `unsealed_at = now()`, defaults `capsule_type` to 'anniversary' if unset
 /// (automatic-reveal path), and clears `sealed_until` (handles early-unseal).
 #[tauri::command]
-pub fn unseal_entry(db: State<Database>, id: String) -> Result<(), String> {
+pub fn unseal_entry(
+    db: State<Database>,
+    lock: State<'_, AppLockState>,
+    id: String,
+) -> Result<(), String> {
+    require_unlocked(&lock)?;
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
     let rows = conn
@@ -173,9 +191,11 @@ pub fn unseal_entry(db: State<Database>, id: String) -> Result<(), String> {
 #[tauri::command]
 pub fn get_mood_delta(
     db: State<Database>,
+    lock: State<'_, AppLockState>,
     entry_id: String,
     entry_created_at: String,
 ) -> Result<MoodDelta, String> {
+    require_unlocked(&lock)?;
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
     let avg_since: Option<f32> = conn

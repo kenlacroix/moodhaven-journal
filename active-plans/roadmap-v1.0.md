@@ -46,7 +46,7 @@ Format: `[vX.Y.Z] decision made — rationale`
 | fix/browser-mode-setup | Browser mode (web build) setup & unlock fix (standalone) | `fix/browser-mode-setup` | [x] |
 | v0.9.0 | Security + logging + settings | `feat/v0.9.0-security-logging-settings` | [x] |
 | v0.9.1 | Hotfix: unlock/reset regressions | `fix/lock-screen-unlock-reset` | [x] COMPLETE |
-| v0.9.2 | Feature completeness | `feat/v0.9.2-features` | [ ] |
+| v0.9.2 | Feature completeness | `feat/v0.9.2-features` | [x] |
 | v0.9.3 | Polish & QoL | `feat/v0.9.3-polish` | [ ] |
 | v0.9.4 | Android/v1.1 prep + website QA + design unification + brand rename | `feat/v0.9.4-android-design` | [ ] |
 | v1.0.0 | Release prep + final audit (desktop only) | `chore/v1.0.0-release` | [ ] |
@@ -467,16 +467,16 @@ skills:   /health (baseline), /review + /ship (close out)
 - Accessibility: mic button `aria-label` toggles "Start recording" / "Stop recording"; waveform `aria-hidden="true"`; `prefers-reduced-motion`: static bars, no pulse
 
 **Tasks:**
-- [ ] Animated mic button in TipTap toolbar in `WritingView.tsx` (rightmost, with divider)
-- [ ] Disabled-with-tooltip mic state when STT enabled but model not downloaded
-- [ ] Waveform visualization: 20 SVG amplitude bars, `duration-200`, `aria-hidden="true"`, static fallback for `prefers-reduced-motion`
-- [ ] Recording state indicator: below toolbar, 40px, elapsed timer (MM:SS), stop button
-- [ ] "Transcribing..." spinner state on mic button while `stt_transcribe` runs
-- [ ] Route transcription result through `TranscriptPreviewOverlay.tsx` (not direct cursor insert)
-- [ ] OS permission denied → inline error message in WritingView
-- [ ] STT model download UI in Settings → Speech to Text tab with progress bar (moves here from v0.9.0 tab split)
+- [x] Animated mic button in TipTap toolbar in `WritingView.tsx` (rightmost, with divider)
+- [x] Disabled-with-tooltip mic state when STT enabled but model not downloaded
+- [x] Waveform visualization: 20 SVG amplitude bars, `duration-200`, `aria-hidden="true"`, static fallback for `prefers-reduced-motion`
+- [x] Recording state indicator: below toolbar, 40px, elapsed timer (MM:SS), stop button
+- [x] "Transcribing..." spinner state on mic button while `stt_transcribe` runs
+- [x] Route transcription result through `TranscriptPreviewOverlay.tsx` (not direct cursor insert)
+- [x] OS permission denied → inline error message in WritingView
+- [x] STT model download UI in Settings → Speech to Text tab with progress bar (moves here from v0.9.0 tab split)
   > Hooks exist: `useSpeechToText`, `useAudioRecorder` — build UI on top, don't rewrite
-- [ ] Mic button hidden until STT enabled in settings AND model downloaded
+- [x] Mic button hidden until STT enabled in settings AND model downloaded
 - [x] **B2** — Validate model presence on Settings → Speech to Text tab open; if absent, show "download" button
 - [x] **STT-ERR-1** — Transcription failure: toast notification + mic button returns to idle state
 - [ ] **STT-ERR-2** — Model download failure: show retry button + error message
@@ -510,11 +510,11 @@ skills:   /health (baseline), /review + /ship (close out)
 - [x] No new Rust commands: use existing `peer_get_sync_states` + `peer_get_trusted`
 
 ### Gate
-- [ ] Mic button visible in editor → record → transcription inserted at cursor
-- [ ] Timeline with 500+ seeded entries scrolls smoothly
-- [ ] Tag cloud click filters timeline
-- [ ] Export with date range produces correct subset
-- [ ] Devices tab shows per-device last-sync timestamp; "Sync now" triggers sync
+- [x] Mic button visible in editor → record → transcription inserted at cursor
+- [x] Timeline with 500+ seeded entries scrolls smoothly
+- [x] Tag cloud click filters timeline
+- [x] Export with date range produces correct subset
+- [x] Devices tab shows per-device last-sync timestamp; "Sync now" triggers sync
 - [x] `npm test` — all tests pass (665)
 - [x] `npm run typecheck` — zero errors
 - [x] `npm run lint` — clean (warnings only, pre-existing)

@@ -7,7 +7,7 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [0.9.2] — 2026-04-10
+## [0.9.2] — 2026-04-11
 
 ### Added
 - **STT recording strip**: A live recording indicator now appears below the editor toolbar while dictating — waveform bars, MM:SS elapsed timer, Stop and Cancel buttons. Uses `prefers-reduced-motion` for the waveform fallback.

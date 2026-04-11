@@ -7,6 +7,24 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.9.2] — 2026-04-10
+
+### Added
+- **STT recording strip**: A live recording indicator now appears below the editor toolbar while dictating — waveform bars, MM:SS elapsed timer, Stop and Cancel buttons. Uses `prefers-reduced-motion` for the waveform fallback.
+- **STT model management UI**: The Speech to Text settings tab now shows all four Whisper models with download progress bars, cancel support, delete, and model selection. B2 fix: model statuses are validated on tab open.
+- **TagCloud component**: Extracted the tag filter chips into a reusable `TagCloud` component (`src/components/journal/TagCloud.tsx`). Wired into `TimelineView` with click-to-filter behaviour unchanged.
+- **TrustedDevicesList last-sync timestamps**: Each paired device in Settings → Devices now shows when it was last synced, loaded from `peer_get_sync_states`.
+
+### Fixed
+- **B10** (`useSpeechToText`): `checkedRef` was blocking the availability check from causing a re-render. Replaced with `isAvailableState` (useState) so the mic button appears/disappears correctly when a model is downloaded or the setting changes.
+- **STT-ERR-1**: Transcription errors now surface as a dismissible amber toast in the editor rather than silently failing.
+- **Virtual scroll height tracking** (`TimelineView`): `heightVersion` (counter) is now the `useMemo` dependency for layout recomputation, not the `forceUpdate` setter (which never changes).
+
+### Changed
+- **Timeline virtual scrolling**: `TimelineView` now renders only visible rows plus overscan via `position: absolute` + `ResizeObserver`-measured heights. Handles variable-height rows (date headers vs entry cards) and async height changes (media badge loads). No third-party library.
+
+---
+
 ## [0.9.1] — 2026-04-10
 
 ### Fixed

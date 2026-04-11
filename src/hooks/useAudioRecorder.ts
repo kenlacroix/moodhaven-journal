@@ -16,6 +16,8 @@ interface UseAudioRecorderResult {
   state: RecordingState;
   error: string | null;
   permissionModal: MicPermissionModal;
+  /** Elapsed recording time in seconds. Only non-zero while state === 'recording'. */
+  elapsedSeconds: number;
   startRecording: () => Promise<void>;
   proceedAfterConsent: () => Promise<void>;
   dismissPermissionModal: () => void;
@@ -112,6 +114,9 @@ export function useAudioRecorder(): UseAudioRecorderResult {
   const [state, setState] = useState<RecordingState>('idle');
   const [error, setError] = useState<string | null>(null);
   const [permissionModal, setPermissionModal] = useState<MicPermissionModal>('none');
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const elapsedIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const recordingStartRef = useRef<number>(0);
 
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -119,6 +124,13 @@ export function useAudioRecorder(): UseAudioRecorderResult {
   const chunksRef = useRef<Float32Array[]>([]);
 
   const cleanup = useCallback(() => {
+    // Stop elapsed timer
+    if (elapsedIntervalRef.current) {
+      clearInterval(elapsedIntervalRef.current);
+      elapsedIntervalRef.current = null;
+    }
+    setElapsedSeconds(0);
+
     // Stop all tracks
     if (mediaStreamRef.current) {
       mediaStreamRef.current.getTracks().forEach((track) => track.stop());
@@ -181,6 +193,11 @@ export function useAudioRecorder(): UseAudioRecorderResult {
       processor.connect(audioContext.destination);
 
       setState('recording');
+      setElapsedSeconds(0);
+      recordingStartRef.current = Date.now();
+      elapsedIntervalRef.current = setInterval(() => {
+        setElapsedSeconds(Math.floor((Date.now() - recordingStartRef.current) / 1000));
+      }, 1000);
     } catch (err) {
       cleanup();
       setState('idle');
@@ -300,6 +317,7 @@ export function useAudioRecorder(): UseAudioRecorderResult {
     state,
     error,
     permissionModal,
+    elapsedSeconds,
     startRecording,
     proceedAfterConsent,
     dismissPermissionModal,

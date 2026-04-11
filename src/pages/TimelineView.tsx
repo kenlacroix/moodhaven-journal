@@ -62,7 +62,7 @@ function getVisibleRange(
   let hi = rows.length - 1;
   while (lo <= hi) {
     const mid = (lo + hi) >> 1;
-    const itemBottom = offsets[mid] + (rows[mid] ? DEFAULT_ENTRY_HEIGHT : DEFAULT_HEADER_HEIGHT);
+    const itemBottom = offsets[mid] + (rows[mid].type === 'entry' ? DEFAULT_ENTRY_HEIGHT : DEFAULT_HEADER_HEIGHT);
     if (itemBottom < visTop) lo = mid + 1;
     else hi = mid - 1;
   }
@@ -670,221 +670,6 @@ export function TimelineView({ onSelectEntry, onNewEntry, onSealEntry, refreshTr
         }}
         filterKey={`${activeBookId ?? ''}-${moodFilter ?? ''}-${dateRange}-${tagFilter ?? ''}-${debouncedQuery}`}
       />
-      {/* VIRTUAL LIST PLACEHOLDER — old render path removed */}
-      {false && Object.entries(groupedEntries).map(([date, dateEntries]) => (
-          <div key={`${date}-${activeBookId ?? 'all'}`} className={isAndroid ? 'mb-6' : ''}>
-            {/* Date group header with pill badge */}
-            <div className={`flex items-center gap-2 mb-3 ${isAndroid ? 'px-4' : ''}`}>
-              <h2 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
-                {getDateHeader(date, dateEntries[0])}
-              </h2>
-              <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
-                {dateEntries.length}
-              </span>
-            </div>
-            <div className={isAndroid ? '' : 'space-y-2'}>
-              {dateEntries.map((entry, i) => {
-                const hasMood = entry.mood !== null && entry.mood > 0;
-                const moodColor = hasMood ? getMoodColor(entry.mood!) : null;
-                return (
-                  <div
-                    key={entry.id}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => onSelectEntry(entry.id)}
-                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelectEntry(entry.id); } }}
-                    style={{
-                      animationDelay: i < 10 ? `${i * 30}ms` : '0ms',
-                      ...(moodColor ? { borderLeftColor: moodColor } : {}),
-                    }}
-                    className={`relative w-full text-left p-4 bg-white dark:bg-slate-900 border-l-4 border-slate-100 dark:border-slate-800 transition-all duration-150 group animate-entry-in cursor-pointer ${
-                      isAndroid
-                        ? 'border-b active:bg-slate-50 dark:active:bg-slate-800/50 active:scale-[0.99] pl-3'
-                        : 'rounded-xl border shadow-sm hover:border-slate-200 dark:hover:border-slate-700 hover:shadow-md hover:-translate-y-0.5'
-                    }`}
-                  >
-                    {/* Actions dropdown (⋯) */}
-                    <EntryActionsMenu
-                      entry={entry}
-                      onDelete={handleDelete}
-                      onSealEntry={onSealEntry}
-                      onPinToggle={async (pinned) => {
-                        handlePinToggle(entry.id, pinned);
-                        try { await patchEntryPinned(entry.id, pinned); }
-                        catch { handlePinToggle(entry.id, !pinned); }
-                      }}
-                    />
-
-                    <div className="flex items-start gap-3">
-                      {/* Mood indicator — 32px fixed, explicit null state */}
-                      <div
-                        className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
-                        style={moodColor ? { backgroundColor: `${moodColor}18` } : undefined}
-                        title={hasMood ? `Mood: ${entry.mood}` : 'No mood recorded'}
-                      >
-                        {hasMood ? (
-                          <span className="text-base leading-none">
-                            {MOOD_OPTIONS.find((o) => o.level === entry.mood)?.emoji}
-                          </span>
-                        ) : (
-                          <span className="text-xs text-slate-300 dark:text-slate-600 font-medium">—</span>
-                        )}
-                      </div>
-
-                      <div className="flex-1 min-w-0">
-                        {/* Title */}
-                        {entry.title && (
-                          <h3 className="font-semibold text-slate-800 dark:text-slate-100 mb-1 truncate">
-                            {entry.title}
-                          </h3>
-                        )}
-
-                        {/* Preview */}
-                        <p className="text-sm font-normal text-slate-500 dark:text-slate-400 line-clamp-2">
-                          {entry.content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()}
-                        </p>
-
-                        {/* Tags */}
-                        {entry.tags.length > 0 && (
-                          <div className="flex flex-wrap gap-1.5 mt-2">
-                            {entry.tags.slice(0, 3).map((tag) => (
-                              <span
-                                key={tag}
-                                className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-xs font-medium bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400"
-                              >
-                                <span className="text-[10px] opacity-70">#</span>
-                                {tag}
-                              </span>
-                            ))}
-                            {entry.tags.length > 3 && (
-                              <span className="text-xs text-slate-400 dark:text-slate-500">
-                                +{entry.tags.length - 3} more
-                              </span>
-                            )}
-                          </div>
-                        )}
-
-                        {/* Privacy badge */}
-                        {(entry.privacyMode ?? 0) > 0 && (
-                          <div className="flex items-center gap-1 mt-2">
-                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
-                              entry.privacyMode === 1
-                                ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400'
-                                : 'bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400'
-                            }`}>
-                              {entry.privacyMode === 1 ? (
-                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
-                                </svg>
-                              ) : (
-                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
-                                </svg>
-                              )}
-                              {entry.privacyMode === 1 ? 'Mindful' : 'Private'}
-                            </span>
-                          </div>
-                        )}
-
-                        {/* Capsule badges */}
-                        {(entry.capsuleType === 'anniversary' || (entry.sealedUntil && !entry.unsealedAt)) && (
-                          <div className="flex items-center gap-1 mt-2">
-                            {entry.capsuleType === 'anniversary' && (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-rose-50 dark:bg-rose-900/20 text-rose-500 dark:text-rose-400">
-                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
-                                </svg>
-                                Anniversary
-                              </span>
-                            )}
-                            {entry.sealedUntil && !entry.unsealedAt && (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-50 dark:bg-indigo-900/20 text-indigo-500 dark:text-indigo-400">
-                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
-                                </svg>
-                                Time Capsule
-                              </span>
-                            )}
-                          </div>
-                        )}
-
-                        {/* Edited badge — shown when last edit is >60s after creation */}
-                        {(() => {
-                          const created = parseEntryTimestamp(entry.created_at).getTime();
-                          const updated = parseEntryTimestamp(entry.updated_at).getTime();
-                          if (updated - created > 60_000) {
-                            return (
-                              <span className="inline-flex items-center gap-1 text-[10px] text-slate-400 dark:text-slate-500 mt-1">
-                                <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125" />
-                                </svg>
-                                Edited {parseEntryTimestamp(entry.updated_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}
-                              </span>
-                            );
-                          }
-                          return null;
-                        })()}
-
-                        {/* Footer: time + weather chip + attachment count */}
-                        <div className="flex items-center gap-3 mt-2">
-                          <span className="inline-flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500">
-                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            {parseEntryTimestamp(entry.created_at).toLocaleTimeString([], {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
-                          </span>
-                          {(entry.locationWeather?.temperature !== undefined || entry.locationWeather?.city) && (
-                            <span className="inline-flex items-center gap-0.5 text-[10px] text-slate-400 dark:text-slate-500">
-                              {entry.locationWeather!.city && (
-                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
-                                </svg>
-                              )}
-                              <span>{getWeatherEmoji(entry.locationWeather!.weatherCode)}</span>
-                              {entry.locationWeather!.temperature !== undefined && (
-                                <span>{Math.round(entry.locationWeather!.temperature)}°</span>
-                              )}
-                              {entry.locationWeather!.city && (
-                                <span>· {entry.locationWeather!.city}</span>
-                              )}
-                            </span>
-                          )}
-                          {/* Attachment count chip */}
-                          {mediaByEntry.has(entry.id) && (() => {
-                            const m = mediaByEntry.get(entry.id)!;
-                            return (
-                              <span className="inline-flex items-center gap-1 text-[10px] text-slate-400 dark:text-slate-500">
-                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94A3 3 0 1119.5 7.372L8.552 18.32m.009-.01l-.01.01m5.699-9.941l-7.81 7.81a1.5 1.5 0 002.112 2.13" />
-                                </svg>
-                                {m.hasImages ? '🖼' : '📄'} {m.count}
-                              </span>
-                            );
-                          })()}
-                        </div>
-                      </div>
-
-                      {/* Arrow */}
-                      <svg
-                        className="w-4 h-4 text-slate-300 dark:text-slate-600 group-hover:text-slate-400 dark:group-hover:text-slate-500 group-hover:translate-x-0.5 flex-shrink-0 mt-1 transition-all duration-150"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                        strokeWidth={2}
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                      </svg>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        ))}
     </div>
   );
 }
@@ -934,8 +719,10 @@ function VirtualEntryList({
 
   // Reset heights when filter changes (items may be different)
   useEffect(() => {
+    resizeObserverRef.current?.disconnect();
     heightsRef.current = new Map();
     rowRefs.current = new Map();
+    forceUpdate(0);
   }, [filterKey]);
 
   // ResizeObserver to track dynamic row heights
@@ -986,19 +773,35 @@ function VirtualEntryList({
   const [viewportHeight, setViewportHeight] = useState(600);
 
   useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    // Find nearest scrollable ancestor (MainLayout's <main overflow-auto>)
+    let scrollEl: HTMLElement | null = container.parentElement;
+    while (scrollEl) {
+      const { overflowY } = window.getComputedStyle(scrollEl);
+      if (overflowY === 'auto' || overflowY === 'scroll') break;
+      scrollEl = scrollEl.parentElement;
+    }
+
     const handleScroll = () => {
-      const container = containerRef.current;
-      if (!container) return;
-      const rect = container.getBoundingClientRect();
-      const containerTop = rect.top + window.scrollY;
-      setScrollTop(Math.max(0, window.scrollY - containerTop));
+      const c = containerRef.current;
+      if (!c) return;
+      if (scrollEl) {
+        // How far has the container been scrolled above the scroll parent's top edge?
+        setScrollTop(Math.max(0, scrollEl.getBoundingClientRect().top - c.getBoundingClientRect().top));
+      } else {
+        setScrollTop(Math.max(0, -c.getBoundingClientRect().top));
+      }
     };
-    const handleResize = () => setViewportHeight(window.innerHeight);
-    window.addEventListener('scroll', handleScroll, { passive: true });
+    const handleResize = () => setViewportHeight(scrollEl ? scrollEl.clientHeight : window.innerHeight);
+
+    const target: EventTarget = scrollEl ?? window;
+    target.addEventListener('scroll', handleScroll, { passive: true });
     window.addEventListener('resize', handleResize, { passive: true });
-    setViewportHeight(window.innerHeight);
+    setViewportHeight(scrollEl ? scrollEl.clientHeight : window.innerHeight);
     return () => {
-      window.removeEventListener('scroll', handleScroll);
+      target.removeEventListener('scroll', handleScroll);
       window.removeEventListener('resize', handleResize);
     };
   }, []);
@@ -1016,8 +819,8 @@ function VirtualEntryList({
       className={isAndroid ? '' : 'relative'}
       style={{ height: totalHeight || undefined, position: totalHeight ? 'relative' : undefined }}
     >
-      {visibleRows.map((row) => {
-        const top = offsets[rows.indexOf(row)];
+      {visibleRows.map((row, i) => {
+        const top = offsets[start + i];
         const style = totalHeight ? { position: 'absolute' as const, top, left: 0, right: 0 } : undefined;
 
         if (row.type === 'header') {
@@ -1027,7 +830,7 @@ function VirtualEntryList({
               data-row-key={row.key}
               ref={(el) => registerRow(row.key, el)}
               style={style}
-              className={`flex items-center gap-2 mb-3 pt-${start > 0 ? '6' : '0'} ${isAndroid ? 'px-4' : ''}`}
+              className={`flex items-center gap-2 mb-3 ${start > 0 ? 'pt-6' : 'pt-0'} ${isAndroid ? 'px-4' : ''}`}
             >
               <h2 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
                 {getDateHeader(row.date, row.sampleEntry)}

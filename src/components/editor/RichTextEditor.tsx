@@ -12,7 +12,7 @@
  * - No toolbar visible by default
  */
 
-import { useState, useEffect, useCallback, useRef, useLayoutEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useEditor, EditorContent, type Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { Extension } from '@tiptap/core';
@@ -312,7 +312,7 @@ export function RichTextEditor({
   // STT-ERR-1: show toast when transcription fails; auto-dismiss after 4s
   const [sttToast, setSttToast] = useState<string | null>(null);
   const prevSttErrorRef = useRef<string | null>(null);
-  useLayoutEffect(() => {
+  useEffect(() => {
     if (sttError && sttError !== prevSttErrorRef.current) {
       setSttToast(sttError);
       prevSttErrorRef.current = sttError;

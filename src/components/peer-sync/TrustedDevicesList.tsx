@@ -2,7 +2,7 @@
  * TrustedDevicesList — Shows all paired devices with revoke option.
  */
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import type { TrustedDevice } from '../../types/peerSync';
 import { revokeDevice } from '../../lib/services/peerPairingService';
 import { getPeerSyncStates, type PeerSyncStateRecord } from '../../lib/services/peerSyncEngineService';
@@ -124,6 +124,9 @@ export function TrustedDevicesList() {
   const trustedDevices = usePeerSyncStore((s) => s.trustedDevices);
   const [syncStates, setSyncStates] = useState<Record<string, string>>({});
 
+  // Stable key — only re-fetch when device IDs actually change, not on every Zustand emit
+  const deviceListKey = useMemo(() => trustedDevices.map((d) => d.deviceId).join(','), [trustedDevices]);
+
   useEffect(() => {
     getPeerSyncStates()
       .then((states: PeerSyncStateRecord[]) => {
@@ -133,8 +136,8 @@ export function TrustedDevicesList() {
         }
         setSyncStates(map);
       })
-      .catch(() => {});
-  }, [trustedDevices]);
+      .catch((err: unknown) => { logger.error('Failed to load peer sync states', { error: String(err) }); });
+  }, [deviceListKey]);
 
   if (trustedDevices.length === 0) {
     return (

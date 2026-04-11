@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { checkModelStatus, downloadModel, deleteModel, cancelDownload } from '../../../lib/services/speechToTextService';
 import { SettingToggle } from '../SettingToggle';
 import type { SettingsTabBaseProps } from './types';
@@ -144,25 +144,42 @@ export function SpeechToTextTab({ settings, updateSettings, saveSettings }: Prop
   const stt = settings.speechToText;
 
   // Per-model download state (phase + progress)
-  const [downloadStates, setDownloadStates] = useState<Partial<Record<STTModel, DownloadState>>>({});
+  const [downloadStates, setDownloadStates] = useState<Partial<Record<STTModel, DownloadState | null>>>({});
   // Per-model downloaded size (null = not downloaded)
   const [downloadedSizes, setDownloadedSizes] = useState<Partial<Record<STTModel, number | null>>>({});
+
+  // Keep refs so async callbacks always read fresh values
+  const sttRef = useRef(stt);
+  useEffect(() => { sttRef.current = stt; }, [stt]);
+
+  // Keep a ref so the unmount cleanup can read current download state without a dep
+  const downloadStatesRef = useRef(downloadStates);
+  useEffect(() => { downloadStatesRef.current = downloadStates; }, [downloadStates]);
+
+  // Cancel any in-flight downloads when the tab unmounts
+  useEffect(() => {
+    return () => {
+      for (const [modelId, state] of Object.entries(downloadStatesRef.current)) {
+        if (state && state.phase !== 'complete' && state.phase !== 'error' && state.phase !== 'cancelled') {
+          cancelDownload(modelId as STTModel).catch(() => {});
+        }
+      }
+    };
+  }, []);
 
   // B2: check all model statuses on tab open
   useEffect(() => {
     let cancelled = false;
     async function checkAll() {
+      let activeModelStatus: { downloaded: boolean; size: number | null } | null = null;
       for (const m of STT_MODELS) {
         if (cancelled) break;
         const status = await checkModelStatus(m.id);
         setDownloadedSizes((prev) => ({ ...prev, [m.id]: status.downloaded ? (status.size ?? 0) : null }));
+        if (m.id === stt.model) activeModelStatus = status;
       }
-      // If active model is no longer downloaded, reflect that in settings
-      if (!cancelled) {
-        const activeStatus = await checkModelStatus(stt.model);
-        if (stt.modelDownloaded !== activeStatus.downloaded) {
-          updateSettings({ speechToText: { ...stt, modelDownloaded: activeStatus.downloaded } });
-        }
+      if (!cancelled && activeModelStatus !== null && stt.modelDownloaded !== activeModelStatus.downloaded) {
+        updateSettings({ speechToText: { ...stt, modelDownloaded: activeModelStatus.downloaded } });
       }
     }
     checkAll();
@@ -214,13 +231,13 @@ export function SpeechToTextTab({ settings, updateSettings, saveSettings }: Prop
         }));
       });
 
-      // Download complete
+      // Download complete — use sttRef for fresh settings value
       const status = await checkModelStatus(modelId);
       setDownloadedSizes((prev) => ({ ...prev, [modelId]: status.size ?? 0 }));
-      setDownloadStates((prev) => ({ ...prev, [modelId]: null as unknown as DownloadState }));
+      setDownloadStates((prev) => ({ ...prev, [modelId]: null }));
 
-      if (stt.model === modelId) {
-        updateSettings({ speechToText: { ...stt, modelDownloaded: true, downloadProgress: null } });
+      if (sttRef.current.model === modelId) {
+        updateSettings({ speechToText: { ...sttRef.current, modelDownloaded: true, downloadProgress: null } });
         await saveSettings();
       }
     } catch (err) {

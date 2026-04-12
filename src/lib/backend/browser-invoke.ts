@@ -464,6 +464,17 @@ async function dispatch(command: string, p: Params): Promise<any> {
     case 'retrieve_session_password':
       return null;
 
+    // Voice memos — not available in browser (Wear OS / desktop-only feature)
+    case 'list_voice_memos':
+      return [];
+    case 'get_voice_memo':
+    case 'delete_voice_memo':
+    case 'patch_voice_memo_transcription':
+    case 'link_voice_memo_to_entry':
+    case 'transcribe_voice_memo':
+    case 'store_voice_memo':
+      return null;
+
     default:
       console.warn(`[browser-invoke] unhandled command: ${command}`, p);
       return null;

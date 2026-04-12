@@ -11,7 +11,7 @@
 <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-22c55e?style=flat-square" alt="License"></a>
 <a href="#installation"><img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Web-0ea5e9?style=flat-square" alt="Platform"></a>
 <a href="#watch--phone-companion-beta"><img src="https://img.shields.io/badge/companion-Wear%20OS%20%7C%20Android-f97316?style=flat-square" alt="Companion"></a>
-<a href="#tech-stack"><img src="https://img.shields.io/badge/tests-667%20passing-22c55e?style=flat-square" alt="Tests"></a>
+<a href="#tech-stack"><img src="https://img.shields.io/badge/tests-693%20passing-22c55e?style=flat-square" alt="Tests"></a>
 <a href="https://tauri.app"><img src="https://img.shields.io/badge/built%20with-Tauri%202-ffd866?style=flat-square" alt="Built with Tauri"></a>
 <a href="#security--privacy"><img src="https://img.shields.io/badge/encryption-AES--256--GCM-ef4444?style=flat-square" alt="Encryption"></a>
 </p>
@@ -54,9 +54,9 @@
 
 | Platform | Installer |
 |:---|:---|
-| Windows | `MoodHaven_0.9.1_x64-setup.exe` |
-| macOS | `MoodHaven_0.9.1_x64.dmg` |
-| Linux | `moodhaven_0.9.1_amd64.AppImage` or `.deb` |
+| Windows | `MoodHaven_0.9.3_x64-setup.exe` |
+| macOS | `MoodHaven_0.9.3_x64.dmg` |
+| Linux | `moodhaven_0.9.3_amd64.AppImage` or `.deb` |
 
 **Browser** — Run directly in your browser or self-host with the `dist-web/` build. No Rust or install required.
 
@@ -114,10 +114,10 @@ Grab the latest build from the [Releases](https://github.com/kenlacroix/moodhave
 
 | Platform | Installer | Minimum Version |
 |:---|:---|:---|
-| **Windows** | `MoodHaven_0.9.1_x64-setup.exe` | Windows 10 |
-| **macOS** | `MoodHaven_0.9.1_x64.dmg` | macOS 10.15 Catalina |
-| **Linux** | `moodhaven_0.9.1_amd64.AppImage` | Any modern distro |
-| **Linux (Debian)** | `moodhaven_0.9.1_amd64.deb` | Ubuntu 22.04+ |
+| **Windows** | `MoodHaven_0.9.3_x64-setup.exe` | Windows 10 |
+| **macOS** | `MoodHaven_0.9.3_x64.dmg` | macOS 10.15 Catalina |
+| **Linux** | `moodhaven_0.9.3_amd64.AppImage` | Any modern distro |
+| **Linux (Debian)** | `moodhaven_0.9.3_amd64.deb` | Ubuntu 22.04+ |
 | **Web** | `npm run build:web` → serve `dist-web/` | Any modern browser |
 
 ### First Launch
@@ -260,7 +260,7 @@ Full architecture: [docs/watch-companion.md](docs/watch-companion.md)
 | **Encryption** | AES-256-GCM + PBKDF2 (WebCrypto API) |
 | **Peer identity** | Ed25519 ([ed25519-dalek](https://github.com/dalek-cryptography/curve25519-dalek)) |
 | **2FA** | [totp-rs](https://github.com/constantoine/totp-rs) + native CTAP2/HID |
-| **Testing** | [Vitest](https://vitest.dev) + Testing Library · 667 tests |
+| **Testing** | [Vitest](https://vitest.dev) + Testing Library · 693 tests |
 | **Build** | Vite 8 + Tauri CLI |
 | **Mobile** | Kotlin + Wear OS Data Layer (MessageAPI + ChannelAPI) |
 
@@ -329,27 +329,6 @@ Full cross-platform build guide: [docs/build.md](docs/build.md)
 
 ---
 
-## Tech Stack
-
-| Layer | Technology |
-|:---|:---|
-| **Desktop shell** | [Tauri 2](https://tauri.app) (Rust) |
-| **Frontend** | React 18 + TypeScript + TailwindCSS |
-| **Rich text** | [TipTap](https://tiptap.dev) |
-| **State** | [Zustand](https://zustand-demo.pmnd.rs) |
-| **Database** | SQLite via [rusqlite](https://github.com/rusqlite/rusqlite) (bundled) |
-| **Encryption** | AES-256-GCM + PBKDF2 (WebCrypto API) |
-| **Peer identity** | Ed25519 ([ed25519-dalek](https://github.com/dalek-cryptography/curve25519-dalek)) |
-| **Peer discovery** | mDNS/DNS-SD ([mdns-sd](https://github.com/keepsimple1/mdns-sd)) |
-| **2FA** | [totp-rs](https://github.com/constantoine/totp-rs) + native CTAP2/HID |
-| **Charts** | Custom SVG (no charting library dependency) |
-| **Testing** | [Vitest](https://vitest.dev) + Testing Library (667 tests) |
-| **Build** | Vite 8 + `npm run tauri build` |
-| **Android bridge** | Kotlin + Wear OS Data Layer (MessageAPI + ChannelAPI) |
-| **Wear OS app** | Kotlin + Wear OS Compose-free (XML layouts, Wearable widgets) |
-
----
-
 ## Beta Testing
 
 MoodHaven Journal is in public beta. The core feature set is complete and stable — the app is used daily in production. What beta testers can help with:
@@ -393,7 +372,7 @@ npm run tauri dev
 ```
 
 ```bash
-npm test                          # 667 tests
+npm test                          # 693 tests
 npm run typecheck                 # TypeScript strict check
 cd src-tauri && cargo check       # Rust compilation check
 ```
@@ -405,6 +384,8 @@ Additional docs: [Architecture](docs/architecture.md) · [Tauri Commands](docs/t
 
 ## Recent Changes
 
+**v0.9.3** — Polish, QoL, and /review fixes: live STT recording strip in the editor toolbar, full model download UI in SpeechToTextTab, TagCloud tag filtering in the timeline, virtual scroll for large vaults, per-device last-sync timestamps in Devices tab, Privacy Transparency document, `use2FASetup` hook extraction, `useAppBanners` streak/OTD hook, `get_entries_on_this_day` Rust SQL command. 7 bugs fixed from /review pass. 693 tests.
+**v0.9.2** — STT recording UI, virtual scroll, TagCloud, devices last-sync, Privacy Transparency system, `useAppBanners` hook (streak milestones + On This Day), mood sparkline in sidebar, keyboard shortcuts (`1–5` mood, `?` cheatsheet). 676 tests.
 **v0.9.1** — v0.9.0 regression fixes: unlock was blocked by missing ACL permissions (`verify_password` and 9 others absent from ACL allow-list), factory reset was blocked from the lock screen, wrong-password errors showed the generic message instead of attempt count. Settings service now silently swallows `Session is locked` errors on startup. 667 tests.
 **v0.9.0** — Password verification moved to Rust (SEC-DEFER-001): PBKDF2 hash check now runs entirely in the backend — the hash never leaves Rust. Analytics, time capsule, Oura, and settings commands now require an unlocked session. SpeechToTextTab added as the 9th settings tab (model download UI coming v0.9.1). 654 tests.
 **v0.8.5.1** — Android Wear companion patch: tile tap regression fix, `WearProtocol.PATH_FEEDBACK` constant, HR timeout log level promoted to `Log.i`.

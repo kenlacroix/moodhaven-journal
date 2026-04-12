@@ -645,20 +645,39 @@ skills:   /health (baseline), /qa (website), /design-review (website visual pass
 > Goal: the website should feel like it was made by the same team as the app — same visual language,
 > same tone, same level of polish. Run QA first to find issues, then fix them.
 
-- [ ] Run `/qa` on the website — capture all functional bugs, broken links, layout issues, copy errors
-- [ ] Fix all P0/P1 findings from QA pass
+**Pre-flight audit findings (2026-04-12) — confirmed in code:**
+
+| ID | File | Issue | Priority |
+|----|------|-------|----------|
+| WQA-001 | `components/HomeClient.tsx:71` | "Free to download. Pro features coming soon." — contradicts FOSS positioning | P0 |
+| WQA-002 | `app/faq/page.tsx` — "Is MoodHaven free?" | References "Pro tier for AI insights and future cloud features" — must be rewritten | P0 |
+| WQA-003 | `app/faq/page.tsx` — "Community vs future versions" | Implies paid tiers; remove or reframe as "all features free and open source" | P0 |
+| WQA-004 | `components/HomeClient.tsx:44` | Hero subtitle names "Day One or Notion" — competitive framing, revisit tone | P1 |
+| WQA-005 | `components/WaitlistModal.tsx` | Formspree waitlist endpoint (`xeogkzgz`) still wired — conflicts with "just download it" positioning | P1 |
+| WQA-006 | `components/HomeClient.tsx:30` | Hero uses `hero-rain.jpg` — blue rain photo, no relation to app brand (DESIGN-DEBT-001) | P1 |
+| WQA-007 | `components/HomeClient.tsx` | No FOSS statement above the fold (DESIGN-DEBT-005) | P1 |
+| WQA-008 | Homepage | No GitHub star badge anywhere (DESIGN-DEBT-004) | P2 |
+| WQA-009 | `components/CommunityCallout.tsx` | Newsletter carousel position — likely above product proof (DESIGN-DEBT-002) | P2 |
+
+**Token audit:** `tailwind.config.js` colors match app — violet `primary`, orange `accent.cta`, mood palette aligned. No token work needed.
+
+- [ ] Fix WQA-001 — strip "Pro features coming soon" from hero
+- [ ] Fix WQA-002 + WQA-003 — rewrite FAQ pricing answers to reflect FOSS reality
+- [ ] Fix WQA-004 — revise hero subtitle (drop competitor names, lead with local-first + privacy)
+- [ ] Fix WQA-005 — audit `WaitlistModal` usage; remove or replace with download CTA
+- [ ] Fix WQA-007 — add FOSS statement above the fold in hero (DESIGN-DEBT-005)
+- [ ] Fix WQA-008 — add GitHub star badge to homepage (DESIGN-DEBT-004)
+- [ ] Fix WQA-006 — replace blue rain hero photo (DESIGN-DEBT-001)
+- [ ] Fix WQA-009 — move newsletter carousel below product proof (DESIGN-DEBT-002)
+- [ ] Run `/qa` on the website — capture any remaining functional bugs, broken links, layout issues
+- [ ] Fix all remaining P0/P1 findings from QA pass
 - [ ] Run `/design-review` on the website — visual audit against app design language
   > Look for: color mismatches vs. app mood palette, typography inconsistency, spacing/alignment,
   > animation quality, mobile responsiveness, hero hierarchy, CTA clarity
 - [ ] Fix all design-review findings (within scope of existing site structure)
-- [ ] **Phase A** (design-unification) — Content: update FAQ (export shipped, mobile exists), add FOSS statement, remove any "Pro"/"subscription" language, fix "coming soon" → "available now"
-- [ ] **Phase B** (design-unification) — Tokens: violet-700 primary, orange accent, mood color scales in `tailwind.config.js`; sweep 4 components + 5 static pages
+- [ ] **Phase B** (design-unification) — Tokens: sweep 4 components + 5 static pages for any remaining off-token colors
 - [ ] **Phase C** (design-unification) — Hero: subtitle leading with local-first + AI insights + privacy
-- [ ] **DESIGN-DEBT-001** — Replace blue rain hero photo with app screenshot or violet-tinted layout
-- [ ] **DESIGN-DEBT-002** — Remove or demote newsletter carousel (below product proof)
 - [ ] **DESIGN-DEBT-003** — Convert value props to proof-based modules (concrete evidence)
-- [ ] **DESIGN-DEBT-004** — Add GitHub star badge to homepage
-- [ ] **DESIGN-DEBT-005** — Add FOSS statement to homepage: "Free and open source. No account, no subscription, no cloud required."
 - [ ] **D-001** — Create `DESIGN.md`: color tokens, typography scale, spacing, motion, component vocabulary
 - [ ] Final `/design-review` pass on website after all changes — confirm cohesion with app
 

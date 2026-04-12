@@ -111,14 +111,8 @@ Replaced `response.json()` with a streaming reader that aborts and falls back to
 
 ---
 
-### D-003: Spec the voice memos empty state
-**What:** Define the empty-state copy and primary action for the voice memos panel in WritingView — the screen a brand-new STT user sees before their first recording.
-**Why:** Voice journaling is a new behavior for MoodHaven Journal users. Without an onboarding-style empty state, users who enable STT and see a blank panel have no signal about what to do next.
-**Pros:** Converts a moment of confusion into a moment of invitation. Follows the design principle "empty states are features."
-**Cons:** Requires copywriting + small component work.
-**Context:** Identified during STT design review Pass 3 (user journey). The plan adds the voice memo list UI but never specifies its empty state.
-**Depends on:** STT Transcript Formatting PR must ship first.
-**Effort:** human ~2h / CC+gstack ~15min
+### ~~D-003: Spec the voice memos empty state~~ ✅ RESOLVED (2026-04-12)
+**Completed:** v0.9.3 — `WearVoiceMemoPanel` in `WritingView` renders an empty state with first-run copy and a "Get started" prompt when no memos are present.
 
 ---
 
@@ -205,11 +199,8 @@ Added `buildFeatures { buildConfig = true }` to `wear/build.gradle.kts`. Replace
 
 ## Settings Refactor (refactor/settings-page-split-and-capsule-tests — v0.7.14)
 
-### SETTINGS-001: Extract `use2FASetup` hook (P3)
-**What:** Extract the 2FA state machine from `PrivacyTab.tsx` into a `src/hooks/use2FASetup.ts` hook. Covers: `show2FASetup`, `showBackupCodes`, `backupCodes`, `isDisabling2FA`, `showDisable2FAConfirm`, and all 6 associated callbacks.
-**Why:** PrivacyTab is currently the largest tab component (~523 lines). The 2FA state block is self-contained and reusable if a dedicated Security page is ever added.
-**Context:** Deferred from settings refactor plan (2026-04-01). Acceptable as-is since it doesn't affect DX or UX. Extract when PrivacyTab next needs modification.
-**Effort:** human ~1h / CC+gstack ~10min
+### ~~SETTINGS-001: Extract `use2FASetup` hook (P3)~~ ✅ RESOLVED (2026-04-12)
+**Completed:** v0.9.3 — `src/hooks/use2FASetup.ts` extracted from `PrivacyTab.tsx`. Covers all 6 callbacks + state. 6 Vitest tests added in `use2FASetup.test.ts`.
 
 ### SETTINGS-002: `React.lazy()` tab loading (P4)
 **What:** Wrap each tab import in `SettingsPage.tsx` with `React.lazy()` and add a `<Suspense fallback={null}>` wrapper around the rendered tab. Only the active tab's JS chunk is loaded on first render.

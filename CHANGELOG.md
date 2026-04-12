@@ -7,6 +7,23 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.9.3] — 2026-04-12
+
+### Added
+- **F4 — Mood sparkline**: A 7-day inline SVG sparkline appears in the sidebar (desktop only) showing recent mood trend with mood-colored dots and a connecting path. Silent on no data.
+- **F5 — Keyboard shortcuts**: Press `1`–`5` outside the editor to set mood level; press `?` or `/` to toggle a shortcut cheatsheet overlay. Guards against intercepting editor keypresses via `isContentEditable` check.
+- **F7 — Streak milestone toasts**: A dismissible violet toast fires once per unlock session when the user hits a 7-, 14-, 30-, 60-, 90-, or 365-day writing streak.
+- **F10 — On This Day banner**: A dismissible card appears in the bottom-right corner once per session when past entries exist for today's date. Shows entry count and oldest year; links to the On This Day view.
+- **D-003 — Watch memo panel**: A `WearVoiceMemoPanel` section in WritingView surfaces incoming Wear OS voice memos with timestamps, durations, transcription status, "Use" (insert into editor), and delete buttons. Shows a first-run empty state with Wear OS onboarding copy.
+- **SETTINGS-001 — `use2FASetup` hook**: Extracted all 2FA setup state and handlers out of `PrivacyTab` (was ~70 lines inline) into `src/hooks/use2FASetup.ts`. Reduces PrivacyTab to a pure layout component for that flow.
+- **PRIV-001 — Privacy Guarantees card**: Static checklist in Settings → Privacy → Transparency section listing all data handling commitments.
+- **PRIV-002 — Live privacy state panel**: Real-time panel showing current storage backend, cloud sync, AI, peer sync, STT formatting, telemetry, and account status — colour-coded green/amber.
+- **PRIV-003 — Export Privacy Snapshot**: Button in Transparency section exports a JSON snapshot of the current privacy state and opens the log folder. Uses `get_log_path` + `write_text_file` + `open_log_folder`.
+- **PRIV-004 — "Private by design" onboarding**: A green callout card in the setup wizard Welcome step summarises the three core privacy commitments before the user creates their first journal.
+- **PRIV-005 — `docs/TRANSPARENCY.md`**: Unsigned transparency manifest documenting all data flows, what leaves the device, telemetry (none), and AI/STT behaviour.
+
+---
+
 ## [0.9.2] — 2026-04-11
 
 ### Added

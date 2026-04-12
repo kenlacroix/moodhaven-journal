@@ -545,12 +545,12 @@ skills:   /health (baseline), /design-review (visual pass on new UI),
 > Context: `active-plans/warrant-canary.md` (merged — see Decision Log)  
 > Goal: reinforce user trust via verifiable, human-readable privacy guarantees — not just claims.
 
-**Scope for v0.9.2 (MVP — no signing key complexity):**
-- [ ] **PRIV-001** — Settings → Privacy: add "Transparency" section with static Privacy Guarantees card (human-readable bullet list: no cloud by default, no telemetry, LAN-only sync, AES-256-GCM encryption, no accounts)
-- [ ] **PRIV-002** — Settings → Privacy: "Current Privacy State" live panel (reads actual runtime state: `cloudSyncEnabled`, `aiEnabled`, `telemetryEnabled`, `externalConnections: []`) — machine-checkable snapshot the user can see
-- [ ] **PRIV-003** — Export privacy state as JSON (button: "Export Privacy Snapshot") — exports the live panel data to a `.json` file via `write_text_file` (existing command, no new Rust needed)
-- [ ] **PRIV-004** — First-run onboarding: add "Private by design" slide with the three core guarantees (local-only storage, optional LAN sync, no accounts required) before the password setup step
-- [ ] **PRIV-005** — `docs/TRANSPARENCY.md`: unsigned transparency manifest template (version, date, commit hash, statement of no telemetry/backdoors/cloud collection) — updated each release
+**Scope for v0.9.3 (MVP — no signing key complexity):**
+- [x] **PRIV-001** — Settings → Privacy: add "Transparency" section with static Privacy Guarantees card (human-readable bullet list: no cloud by default, no telemetry, LAN-only sync, AES-256-GCM encryption, no accounts)
+- [x] **PRIV-002** — Settings → Privacy: "Current Privacy State" live panel (reads actual runtime state: `cloudSyncEnabled`, `aiEnabled`, `telemetryEnabled`, `externalConnections: []`) — machine-checkable snapshot the user can see
+- [x] **PRIV-003** — Export privacy state as JSON (button: "Export Privacy Snapshot") — exports the live panel data to a `.json` file via `write_text_file` (existing command, no new Rust needed)
+- [x] **PRIV-004** — First-run onboarding: add "Private by design" slide with the three core guarantees (local-only storage, optional LAN sync, no accounts required) before the password setup step
+- [x] **PRIV-005** — `docs/TRANSPARENCY.md`: unsigned transparency manifest template (version, date, commit hash, statement of no telemetry/backdoors/cloud collection) — updated each release
 
 **Deferred to post-v1.0 (signing complexity not worth it pre-launch):**
 - Transparency signing key + GPG-signed manifest (`/docs/keys/transparency.asc`)
@@ -559,19 +559,18 @@ skills:   /health (baseline), /design-review (visual pass on new UI),
 - In-app signature verification UI
 
 ### Features // all parallel
-- [ ] **F4** — 7-day mood sparkline in `Sidebar.tsx` footer (inline SVG, `get_mood_statistics`)
-- [ ] **F5** — Keyboard shortcuts in `WritingView.tsx`: `1–5` mood, `Ctrl+Shift+F` focus, `?` cheatsheet modal
-  > Verify shortcuts don't conflict with TipTap bindings before implementing
-- [ ] **F6** — Pinned entries collapsible section at top of `TimelineView.tsx` (existing `pinned` column — no backend work)
-- [ ] **F7** — Streak celebration toasts at 7 / 30 / 100 day milestones (`get_streak_stats` on app load)
-- [ ] **F10** — On This Day in-app banner on app load when prior-year entries exist for today's date
+- [x] **F4** — 7-day mood sparkline in `Sidebar.tsx` footer (inline SVG, `get_mood_statistics`)
+- [x] **F5** — Keyboard shortcuts in `WritingView.tsx`: `1–5` mood, `Ctrl+Shift+F` focus, `?` cheatsheet modal
+- [x] **F6** — Pinned entries collapsible section at top of `TimelineView.tsx` (existing `pinned` column — no backend work) — was already implemented
+- [x] **F7** — Streak celebration toasts at 7 / 30 / 100 day milestones (`get_streak_stats` on app load)
+- [x] **F10** — On This Day in-app banner on app load when prior-year entries exist for today's date
 
 ### Accessibility
-- [ ] **TL-003** (`src/components/timecapsule/TimeCapsuleRevealModal.tsx`) — focus trap on open, ESC closes, `aria-modal="true"`, `role="dialog"`, initial focus on first interactive element
+- [x] **TL-003** (`src/components/timecapsule/TimeCapsuleRevealModal.tsx`) — focus trap on open, ESC closes, `aria-modal="true"`, `role="dialog"`, initial focus on first interactive element — was already implemented
 
 ### Code Quality // parallel
-- [ ] **SETTINGS-001** — Extract `use2FASetup`: `PrivacyTab.tsx` → `src/hooks/use2FASetup.ts`
-- [ ] **D-003** — Voice memos empty state in `WritingView.tsx` (onboarding guidance when no memos exist)
+- [x] **SETTINGS-001** — Extract `use2FASetup`: `PrivacyTab.tsx` → `src/hooks/use2FASetup.ts`
+- [x] **D-003** — Voice memos empty state in `WritingView.tsx` (onboarding guidance when no memos exist)
 
 ### Gate
 - [ ] Sparkline renders in sidebar with real data
@@ -580,11 +579,11 @@ skills:   /health (baseline), /design-review (visual pass on new UI),
 - [ ] Streak toast fires (verify with seeded 7-day streak)
 - [ ] TimeCapsule modal: Tab cycles focus within modal, ESC closes, screen reader sees `dialog` role
 - [ ] Run `/design-review` on the new UI additions — fix any findings
-- [ ] `npm test` — all tests pass
-- [ ] `npm run typecheck` — zero errors
-- [ ] `npm run lint` — clean
-- [ ] Bump `0.9.3` in `package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json`
-- [ ] Update `CHANGELOG.md` — add v0.9.3 entry
+- [x] `npm test` — all tests pass
+- [x] `npm run typecheck` — zero errors
+- [x] `npm run lint` — clean
+- [x] Bump `0.9.3` in `package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json`
+- [x] Update `CHANGELOG.md` — add v0.9.3 entry
 - [ ] Run `/review` → `/ship` → merge to `main`
 
 ---

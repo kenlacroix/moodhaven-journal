@@ -48,6 +48,27 @@ export function WelcomeStep({ onNext }: WelcomeStepProps) {
           Optional AI insights
         </span>
       </div>
+      {/* PRIV-004: Privacy-by-design callout */}
+      <div className="text-left p-4 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl">
+        <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 uppercase tracking-wide mb-2">
+          Private by design
+        </p>
+        <ul className="space-y-1">
+          {[
+            'Journal text never leaves your device',
+            'No accounts, no cloud profile, no telemetry',
+            'AES-256-GCM encryption — only you hold the key',
+          ].map((item) => (
+            <li key={item} className="flex items-start gap-2 text-sm text-emerald-800 dark:text-emerald-300">
+              <svg className="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+              {item}
+            </li>
+          ))}
+        </ul>
+      </div>
+
       <button
         type="button"
         onClick={onNext}

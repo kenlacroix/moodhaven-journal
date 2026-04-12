@@ -529,11 +529,12 @@ function TransparencySection({ settings, isBrowser }: { settings: AppSettings; i
         accounts: 'none — no registration, no login, no cloud account',
       };
       const json = JSON.stringify(snapshot, null, 2);
-      const path = await invoke<string>('get_log_path');
-      const dir = path.substring(0, path.lastIndexOf('/') + 1);
+      const logPath = await invoke<string>('get_log_path');
+      const sep = logPath.includes('\\') ? '\\' : '/';
+      const dir = logPath.substring(0, logPath.lastIndexOf(sep) + 1);
       await invoke('write_text_file', {
-        filePath: `${dir}privacy-snapshot.json`,
-        content: json,
+        path: `${dir}privacy-snapshot.json`,
+        contents: json,
       });
       await invoke('open_log_folder');
     } catch (err) {

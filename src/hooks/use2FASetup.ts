@@ -35,6 +35,7 @@ export function use2FASetup(refresh2FAStatus: () => Promise<void>): Use2FASetupR
   }, [refresh2FAStatus]);
 
   const handleRegenerateBackupCodes = useCallback(async () => {
+    setBackupCodes(null);
     try {
       const codes = await regenerateBackupCodes();
       setBackupCodes(codes);

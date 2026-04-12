@@ -23,7 +23,11 @@ export interface AppBannerState {
   dismissOnThisDay: () => void;
 }
 
-const STREAK_MILESTONES = [100, 30, 7] as const;
+const STREAK_MILESTONE_MESSAGES: readonly [number, string][] = [
+  [100, `100 days in a row. That's extraordinary.`],
+  [30, `30-day streak! You're building something real.`],
+  [7, `7-day streak — great momentum!`],
+];
 const SESSION_STREAK_KEY = 'mb_streak_toast_shown';
 const SESSION_OTD_KEY = 'mb_otd_banner_shown';
 
@@ -37,41 +41,40 @@ export function useAppBanners(enabled: boolean): AppBannerState {
     let cancelled = false;
 
     async function run() {
+      const needsStreak = !sessionStorage.getItem(SESSION_STREAK_KEY);
+      const needsOtd = !sessionStorage.getItem(SESSION_OTD_KEY);
+
+      // Run both IPC calls in parallel (F7 + F10)
+      const [streakResult, otdResult] = await Promise.allSettled([
+        needsStreak ? getStreakStats() : Promise.resolve(null),
+        needsOtd ? getEntriesOnThisDay() : Promise.resolve(null),
+      ]);
+
+      if (cancelled) return;
+
       // F7: streak milestone
-      if (!sessionStorage.getItem(SESSION_STREAK_KEY)) {
-        try {
-          const stats = await getStreakStats();
-          if (!cancelled && stats.currentStreak >= 7) {
-            const milestone = STREAK_MILESTONES.find((m) => stats.currentStreak >= m);
-            if (milestone !== undefined) {
-              setStreakToast(
-                stats.currentStreak >= 100
-                  ? `100 days in a row. That's extraordinary.`
-                  : stats.currentStreak >= 30
-                    ? `30-day streak! You're building something real.`
-                    : `7-day streak — great momentum!`
-              );
-            }
-          }
-          sessionStorage.setItem(SESSION_STREAK_KEY, '1');
-        } catch (err) {
-          logger.warn('[useAppBanners] streak check failed', { error: String(err) });
+      if (needsStreak) {
+        if (streakResult.status === 'fulfilled' && streakResult.value) {
+          const { currentStreak } = streakResult.value;
+          const match = STREAK_MILESTONE_MESSAGES.find(([m]) => currentStreak >= m);
+          if (match) setStreakToast(match[1]);
+        } else if (streakResult.status === 'rejected') {
+          logger.warn('[useAppBanners] streak check failed', { error: String(streakResult.reason) });
         }
+        sessionStorage.setItem(SESSION_STREAK_KEY, '1');
       }
 
       // F10: On This Day entries
-      if (!cancelled && !sessionStorage.getItem(SESSION_OTD_KEY)) {
-        try {
-          const entries = await getEntriesOnThisDay();
-          if (!cancelled && entries.length > 0) {
-            setOnThisDayCount(entries.length);
-            const years = entries.map((e) => new Date(e.created_at).getFullYear());
-            setOnThisDayOldestYear(Math.min(...years));
-          }
-          sessionStorage.setItem(SESSION_OTD_KEY, '1');
-        } catch (err) {
-          logger.warn('[useAppBanners] on-this-day check failed', { error: String(err) });
+      if (needsOtd) {
+        if (otdResult.status === 'fulfilled' && otdResult.value && otdResult.value.length > 0) {
+          const entries = otdResult.value;
+          setOnThisDayCount(entries.length);
+          const years = entries.map((e) => new Date(e.created_at).getFullYear());
+          setOnThisDayOldestYear(Math.min(...years));
+        } else if (otdResult.status === 'rejected') {
+          logger.warn('[useAppBanners] on-this-day check failed', { error: String(otdResult.reason) });
         }
+        sessionStorage.setItem(SESSION_OTD_KEY, '1');
       }
     }
 

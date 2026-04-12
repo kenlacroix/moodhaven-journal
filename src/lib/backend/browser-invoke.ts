@@ -115,6 +115,9 @@ async function dispatch(command: string, p: Params): Promise<any> {
     case 'get_journal_entries_by_date': {
       return dbGetEntriesByDate(p.startDate as string, p.endDate as string);
     }
+    case 'get_entries_on_this_day': {
+      return [];
+    }
     case 'update_journal_entry': {
       return dbUpdateEntry(p.id as string, {
         encrypted_content: p.encryptedContent as BrowserEntryRow['encrypted_content'],

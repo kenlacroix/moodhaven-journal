@@ -501,21 +501,12 @@ export async function searchEntries(query: string): Promise<JournalEntry[]> {
 }
 
 /**
- * Get entries from same day in previous years (On This Day)
+ * Get entries from same day in previous years (On This Day).
+ * Uses a dedicated Rust command that filters in SQL rather than fetching all entries.
  */
 export async function getEntriesOnThisDay(): Promise<JournalEntry[]> {
-  const entries = await getAllEntries();
-  const today = new Date();
-  const currentMonth = today.getMonth();
-  const currentDay = today.getDate();
-  const currentYear = today.getFullYear();
-
-  return entries.filter((entry) => {
-    const entryDate = new Date(entry.created_at);
-    return (
-      entryDate.getMonth() === currentMonth &&
-      entryDate.getDate() === currentDay &&
-      entryDate.getFullYear() !== currentYear
-    );
-  });
+  const password = getPassword();
+  const rows = await invoke<EncryptedJournalEntryRow[]>('get_entries_on_this_day');
+  const decryptable = rows.filter((row) => row.encrypted_content !== null);
+  return Promise.all(decryptable.map((row) => decryptEntry(row, password)));
 }

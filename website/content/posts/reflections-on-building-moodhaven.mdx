@@ -1,0 +1,51 @@
+---
+title: "Reflections on Building MoodHaven Journal"
+publishDate: "2025-06-20"
+heroImage: "/images/tea-window.jpg"
+excerpt: "Every project teaches you more than you expected. Building MoodHaven has been as much a personal journey as a technical one."
+---
+
+Every project begins with an idea. Some teach you far more than you ever expected.
+
+When I first started MoodHaven Journal, I knew I wanted to create a tool that protected private reflections — but I didn't fully realize how much the process itself would teach me.
+
+## 1. Privacy Is More Than Encryption
+
+Encryption is essential — but true privacy requires design choices that go deeper:
+
+- Local-first architecture that doesn't phone home
+- No forced accounts before you can start writing
+- No silent network calls for analytics or crash reporting
+- No "improve your experience" data collection that actually improves the company's targeting
+
+Privacy isn't a checkbox. It's a philosophy that has to touch every decision: how errors are logged, how settings are stored, what gets included in a bug report, what metadata is written to disk.
+
+Getting this right is an ongoing process, not a one-time implementation.
+
+## 2. Simplicity Is Hard (But Worth It)
+
+Every feature starts with a question: will this truly serve the person journaling, or will it serve engagement metrics?
+
+Complexity creeps in fast. A streak counter sounds motivating. A badge for "100 entries" sounds rewarding. But those are patterns borrowed from social apps — patterns designed to create habit through pressure, not through genuine usefulness.
+
+Fighting for a calm, focused experience is one of the hardest parts of this project. MoodHaven has no streaks, no badges, no notifications you didn't ask for. Just a space to write.
+
+## 3. Trust Must Be Earned, Not Assumed
+
+MoodHaven asks users to trust that the encryption is real, that local-first actually means local-first, and that "no tracking" means no tracking.
+
+That trust can't be claimed — it has to be demonstrated through code, through transparency, through the absence of anything that would contradict it.
+
+Publishing the source code on [GitHub](https://github.com/kenlacroix/moodhaven-journal) is part of that. The security model is documented. The encryption implementation is readable. Anyone who wants to verify the claims can.
+
+## 4. Progress Is Imperfect, but Real
+
+Building MoodHaven hasn't been a straight line. There have been long coding sessions, false starts, and features that got rebuilt twice before feeling right.
+
+But every version has shipped more trustworthy and more useful than the last. The test suite now covers hundreds of scenarios. The security model has been hardened through multiple reviews. The UI has gotten quieter and more intentional with each iteration.
+
+We're not done. But the foundation is solid, and the direction is clear.
+
+---
+
+Thank you for being part of this journey. The trust you place in MoodHaven means everything — and we'll continue working to earn it every day.

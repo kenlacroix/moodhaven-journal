@@ -1,0 +1,34 @@
+---
+title: "First Look: MoodHaven's Mobile Companion"
+publishDate: "2025-06-13"
+heroImage: "/images/tea-window.jpg"
+excerpt: "A mobile journaling companion built around the same privacy-first principles as the desktop app — offline-first, encrypted, no mandatory accounts."
+---
+
+The desktop app is where MoodHaven started, but your thoughts don't always wait until you're at your computer.
+
+We're building a mobile companion that brings the same privacy-first principles to your phone.
+
+## What It's Built Around
+
+The mobile app follows the same architecture as the desktop version:
+
+**Local-first, always.** Journal entries are saved only to your device by default. No account required, no cloud dependency, no onboarding that asks you to sign up before you can write.
+
+**Optional encrypted sync.** If you want your entries available across devices, you can sync to your own cloud storage — MinIO, Backblaze, DigitalOcean Spaces, or a self-hosted solution. Only encrypted blobs are transferred. The service you sync to never sees plaintext.
+
+**Fully offline.** The app works without internet connectivity. Create entries, revisit past reflections, track your mood — all without a network connection.
+
+**Calm interface.** The same design philosophy from the desktop app: soft tones, minimal chrome, no notifications you didn't ask for, no streaks, no gamification.
+
+## How It Connects to the Desktop App
+
+The mobile app and desktop app can sync directly over your local network — no intermediary server required. Both devices discover each other via mDNS, authenticate through a QR code pairing flow, and exchange encrypted entries over a direct TCP connection.
+
+Your data travels from device to device as ciphertext. Neither device trusts the other blindly — pairing requires a PIN that you verify in person.
+
+## What's Coming
+
+The Wear OS companion (for voice journaling on the go) is already in progress. The watch captures audio, forwards it to your phone, and the desktop app transcribes it locally using whisper.cpp — no cloud speech API.
+
+The mobile app is in active development. Watch [GitHub Releases](https://github.com/kenlacroix/moodhaven-journal/releases) for updates.

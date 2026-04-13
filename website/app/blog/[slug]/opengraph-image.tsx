@@ -1,16 +1,15 @@
 // app/blog/[slug]/opengraph-image.tsx
-// Generates a 1200×630 OG card at build time for every blog post.
-// Next.js wires this automatically to og:image and twitter:image.
+// Generates a 1200×630 OG card for every blog post.
+// Must use edge runtime — Cloudflare Pages does not support Node.js runtime routes.
+// Post metadata is sourced from lib/post-static-meta.ts (no fs dependency).
+
+export const runtime = "edge";
 
 import { ImageResponse } from "next/og";
-import { getAllPosts, getPostBySlug } from "@/lib/posts";
+import { POST_STATIC_META } from "@/lib/post-static-meta";
 
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
-
-export function generateStaticParams() {
-  return getAllPosts().map((post) => ({ slug: post.slug }));
-}
 
 export default async function Image({
   params,
@@ -19,16 +18,11 @@ export default async function Image({
 }) {
   const { slug } = await params;
 
-  let title = "MoodHaven Journal";
-  let excerpt = "Privacy-first journaling with mood tracking and AI insights.";
-
-  try {
-    const post = getPostBySlug(slug);
-    title = post.title;
-    if (post.excerpt) excerpt = post.excerpt;
-  } catch {
-    // fall through to defaults
-  }
+  const post = POST_STATIC_META[slug];
+  const title = post?.title ?? "MoodHaven Journal";
+  const excerpt =
+    post?.excerpt ??
+    "Privacy-first journaling with mood tracking and AI insights.";
 
   const truncatedExcerpt =
     excerpt.length > 130 ? excerpt.slice(0, 130).trim() + "…" : excerpt;

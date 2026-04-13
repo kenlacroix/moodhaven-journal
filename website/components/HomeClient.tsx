@@ -74,9 +74,9 @@ export default function HomeClient() {
               </div>
             </AnimatedReveal>
 
-            {/* App screenshot */}
-            <AnimatedReveal className="hidden lg:block shrink-0 w-[460px]" delay={0.15}>
-              <div className="rounded-xl overflow-hidden shadow-2xl shadow-primary-950/50 ring-1 ring-white/10">
+            {/* App screenshot — side-by-side on lg+, stacked below copy on smaller screens */}
+            <AnimatedReveal className="w-full lg:shrink-0 lg:w-[460px]" delay={0.15}>
+              <div className="rounded-xl overflow-hidden shadow-2xl shadow-primary-950/50 ring-1 ring-white/10 max-w-sm mx-auto lg:max-w-none">
                 <Image
                   src="/images/writing-view.png"
                   alt="MoodHaven Journal — writing view with mood selector and rich text editor"

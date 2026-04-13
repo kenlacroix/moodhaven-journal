@@ -93,13 +93,14 @@ export function LockScreen() {
   }, []);
 
   // Countdown timer — ticks every second while locked out
+  const lockIsActive = lockoutRemaining > 0;
   useEffect(() => {
     if (timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;
     }
 
-    if (lockoutRemaining > 0) {
+    if (lockIsActive) {
       timerRef.current = setInterval(() => {
         const remaining = getRemainingLockoutMs(rateLimitState);
         setLockoutRemaining(remaining);
@@ -119,7 +120,7 @@ export function LockScreen() {
         timerRef.current = null;
       }
     };
-  }, [lockoutRemaining > 0, rateLimitState]);
+  }, [lockIsActive, rateLimitState]);
 
   // Helper: handle a failed auth attempt (shared by password and recovery key)
   const handleFailedAttempt = useCallback(
@@ -206,7 +207,7 @@ export function LockScreen() {
         setIsLoading(false);
       }
     },
-    [password, unlock, twoFactorStatus, rateLimitState, handleFailedAttempt]
+    [password, unlock, twoFactorStatus, rateLimitState, handleFailedAttempt, biometricAvailable, biometricEnrolled]
   );
 
   // Handle successful 2FA verification
@@ -237,7 +238,7 @@ export function LockScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, [verifiedPassword, unlock, resetRateLimit, setRateLimitState]);
+  }, [verifiedPassword, unlock, setRateLimitState]);
 
   // Handle 2FA cancellation - go back to password entry
   const handle2FACancel = useCallback(() => {
@@ -385,7 +386,7 @@ export function LockScreen() {
       setRateLimitState({ failedAttempts: 0, lockoutUntil: null, lastFailedAt: null });
       setLockoutRemaining(0);
     }
-  }, [unlock, resetRateLimit, setRateLimitState]);
+  }, [unlock, setRateLimitState]);
 
   // Derived UI helpers
   const freeAttemptsLeft = getRemainingFreeAttempts(rateLimitState);

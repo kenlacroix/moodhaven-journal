@@ -98,6 +98,14 @@ cd src-tauri && cargo check
 - STT setup: @docs/speech-to-text.md
 - Watch companion: @docs/watch-companion.md
 
+## Health Stack
+
+- typecheck: tsc --noEmit
+- lint: eslint src --ext .ts,.tsx
+- test: vitest run
+- deadcode: knip
+- rust: cargo check && cargo fmt --check
+
 ## Skill routing
 
 When the user's request matches an available skill, ALWAYS invoke it using the Skill

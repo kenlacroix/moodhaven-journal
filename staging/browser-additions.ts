@@ -19,7 +19,7 @@
  */
 
 import { getDb } from './browserDb'; // re-export your existing IDB open helper
-import { hashPassword, verifyPasswordHash } from '../crypto';
+import { verifyPasswordHash } from '../crypto';
 
 // ---------------------------------------------------------------------------
 // IDB constants

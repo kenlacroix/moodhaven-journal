@@ -247,7 +247,8 @@ export function TimelineView({ onSelectEntry, onNewEntry, onSealEntry, refreshTr
     }
   }, []);
 
-  // Build relative date header (recalculates when currentDate changes)
+  // Build relative date header. currentDate in deps intentionally busts the
+  // memo at midnight so "Today / Yesterday" labels stay accurate.
   const getDateHeader = useCallback((dateStr: string, sampleEntry: JournalEntry) => {
     const entryDate = new Date(sampleEntry.created_at);
     const label = getRelativeDateLabel(entryDate);
@@ -256,6 +257,7 @@ export function TimelineView({ onSelectEntry, onNewEntry, onSealEntry, refreshTr
       return `${label} — ${dateStr}`;
     }
     return dateStr;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentDate]);
 
   const clearAllFilters = useCallback(() => {

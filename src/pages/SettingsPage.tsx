@@ -305,13 +305,14 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
     };
   }, [showPasswordModal]);
 
+  const syncIsLockedOut = syncLockoutRemaining > 0;
   useEffect(() => {
     if (syncTimerRef.current) {
       clearInterval(syncTimerRef.current);
       syncTimerRef.current = null;
     }
 
-    if (syncLockoutRemaining > 0) {
+    if (syncIsLockedOut) {
       syncTimerRef.current = setInterval(() => {
         const remaining = getRemainingLockoutMs(syncRateLimit);
         setSyncLockoutRemaining(remaining);
@@ -331,7 +332,7 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
         syncTimerRef.current = null;
       }
     };
-  }, [syncLockoutRemaining > 0, syncRateLimit]);
+  }, [syncIsLockedOut, syncRateLimit]);
 
   const syncLockedOut = syncLockoutRemaining > 0;
 
@@ -410,7 +411,7 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
     } finally {
       setIsSyncing(false);
     }
-  }, [syncPassword, syncRateLimit, showPasswordModal]);
+  }, [syncPassword, syncRateLimit]);
 
   const matchedTab = useMemo(() => {
     if (!searchQuery.trim()) return null;

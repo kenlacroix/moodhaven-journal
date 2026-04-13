@@ -7,11 +7,20 @@ import { visit } from 'unist-util-visit';
 
 export type Heading = { id: string; text: string; depth: number };
 
+interface MdastChild { type: string; value: string }
+interface MdastHeading {
+  type: 'heading';
+  depth: number;
+  children: MdastChild[];
+  data?: { id?: string };
+}
+
 export async function getHeadings(mdxContent: string): Promise<Heading[]> {
   // 1. Build a processor with your plugins
   const processor = unified()
     .use(remarkParse)
     .use(remarkMdx)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     .use(remarkSlug as any);
 
   // 2. Parse to a tree…
@@ -21,8 +30,8 @@ export async function getHeadings(mdxContent: string): Promise<Heading[]> {
 
   // 4. Walk it for headings with data.id
   const headings: Heading[] = [];
-  visit(tree, 'heading', (node: any) => {
-    const textNode = node.children.find((c: any) => c.type === 'text');
+  visit(tree, 'heading', (node: MdastHeading) => {
+    const textNode = node.children.find(c => c.type === 'text');
     if (textNode && node.data?.id) {
       headings.push({
         id: node.data.id!,

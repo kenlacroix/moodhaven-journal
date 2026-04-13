@@ -23,6 +23,16 @@ export default function HomeClient() {
           <div className="flex flex-col lg:flex-row items-center gap-12">
             {/* Copy block */}
             <AnimatedReveal className="flex-1 text-center lg:text-left">
+              {/* Announcement chip */}
+              <a
+                href="/changelog"
+                className="inline-flex items-center gap-2 bg-white/10 border border-white/20 rounded-full px-3.5 py-1.5 mb-6 text-xs font-medium text-primary-100 hover:bg-white/20 transition-colors duration-200"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-accent-cta animate-pulse" aria-hidden="true" />
+                v0.9.4 just shipped
+                <span className="text-white font-semibold">See what&apos;s new →</span>
+              </a>
+
               <h1 className="text-3xl md:text-5xl font-bold tracking-tight">
                 Your Private Journal That Stays Yours
               </h1>
@@ -55,22 +65,22 @@ export default function HomeClient() {
                 </div>
               </div>
 
-              <div className="mt-6 flex flex-col items-center lg:items-start gap-2">
-                <p className="text-sm text-primary-300">
-                  Free and open source. No account, no subscription, no cloud required.
-                </p>
-                <a
-                  href="https://github.com/kenlacroix/moodhaven-journal"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label="Star MoodHaven Journal on GitHub"
-                >
-                  <img
-                    src="https://img.shields.io/github/stars/kenlacroix/moodhaven-journal?style=social"
-                    alt="GitHub stars"
-                    className="h-4"
-                  />
-                </a>
+              {/* Trust strip */}
+              <div className="mt-6 flex flex-wrap justify-center lg:justify-start gap-2">
+                {[
+                  "v0.9.4",
+                  "700+ tests",
+                  "MIT licensed",
+                  "Built in public",
+                ].map((label) => (
+                  <span
+                    key={label}
+                    className="inline-flex items-center gap-1.5 bg-white/10 border border-white/15 rounded-full px-3 py-1 text-xs text-primary-200"
+                  >
+                    <span className="w-1 h-1 rounded-full bg-primary-400" aria-hidden="true" />
+                    {label}
+                  </span>
+                ))}
               </div>
             </AnimatedReveal>
 

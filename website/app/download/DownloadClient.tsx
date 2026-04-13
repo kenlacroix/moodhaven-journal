@@ -237,6 +237,55 @@ export default function DownloadClient({ release }: { release: LatestRelease | n
                 </p>
               )}
             </div>
+          ) : os === "android" ? (
+            /* Android — no Play Store yet, offer sideload APK */
+            <div className="space-y-5">
+              <div className="bg-primary-50 rounded-xl p-5 text-left">
+                <h3 className="text-sm font-semibold text-neutral-900 mb-1">
+                  Install via sideload
+                </h3>
+                <p className="text-sm text-neutral-600 leading-relaxed mb-4">
+                  MoodHaven isn&apos;t on the Play Store yet. You can install it directly from the APK — takes about 60 seconds.
+                </p>
+                <ol className="space-y-2 text-sm text-neutral-600 list-decimal list-inside leading-relaxed">
+                  <li>
+                    Go to <strong>Settings → Apps → Special app access → Install unknown apps</strong> and enable it for your browser.
+                  </li>
+                  <li>Download the APK from GitHub Releases below.</li>
+                  <li>Open the downloaded file and tap <strong>Install</strong>.</li>
+                </ol>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                <a
+                  href="https://github.com/kenlacroix/moodhaven-journal/releases/latest"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-block text-center rounded-full bg-accent-cta text-neutral-900 px-6 py-3 text-sm font-semibold shadow transition-all duration-200 ease-out hover:bg-accent-cta/90 hover:scale-105 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-cta/60"
+                >
+                  Download APK from GitHub <span aria-hidden="true">↗</span>
+                </a>
+                <a
+                  href="https://journal.moodhaven.app"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-block text-center rounded-full border border-neutral-300 bg-white text-neutral-900 px-6 py-3 text-sm font-semibold hover:bg-neutral-50 transition duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-300"
+                >
+                  Use web app instead <span aria-hidden="true">→</span>
+                </a>
+              </div>
+              <p className="text-center text-xs text-neutral-400">
+                Play Store listing coming soon. Watch{" "}
+                <a
+                  href="https://github.com/kenlacroix/moodhaven-journal/releases"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline hover:text-neutral-600"
+                >
+                  GitHub Releases
+                </a>{" "}
+                for updates.
+              </p>
+            </div>
           ) : (
             /* No matching asset — no release published yet */
             <div className="text-center">

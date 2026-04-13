@@ -240,8 +240,6 @@ pub fn run() {
             commands::generate_totp_secret,
             commands::verify_totp_code,
             commands::enable_totp,
-            commands::store_webauthn_credential_cmd,
-            commands::get_webauthn_credentials,
             commands::regenerate_backup_codes,
             commands::verify_backup_code,
             commands::get_backup_codes_count,
@@ -286,7 +284,6 @@ pub fn run() {
             commands::open_media_attachment,
             commands::get_media_thumbnail,
             commands::delete_media_attachment,
-            commands::sweep_preview_temp,
             // Media sync helpers
             commands::read_media_for_sync,
             commands::write_media_from_sync,
@@ -310,8 +307,6 @@ pub fn run() {
             // Sync log (incremental sync infrastructure)
             commands::get_unsynced_log,
             commands::mark_sync_log_synced,
-            // Signal pipeline self-test (automated testing without a watch)
-            commands::debug_signal_self_test,
             // Voice memos (Wear OS audio recordings)
             commands::store_voice_memo,
             commands::list_voice_memos,

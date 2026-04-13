@@ -149,6 +149,7 @@ struct TwoFactorRow {
     enabled: bool,
     method: Option<String>,
     totp_secret: Option<String>,
+    #[allow(dead_code)]
     webauthn_credentials: Option<String>,
     backup_codes: Option<String>,
     created_at: String,
@@ -188,50 +189,6 @@ fn enable_totp_in_db(db: &Database, backup_codes_json: &str) -> Result<(), Strin
         rusqlite::params![backup_codes_json],
     )
     .map_err(|e| format!("Failed to enable TOTP: {}", e))?;
-
-    Ok(())
-}
-
-/// Store WebAuthn credential
-fn store_webauthn_credential(
-    db: &Database,
-    credential: &WebAuthnCredential,
-    backup_codes_json: &str,
-) -> Result<(), String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
-
-    // Get existing credentials
-    let existing: Option<String> = conn
-        .query_row(
-            "SELECT webauthn_credentials FROM two_factor_auth WHERE id = 1",
-            [],
-            |row| row.get(0),
-        )
-        .ok();
-
-    let mut credentials: Vec<WebAuthnCredential> = existing
-        .and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or_default();
-
-    credentials.push(credential.clone());
-    let credentials_json = serde_json::to_string(&credentials)
-        .map_err(|e| format!("JSON serialization failed: {}", e))?;
-
-    conn.execute(
-        "INSERT INTO two_factor_auth (id, enabled, method, webauthn_credentials, backup_codes, updated_at)
-         VALUES (1, 1, 'webauthn', ?1, ?2, datetime('now'))
-         ON CONFLICT(id) DO UPDATE SET
-             enabled = 1,
-             method = CASE
-                 WHEN method = 'totp' THEN 'both'
-                 ELSE 'webauthn'
-             END,
-             webauthn_credentials = ?1,
-             backup_codes = COALESCE(backup_codes, ?2),
-             updated_at = datetime('now')",
-        rusqlite::params![credentials_json, backup_codes_json],
-    )
-    .map_err(|e| format!("Failed to store WebAuthn credential: {}", e))?;
 
     Ok(())
 }
@@ -330,58 +287,6 @@ pub fn enable_totp(db: State<Database>, code: String) -> Result<BackupCodes, Str
         codes,
         generated_at: chrono::Utc::now().to_rfc3339(),
     })
-}
-
-/// Store a WebAuthn credential after frontend verification
-#[tauri::command]
-pub fn store_webauthn_credential_cmd(
-    db: State<Database>,
-    credential_id: String,
-    public_key: String,
-) -> Result<BackupCodes, String> {
-    let credential = WebAuthnCredential {
-        id: credential_id,
-        public_key,
-        created_at: chrono::Utc::now().to_rfc3339(),
-    };
-
-    // Generate backup codes if this is the first 2FA method
-    let row = get_2fa_row(&db)?;
-    let needs_backup_codes = row.map_or(true, |r| r.backup_codes.is_none());
-
-    let codes = if needs_backup_codes {
-        generate_backup_codes_internal()
-    } else {
-        vec![]
-    };
-
-    let hashed_codes: Vec<String> = codes.iter().map(|c| hash_backup_code(c)).collect();
-    let backup_codes_json = serde_json::to_string(&hashed_codes)
-        .map_err(|e| format!("JSON serialization failed: {}", e))?;
-
-    store_webauthn_credential(&db, &credential, &backup_codes_json)?;
-
-    Ok(BackupCodes {
-        codes,
-        generated_at: chrono::Utc::now().to_rfc3339(),
-    })
-}
-
-/// Get WebAuthn credentials for verification
-#[tauri::command]
-pub fn get_webauthn_credentials(db: State<Database>) -> Result<Vec<WebAuthnCredential>, String> {
-    let row = get_2fa_row(&db)?;
-
-    match row {
-        Some(r) => {
-            let credentials: Vec<WebAuthnCredential> = r
-                .webauthn_credentials
-                .and_then(|s| serde_json::from_str(&s).ok())
-                .unwrap_or_default();
-            Ok(credentials)
-        }
-        None => Ok(vec![]),
-    }
 }
 
 /// Generate new backup codes (replaces existing)

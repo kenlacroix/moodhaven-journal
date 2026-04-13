@@ -23,28 +23,46 @@ const CALLOUTS = [
 
 export default function AppPreview() {
   return (
-    <section className="bg-[var(--background)] px-4 py-14">
+    <section className="bg-[var(--background)] px-4 py-20">
       <div className="max-w-5xl mx-auto">
         <AnimatedReveal>
-          <h2 className="text-center text-sm font-semibold text-neutral-500 uppercase tracking-widest mb-3">
+          <p className="text-center text-xs font-semibold text-neutral-400 uppercase tracking-widest mb-3">
             See it in action
+          </p>
+          <h2 className="text-center text-2xl md:text-3xl font-bold text-neutral-900 mb-4">
+            A writing space that respects you
           </h2>
-          <p className="text-center text-neutral-500 text-sm mb-10 max-w-md mx-auto">
-            The writing view — where you spend most of your time.
+          <p className="text-center text-neutral-500 text-base mb-12 max-w-md mx-auto">
+            Clean, focused, and private by default. Your words stay on your device.
           </p>
         </AnimatedReveal>
 
-        <AnimatedReveal delay={0.1}>
-          <div className="rounded-xl overflow-hidden shadow-xl shadow-neutral-200/60 ring-1 ring-neutral-200">
-            <Image
-              src="/images/writing-view.png"
-              alt="MoodHaven Journal writing view — mood selector at top, rich text editor, book switcher in sidebar"
-              width={960}
-              height={640}
-              className="w-full h-auto"
-            />
-          </div>
-        </AnimatedReveal>
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+          <AnimatedReveal delay={0.1} className="lg:col-span-3">
+            <div className="rounded-xl overflow-hidden shadow-xl shadow-neutral-200/60 ring-1 ring-neutral-200">
+              <Image
+                src="/images/writing-view.png"
+                alt="MoodHaven Journal writing view — mood selector at top, rich text editor, book switcher in sidebar"
+                width={960}
+                height={640}
+                className="w-full h-auto"
+              />
+            </div>
+            <p className="text-center text-xs text-neutral-400 mt-2">Write view</p>
+          </AnimatedReveal>
+          <AnimatedReveal delay={0.2} className="lg:col-span-2">
+            <div className="rounded-xl overflow-hidden shadow-xl shadow-neutral-200/60 ring-1 ring-neutral-200">
+              <Image
+                src="/images/app-calendar-view.png"
+                alt="MoodHaven Journal calendar view — monthly mood heatmap with today highlighted"
+                width={1280}
+                height={800}
+                className="w-full h-auto"
+              />
+            </div>
+            <p className="text-center text-xs text-neutral-400 mt-2">Calendar view</p>
+          </AnimatedReveal>
+        </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-8">
           {CALLOUTS.map((c, i) => (

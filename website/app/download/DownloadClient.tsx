@@ -179,17 +179,17 @@ export default function DownloadClient({ release }: { release: LatestRelease | n
           <h1 className="text-3xl md:text-4xl font-bold text-neutral-900 tracking-tight text-center">
             Download MoodHaven Journal
           </h1>
-          <p className="mt-3 text-center text-neutral-500 text-sm">
-            Free to download. Open source.{" "}
+          <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
             {release?.version && (
-              <span className="text-neutral-400">
-                Latest: {release.version}
-                {days !== null && days > 30 && (
-                  <span className="ml-1 text-neutral-400">(released {days} days ago)</span>
-                )}
+              <span className="inline-flex items-center gap-1.5 bg-primary-50 text-primary-700 border border-primary-200 text-xs font-semibold px-2.5 py-1 rounded-full">
+                <span className="w-1.5 h-1.5 rounded-full bg-primary-500 inline-block" aria-hidden="true" />
+                {release.version} — latest
               </span>
             )}
-          </p>
+            <span className="inline-flex items-center gap-1 text-xs text-neutral-500 bg-neutral-100 px-2.5 py-1 rounded-full">✓ SHA-256 verified</span>
+            <span className="inline-flex items-center gap-1 text-xs text-neutral-500 bg-neutral-100 px-2.5 py-1 rounded-full">✓ No account required</span>
+            <span className="inline-flex items-center gap-1 text-xs text-neutral-500 bg-neutral-100 px-2.5 py-1 rounded-full">✓ MIT licensed</span>
+          </div>
         </AnimatedReveal>
 
         {/* Primary CTA */}

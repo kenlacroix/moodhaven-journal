@@ -76,15 +76,23 @@ export default function HomeClient() {
 
             {/* App screenshot — side-by-side on lg+, stacked below copy on smaller screens */}
             <AnimatedReveal className="w-full lg:shrink-0 lg:w-[460px]" delay={0.15}>
-              <div className="rounded-xl overflow-hidden shadow-2xl shadow-primary-950/50 ring-1 ring-white/10 max-w-sm mx-auto lg:max-w-none">
-                <Image
-                  src="/images/writing-view.png"
-                  alt="MoodHaven Journal — writing view with mood selector and rich text editor"
-                  width={960}
-                  height={640}
-                  className="w-full h-auto"
-                  priority
+              {/* Glow halo behind the screenshot */}
+              <div className="relative max-w-sm mx-auto lg:max-w-none">
+                <div
+                  className="absolute -inset-3 rounded-2xl opacity-40 blur-2xl pointer-events-none"
+                  style={{ background: "radial-gradient(ellipse at center, rgba(139,92,246,0.6) 0%, rgba(91,33,182,0.3) 60%, transparent 100%)" }}
+                  aria-hidden="true"
                 />
+                <div className="relative rounded-xl overflow-hidden shadow-2xl shadow-primary-950/60 ring-1 ring-white/20">
+                  <Image
+                    src="/images/writing-view.png"
+                    alt="MoodHaven Journal — writing view with mood selector and rich text editor"
+                    width={960}
+                    height={640}
+                    className="w-full h-auto"
+                    priority
+                  />
+                </div>
               </div>
             </AnimatedReveal>
           </div>

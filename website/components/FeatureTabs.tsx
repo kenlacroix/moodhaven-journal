@@ -75,11 +75,14 @@ export default function FeatureTabs() {
   const Icon = tab.icon;
 
   return (
-    <section className="bg-[var(--background)] px-4 py-14">
+    <section className="bg-[var(--background)] px-4 py-20">
       <div className="max-w-5xl mx-auto">
         <AnimatedReveal>
-          <h2 className="text-center text-sm font-semibold text-neutral-500 uppercase tracking-widest mb-10">
-            How it works
+          <p className="text-center text-xs font-semibold text-neutral-400 uppercase tracking-widest mb-3">
+            Under the hood
+          </p>
+          <h2 className="text-center text-2xl md:text-3xl font-bold text-neutral-900 mb-10">
+            Built to be verified, not trusted
           </h2>
         </AnimatedReveal>
 

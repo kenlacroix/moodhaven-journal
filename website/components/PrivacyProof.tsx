@@ -45,11 +45,14 @@ const SPECS = [
 
 export default function PrivacyProof() {
   return (
-    <section className="bg-[var(--background)] px-4 py-14">
+    <section className="bg-[var(--background)] px-4 py-20">
       <div className="max-w-5xl mx-auto">
         <AnimatedReveal>
-          <h2 className="text-center text-sm font-semibold text-neutral-500 uppercase tracking-widest mb-10">
+          <p className="text-center text-xs font-semibold text-neutral-400 uppercase tracking-widest mb-3">
             Privacy, proved
+          </p>
+          <h2 className="text-center text-2xl md:text-3xl font-bold text-neutral-900 mb-10">
+            Zero data collected. Verified in code.
           </h2>
         </AnimatedReveal>
 
@@ -57,7 +60,7 @@ export default function PrivacyProof() {
           {/* Never collected */}
           <AnimatedReveal delay={0.1}>
             <div className="bg-white/90 rounded-xl p-6 ring-1 ring-neutral-100 h-full">
-              <h3 className="text-sm font-semibold text-neutral-900 mb-1">
+              <h3 className="text-base font-semibold text-neutral-900 mb-1">
                 What we never collect
               </h3>
               <p className="text-xs text-neutral-400 mb-5">
@@ -82,7 +85,7 @@ export default function PrivacyProof() {
           {/* Technical spec */}
           <AnimatedReveal delay={0.2}>
             <div className="bg-white/90 rounded-xl p-6 ring-1 ring-neutral-100 h-full">
-              <h3 className="text-sm font-semibold text-neutral-900 mb-1">
+              <h3 className="text-base font-semibold text-neutral-900 mb-1">
                 Encryption spec
               </h3>
               <p className="text-xs text-neutral-400 mb-5">

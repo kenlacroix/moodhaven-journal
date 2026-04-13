@@ -4,7 +4,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Menu, X } from 'lucide-react';
 
 const navLinks = [
@@ -21,20 +21,27 @@ export default function NavBar() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
 
+  // Homepage hero has a dark gradient — navbar can be transparent there.
+  // All other pages have a white background, so default to solid white on load.
+  const isHero = pathname === '/';
+
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 10);
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  const navBg = useMemo(() => {
+    if (isHero) {
+      return scrolled ? 'bg-white/90 backdrop-blur-md border-b border-neutral-200' : 'bg-transparent';
+    }
+    return 'bg-white/95 backdrop-blur-md border-b border-neutral-200';
+  }, [isHero, scrolled]);
+
   return (
     <header
       role="banner"
-      className={`sticky top-0 z-50 w-full transition-all duration-300 ${
-        scrolled
-          ? 'bg-white/80 backdrop-blur-md border-b border-neutral-200'
-          : 'bg-transparent'
-      }`}
+      className={`sticky top-0 z-50 w-full transition-all duration-300 ${navBg}`}
     >
       <nav
         role="navigation"
@@ -61,15 +68,17 @@ export default function NavBar() {
               <Link
                 key={link.name}
                 href={link.href}
-                className={`relative text-sm font-medium transition-colors duration-200 ${
-                  active ? 'text-primary-700' : 'text-neutral-800 hover:text-primary-700'
-                } group`}
+                className={`relative text-sm font-medium transition-colors duration-200 group ${
+                  isHero && !scrolled
+                    ? active ? 'text-white' : 'text-primary-200 hover:text-white'
+                    : active ? 'text-primary-700' : 'text-neutral-800 hover:text-primary-700'
+                }`}
               >
                 {link.name}
                 <span
-                  className={`absolute left-0 -bottom-0.5 h-[2px] w-full bg-primary-700 transition-transform duration-300 origin-left ${
-                    active ? 'scale-x-100' : 'scale-x-0 group-hover:scale-x-100'
-                  }`}
+                  className={`absolute left-0 -bottom-0.5 h-[2px] w-full transition-transform duration-300 origin-left ${
+                    isHero && !scrolled ? 'bg-white' : 'bg-primary-700'
+                  } ${active ? 'scale-x-100' : 'scale-x-0 group-hover:scale-x-100'}`}
                 />
               </Link>
             );
@@ -89,7 +98,7 @@ export default function NavBar() {
           aria-label={menuOpen ? 'Close menu' : 'Open menu'}
           aria-expanded={menuOpen}
           aria-controls="mobile-menu"
-          className="md:hidden text-neutral-800"
+          className={`md:hidden ${isHero && !scrolled ? 'text-white' : 'text-neutral-800'}`}
           onClick={() => setMenuOpen(!menuOpen)}
         >
           {menuOpen ? <X size={24} /> : <Menu size={24} />}

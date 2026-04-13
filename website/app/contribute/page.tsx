@@ -4,8 +4,17 @@ import AnimatedReveal from "@/components/AnimatedReveal";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Contribute — MoodHaven Journal",
-  description: "Help build MoodHaven Journal — pull requests, bug reports, documentation, testing, and spreading the word all make a difference.",
+  title: "Contribute",
+  description:
+    "Help build MoodHaven Journal — pull requests, bug reports, documentation, testing, and spreading the word all make a real difference to an open-source project.",
+  alternates: { canonical: "https://www.moodhaven.app/contribute" },
+  openGraph: {
+    title: "Contribute to MoodHaven Journal",
+    description:
+      "MoodHaven is open source and built in public. Code, bug reports, docs, or just telling a friend — every contribution counts.",
+    url: "https://www.moodhaven.app/contribute",
+    type: "website",
+  },
 };
 
 const WAYS = [

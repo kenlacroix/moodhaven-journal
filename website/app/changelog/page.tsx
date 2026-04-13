@@ -104,9 +104,13 @@ const SECTION_COLORS: Record<string, string> = {
 /* Page                                                                 */
 /* ------------------------------------------------------------------ */
 
-export const metadata = {
-  title: "Changelog — MoodHaven Journal",
-  description: "What's changed in each version of MoodHaven Journal.",
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Changelog",
+  description:
+    "What's new in MoodHaven Journal — release notes for every version including new features, bug fixes, and security improvements.",
+  alternates: { canonical: "https://www.moodhaven.app/changelog" },
 };
 
 export default function ChangelogPage() {

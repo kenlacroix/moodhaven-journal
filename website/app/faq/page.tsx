@@ -4,8 +4,17 @@ import AnimatedReveal from "@/components/AnimatedReveal";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "FAQ — MoodHaven Journal",
-  description: "Frequently asked questions about MoodHaven Journal — privacy, encryption, platforms, and how it works.",
+  title: "FAQ",
+  description:
+    "Frequently asked questions about MoodHaven Journal — how encryption works, which platforms are supported, whether it's really free, and how the open-source model works.",
+  alternates: { canonical: "https://www.moodhaven.app/faq" },
+  openGraph: {
+    title: "FAQ — MoodHaven Journal",
+    description:
+      "Answers to common questions about privacy, encryption, platforms, and how MoodHaven Journal works.",
+    url: "https://www.moodhaven.app/faq",
+    type: "website",
+  },
 };
 
 const QUESTIONS = [

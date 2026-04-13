@@ -1,7 +1,11 @@
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Privacy Policy — MoodHaven Journal',
+  title: 'Privacy Policy',
+  description:
+    'MoodHaven Journal privacy policy — how we handle your data (short answer: we don\'t collect any). Your journal stays on your device, encrypted, always.',
+  alternates: { canonical: 'https://www.moodhaven.app/privacy' },
+  robots: { index: true, follow: false },
 };
 
 export default function PrivacyPage() {

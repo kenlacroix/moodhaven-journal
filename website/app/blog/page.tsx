@@ -7,8 +7,17 @@ import { BookOpen, ArrowRight } from "lucide-react";
 import { getAllPosts } from "@/lib/posts";
 
 export const metadata: Metadata = {
-  title: "Blog — MoodHaven Journal",
-  description: "Writing about privacy-first software, local-first design, and what we're building with MoodHaven Journal.",
+  title: "Blog",
+  description:
+    "Writing about privacy-first software, local-first design, open source, and what we're building with MoodHaven Journal.",
+  alternates: { canonical: "https://www.moodhaven.app/blog" },
+  openGraph: {
+    title: "Blog — MoodHaven Journal",
+    description:
+      "Writing about privacy-first software, local-first design, and what we're building.",
+    url: "https://www.moodhaven.app/blog",
+    type: "website",
+  },
 };
 
 interface PostMeta {

@@ -1,7 +1,10 @@
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Terms of Use — MoodHaven Journal',
+  title: 'Terms of Use',
+  description: 'Terms of use for MoodHaven Journal — a free, open-source journaling app.',
+  alternates: { canonical: 'https://www.moodhaven.app/terms' },
+  robots: { index: true, follow: false },
 };
 
 export default function TermsPage() {

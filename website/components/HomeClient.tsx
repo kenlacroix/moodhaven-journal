@@ -41,7 +41,7 @@ export default function HomeClient() {
             Your Private Journal That Stays Yours
           </h1>
           <p className="text-lg md:text-xl text-blue-100 mt-2">
-            No accounts. No cloud required. Unlike Day One or Notion, your entries never leave your device — AI insights from your moods, not your words.
+            Local-first journaling with mood tracking and AI insights — all on your device. No accounts, no cloud, no compromises.
           </p>
           <div className="flex flex-col sm:flex-row justify-center gap-6 pt-6">
             <div className="flex flex-col items-center gap-2">
@@ -67,9 +67,24 @@ export default function HomeClient() {
               </p>
             </div>
           </div>
-          <p className="mt-4 text-sm text-blue-100/70">
-            Free to download. Pro features coming soon.
-          </p>
+          <div className="mt-4 flex flex-col items-center gap-2">
+            <p className="text-sm text-blue-100/70">
+              Free and open source. No account, no subscription, no cloud required.
+            </p>
+            <a
+              href="https://github.com/kenlacroix/moodhaven-journal"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-xs text-blue-100/60 hover:text-blue-100 transition-colors"
+              aria-label="Star MoodHaven Journal on GitHub"
+            >
+              <img
+                src="https://img.shields.io/github/stars/kenlacroix/moodhaven-journal?style=social"
+                alt="GitHub stars"
+                className="h-4"
+              />
+            </a>
+          </div>
         </AnimatedReveal>
       </section>
 

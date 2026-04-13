@@ -18,7 +18,7 @@
 
 <p>MoodHaven Journal is a zero-knowledge journaling app designed to keep your thoughts safe.<br>Your entries are encrypted end-to-end, and your password never leaves your device.</p>
 
-<p><a href="#installation">Download</a> · <a href="#building-from-source">Build from Source</a> · <a href="#security--privacy">Security Model</a> · <a href="#contributing">Contributing</a></p>
+<p><a href="#installation">Download</a> · <a href="#building-from-source">Build from Source</a> · <a href="#security--privacy">Security Model</a> · <a href="https://github.com/kenlacroix/moodhaven-journal/wiki">Wiki</a> · <a href="#contributing">Contributing</a></p>
 
 </div>
 
@@ -201,7 +201,7 @@ Encryption Key (256-bit, never stored)
 
 **AI privacy:** when AI features are enabled, journal text is never sent to any external service — only anonymised metadata (mood scores, entry frequency, time-of-day patterns).
 
-Full security model: [.claude/docs/security.md](.claude/docs/security.md)
+Full security model: [SECURITY.md](SECURITY.md)
 
 ---
 
@@ -378,7 +378,19 @@ cd src-tauri && cargo check       # Rust compilation check
 ```
 
 See [CLAUDE.md](CLAUDE.md) for architecture, security guidelines, and conventions.
-Additional docs: [Architecture](docs/architecture.md) · [Tauri Commands](docs/tauri-commands.md) · [Peer Sync Security](docs/peer-sync-security.md) · [Changelog](CHANGELOG.md)
+
+**Documentation:**
+
+| Topic | Link |
+|:---|:---|
+| Architecture overview | [docs/architecture.md](docs/architecture.md) · [Wiki](https://github.com/kenlacroix/moodhaven-journal/wiki/Architecture-Overview) |
+| Tauri command reference | [docs/tauri-commands.md](docs/tauri-commands.md) · [Wiki](https://github.com/kenlacroix/moodhaven-journal/wiki/Tauri-Command-Reference) |
+| Security model | [SECURITY.md](SECURITY.md) · [Wiki](https://github.com/kenlacroix/moodhaven-journal/wiki/Security-Model) |
+| Peer sync protocol | [docs/peer-sync-security.md](docs/peer-sync-security.md) · [Wiki](https://github.com/kenlacroix/moodhaven-journal/wiki/Peer-Sync-Security) |
+| Speech-to-text | [docs/speech-to-text.md](docs/speech-to-text.md) · [Wiki](https://github.com/kenlacroix/moodhaven-journal/wiki/Speech-to-Text) |
+| Watch companion | [docs/watch-companion.md](docs/watch-companion.md) · [Wiki](https://github.com/kenlacroix/moodhaven-journal/wiki/Watch-Companion) |
+| Build guide | [.claude/docs/build.md](.claude/docs/build.md) · [Wiki](https://github.com/kenlacroix/moodhaven-journal/wiki/Building-from-Source) |
+| Changelog | [CHANGELOG.md](CHANGELOG.md) · [moodhaven.app/changelog](https://moodhaven.app/changelog) |
 
 ---
 

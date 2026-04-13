@@ -6,6 +6,9 @@ import AnimatedReveal from "./AnimatedReveal";
 import PrivacyCallout from "./PrivacyCallout";
 import FeaturesGrid from "./FeaturesGrid";
 import CommunityCallout from "./CommunityCallout";
+import AppPreview from "./AppPreview";
+import PrivacyProof from "./PrivacyProof";
+import FeatureTabs from "./FeatureTabs";
 
 export default function HomeClient() {
   return (
@@ -88,8 +91,11 @@ export default function HomeClient() {
         </div>
       </section>
 
+      <AppPreview />
       <PrivacyCallout />
       <FeaturesGrid />
+      <FeatureTabs />
+      <PrivacyProof />
       <CommunityCallout />
     </div>
   );

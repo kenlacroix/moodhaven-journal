@@ -23,7 +23,7 @@ const columns = [
     links: [
       { label: "GitHub ↗", href: "https://github.com/kenlacroix/moodhaven-journal", external: true },
       { label: "Contribute", href: "/contribute" },
-      { label: "Changelog ↗", href: "https://github.com/kenlacroix/moodhaven-journal/blob/main/CHANGELOG.md", external: true },
+      { label: "Changelog", href: "/changelog" },
     ],
   },
 ];

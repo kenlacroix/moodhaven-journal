@@ -1,6 +1,7 @@
 // app/blog/page.tsx
 import Link from "next/link";
 import { format } from "date-fns";
+import { BookOpen } from "lucide-react";
 import { getAllPosts } from "@/lib/posts";
 
 /* ------------------------------------------------------------------ */
@@ -58,7 +59,28 @@ export default async function BlogIndex() {
       ))}
 
       {posts.length === 0 && (
-        <p className="text-gray-500">No published posts yet—check back soon.</p>
+        <div className="bg-primary-50 rounded-2xl px-6 py-12 flex flex-col items-center text-center gap-4">
+          <div className="w-12 h-12 rounded-full bg-primary-100 flex items-center justify-center">
+            <BookOpen className="w-6 h-6 text-primary-600" aria-hidden="true" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-neutral-900 mb-1">
+              No posts yet
+            </h2>
+            <p className="text-sm text-neutral-600 leading-relaxed max-w-sm">
+              We write about privacy-first software, local-first design, and what
+              we{"'"}re building. New posts land on Substack first.
+            </p>
+          </div>
+          <a
+            href="https://moodhaven.substack.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded-full bg-white text-primary-700 px-6 py-3 text-sm font-semibold shadow hover:bg-primary-100 hover:scale-105 transition duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-600/60"
+          >
+            Follow on Substack
+          </a>
+        </div>
       )}
     </div>
   );

@@ -43,7 +43,10 @@ const MILESTONES: Milestone[] = [
   { date: "Sep 2025", title: "Community Growth", description: "Grew to 100+ alpha users sharing insights and suggestions." },
   { date: "Oct 2025", title: "Feature Refinement", description: "Implemented privacy-first encryption, custom prompts, and mood tracking." },
   { date: "Apr 2026", title: "v0.8.0 — Web App", description: "Launched web app at journal.moodhaven.app, Wear OS Phase 4, Time Capsule, and LAN peer sync." },
-  { date: "Nov 2026", title: "Public Beta", description: "Preparing for a wider beta — invite your friends and colleagues!", projected: true },
+  { date: "Apr 2026", title: "v0.9.0 — Security Hardening", description: "Lock guards on sensitive commands, settings refactor, and full security audit pass." },
+  { date: "Apr 2026", title: "v0.9.1 — Unlock & Reset", description: "Factory reset, improved unlock flow, and pre-unlock session error handling." },
+  { date: "Apr 2026", title: "v0.9.3 — Website & Polish", description: "Redesigned landing site, improved download page, and across-the-board UI refinements." },
+  { date: "Late 2026", title: "v1.0 — Public Release", description: "Stable release with full documentation, GitHub Wiki, and broad platform support.", projected: true },
 ];
 
 const TECH_LINKS = [
@@ -66,10 +69,10 @@ const TECH_LINKS = [
     external: true,
   },
   {
-    label: "CHANGELOG",
+    label: "Changelog",
     sublabel: "What's changed in each release",
-    href: "https://github.com/kenlacroix/moodhaven-journal/blob/main/CHANGELOG.md",
-    external: true,
+    href: "/changelog",
+    external: false,
   },
   {
     label: "Contribute",

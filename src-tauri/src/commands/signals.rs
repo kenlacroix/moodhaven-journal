@@ -80,6 +80,3 @@ pub fn get_unsynced_log(
 pub fn mark_sync_log_synced(db: State<Database>, up_to_id: i64) -> Result<(), String> {
     db::mark_sync_log_synced(&db, up_to_id)
 }
-
-// ── Self-test command (debug builds only) ────────────────────────────────────
-

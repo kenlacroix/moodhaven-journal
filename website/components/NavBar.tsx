@@ -110,11 +110,54 @@ export default function NavBar() {
         id="mobile-menu"
         role="menu"
         aria-label="Mobile navigation"
-        className={`md:hidden fixed inset-y-0 right-0 w-64 bg-white shadow-xl transform transition-transform duration-300 ease-in-out z-40 ${
+        className={`md:hidden fixed inset-y-0 right-0 w-72 bg-white shadow-2xl transform transition-transform duration-300 ease-in-out z-40 flex flex-col ${
           menuOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
       >
-        <div className="flex flex-col p-6 space-y-4">
+        {/* Drawer header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-100">
+          <Link href="/" onClick={() => setMenuOpen(false)} className="flex items-center gap-2">
+            <Image
+              src="/logo-full.png"
+              alt="MoodHaven Journal"
+              width={120}
+              height={36}
+              className="object-contain"
+            />
+          </Link>
+          <button
+            onClick={() => setMenuOpen(false)}
+            aria-label="Close menu"
+            className="w-8 h-8 flex items-center justify-center rounded-lg text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100 transition-colors"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Nav links */}
+        <div className="flex flex-col flex-1 px-4 py-4 gap-1 overflow-y-auto">
+          {navLinks.map((link) => {
+            const active = pathname === link.href;
+            return (
+              <Link
+                key={link.name}
+                href={link.href}
+                role="menuitem"
+                onClick={() => setMenuOpen(false)}
+                className={`flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors duration-150 ${
+                  active
+                    ? 'bg-primary-50 text-primary-700'
+                    : 'text-neutral-700 hover:bg-neutral-50 hover:text-neutral-900'
+                }`}
+              >
+                {link.name}
+              </Link>
+            );
+          })}
+        </div>
+
+        {/* Drawer footer CTA */}
+        <div className="px-4 py-5 border-t border-neutral-100">
           <a
             href="https://journal.moodhaven.app"
             target="_blank"
@@ -124,27 +167,7 @@ export default function NavBar() {
           >
             Try Free <span aria-hidden="true">→</span>
           </a>
-          {navLinks.map((link) => {
-            const active = pathname === link.href;
-            return (
-              <Link
-                key={link.name}
-                href={link.href}
-                role="menuitem"
-                onClick={() => setMenuOpen(false)}
-                className={`relative text-base font-medium transition-colors duration-200 ${
-                  active ? 'text-primary-700' : 'text-neutral-800 hover:text-primary-700'
-                } group`}
-              >
-                {link.name}
-                <span
-                  className={`absolute left-0 -bottom-0.5 h-[2px] w-full bg-primary-700 transition-transform duration-300 origin-left ${
-                    active ? 'scale-x-100' : 'scale-x-0 group-hover:scale-x-100'
-                  }`}
-                />
-              </Link>
-            );
-          })}
+          <p className="text-center text-xs text-neutral-400 mt-3">No account required. Always free.</p>
         </div>
       </div>
 

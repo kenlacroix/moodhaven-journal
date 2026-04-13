@@ -26,7 +26,7 @@ export default function BlogLayout({ children }: { children: ReactNode }) {
         />
       </div>
       {/* Force a consistent light background on blog pages */}
-      <main className="bg-gray-50 min-h-screen">
+      <main className="bg-neutral-50 min-h-screen">
         {children}
       </main>
     </>

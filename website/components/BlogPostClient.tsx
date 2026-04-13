@@ -30,7 +30,7 @@ export default function BlogPostClient({
       {/* Mobile “Contents” toggle */}
       <button
         onClick={() => setTocOpen(true)}
-        className="fixed bottom-4 right-4 z-50 sm:hidden bg-white dark:bg-gray-900 p-3 rounded-full shadow-md"
+        className="fixed bottom-4 right-4 z-50 sm:hidden bg-white dark:bg-neutral-900 p-3 rounded-full shadow-md"
         aria-label="Show contents"
       >
         📑
@@ -44,7 +44,7 @@ export default function BlogPostClient({
           accentColor={accentColor}
         />
 
-        <div className="flex-1 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 rounded-xl shadow-sm py-8 px-4 sm:py-12 sm:px-6">
+        <div className="flex-1 bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 rounded-xl shadow-sm py-8 px-4 sm:py-12 sm:px-6">
           {heroImage && (
             <motion.img
               src={heroImage}
@@ -61,7 +61,7 @@ export default function BlogPostClient({
             {title}
           </h1>
 
-          <p className="text-gray-500 text-sm mb-8">
+          <p className="text-neutral-500 text-sm mb-8">
             {publishDate && new Date(publishDate).toLocaleDateString(undefined, {
               year: "numeric",
               month: "long",

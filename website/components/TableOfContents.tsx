@@ -16,7 +16,7 @@ export default function TableOfContents({
   headings,
   isOpen,
   onClose,
-  accentColor,
+  accentColor: _accentColor,
 }: TableOfContentsProps) {
   // Build cleaned TOC
   const tocItems = useMemo(() => {

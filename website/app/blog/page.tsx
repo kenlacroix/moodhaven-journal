@@ -62,7 +62,7 @@ export default async function BlogIndex() {
 
         {posts.length > 0 ? (
           <div className="space-y-6">
-            {posts.map((post, i) => (
+            {posts.map((post) => (
               <Link
                 key={post.slug}
                 href={`/blog/${post.slug}`}

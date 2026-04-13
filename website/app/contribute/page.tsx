@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Code2, FileText, Megaphone, Bug, BookOpen, Star } from "lucide-react";
 import AnimatedReveal from "@/components/AnimatedReveal";
-import Link from "next/link";
 
 export const metadata: Metadata = {
   title: "Contribute",

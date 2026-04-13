@@ -73,7 +73,6 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-  const currentYear = new Date().getFullYear();
   return (
     <html lang="en">
       <head>

@@ -111,7 +111,7 @@ export default function DownloadClient({ release }: { release: LatestRelease | n
       ? release.assets.find((a) => a.name.endsWith("_x64.dmg"))
       : undefined;
 
-  const days = release?.publishedAt ? staleDays(release.publishedAt) : null;
+  const _days = release?.publishedAt ? staleDays(release.publishedAt) : null;
 
   const iconClass = "w-8 h-8";
 

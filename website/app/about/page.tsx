@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
-import Link from "next/link";
 import Image from "next/image";
 import AnimatedReveal from "@/components/AnimatedReveal";
 

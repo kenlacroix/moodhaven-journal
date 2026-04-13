@@ -6,7 +6,7 @@ import AnimatedReveal from "./AnimatedReveal";
 
 // Update these at each release (bump version, test count, release date).
 const BUILD_STATS = [
-  { label: "Current version", value: "v0.9.3" },
+  { label: "Current version", value: "v0.9.4" },
   { label: "Automated tests", value: "693" },
   { label: "License", value: "MIT" },
   { label: "First commit", value: "Mar 2025" },

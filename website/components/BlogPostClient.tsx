@@ -79,6 +79,32 @@ export default function BlogPostClient({
           >
             {mdx}
           </article>
+
+          {/* End-of-post CTA */}
+          <div className="mt-12 pt-8 border-t border-neutral-100">
+            <div className="bg-primary-50 rounded-xl p-6 text-center">
+              <p className="text-xs font-semibold text-neutral-400 uppercase tracking-widest mb-2">Try MoodHaven Journal</p>
+              <p className="text-sm text-neutral-600 leading-relaxed mb-5 max-w-sm mx-auto">
+                Free, open-source, and private. Your journal stays on your device — always encrypted, never shared.
+              </p>
+              <div className="flex flex-wrap gap-3 justify-center">
+                <a
+                  href="https://journal.moodhaven.app"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded-full bg-primary-700 text-white px-5 py-2.5 text-sm font-semibold hover:bg-primary-800 transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-700/60"
+                >
+                  Open in Browser <span aria-hidden="true">→</span>
+                </a>
+                <a
+                  href="/download"
+                  className="rounded-full bg-white text-primary-700 px-5 py-2.5 text-sm font-semibold border border-primary-200 hover:bg-primary-50 transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-700/60"
+                >
+                  Download for Desktop <span aria-hidden="true">↓</span>
+                </a>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </>

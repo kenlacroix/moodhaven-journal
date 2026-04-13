@@ -29,9 +29,6 @@ export async function generateMetadata(
   const post = getPostBySlug(slug);
   const base = 'https://www.moodhaven.app';
   const url = `${base}/blog/${slug}`;
-  const image = post.heroImage?.startsWith('http')
-    ? post.heroImage
-    : `${base}${post.heroImage}`;
 
   return {
     title: `${post.title} — MoodHaven Journal`,
@@ -43,13 +40,11 @@ export async function generateMetadata(
       url,
       type: 'article',
       publishedTime: post.publishDate,
-      images: [{ url: image, width: 1200, height: 630, alt: post.title }],
     },
     twitter: {
       card: 'summary_large_image',
       title: post.title,
       description: post.excerpt,
-      images: [image],
     },
   };
 }

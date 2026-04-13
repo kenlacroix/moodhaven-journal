@@ -9,6 +9,7 @@ import CommunityCallout from "./CommunityCallout";
 import AppPreview from "./AppPreview";
 import PrivacyProof from "./PrivacyProof";
 import FeatureTabs from "./FeatureTabs";
+import NewsletterSignup from "./NewsletterSignup";
 
 export default function HomeClient() {
   return (
@@ -114,6 +115,7 @@ export default function HomeClient() {
       <FeaturesGrid />
       <FeatureTabs />
       <PrivacyProof />
+      <NewsletterSignup />
       <CommunityCallout />
     </div>
   );

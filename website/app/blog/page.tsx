@@ -5,6 +5,7 @@ import Image from "next/image";
 import { format } from "date-fns";
 import { BookOpen, ArrowRight } from "lucide-react";
 import { getAllPosts } from "@/lib/posts";
+import NewsletterSignup from "@/components/NewsletterSignup";
 
 export const metadata: Metadata = {
   title: "Blog",
@@ -127,6 +128,8 @@ export default async function BlogIndex() {
         )}
 
       </div>
+
+      <NewsletterSignup />
     </main>
   );
 }

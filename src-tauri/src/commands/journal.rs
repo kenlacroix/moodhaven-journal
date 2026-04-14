@@ -142,6 +142,17 @@ pub fn get_all_journal_entries(
     db::get_all_entries(&db, limit)
 }
 
+/// Get entries from the same calendar day (month+day) in previous years (On This Day).
+/// More efficient than fetching all entries and filtering in JS.
+#[tauri::command]
+pub fn get_entries_on_this_day(
+    db: State<Database>,
+    lock: State<'_, AppLockState>,
+) -> Result<Vec<JournalEntryRow>, String> {
+    require_unlocked(&lock)?;
+    db::get_entries_on_this_day(&db)
+}
+
 /// Get journal entries within a date range
 #[tauri::command]
 pub fn get_journal_entries_by_date(

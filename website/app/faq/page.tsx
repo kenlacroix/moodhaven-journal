@@ -37,17 +37,20 @@ export default function FAQPage() {
         <div>
           <h2 className="font-semibold text-lg text-primary-700">💰 Is MoodHaven free?</h2>
           <p>
-            The core journaling experience is free and always will be. A Pro tier for AI insights and future cloud
-            features is planned — but local journaling, mood tracking, and all privacy features stay free.
+            Yes — completely free, forever. MoodHaven is open source under the MIT license. There is no Pro tier,
+            no subscription, and no paid features. Everything ships to everyone.
           </p>
         </div>
 
         <div>
-          <h2 className="font-semibold text-lg text-primary-700">🌱 What&apos;s the difference between Community and future versions?</h2>
+          <h2 className="font-semibold text-lg text-primary-700">🌱 Is this really open source?</h2>
           <p>
-            The Community version is free, open-source, and entirely local. Future Pro features may include
-            optional encrypted sync, advanced AI insights, and multi-device backup — but the core experience
-            stays distraction-free and privacy-first.
+            Yes.{' '}
+            <a href="https://github.com/kenlacroix/moodhaven-journal" className="text-primary-700 underline" target="_blank" rel="noopener noreferrer">
+              Every line of code is on GitHub
+            </a>
+            , MIT licensed. You can build it yourself, fork it, audit it, or contribute to it.
+            No closed core, no open-core bait-and-switch.
           </p>
         </div>
 

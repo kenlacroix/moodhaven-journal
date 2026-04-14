@@ -1,15 +1,18 @@
 'use client';
-import { motion } from 'framer-motion';
+import Image from 'next/image';
 
+/** App screenshot used as a standalone hero image where needed (e.g. blog, about). */
 export default function HeroImage() {
   return (
-    <motion.img
-      src="/images/tea-window.jpg"
-      alt="Journal and tea in sunlight"
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 1 }}
-      className="rounded-xl shadow-sm my-6 mx-auto"
-    />
+    <div className="rounded-xl overflow-hidden shadow-lg ring-1 ring-neutral-200 my-6 mx-auto max-w-2xl">
+      <Image
+        src="/images/writing-view.png"
+        alt="MoodHaven Journal — writing view with mood selector and rich text editor"
+        width={960}
+        height={640}
+        className="w-full h-auto"
+        priority
+      />
+    </div>
   );
 }

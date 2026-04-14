@@ -18,6 +18,77 @@ import { UpdateBanner } from '../updater/UpdateBanner';
 import { PeerSyncBadge } from '../peer-sync/PeerSyncBadge';
 import type { UseUpdateCheckReturn } from '../../hooks/useUpdateCheck';
 import { usePlatform } from '../../hooks/usePlatform';
+import { getMoodTrend } from '../../lib/services/analyticsService';
+
+const MOOD_COLORS: Record<number, string> = {
+  5: '#10b981',
+  4: '#84cc16',
+  3: '#eab308',
+  2: '#f97316',
+  1: '#ef4444',
+};
+
+function MoodSparkline({ collapsed }: { collapsed: boolean }) {
+  const [points, setPoints] = useState<{ day: number; mood: number }[]>([]);
+
+  useEffect(() => {
+    getMoodTrend(7)
+      .then((trend) => {
+        const today = new Date();
+        const data: { day: number; mood: number }[] = [];
+        for (let i = 6; i >= 0; i--) {
+          const d = new Date(today);
+          d.setDate(today.getDate() - i);
+          const iso = d.toISOString().slice(0, 10);
+          const row = trend.find((t) => t.date === iso);
+          data.push({ day: 6 - i, mood: row?.averageMood ?? 0 });
+        }
+        setPoints(data);
+      })
+      .catch(() => { /* silent — sparkline is decorative */ });
+  }, []);
+
+  if (collapsed || points.length === 0) return null;
+
+  const filled = points.filter((p) => p.mood > 0);
+  if (filled.length === 0) return null;
+
+  const W = 120, H = 28, PAD = 2;
+  const xs = points.map((_, i) => PAD + (i / 6) * (W - PAD * 2));
+  const toY = (m: number) => m === 0 ? H - PAD : PAD + (1 - (m - 1) / 4) * (H - PAD * 2);
+
+  const pathD = points.reduce((acc, p, i) => {
+    if (p.mood === 0) return acc;
+    const x = xs[i].toFixed(1);
+    const y = toY(p.mood).toFixed(1);
+    return acc === '' ? `M${x},${y}` : acc + ` L${x},${y}`;
+  }, '');
+
+  const lastFilled = [...points].reverse().find((p) => p.mood > 0);
+  const lastColor = lastFilled ? MOOD_COLORS[Math.round(lastFilled.mood)] ?? '#8b5cf6' : '#8b5cf6';
+
+  return (
+    <div className="px-3 pb-2" aria-hidden="true">
+      <p className="text-[10px] text-slate-400 dark:text-slate-500 mb-1">7-day mood</p>
+      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="overflow-visible">
+        {pathD && (
+          <path d={pathD} fill="none" stroke={lastColor} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" opacity={0.7} />
+        )}
+        {points.map((p, i) =>
+          p.mood > 0 ? (
+            <circle
+              key={i}
+              cx={xs[i]}
+              cy={toY(p.mood)}
+              r={2}
+              fill={MOOD_COLORS[Math.round(p.mood)] ?? '#8b5cf6'}
+            />
+          ) : null
+        )}
+      </svg>
+    </div>
+  );
+}
 
 export type ViewType = 'writing' | 'timeline' | 'onthisday' | 'insights' | 'calendar' | 'settings' | 'journalOverview';
 
@@ -370,6 +441,9 @@ export function Sidebar({ currentView, onNavigate, onOpenSync, onNavigateToJourn
           </div>
         </div>
       )}
+
+      {/* F4: 7-day mood sparkline */}
+      {!isBrowser && <MoodSparkline collapsed={collapsed} />}
 
       {/* User Guide + Support links */}
       <div className={`px-3 pb-3 pt-1 border-t border-slate-100 dark:border-slate-800 space-y-2 ${collapsed ? 'flex flex-col items-center' : ''}`}>

@@ -48,6 +48,9 @@ import type { JournalTemplate } from '../lib/utils/journalTemplates';
 import { formatTemplateContent } from '../lib/utils/journalTemplates';
 import { usePlatform } from '../hooks/usePlatform';
 import { logger } from '../lib/services/logger';
+import { useWearVoiceMemos } from '../hooks/useWearVoiceMemos';
+import type { VoiceMemo } from '../lib/services/voiceMemoService';
+import { deleteVoiceMemo } from '../lib/services/voiceMemoService';
 
 interface WritingViewProps {
   entryId?: string | null;
@@ -209,6 +212,8 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
   const editorInstanceRef = useRef<Editor | null>(null);
   /** Whether the full mood picker is expanded (true) or collapsed to a badge (false) */
   const [moodPickerOpen, setMoodPickerOpen] = useState(!entryId);
+  /** F5: keyboard shortcut cheatsheet modal */
+  const [showShortcutCheatsheet, setShowShortcutCheatsheet] = useState(false);
   /** Streak badge animation flag — fires once on mount when streak >= 3 */
   const [streakAnimated, setStreakAnimated] = useState(false);
   /** Word-count milestone flash (Android) / glow (desktop) */
@@ -230,8 +235,16 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
   const setShowPrompts = useSettingsStore((s) => s.setShowPrompts);
   const showPrompts = useSettingsStore((s) => s.settings.journal.showPrompts);
   const distractionFree = useSettingsStore((s) => s.distractionFree);
-  const { isAndroid } = usePlatform();
+  const { isAndroid, isBrowser } = usePlatform();
   const setDistractionFree = useSettingsStore((s) => s.setDistractionFree);
+  const sttModel = useSettingsStore((s) => s.settings.speechToText.model);
+  const sttEnabled = useSettingsStore((s) => s.settings.speechToText.enabled);
+
+  // D-003: voice memos from watch companion (desktop only)
+  const { memos: watchMemos, transcribing: memoTranscribing } = useWearVoiceMemos({
+    model: sttModel,
+    enabled: !isBrowser && !isAndroid && sttEnabled,
+  });
   const autoLocationWeather = useSettingsStore((s) => s.settings.journal.autoLocationWeather);
   const autoTitle = useSettingsStore((s) => s.settings.journal.autoTitle ?? false);
   const temperatureUnit = useSettingsStore((s) => s.settings.journal.temperatureUnit ?? 'C');
@@ -326,7 +339,10 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
       .catch(() => { /* silent — non-critical */ });
   }, []);
 
-  // Cmd/Ctrl+Shift+F to toggle distraction-free mode
+  // Keyboard shortcuts (F5):
+  //   Ctrl/Cmd+Shift+F — toggle distraction-free mode
+  //   1–5             — set mood (only when editor is not focused)
+  //   ?               — open shortcut cheatsheet (only when editor is not focused)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'f') {
@@ -336,6 +352,23 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
       if (e.key === 'Escape' && distractionFree) {
         e.preventDefault();
         setDistractionFree(false);
+      }
+      // Don't intercept 1–5 or ? when the user is typing in the editor or any input
+      const target = e.target as HTMLElement;
+      const isTyping = target.isContentEditable || target.tagName === 'INPUT' || target.tagName === 'TEXTAREA';
+      if (!isTyping && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        if (e.key === '?' || e.key === '/') {
+          e.preventDefault();
+          setShowShortcutCheatsheet((v) => !v);
+        }
+        if (['1', '2', '3', '4', '5'].includes(e.key)) {
+          e.preventDefault();
+          const level = parseInt(e.key, 10) as MoodLevel;
+          setMood(level);
+          setMoodIsAuto(false);
+          setMoodPulse(true);
+          setTimeout(() => setMoodPulse(false), 900);
+        }
       }
     };
     window.addEventListener('keydown', onKey);
@@ -1473,6 +1506,206 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
           usedTemplateIds={usedTemplateIds}
         />
       )}
+
+      {/* D-003: Watch voice memos panel — desktop only */}
+      {!isBrowser && !isAndroid && (
+        <WearVoiceMemoPanel
+          memos={watchMemos}
+          transcribing={memoTranscribing}
+          onCreateEntry={(memo) => {
+            if (memo.transcription) handleUsePrompt({ text: memo.transcription });
+          }}
+          onDelete={async (id) => {
+            try { await deleteVoiceMemo(id); }
+            catch (e) { logger.error('[WritingView] Failed to delete voice memo', { error: String(e) }); }
+          }}
+        />
+      )}
+
+      {/* F5: Keyboard shortcut cheatsheet */}
+      {showShortcutCheatsheet && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+          onClick={() => setShowShortcutCheatsheet(false)}
+        >
+          <div
+            className="w-full max-w-sm bg-white dark:bg-slate-900 rounded-2xl shadow-2xl p-5 animate-slide-up"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Keyboard Shortcuts</h3>
+              <button
+                type="button"
+                onClick={() => setShowShortcutCheatsheet(false)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+                aria-label="Close"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="space-y-2">
+              {([
+                ['1–5', 'Set mood level (when not typing)'],
+                ['Ctrl+Shift+F', 'Toggle focus / distraction-free mode'],
+                ['?', 'Show this cheatsheet'],
+                ['Escape', 'Exit focus mode'],
+              ] as [string, string][]).map(([key, desc]) => (
+                <div key={key} className="flex items-center justify-between gap-4">
+                  <span className="text-xs text-slate-500 dark:text-slate-400">{desc}</span>
+                  <kbd className="flex-shrink-0 px-2 py-0.5 text-xs font-mono bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded border border-slate-200 dark:border-slate-700">
+                    {key}
+                  </kbd>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── D-003: Watch voice memos panel ────────────────────────────────────────────
+
+function WearVoiceMemoPanel({
+  memos,
+  transcribing,
+  onCreateEntry,
+  onDelete,
+}: {
+  memos: VoiceMemo[];
+  transcribing: Set<string>;
+  onCreateEntry: (memo: VoiceMemo) => void;
+  onDelete: (id: string) => Promise<void>;
+}) {
+  const [collapsed, setCollapsed] = useState(true);
+  const [deleting, setDeleting] = useState<string | null>(null);
+
+  // Only show when there are memos, or always show empty state as onboarding guide
+  const hasMemos = memos.length > 0;
+
+  // If no memos and collapsed, show a minimal hint (not the full panel)
+  if (!hasMemos && collapsed) {
+    return (
+      <div className="px-4 sm:px-8 lg:px-12 pb-2">
+        <button
+          type="button"
+          onClick={() => setCollapsed(false)}
+          className="flex items-center gap-1.5 text-xs text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z" />
+          </svg>
+          Watch memos
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="px-4 sm:px-8 lg:px-12 pb-4">
+      <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 overflow-hidden">
+        {/* Panel header */}
+        <button
+          type="button"
+          onClick={() => setCollapsed((v) => !v)}
+          className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <svg className="w-4 h-4 text-slate-500 dark:text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z" />
+            </svg>
+            <span className="text-sm font-medium text-slate-700 dark:text-slate-200">Watch Memos</span>
+            {hasMemos && (
+              <span className="px-1.5 py-0.5 text-xs rounded-full bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400">
+                {memos.length}
+              </span>
+            )}
+          </div>
+          <svg
+            className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${collapsed ? '' : 'rotate-180'}`}
+            fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+
+        {/* Panel body */}
+        {!collapsed && (
+          <div className="border-t border-slate-100 dark:border-slate-700">
+            {!hasMemos ? (
+              /* Empty state — D-003 */
+              <div className="px-4 py-6 text-center">
+                <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center mx-auto mb-3">
+                  <svg className="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z" />
+                  </svg>
+                </div>
+                <p className="text-sm font-medium text-slate-700 dark:text-slate-200 mb-1">No voice memos yet</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 max-w-xs mx-auto">
+                  Record a memo on your Wear OS watch. It will appear here ready to transcribe and turn into a journal entry.
+                </p>
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-100 dark:divide-slate-700">
+                {memos.map((memo) => {
+                  const isTranscribing = transcribing.has(memo.id);
+                  const durationSec = Math.round(memo.duration_ms / 1000);
+                  const mm = String(Math.floor(durationSec / 60)).padStart(2, '0');
+                  const ss = String(durationSec % 60).padStart(2, '0');
+                  return (
+                    <div key={memo.id} className="px-4 py-3 flex items-start gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-xs text-slate-500 dark:text-slate-400">
+                            {new Date(memo.timestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                          <span className="text-xs text-slate-400 dark:text-slate-500">{mm}:{ss}</span>
+                        </div>
+                        {isTranscribing ? (
+                          <p className="text-xs text-violet-500 dark:text-violet-400 animate-pulse">Transcribing…</p>
+                        ) : memo.transcription ? (
+                          <p className="text-xs text-slate-600 dark:text-slate-300 line-clamp-2">{memo.transcription}</p>
+                        ) : (
+                          <p className="text-xs text-slate-400 dark:text-slate-500 italic">Awaiting transcription…</p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        {memo.transcription && !isTranscribing && (
+                          <button
+                            type="button"
+                            onClick={() => onCreateEntry(memo)}
+                            className="px-2 py-1 text-xs font-medium bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400 rounded-lg hover:bg-violet-100 dark:hover:bg-violet-900/40 transition-colors"
+                          >
+                            Use
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            setDeleting(memo.id);
+                            await onDelete(memo.id);
+                            setDeleting(null);
+                          }}
+                          disabled={deleting === memo.id}
+                          className="p-1 text-slate-400 hover:text-rose-500 dark:hover:text-rose-400 transition-colors disabled:opacity-40"
+                          aria-label="Delete memo"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

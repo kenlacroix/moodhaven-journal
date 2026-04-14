@@ -42,6 +42,7 @@ function setupRecorderMock(stateOverride: string = 'idle') {
     state: stateOverride as ReturnType<typeof useAudioRecorder>['state'],
     error: null,
     permissionModal: 'none',
+    elapsedSeconds: 0,
     startRecording: mockStartRecording,
     proceedAfterConsent: vi.fn(),
     dismissPermissionModal: vi.fn(),

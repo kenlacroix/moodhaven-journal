@@ -46,7 +46,7 @@ Format: `[vX.Y.Z] decision made — rationale`
 | fix/browser-mode-setup | Browser mode (web build) setup & unlock fix (standalone) | `fix/browser-mode-setup` | [x] |
 | v0.9.0 | Security + logging + settings | `feat/v0.9.0-security-logging-settings` | [x] |
 | v0.9.1 | Hotfix: unlock/reset regressions | `fix/lock-screen-unlock-reset` | [x] COMPLETE |
-| v0.9.2 | Feature completeness | `feat/v0.9.2-features` | [ ] |
+| v0.9.2 | Feature completeness | `feat/v0.9.2-features` | [x] |
 | v0.9.3 | Polish & QoL | `feat/v0.9.3-polish` | [ ] |
 | v0.9.4 | Android/v1.1 prep + website QA + design unification + brand rename | `feat/v0.9.4-android-design` | [ ] |
 | v1.0.0 | Release prep + final audit (desktop only) | `chore/v1.0.0-release` | [ ] |
@@ -79,32 +79,32 @@ skills:   /health (baseline), /review + /ship (close out)
 **Session start:** `TaskCreate` items for each section below, then `git checkout -b chore/v0.8.4-housekeeping`.
 
 ### Security // parallel
-- [ ] **B1** (`src/lib/recoveryKeyService.ts`) — Replace `Math.random()` with `crypto.getRandomValues()`
-- [ ] **SEC-DEP-001** — Upgrade `vite` → v8, `vitest` → v4 (GHSA-67mh-4wv8-2f99 esbuild CORS vuln)
-- [ ] **UpdatePanel** (`src/components/settings/`) — Apply `DOMPurify` to `dangerouslySetInnerHTML` on GitHub release notes
-- [ ] **CI-PIN** — Pin all GitHub Actions to SHA hashes (`.github/workflows/build.yml`, `.github/workflows/test.yml`) — `tauri-apps/tauri-action@v0` runs with `TAURI_SIGNING_PRIVATE_KEY`; mutable tags are a supply chain risk
+- [x] **B1** (`src/lib/recoveryKeyService.ts`) — Replace `Math.random()` with `crypto.getRandomValues()`
+- [x] **SEC-DEP-001** — Upgrade `vite` → v8, `vitest` → v4 (GHSA-67mh-4wv8-2f99 esbuild CORS vuln)
+- [x] **UpdatePanel** (`src/components/settings/`) — Apply `DOMPurify` to `dangerouslySetInnerHTML` on GitHub release notes
+- [x] **CI-PIN** — Pin all GitHub Actions to SHA hashes (`.github/workflows/build.yml`, `.github/workflows/test.yml`) — `tauri-apps/tauri-action@v0` runs with `TAURI_SIGNING_PRIVATE_KEY`; mutable tags are a supply chain risk
 
 ### Code Cleanup // parallel
-- [ ] **B3** (`src-tauri/src/commands/analytics.rs`) — Fix `get_overall_statistics` returning hardcoded 0 for streaks/mood
-- [ ] **B4** — Remove orphaned `AnalyticsPage` component (dead code; analytics merged into Insights)
-- [ ] **B5** (`src/components/settings/SettingsPage.tsx`) — Fix `setInterval` memory leak (missing `clearInterval` on unmount)
+- [x] **B3** (`src-tauri/src/commands/analytics.rs`) — Fix `get_overall_statistics` returning hardcoded 0 for streaks/mood
+- [x] **B4** — Remove orphaned `AnalyticsPage` component (dead code; analytics merged into Insights)
+- [x] **B5** (`src/components/settings/SettingsPage.tsx`) — Fix `setInterval` memory leak (missing `clearInterval` on unmount)
 
 ### Structural
-- [ ] **chore-plans-consolidation** — Rename `plans/` → `active-plans/`, update `.gitignore` + `CLAUDE.md` key files table
+- [x] **chore-plans-consolidation** — Rename `plans/` → `active-plans/`, update `.gitignore` + `CLAUDE.md` key files table
   > Plan: `active-plans/chore-plans-consolidation.md`
 
 ### Gate
-- [ ] `npm run typecheck` — zero errors
-- [ ] `cargo check` — zero errors
-- [ ] `npm test` — all tests pass
-- [ ] `cd src-tauri && cargo test` — all tests pass
-- [ ] `npm audit` — no new high/critical
-- [ ] `cargo audit` — no new high/critical
-- [ ] `npm run lint` — clean
-- [ ] Bump `0.8.4` in `package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json`
-- [ ] Update `CHANGELOG.md` — add v0.8.4 entry
-- [ ] Run `/review` — address findings
-- [ ] Run `/ship` → merge to `main`
+- [x] `npm run typecheck` — zero errors
+- [x] `cargo check` — zero errors
+- [x] `npm test` — all tests pass
+- [x] `cd src-tauri && cargo test` — all tests pass
+- [x] `npm audit` — no new high/critical
+- [x] `cargo audit` — no new high/critical
+- [x] `npm run lint` — clean
+- [x] Bump `0.8.4` in `package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json`
+- [x] Update `CHANGELOG.md` — add v0.8.4 entry
+- [x] Run `/review` — address findings
+- [x] Run `/ship` → merge to `main`
 
 ---
 
@@ -129,38 +129,38 @@ rollback: if peer sync breaks post-rename, "moodhaven-sync-v1:" in
 > Plan: `active-plans/rename-moodhaven-journal.md`  
 > Commit order: metadata/config first → UI strings → atomic pairs last.
 
-- [ ] `package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json` — productName, identifier, DB filename
-- [ ] UI strings (~20 component files)
-- [ ] mDNS service type → `_moodhaven._tcp.local`
-- [ ] WebDAV directory name + file extension
-- [ ] `device.json` app identifier path
-- [ ] Test files referencing brand strings
-- [ ] **ATOMIC commit:** Sync protocol prefix `moodhaven-sync-v1:` — reader + writer together
-- [ ] **ATOMIC commit:** Format version strings — writer and reader together
+- [x] `package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json` — productName, identifier, DB filename
+- [x] UI strings (~20 component files)
+- [x] mDNS service type → `_moodhaven._tcp.local`
+- [x] WebDAV directory name + file extension
+- [x] `device.json` app identifier path
+- [x] Test files referencing brand strings
+- [x] **ATOMIC commit:** Sync protocol prefix `moodhaven-sync-v1:` — reader + writer together
+- [x] **ATOMIC commit:** Format version strings — writer and reader together
 
 ### chore-lib-restructure
 > Plan: `active-plans/chore-lib-restructure.md`  
 > Separate commit from the rename on the same branch.
 
-- [ ] Move 32 service files → `src/lib/services/`
-- [ ] Move 7 utility files → `src/lib/utils/`
-- [ ] Update ~65 external `../lib/` imports → `../lib/services/` or `../lib/utils/`
-- [ ] Fix 5 intra-lib cross-subdir imports (e.g. `aiService.ts` → `./transcriptFormatter`)
-- [ ] Fix 22 `../types/` imports → `../../types/` (depth increased after move)
-- [ ] Fix 3 self-referential logger imports
-- [ ] Enforce: `utils/` must NOT import from `services/`
+- [x] Move 32 service files → `src/lib/services/`
+- [x] Move 7 utility files → `src/lib/utils/`
+- [x] Update ~65 external `../lib/` imports → `../lib/services/` or `../lib/utils/`
+- [x] Fix 5 intra-lib cross-subdir imports (e.g. `aiService.ts` → `./transcriptFormatter`)
+- [x] Fix 22 `../types/` imports → `../../types/` (depth increased after move)
+- [x] Fix 3 self-referential logger imports
+- [x] Enforce: `utils/` must NOT import from `services/`
 
 ### Gate
-- [ ] `npm run typecheck` — zero errors
-- [ ] `npm test` — all 633+ tests pass
-- [ ] `npm run lint` — clean
-- [ ] `cargo check` — zero errors
-- [ ] `npm run dev:web` — browser build starts without errors
-- [ ] Dev build launches; app title reads "MoodHaven Journal"
-- [ ] Bump `0.8.5` in `package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json`
-- [ ] Update `CHANGELOG.md` — add v0.8.5 entry
-- [ ] Run `/review` — address findings
-- [ ] Run `/ship` → merge to `main`
+- [x] `npm run typecheck` — zero errors
+- [x] `npm test` — all 633+ tests pass
+- [x] `npm run lint` — clean
+- [x] `cargo check` — zero errors
+- [x] `npm run dev:web` — browser build starts without errors
+- [x] Dev build launches; app title reads "MoodHaven Journal"
+- [x] Bump `0.8.5` in `package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json`
+- [x] Update `CHANGELOG.md` — add v0.8.5 entry
+- [x] Run `/review` — address findings
+- [x] Run `/ship` → merge to `main`
 
 ---
 
@@ -179,20 +179,20 @@ skills:   /review + /ship (close out)
 > If it reveals unexpected complexity, it does not block security work.
 
 **Tasks:**
-- [ ] Read `src-tauri/src/commands/peer_sync_engine.rs` in full — map all responsibilities
-- [ ] Extract `connection.rs` — TCP accept loop, frame read/write, length-prefix + nonce
-- [ ] Extract `protocol.rs` — HELLO/MANIFEST/ENTRIES/DONE message types, serialization
-- [ ] Extract `crypto.rs` (sync-specific) — transport key derivation
-- [ ] Extract `conflict.rs` — LWW conflict resolution (`updated_at` comparison)
-- [ ] Keep `peer_sync_engine.rs` as orchestrator that imports the above
-- [ ] Add `pub mod` declarations in `src-tauri/src/commands/mod.rs`
-- [ ] Wire behavior test: two-instance sync before + after; entry counts must match
+- [x] Read `src-tauri/src/commands/peer_sync_engine.rs` in full — map all responsibilities
+- [x] Extract `connection.rs` — TCP accept loop, frame read/write, length-prefix + nonce
+- [x] Extract `protocol.rs` — HELLO/MANIFEST/ENTRIES/DONE message types, serialization
+- [x] Extract `crypto.rs` (sync-specific) — transport key derivation
+- [x] Extract `conflict.rs` — LWW conflict resolution (`updated_at` comparison)
+- [x] Keep `peer_sync_engine.rs` as orchestrator that imports the above
+- [x] Add `pub mod` declarations in `src-tauri/src/commands/mod.rs`
+- [x] Wire behavior test: two-instance sync before + after; entry counts must match
 
 **Gate:**
-- [ ] `cargo check` — zero errors
-- [ ] `cd src-tauri && cargo test` — all tests pass
-- [ ] Wire format unchanged (two-instance sync test)
-- [ ] Run `/review` → `/ship` → merge to `main`
+- [x] `cargo check` — zero errors
+- [x] `cd src-tauri && cargo test` — all tests pass
+- [x] Wire format unchanged (two-instance sync test)
+- [x] Run `/review` → `/ship` → merge to `main`
 
 ---
 
@@ -216,59 +216,59 @@ skills:   /review + /ship (close out)
 **Plan:** `active-plans/feat-android-companion-polish.md`
 
 ### Phone App — P1 Bugs
-- [ ] **PHONE-P1-1** — Extract `AudioFrameParser` from `WearListenerService` + `WearPlugin` (single parse path for 4-byte-header framing protocol)
-- [ ] **PHONE-P1-2** — `WearPlugin` singleton: simplify `_instance volatile` → companion object (Tauri init is single-threaded)
-- [ ] **PHONE-P1-3** — `WearSignalBuffer`: validate JSON at `enqueue()` time; log and discard malformed entries (prevents bad JSON replaying in `drainBuffer()`)
+- [x] **PHONE-P1-1** — Extract `AudioFrameParser` from `WearListenerService` + `WearPlugin` (single parse path for 4-byte-header framing protocol)
+- [x] **PHONE-P1-2** — `WearPlugin` singleton: simplify `_instance volatile` → companion object (Tauri init is single-threaded)
+- [x] **PHONE-P1-3** — `WearSignalBuffer`: validate JSON at `enqueue()` time; log and discard malformed entries (prevents bad JSON replaying in `drainBuffer()`)
 
 ### Phone App — P2 Hardening // parallel
-- [ ] **PHONE-P2-1** — `BiometricPlugin` lines 112, 174: `activity as FragmentActivity` → `activity as? FragmentActivity ?: return`
-- [ ] **PHONE-P2-2** — `BiometricPlugin`: empty `catch (_: Exception) {}` on KeyStore errors → `Log.w()`
-- [ ] **PHONE-P2-3** — `WearListenerService`: delete stale audio file in `voice_memos_incoming/` on bridge failure path
-- [ ] **PHONE-P2-4** — `WearListenerService`: add `byteArray.size > 1_048_576` guard before parsing metadata JSON
+- [x] **PHONE-P2-1** — `BiometricPlugin` lines 112, 174: `activity as FragmentActivity` → `activity as? FragmentActivity ?: return`
+- [x] **PHONE-P2-2** — `BiometricPlugin`: empty `catch (_: Exception) {}` on KeyStore errors → `Log.w()`
+- [x] **PHONE-P2-3** — `WearListenerService`: delete stale audio file in `voice_memos_incoming/` on bridge failure path
+- [x] **PHONE-P2-4** — `WearListenerService`: add `byteArray.size > 1_048_576` guard before parsing metadata JSON
 
 ### Phone App — P3 Constants // parallel
-- [ ] **PHONE-P3-1** — New file `WearProtocol.kt`: centralize `/audio_channel`, `/signal`, `/feedback` path constants (scattered across `WearListenerService`, `WearPlugin`, `FeedbackService`, `RecordFragment`)
-- [ ] **PHONE-P3-2** — `MoodTileService` + `TileActionActivity`: replace `"com.moodbloom.app"` literals → `BuildConfig.APPLICATION_ID`
+- [x] **PHONE-P3-1** — New file `WearProtocol.kt`: centralize `/audio_channel`, `/signal`, `/feedback` path constants (scattered across `WearListenerService`, `WearPlugin`, `FeedbackService`, `RecordFragment`)
+- [x] **PHONE-P3-2** — `MoodTileService` + `TileActionActivity`: replace `"com.moodbloom.app"` literals → `BuildConfig.APPLICATION_ID`
 
 ### Wear OS App — P1 Bugs
-- [ ] **WEAR-P1-1** — `SyncFragment` line 121: `val total = voiceSent` → `voiceSent + moodSent`
-- [ ] **WEAR-P1-2** — `MoodHistory`: `MOODS.first { it.level == moodLevel }` → `firstOrNull() ?: MOODS[2]` (neutral fallback; prevents `NoSuchElementException`)
-- [ ] **WEAR-P1-3** — `MoodHistory`: deduplicate double `load(prefs)` call (lines 43–44)
-- [ ] **WEAR-P1-4** — `TileActionActivity`: on send failure, show `tvStatus.text = "Not sent"` + red tint + error haptic + delayed `finish()` (currently finishes unconditionally)
-- [ ] **WEAR-P1-5** — `SyncFragment`: add transfer failure error state visible to user
+- [x] **WEAR-P1-1** — `SyncFragment` line 121: `val total = voiceSent` → `voiceSent + moodSent`
+- [x] **WEAR-P1-2** — `MoodHistory`: `MOODS.first { it.level == moodLevel }` → `firstOrNull() ?: MOODS[2]` (neutral fallback; prevents `NoSuchElementException`)
+- [x] **WEAR-P1-3** — `MoodHistory`: deduplicate double `load(prefs)` call (lines 43–44)
+- [x] **WEAR-P1-4** — `TileActionActivity`: on send failure, show `tvStatus.text = "Not sent"` + red tint + error haptic + delayed `finish()` (currently finishes unconditionally)
+- [x] **WEAR-P1-5** — `SyncFragment`: add transfer failure error state visible to user
 
 ### Wear OS App — P2 Hardening // parallel
-- [ ] **WEAR-P2-1** — `BreatheSessionActivity`: replace `while (isPaused) delay(50)` busy-wait → `Channel`-based conditional suspend
-- [ ] **WEAR-P2-2** — `BreatheSessionActivity`: `@Volatile isPaused` → `AtomicBoolean`
-- [ ] **WEAR-P2-3** — `BreatheSessionActivity`: wrap `vibrate()` with `if (lifecycle.currentState.isAtLeast(STARTED))`
-- [ ] **WEAR-P2-4** — `BreatheSummaryActivity`: `if (!userInteracted && isActive)` guard on 6s auto-dismiss coroutine
-- [ ] **WEAR-P2-5** — `BreatheRingView.setModeColor()`: add `try-catch` around `Color.parseColor()` with fallback `#8b5cf6`
-- [ ] **WEAR-P2-6** — `BreatheModeDetailActivity`: add `withTimeoutOrNull(12_000)` on `HealthSnapshot.capture()` (prevents stuck-disabled button)
-- [ ] **WEAR-P2-7** — `RecordingSession.onAutoStop`: guard callback with `activity?.isDestroyed == false`
+- [x] **WEAR-P2-1** — `BreatheSessionActivity`: replace `while (isPaused) delay(50)` busy-wait → `Channel`-based conditional suspend
+- [x] **WEAR-P2-2** — `BreatheSessionActivity`: `@Volatile isPaused` → `AtomicBoolean`
+- [x] **WEAR-P2-3** — `BreatheSessionActivity`: wrap `vibrate()` with `if (lifecycle.currentState.isAtLeast(STARTED))`
+- [x] **WEAR-P2-4** — `BreatheSummaryActivity`: `if (!userInteracted && isActive)` guard on 6s auto-dismiss coroutine
+- [x] **WEAR-P2-5** — `BreatheRingView.setModeColor()`: add `try-catch` around `Color.parseColor()` with fallback `#8b5cf6`
+- [x] **WEAR-P2-6** — `BreatheModeDetailActivity`: add `withTimeoutOrNull(12_000)` on `HealthSnapshot.capture()` (prevents stuck-disabled button)
+- [x] **WEAR-P2-7** — `RecordingSession.onAutoStop`: guard callback with `activity?.isDestroyed == false`
 
 ### Wear OS App — P3 Duplication // parallel
-- [ ] **WEAR-P3-1** — New file `MoodHistoryAdapter.kt`: extract shared adapter from `HistoryActivity.HistoryAdapter` + `HistoryFragment`; update both callers
-- [ ] **WEAR-P3-2** — `BreatheFragment`: `Calendar.getInstance().get(HOUR_OF_DAY)` → `LocalTime.now().hour` (Wear OS 3+ is API 30)
-- [ ] **WEAR-P3-3** — `MoodComplicationService`: add 30s in-memory cache (field + timestamp) — currently calls `MoodHistory.load()` on every complication update
-- [ ] **WEAR-P3-4** — `MoodAdapter`: move `GradientDrawable` creation out of `onBindViewHolder` (alloc per scroll frame)
-- [ ] **WEAR-P3-5** — `OfflineQueue`: replace `ConcurrentLinkedQueue + takeLast(MAX_ENTRIES)` O(n) → `ArrayDeque` with `removeFirst()` eviction
+- [x] **WEAR-P3-1** — New file `MoodHistoryAdapter.kt`: extract shared adapter from `HistoryActivity.HistoryAdapter` + `HistoryFragment`; update both callers
+- [x] **WEAR-P3-2** — `BreatheFragment`: `Calendar.getInstance().get(HOUR_OF_DAY)` → `LocalTime.now().hour` (Wear OS 3+ is API 30)
+- [x] **WEAR-P3-3** — `MoodComplicationService`: add 30s in-memory cache (field + timestamp) — currently calls `MoodHistory.load()` on every complication update
+- [x] **WEAR-P3-4** — `MoodAdapter`: move `GradientDrawable` creation out of `onBindViewHolder` (alloc per scroll frame)
+- [x] **WEAR-P3-5** — `OfflineQueue`: replace `ConcurrentLinkedQueue + takeLast(MAX_ENTRIES)` O(n) → `ArrayDeque` with `removeFirst()` eviction
 
 ### Wear OS App — P4 Polish // parallel
-- [ ] **WEAR-P4-1** — Extract all hardcoded UI strings to `wear/src/main/res/values/strings.xml`: "Log mood", "Syncing…", "Sync now", "Recording…", haptic labels
-- [ ] **WEAR-P4-2** — Replace `"com.moodbloom.wear"` cross-process literals → `BuildConfig.APPLICATION_ID`
-- [ ] **WEAR-P4-3** — `HealthSnapshot`: downgrade post-timeout `Log.d()` → `Log.i()`
-- [ ] **WEAR-P4-4** — `SignalSender.drainAndSend()`: add exponential backoff (250ms, 500ms, 1s) before giving up
-- [ ] **WEAR-P4-5** — Verify mood hex colors in `MoodPickerScreen.kt` match desktop tokens (`#10b981`, `#84cc16`, `#eab308`, `#f97316`, `#ef4444`); align if not
+- [x] **WEAR-P4-1** — Extract all hardcoded UI strings to `wear/src/main/res/values/strings.xml`: "Log mood", "Syncing…", "Sync now", "Recording…", haptic labels
+- [x] **WEAR-P4-2** — Replace `"com.moodbloom.wear"` cross-process literals → `BuildConfig.APPLICATION_ID`
+- [x] **WEAR-P4-3** — `HealthSnapshot`: downgrade post-timeout `Log.d()` → `Log.i()`
+- [x] **WEAR-P4-4** — `SignalSender.drainAndSend()`: add exponential backoff (250ms, 500ms, 1s) before giving up
+- [x] **WEAR-P4-5** — Verify mood hex colors in `MoodPickerScreen.kt` match desktop tokens (`#10b981`, `#84cc16`, `#eab308`, `#f97316`, `#ef4444`); align if not
 
 ### Gate
-- [ ] `./gradlew :app:assembleDebug` — phone app builds clean
-- [ ] `./gradlew :wear:assembleDebug` — wear app builds clean
-- [ ] `SyncFragment` count shows `voiceSent + moodSent` correctly
-- [ ] `MoodHistory` does not throw on any mood level value (including out-of-range)
-- [ ] `BreatheSession` pause/resume: no stuck state, no busy-wait (verify on physical watch hardware if available)
-- [ ] `AudioFrameParser` is the single parse path — both `WearPlugin` and `WearListenerService` use it
-- [ ] No `"com.moodbloom.app"` or `"com.moodbloom.wear"` literals remaining in Kotlin source
-- [ ] Run `/review` → `/ship` → merge to `main`
+- [x] `./gradlew :app:assembleDebug` — phone app builds clean
+- [x] `./gradlew :wear:assembleDebug` — wear app builds clean
+- [x] `SyncFragment` count shows `voiceSent + moodSent` correctly
+- [x] `MoodHistory` does not throw on any mood level value (including out-of-range)
+- [x] `BreatheSession` pause/resume: no stuck state, no busy-wait (verify on physical watch hardware if available)
+- [x] `AudioFrameParser` is the single parse path — both `WearPlugin` and `WearListenerService` use it
+- [x] No `"com.moodbloom.app"` or `"com.moodbloom.wear"` literals remaining in Kotlin source
+- [x] Run `/review` → `/ship` → merge to `main`
 
 ---
 
@@ -295,21 +295,21 @@ No browser console errors. Root hypothesis: the v0.9.0 SEC-DEFER-001 change wire
 **Pre-flight:** Read `src/lib/backend/browser-invoke.ts` (full routing table), `src/lib/backend/browser.ts` (`storePasswordHash`, `getPasswordHash`), `src/lib/services/crypto.ts` (`verifyPassword`), `src/components/LockScreen.tsx` (unlock call site post SEC-DEFER-001).
 
 ### Investigation + Fix
-- [ ] **BROWSER-001** — Check `browser-invoke.ts`: is `verify_password` routed? SEC-DEFER-001 wired `LockScreen.tsx` to `invoke('verify_password')` but the browser shim table may not have an entry → "An error occurred" on unlock
-- [ ] **BROWSER-002** — If missing: add browser shim for `verify_password` that calls `crypto.verifyPassword(password)` using the IndexedDB-stored hash (mirrors what `browser.getPasswordHash()` already returns)
-- [ ] **BROWSER-003** — Confirm `store_password_hash` and `get_password_hash` are routed correctly; fix any gaps
-- [ ] **BROWSER-004** — Check Import Existing Data path in browser-invoke: confirm the import command routes to `browser.importData()`
-- [ ] **BROWSER-005** — Full smoke test in browser mode (`npm run dev:web`): setup → lock → unlock → import
+- [x] **BROWSER-001** — Check `browser-invoke.ts`: is `verify_password` routed? SEC-DEFER-001 wired `LockScreen.tsx` to `invoke('verify_password')` but the browser shim table may not have an entry → "An error occurred" on unlock
+- [x] **BROWSER-002** — If missing: add browser shim for `verify_password` that calls `crypto.verifyPassword(password)` using the IndexedDB-stored hash (mirrors what `browser.getPasswordHash()` already returns)
+- [x] **BROWSER-003** — Confirm `store_password_hash` and `get_password_hash` are routed correctly; fix any gaps
+- [x] **BROWSER-004** — Check Import Existing Data path in browser-invoke: confirm the import command routes to `browser.importData()`
+- [x] **BROWSER-005** — Full smoke test in browser mode (`npm run dev:web`): setup → lock → unlock → import
 
 ### Gate
-- [ ] `npm run dev:web` — browser build starts without errors
-- [ ] Browser: full setup flow completes (password set, first entry saved)
-- [ ] Browser: lock → correct password → unlocks
-- [ ] Browser: lock → wrong password → stays locked with error message
-- [ ] Browser: Import Existing Data flow completes without errors
-- [ ] `npm run typecheck` — zero errors
-- [ ] `npm test` — all existing tests pass
-- [ ] Run `/review` → `/ship` → merge to `main`
+- [x] `npm run dev:web` — browser build starts without errors
+- [x] Browser: full setup flow completes (password set, first entry saved)
+- [x] Browser: lock → correct password → unlocks
+- [x] Browser: lock → wrong password → stays locked with error message
+- [x] Browser: Import Existing Data flow completes without errors
+- [x] `npm run typecheck` — zero errors
+- [x] `npm test` — all existing tests pass
+- [x] Run `/review` → `/ship` → merge to `main`
 
 ---
 
@@ -403,20 +403,20 @@ skills:   /health (baseline), /investigate (if SEC-DEFER-001 parity fails),
 - [x] **B9** — Oura PAT trim on save + format hint in `OuraConnectionCard.tsx`
 
 ### Gate
-- [ ] Manual unlock: correct password → Rust `true` → app unlocks
-- [ ] Manual unlock: wrong password → Rust `false` → lock screen error, stays locked
-- [ ] Log file present at `{app_data}/logs/moodhaven.log` after first launch
-- [ ] Log level change takes effect without restart
-- [ ] All 9 settings tabs render (General, Appearance, Privacy, Sync, AI, Health, Devices, Export, Speech, About); all settings survive app restart
-- [ ] Peer sync refactor: wire format unchanged (verify with two-instance sync test)
-- [ ] `cd src-tauri && cargo test` — all Rust tests pass including 6 new time capsule tests
+- [x] Manual unlock: correct password → Rust `true` → app unlocks
+- [x] Manual unlock: wrong password → Rust `false` → lock screen error, stays locked
+- [x] Log file present at `{app_data}/logs/moodhaven.log` after first launch
+- [x] Log level change takes effect without restart
+- [x] All 9 settings tabs render (General, Appearance, Privacy, Sync, AI, Health, Devices, Export, Speech, About); all settings survive app restart
+- [x] Peer sync refactor: wire format unchanged (verify with two-instance sync test)
+- [x] `cd src-tauri && cargo test` — all Rust tests pass including 6 new time capsule tests
 - [x] `npm test` — 641 tests pass
 - [x] `npm run typecheck` — zero errors
 - [x] `npm run lint` — clean (132 pre-existing warnings, 0 errors)
 - [x] Bump `0.9.0` in `package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json`
 - [x] Update `CHANGELOG.md` — add v0.9.0 entry
-- [ ] Run `/review` — address findings
-- [ ] Run `/ship` → merge to `main`
+- [x] Run `/review` — address findings
+- [x] Run `/ship` → merge to `main`
 
 ---
 
@@ -467,61 +467,59 @@ skills:   /health (baseline), /review + /ship (close out)
 - Accessibility: mic button `aria-label` toggles "Start recording" / "Stop recording"; waveform `aria-hidden="true"`; `prefers-reduced-motion`: static bars, no pulse
 
 **Tasks:**
-- [ ] Animated mic button in TipTap toolbar in `WritingView.tsx` (rightmost, with divider)
-- [ ] Disabled-with-tooltip mic state when STT enabled but model not downloaded
-- [ ] Waveform visualization: 20 SVG amplitude bars, `duration-200`, `aria-hidden="true"`, static fallback for `prefers-reduced-motion`
-- [ ] Recording state indicator: below toolbar, 40px, elapsed timer (MM:SS), stop button
-- [ ] "Transcribing..." spinner state on mic button while `stt_transcribe` runs
-- [ ] Route transcription result through `TranscriptPreviewOverlay.tsx` (not direct cursor insert)
-- [ ] OS permission denied → inline error message in WritingView
-- [ ] STT model download UI in Settings → Speech to Text tab with progress bar (moves here from v0.9.0 tab split)
+- [x] Animated mic button in TipTap toolbar in `WritingView.tsx` (rightmost, with divider)
+- [x] Disabled-with-tooltip mic state when STT enabled but model not downloaded
+- [x] Waveform visualization: 20 SVG amplitude bars, `duration-200`, `aria-hidden="true"`, static fallback for `prefers-reduced-motion`
+- [x] Recording state indicator: below toolbar, 40px, elapsed timer (MM:SS), stop button
+- [x] "Transcribing..." spinner state on mic button while `stt_transcribe` runs
+- [x] Route transcription result through `TranscriptPreviewOverlay.tsx` (not direct cursor insert)
+- [x] OS permission denied → inline error message in WritingView
+- [x] STT model download UI in Settings → Speech to Text tab with progress bar (moves here from v0.9.0 tab split)
   > Hooks exist: `useSpeechToText`, `useAudioRecorder` — build UI on top, don't rewrite
-- [ ] Mic button hidden until STT enabled in settings AND model downloaded
-- [ ] **B2** — Validate model presence on Settings → Speech to Text tab open; if absent, show "download" button
-- [ ] **STT-ERR-1** — Transcription failure: toast notification + mic button returns to idle state
+- [x] Mic button hidden until STT enabled in settings AND model downloaded
+- [x] **B2** — Validate model presence on Settings → Speech to Text tab open; if absent, show "download" button
+- [x] **STT-ERR-1** — Transcription failure: toast notification + mic button returns to idle state
 - [ ] **STT-ERR-2** — Model download failure: show retry button + error message
 - [ ] **B7** (`src-tauri/src/commands/speech_to_text.rs`) — `tokio::time::timeout` around `reqwest` download stream
 - [ ] **B8** (`src-tauri/src/commands/speech_to_text.rs`) — delete `.partial` file in error path
-- [ ] **B10** (`src/hooks/useSpeechToText.ts`) — fix `checkedRef` defeating hook memoization
+- [x] **B10** (`src/hooks/useSpeechToText.ts`) — fix `checkedRef` defeating hook memoization
 
 ### F3: Timeline Virtual Scrolling (must-have) // parallel with F2, F8, F9
-- [ ] Virtual list in `src/features/timeline/TimelineView.tsx`
-- [ ] Render visible rows only + configurable overscan (5 rows recommended)
-- [ ] All existing filter/sort/book/tag behavior preserved
-- [ ] Pinned entries remain always-visible at top
-- [ ] No third-party library — `position: absolute` + measured row heights
-  > **Use measured heights, NOT fixed.** Fixed heights break for: day-header rows (shorter), entries with media badges (taller), expanded pinned section. Dynamic remeasurement required on filter/sort changes.
-  > Implementation: store `Map<entryId, height>`, ResizeObserver on rendered rows, recompute layout on height changes.
-- [ ] Handle grouped-by-day layout: virtual window must include day header rows; header rows have different height from entry rows
-- [ ] Absolute positioning drift fix: on any mutation (filter change, media badge load, expand/collapse) → re-measure all affected rows and recompute offsets
+- [x] Virtual list in `src/pages/TimelineView.tsx`
+- [x] Render visible rows only + configurable overscan (5 rows recommended)
+- [x] All existing filter/sort/book/tag behavior preserved
+- [x] Pinned entries remain always-visible at top
+- [x] No third-party library — `position: absolute` + measured row heights
+- [x] Handle grouped-by-day layout: virtual window must include day header rows; header rows have different height from entry rows
+- [x] Absolute positioning drift fix: on any mutation (filter change, media badge load, expand/collapse) → re-measure all affected rows and recompute offsets
 - [ ] **VSCROLL-TEST** — Pinned entries always appear above virtual window (not inside it); test case required
 - [ ] **VSCROLL-TEST-2** — Dynamic height: test that row heights update correctly after media badge loads (async height change)
 
 ### F2: Hashtag Browser // parallel
-- [ ] New `src/components/journal/TagCloud.tsx`
-- [ ] Click tag → sets active tag filter in `TimelineView.tsx`
-- [ ] Use `get_book_tags` if sufficient; add `get_all_tags` Rust command only if needed
+- [x] New `src/components/journal/TagCloud.tsx`
+- [x] Click tag → sets active tag filter in `TimelineView.tsx`
+- [x] Use `get_book_tags` if sufficient; add `get_all_tags` Rust command only if needed
 
 ### F8: Export Date-Range Selection // parallel
-- [ ] Date range picker in export dialog (in `DataManagementTab` or dedicated modal)
-- [ ] Wire to `export_data` `filter.startDate` / `filter.endDate` — no backend changes needed
+- [x] Date range picker in export dialog (in `SelectiveExportPanel.tsx`) — already implemented
+- [x] Wire to `export_data` `filter.startDate` / `filter.endDate` — no backend changes needed
 
 ### F9: Peer Sync Status Detail // parallel
-- [ ] Per-device last-sync timestamp in `DevicesTab.tsx`
-- [ ] "Sync now" button per device → `invoke('peer_sync_now', { peerDeviceId })`
-- [ ] No new Rust commands: use existing `peer_get_sync_states` + `peer_get_trusted`
+- [x] Per-device last-sync timestamp in `TrustedDevicesList.tsx` (loads from `peer_get_sync_states`)
+- [x] "Sync now" button per device in `DevicesTab.tsx` `NearbyPeerRow` — already existed
+- [x] No new Rust commands: use existing `peer_get_sync_states` + `peer_get_trusted`
 
 ### Gate
-- [ ] Mic button visible in editor → record → transcription inserted at cursor
-- [ ] Timeline with 500+ seeded entries scrolls smoothly
-- [ ] Tag cloud click filters timeline
-- [ ] Export with date range produces correct subset
-- [ ] Devices tab shows per-device last-sync timestamp; "Sync now" triggers sync
-- [ ] `npm test` — all tests pass
-- [ ] `npm run typecheck` — zero errors
-- [ ] `npm run lint` — clean
-- [ ] Bump `0.9.2` in `package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json`
-- [ ] Update `CHANGELOG.md` — add v0.9.2 entry
+- [x] Mic button visible in editor → record → transcription inserted at cursor
+- [x] Timeline with 500+ seeded entries scrolls smoothly
+- [x] Tag cloud click filters timeline
+- [x] Export with date range produces correct subset
+- [x] Devices tab shows per-device last-sync timestamp; "Sync now" triggers sync
+- [x] `npm test` — all tests pass (665)
+- [x] `npm run typecheck` — zero errors
+- [x] `npm run lint` — clean (warnings only, pre-existing)
+- [x] Bump `0.9.2` in `package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json`
+- [x] Update `CHANGELOG.md` — add v0.9.2 entry
 - [ ] Run `/review` — address findings
 - [ ] Run `/ship` → merge to `main`
 
@@ -547,12 +545,12 @@ skills:   /health (baseline), /design-review (visual pass on new UI),
 > Context: `active-plans/warrant-canary.md` (merged — see Decision Log)  
 > Goal: reinforce user trust via verifiable, human-readable privacy guarantees — not just claims.
 
-**Scope for v0.9.2 (MVP — no signing key complexity):**
-- [ ] **PRIV-001** — Settings → Privacy: add "Transparency" section with static Privacy Guarantees card (human-readable bullet list: no cloud by default, no telemetry, LAN-only sync, AES-256-GCM encryption, no accounts)
-- [ ] **PRIV-002** — Settings → Privacy: "Current Privacy State" live panel (reads actual runtime state: `cloudSyncEnabled`, `aiEnabled`, `telemetryEnabled`, `externalConnections: []`) — machine-checkable snapshot the user can see
-- [ ] **PRIV-003** — Export privacy state as JSON (button: "Export Privacy Snapshot") — exports the live panel data to a `.json` file via `write_text_file` (existing command, no new Rust needed)
-- [ ] **PRIV-004** — First-run onboarding: add "Private by design" slide with the three core guarantees (local-only storage, optional LAN sync, no accounts required) before the password setup step
-- [ ] **PRIV-005** — `docs/TRANSPARENCY.md`: unsigned transparency manifest template (version, date, commit hash, statement of no telemetry/backdoors/cloud collection) — updated each release
+**Scope for v0.9.3 (MVP — no signing key complexity):**
+- [x] **PRIV-001** — Settings → Privacy: add "Transparency" section with static Privacy Guarantees card (human-readable bullet list: no cloud by default, no telemetry, LAN-only sync, AES-256-GCM encryption, no accounts)
+- [x] **PRIV-002** — Settings → Privacy: "Current Privacy State" live panel (reads actual runtime state: `cloudSyncEnabled`, `aiEnabled`, `telemetryEnabled`, `externalConnections: []`) — machine-checkable snapshot the user can see
+- [x] **PRIV-003** — Export privacy state as JSON (button: "Export Privacy Snapshot") — exports the live panel data to a `.json` file via `write_text_file` (existing command, no new Rust needed)
+- [x] **PRIV-004** — First-run onboarding: add "Private by design" slide with the three core guarantees (local-only storage, optional LAN sync, no accounts required) before the password setup step
+- [x] **PRIV-005** — `docs/TRANSPARENCY.md`: unsigned transparency manifest template (version, date, commit hash, statement of no telemetry/backdoors/cloud collection) — updated each release
 
 **Deferred to post-v1.0 (signing complexity not worth it pre-launch):**
 - Transparency signing key + GPG-signed manifest (`/docs/keys/transparency.asc`)
@@ -561,19 +559,18 @@ skills:   /health (baseline), /design-review (visual pass on new UI),
 - In-app signature verification UI
 
 ### Features // all parallel
-- [ ] **F4** — 7-day mood sparkline in `Sidebar.tsx` footer (inline SVG, `get_mood_statistics`)
-- [ ] **F5** — Keyboard shortcuts in `WritingView.tsx`: `1–5` mood, `Ctrl+Shift+F` focus, `?` cheatsheet modal
-  > Verify shortcuts don't conflict with TipTap bindings before implementing
-- [ ] **F6** — Pinned entries collapsible section at top of `TimelineView.tsx` (existing `pinned` column — no backend work)
-- [ ] **F7** — Streak celebration toasts at 7 / 30 / 100 day milestones (`get_streak_stats` on app load)
-- [ ] **F10** — On This Day in-app banner on app load when prior-year entries exist for today's date
+- [x] **F4** — 7-day mood sparkline in `Sidebar.tsx` footer (inline SVG, `get_mood_statistics`)
+- [x] **F5** — Keyboard shortcuts in `WritingView.tsx`: `1–5` mood, `Ctrl+Shift+F` focus, `?` cheatsheet modal
+- [x] **F6** — Pinned entries collapsible section at top of `TimelineView.tsx` (existing `pinned` column — no backend work) — was already implemented
+- [x] **F7** — Streak celebration toasts at 7 / 30 / 100 day milestones (`get_streak_stats` on app load)
+- [x] **F10** — On This Day in-app banner on app load when prior-year entries exist for today's date
 
 ### Accessibility
-- [ ] **TL-003** (`src/components/timecapsule/TimeCapsuleRevealModal.tsx`) — focus trap on open, ESC closes, `aria-modal="true"`, `role="dialog"`, initial focus on first interactive element
+- [x] **TL-003** (`src/components/timecapsule/TimeCapsuleRevealModal.tsx`) — focus trap on open, ESC closes, `aria-modal="true"`, `role="dialog"`, initial focus on first interactive element — was already implemented
 
 ### Code Quality // parallel
-- [ ] **SETTINGS-001** — Extract `use2FASetup`: `PrivacyTab.tsx` → `src/hooks/use2FASetup.ts`
-- [ ] **D-003** — Voice memos empty state in `WritingView.tsx` (onboarding guidance when no memos exist)
+- [x] **SETTINGS-001** — Extract `use2FASetup`: `PrivacyTab.tsx` → `src/hooks/use2FASetup.ts`
+- [x] **D-003** — Voice memos empty state in `WritingView.tsx` (onboarding guidance when no memos exist)
 
 ### Gate
 - [ ] Sparkline renders in sidebar with real data
@@ -582,11 +579,11 @@ skills:   /health (baseline), /design-review (visual pass on new UI),
 - [ ] Streak toast fires (verify with seeded 7-day streak)
 - [ ] TimeCapsule modal: Tab cycles focus within modal, ESC closes, screen reader sees `dialog` role
 - [ ] Run `/design-review` on the new UI additions — fix any findings
-- [ ] `npm test` — all tests pass
-- [ ] `npm run typecheck` — zero errors
-- [ ] `npm run lint` — clean
-- [ ] Bump `0.9.3` in `package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json`
-- [ ] Update `CHANGELOG.md` — add v0.9.3 entry
+- [x] `npm test` — all tests pass
+- [x] `npm run typecheck` — zero errors
+- [x] `npm run lint` — clean
+- [x] Bump `0.9.3` in `package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json`
+- [x] Update `CHANGELOG.md` — add v0.9.3 entry
 - [ ] Run `/review` → `/ship` → merge to `main`
 
 ---
@@ -648,20 +645,39 @@ skills:   /health (baseline), /qa (website), /design-review (website visual pass
 > Goal: the website should feel like it was made by the same team as the app — same visual language,
 > same tone, same level of polish. Run QA first to find issues, then fix them.
 
-- [ ] Run `/qa` on the website — capture all functional bugs, broken links, layout issues, copy errors
-- [ ] Fix all P0/P1 findings from QA pass
+**Pre-flight audit findings (2026-04-12) — confirmed in code:**
+
+| ID | File | Issue | Priority |
+|----|------|-------|----------|
+| WQA-001 | `components/HomeClient.tsx:71` | "Free to download. Pro features coming soon." — contradicts FOSS positioning | P0 |
+| WQA-002 | `app/faq/page.tsx` — "Is MoodHaven free?" | References "Pro tier for AI insights and future cloud features" — must be rewritten | P0 |
+| WQA-003 | `app/faq/page.tsx` — "Community vs future versions" | Implies paid tiers; remove or reframe as "all features free and open source" | P0 |
+| WQA-004 | `components/HomeClient.tsx:44` | Hero subtitle names "Day One or Notion" — competitive framing, revisit tone | P1 |
+| WQA-005 | `components/WaitlistModal.tsx` | Formspree waitlist endpoint (`xeogkzgz`) still wired — conflicts with "just download it" positioning | P1 |
+| WQA-006 | `components/HomeClient.tsx:30` | Hero uses `hero-rain.jpg` — blue rain photo, no relation to app brand (DESIGN-DEBT-001) | P1 |
+| WQA-007 | `components/HomeClient.tsx` | No FOSS statement above the fold (DESIGN-DEBT-005) | P1 |
+| WQA-008 | Homepage | No GitHub star badge anywhere (DESIGN-DEBT-004) | P2 |
+| WQA-009 | `components/CommunityCallout.tsx` | Newsletter carousel position — likely above product proof (DESIGN-DEBT-002) | P2 |
+
+**Token audit:** `tailwind.config.js` colors match app — violet `primary`, orange `accent.cta`, mood palette aligned. No token work needed.
+
+- [ ] Fix WQA-001 — strip "Pro features coming soon" from hero
+- [ ] Fix WQA-002 + WQA-003 — rewrite FAQ pricing answers to reflect FOSS reality
+- [ ] Fix WQA-004 — revise hero subtitle (drop competitor names, lead with local-first + privacy)
+- [ ] Fix WQA-005 — audit `WaitlistModal` usage; remove or replace with download CTA
+- [ ] Fix WQA-007 — add FOSS statement above the fold in hero (DESIGN-DEBT-005)
+- [ ] Fix WQA-008 — add GitHub star badge to homepage (DESIGN-DEBT-004)
+- [ ] Fix WQA-006 — replace blue rain hero photo (DESIGN-DEBT-001)
+- [ ] Fix WQA-009 — move newsletter carousel below product proof (DESIGN-DEBT-002)
+- [ ] Run `/qa` on the website — capture any remaining functional bugs, broken links, layout issues
+- [ ] Fix all remaining P0/P1 findings from QA pass
 - [ ] Run `/design-review` on the website — visual audit against app design language
   > Look for: color mismatches vs. app mood palette, typography inconsistency, spacing/alignment,
   > animation quality, mobile responsiveness, hero hierarchy, CTA clarity
 - [ ] Fix all design-review findings (within scope of existing site structure)
-- [ ] **Phase A** (design-unification) — Content: update FAQ (export shipped, mobile exists), add FOSS statement, remove any "Pro"/"subscription" language, fix "coming soon" → "available now"
-- [ ] **Phase B** (design-unification) — Tokens: violet-700 primary, orange accent, mood color scales in `tailwind.config.js`; sweep 4 components + 5 static pages
+- [ ] **Phase B** (design-unification) — Tokens: sweep 4 components + 5 static pages for any remaining off-token colors
 - [ ] **Phase C** (design-unification) — Hero: subtitle leading with local-first + AI insights + privacy
-- [ ] **DESIGN-DEBT-001** — Replace blue rain hero photo with app screenshot or violet-tinted layout
-- [ ] **DESIGN-DEBT-002** — Remove or demote newsletter carousel (below product proof)
 - [ ] **DESIGN-DEBT-003** — Convert value props to proof-based modules (concrete evidence)
-- [ ] **DESIGN-DEBT-004** — Add GitHub star badge to homepage
-- [ ] **DESIGN-DEBT-005** — Add FOSS statement to homepage: "Free and open source. No account, no subscription, no cloud required."
 - [ ] **D-001** — Create `DESIGN.md`: color tokens, typography scale, spacing, motion, component vocabulary
 - [ ] Final `/design-review` pass on website after all changes — confirm cohesion with app
 

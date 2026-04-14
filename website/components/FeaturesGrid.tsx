@@ -6,37 +6,37 @@ const FEATURES = [
     icon: HardDrive,
     name: "Local-first, always",
     description:
-      "Your data lives on your device. Nothing leaves unless you choose to sync.",
+      "SQLite on your disk. No telemetry, no sync unless you opt in. Check the source — there's no network call in the entry save path.",
   },
   {
     icon: ShieldCheck,
-    name: "AES-256 encryption",
+    name: "AES-256-GCM encryption",
     description:
-      "Every entry encrypted before it touches storage. Not even we could read it.",
+      "PBKDF2, 600k iterations, per-entry random salt. Keys derived in memory, never stored. Audit it yourself in crypto.ts.",
   },
   {
     icon: Brain,
-    name: "AI insights, no cloud",
+    name: "AI from metadata, not your words",
     description:
-      "Mood patterns and writing prompts derived from metadata — never your words.",
+      "Mood scores, time-of-day patterns, entry frequency — that's all the AI sees. Your journal text never leaves the device.",
   },
   {
     icon: BookOpen,
     name: "Multiple journals",
     description:
-      "Separate spaces for work, personal, travel — each with its own color and emoji.",
+      "Named books with emoji and color. Work, personal, therapy — each filtered separately in the timeline and calendar.",
   },
   {
     icon: Wifi,
     name: "Peer sync over LAN",
     description:
-      "Sync across your own devices on the same network. No cloud account, no fees.",
+      "Ed25519 device identity, QR/PIN pairing, AES-256-GCM transport. No cloud relay. A passive observer sees only ciphertext.",
   },
   {
     icon: Monitor,
-    name: "Cross-platform",
+    name: "Every platform",
     description:
-      "Desktop on Windows, macOS, Linux. Web app on any browser. Wear OS for quick captures.",
+      "Native desktop on Windows, macOS, Linux. Browser PWA at journal.moodhaven.app. Wear OS for voice captures from your wrist.",
   },
 ];
 

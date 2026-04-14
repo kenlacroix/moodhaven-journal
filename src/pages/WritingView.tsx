@@ -512,7 +512,7 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
     }, 2000);
   // `mood` and `content` are intentionally included: a mood auto-detection or
   // format change after the last keystroke should still be reflected in the save.
-  }, [content, contentText, wordCount, title, mood, privacyMode, autoTitle, onEntrySaved]);
+  }, [content, contentText, wordCount, title, mood, privacyMode, autoTitle, activeBookId, onEntrySaved]);
 
   useEffect(() => { scheduleAutoSave(); }, [contentText, title, privacyMode, scheduleAutoSave]);
 

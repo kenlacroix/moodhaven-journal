@@ -1,0 +1,38 @@
+{
+  "$schema": "https://unpkg.com/knip@latest/schema.json",
+  "entry": [
+    "src/main.tsx",
+    "src/App.tsx",
+    "src/test/setup.ts",
+    "src/**/*.test.{ts,tsx}",
+    "website/app/**/*.{ts,tsx}",
+    "website/components/**/*.{ts,tsx}",
+    "website/lib/**/*.{ts,tsx}"
+  ],
+  "project": [
+    "src/**/*.{ts,tsx}",
+    "website/**/*.{ts,tsx}"
+  ],
+  "ignore": [
+    "website/.next/**",
+    "website/.vercel/**",
+    "website/next-env.d.ts",
+    "website/next.config.ts",
+    "website/vitest.config.ts",
+    "staging/**",
+    "scripts/**",
+    "node_modules/**",
+    "website/node_modules/**",
+    "src-tauri/**"
+  ],
+  "ignoreDependencies": [
+    "vite",
+    "vitest",
+    "@vitejs/plugin-react",
+    "tailwindcss",
+    "autoprefixer",
+    "postcss",
+    "@tauri-apps/*",
+    "typescript"
+  ]
+}

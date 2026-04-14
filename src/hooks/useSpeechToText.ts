@@ -88,7 +88,7 @@ export function useSpeechToText(): UseSpeechToTextResult {
       setIsAvailableState(false);
       return false;
     }
-  }, [settings.enabled, settings.model]);
+  }, [settings.enabled, settings.model, isAvailableState]);
 
   const startRecording = useCallback(async () => {
     setTranscribeError(null);

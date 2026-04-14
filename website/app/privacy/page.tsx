@@ -17,9 +17,7 @@ export default function PrivacyPage() {
           <p>
             MoodHaven Journal is designed to collect as little as possible. The journal app
             itself stores all your entries locally on your device — nothing is sent to our servers.
-            If you sign up for desktop app notifications via the waitlist form, we collect your
-            email address and any information you choose to provide. That data is processed by
-            Formspree and is used only to notify you when the desktop app is available.
+            This website does not collect any personal information.
           </p>
         </div>
 
@@ -45,7 +43,6 @@ export default function PrivacyPage() {
         <div>
           <h2 className="font-semibold text-lg text-primary-700">Third-party services</h2>
           <ul className="list-disc list-inside space-y-1 mt-2">
-            <li><strong>Formspree</strong> — processes waitlist form submissions</li>
             <li><strong>Substack</strong> — newsletter and blog posts</li>
             <li><strong>Cloudflare</strong> — hosting and CDN</li>
           </ul>

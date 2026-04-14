@@ -742,14 +742,14 @@ function formatElapsed(seconds: number): string {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
-function WaveformBars({ active }: { active: boolean }) {
-  const reducedMotion =
-    typeof window !== 'undefined' &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const prefersReducedMotion =
+  typeof window !== 'undefined' &&
+  window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+function WaveformBars({ active }: { active: boolean }) {
   const bars = Array.from({ length: 20 }, (_, i) => i);
 
-  if (!active || reducedMotion) {
+  if (!active || prefersReducedMotion) {
     return (
       <div className="flex items-center gap-px h-5" aria-hidden="true">
         {bars.map((i) => (

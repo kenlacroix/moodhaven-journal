@@ -545,12 +545,12 @@ skills:   /health (baseline), /design-review (visual pass on new UI),
 > Context: `active-plans/warrant-canary.md` (merged — see Decision Log)  
 > Goal: reinforce user trust via verifiable, human-readable privacy guarantees — not just claims.
 
-**Scope for v0.9.2 (MVP — no signing key complexity):**
-- [ ] **PRIV-001** — Settings → Privacy: add "Transparency" section with static Privacy Guarantees card (human-readable bullet list: no cloud by default, no telemetry, LAN-only sync, AES-256-GCM encryption, no accounts)
-- [ ] **PRIV-002** — Settings → Privacy: "Current Privacy State" live panel (reads actual runtime state: `cloudSyncEnabled`, `aiEnabled`, `telemetryEnabled`, `externalConnections: []`) — machine-checkable snapshot the user can see
-- [ ] **PRIV-003** — Export privacy state as JSON (button: "Export Privacy Snapshot") — exports the live panel data to a `.json` file via `write_text_file` (existing command, no new Rust needed)
-- [ ] **PRIV-004** — First-run onboarding: add "Private by design" slide with the three core guarantees (local-only storage, optional LAN sync, no accounts required) before the password setup step
-- [ ] **PRIV-005** — `docs/TRANSPARENCY.md`: unsigned transparency manifest template (version, date, commit hash, statement of no telemetry/backdoors/cloud collection) — updated each release
+**Scope for v0.9.3 (MVP — no signing key complexity):**
+- [x] **PRIV-001** — Settings → Privacy: add "Transparency" section with static Privacy Guarantees card (human-readable bullet list: no cloud by default, no telemetry, LAN-only sync, AES-256-GCM encryption, no accounts)
+- [x] **PRIV-002** — Settings → Privacy: "Current Privacy State" live panel (reads actual runtime state: `cloudSyncEnabled`, `aiEnabled`, `telemetryEnabled`, `externalConnections: []`) — machine-checkable snapshot the user can see
+- [x] **PRIV-003** — Export privacy state as JSON (button: "Export Privacy Snapshot") — exports the live panel data to a `.json` file via `write_text_file` (existing command, no new Rust needed)
+- [x] **PRIV-004** — First-run onboarding: add "Private by design" slide with the three core guarantees (local-only storage, optional LAN sync, no accounts required) before the password setup step
+- [x] **PRIV-005** — `docs/TRANSPARENCY.md`: unsigned transparency manifest template (version, date, commit hash, statement of no telemetry/backdoors/cloud collection) — updated each release
 
 **Deferred to post-v1.0 (signing complexity not worth it pre-launch):**
 - Transparency signing key + GPG-signed manifest (`/docs/keys/transparency.asc`)
@@ -559,19 +559,18 @@ skills:   /health (baseline), /design-review (visual pass on new UI),
 - In-app signature verification UI
 
 ### Features // all parallel
-- [ ] **F4** — 7-day mood sparkline in `Sidebar.tsx` footer (inline SVG, `get_mood_statistics`)
-- [ ] **F5** — Keyboard shortcuts in `WritingView.tsx`: `1–5` mood, `Ctrl+Shift+F` focus, `?` cheatsheet modal
-  > Verify shortcuts don't conflict with TipTap bindings before implementing
-- [ ] **F6** — Pinned entries collapsible section at top of `TimelineView.tsx` (existing `pinned` column — no backend work)
-- [ ] **F7** — Streak celebration toasts at 7 / 30 / 100 day milestones (`get_streak_stats` on app load)
-- [ ] **F10** — On This Day in-app banner on app load when prior-year entries exist for today's date
+- [x] **F4** — 7-day mood sparkline in `Sidebar.tsx` footer (inline SVG, `get_mood_statistics`)
+- [x] **F5** — Keyboard shortcuts in `WritingView.tsx`: `1–5` mood, `Ctrl+Shift+F` focus, `?` cheatsheet modal
+- [x] **F6** — Pinned entries collapsible section at top of `TimelineView.tsx` (existing `pinned` column — no backend work) — was already implemented
+- [x] **F7** — Streak celebration toasts at 7 / 30 / 100 day milestones (`get_streak_stats` on app load)
+- [x] **F10** — On This Day in-app banner on app load when prior-year entries exist for today's date
 
 ### Accessibility
-- [ ] **TL-003** (`src/components/timecapsule/TimeCapsuleRevealModal.tsx`) — focus trap on open, ESC closes, `aria-modal="true"`, `role="dialog"`, initial focus on first interactive element
+- [x] **TL-003** (`src/components/timecapsule/TimeCapsuleRevealModal.tsx`) — focus trap on open, ESC closes, `aria-modal="true"`, `role="dialog"`, initial focus on first interactive element — was already implemented
 
 ### Code Quality // parallel
-- [ ] **SETTINGS-001** — Extract `use2FASetup`: `PrivacyTab.tsx` → `src/hooks/use2FASetup.ts`
-- [ ] **D-003** — Voice memos empty state in `WritingView.tsx` (onboarding guidance when no memos exist)
+- [x] **SETTINGS-001** — Extract `use2FASetup`: `PrivacyTab.tsx` → `src/hooks/use2FASetup.ts`
+- [x] **D-003** — Voice memos empty state in `WritingView.tsx` (onboarding guidance when no memos exist)
 
 ### Gate
 - [ ] Sparkline renders in sidebar with real data
@@ -580,11 +579,11 @@ skills:   /health (baseline), /design-review (visual pass on new UI),
 - [ ] Streak toast fires (verify with seeded 7-day streak)
 - [ ] TimeCapsule modal: Tab cycles focus within modal, ESC closes, screen reader sees `dialog` role
 - [ ] Run `/design-review` on the new UI additions — fix any findings
-- [ ] `npm test` — all tests pass
-- [ ] `npm run typecheck` — zero errors
-- [ ] `npm run lint` — clean
-- [ ] Bump `0.9.3` in `package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json`
-- [ ] Update `CHANGELOG.md` — add v0.9.3 entry
+- [x] `npm test` — all tests pass
+- [x] `npm run typecheck` — zero errors
+- [x] `npm run lint` — clean
+- [x] Bump `0.9.3` in `package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json`
+- [x] Update `CHANGELOG.md` — add v0.9.3 entry
 - [ ] Run `/review` → `/ship` → merge to `main`
 
 ---
@@ -646,20 +645,39 @@ skills:   /health (baseline), /qa (website), /design-review (website visual pass
 > Goal: the website should feel like it was made by the same team as the app — same visual language,
 > same tone, same level of polish. Run QA first to find issues, then fix them.
 
-- [ ] Run `/qa` on the website — capture all functional bugs, broken links, layout issues, copy errors
-- [ ] Fix all P0/P1 findings from QA pass
+**Pre-flight audit findings (2026-04-12) — confirmed in code:**
+
+| ID | File | Issue | Priority |
+|----|------|-------|----------|
+| WQA-001 | `components/HomeClient.tsx:71` | "Free to download. Pro features coming soon." — contradicts FOSS positioning | P0 |
+| WQA-002 | `app/faq/page.tsx` — "Is MoodHaven free?" | References "Pro tier for AI insights and future cloud features" — must be rewritten | P0 |
+| WQA-003 | `app/faq/page.tsx` — "Community vs future versions" | Implies paid tiers; remove or reframe as "all features free and open source" | P0 |
+| WQA-004 | `components/HomeClient.tsx:44` | Hero subtitle names "Day One or Notion" — competitive framing, revisit tone | P1 |
+| WQA-005 | `components/WaitlistModal.tsx` | Formspree waitlist endpoint (`xeogkzgz`) still wired — conflicts with "just download it" positioning | P1 |
+| WQA-006 | `components/HomeClient.tsx:30` | Hero uses `hero-rain.jpg` — blue rain photo, no relation to app brand (DESIGN-DEBT-001) | P1 |
+| WQA-007 | `components/HomeClient.tsx` | No FOSS statement above the fold (DESIGN-DEBT-005) | P1 |
+| WQA-008 | Homepage | No GitHub star badge anywhere (DESIGN-DEBT-004) | P2 |
+| WQA-009 | `components/CommunityCallout.tsx` | Newsletter carousel position — likely above product proof (DESIGN-DEBT-002) | P2 |
+
+**Token audit:** `tailwind.config.js` colors match app — violet `primary`, orange `accent.cta`, mood palette aligned. No token work needed.
+
+- [ ] Fix WQA-001 — strip "Pro features coming soon" from hero
+- [ ] Fix WQA-002 + WQA-003 — rewrite FAQ pricing answers to reflect FOSS reality
+- [ ] Fix WQA-004 — revise hero subtitle (drop competitor names, lead with local-first + privacy)
+- [ ] Fix WQA-005 — audit `WaitlistModal` usage; remove or replace with download CTA
+- [ ] Fix WQA-007 — add FOSS statement above the fold in hero (DESIGN-DEBT-005)
+- [ ] Fix WQA-008 — add GitHub star badge to homepage (DESIGN-DEBT-004)
+- [ ] Fix WQA-006 — replace blue rain hero photo (DESIGN-DEBT-001)
+- [ ] Fix WQA-009 — move newsletter carousel below product proof (DESIGN-DEBT-002)
+- [ ] Run `/qa` on the website — capture any remaining functional bugs, broken links, layout issues
+- [ ] Fix all remaining P0/P1 findings from QA pass
 - [ ] Run `/design-review` on the website — visual audit against app design language
   > Look for: color mismatches vs. app mood palette, typography inconsistency, spacing/alignment,
   > animation quality, mobile responsiveness, hero hierarchy, CTA clarity
 - [ ] Fix all design-review findings (within scope of existing site structure)
-- [ ] **Phase A** (design-unification) — Content: update FAQ (export shipped, mobile exists), add FOSS statement, remove any "Pro"/"subscription" language, fix "coming soon" → "available now"
-- [ ] **Phase B** (design-unification) — Tokens: violet-700 primary, orange accent, mood color scales in `tailwind.config.js`; sweep 4 components + 5 static pages
+- [ ] **Phase B** (design-unification) — Tokens: sweep 4 components + 5 static pages for any remaining off-token colors
 - [ ] **Phase C** (design-unification) — Hero: subtitle leading with local-first + AI insights + privacy
-- [ ] **DESIGN-DEBT-001** — Replace blue rain hero photo with app screenshot or violet-tinted layout
-- [ ] **DESIGN-DEBT-002** — Remove or demote newsletter carousel (below product proof)
 - [ ] **DESIGN-DEBT-003** — Convert value props to proof-based modules (concrete evidence)
-- [ ] **DESIGN-DEBT-004** — Add GitHub star badge to homepage
-- [ ] **DESIGN-DEBT-005** — Add FOSS statement to homepage: "Free and open source. No account, no subscription, no cloud required."
 - [ ] **D-001** — Create `DESIGN.md`: color tokens, typography scale, spacing, motion, component vocabulary
 - [ ] Final `/design-review` pass on website after all changes — confirm cohesion with app
 

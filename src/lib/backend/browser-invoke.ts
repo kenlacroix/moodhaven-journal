@@ -115,6 +115,9 @@ async function dispatch(command: string, p: Params): Promise<any> {
     case 'get_journal_entries_by_date': {
       return dbGetEntriesByDate(p.startDate as string, p.endDate as string);
     }
+    case 'get_entries_on_this_day': {
+      return [];
+    }
     case 'update_journal_entry': {
       return dbUpdateEntry(p.id as string, {
         encrypted_content: p.encryptedContent as BrowserEntryRow['encrypted_content'],
@@ -462,6 +465,17 @@ async function dispatch(command: string, p: Params): Promise<any> {
     // Session bridge — no-op in browser
     case 'store_session_password':
     case 'retrieve_session_password':
+      return null;
+
+    // Voice memos — not available in browser (Wear OS / desktop-only feature)
+    case 'list_voice_memos':
+      return [];
+    case 'get_voice_memo':
+    case 'delete_voice_memo':
+    case 'patch_voice_memo_transcription':
+    case 'link_voice_memo_to_entry':
+    case 'transcribe_voice_memo':
+    case 'store_voice_memo':
       return null;
 
     default:

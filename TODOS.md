@@ -7,47 +7,27 @@
 
 ## Website Design Debt (from design-unification autoplan review, 2026-04-04)
 
-### DESIGN-DEBT-001: Hero background photo
-**What:** The rain photo hero is blue-toned and conflicts with the violet brand after the token sweep. Replace with app screenshot, branded illustration, or violet-tinted editorial layout.
-**Why:** Both CEO and Design review models flagged it as "beautiful image, weak brand" — visitors remember ambiance, not product. No screenshot exists yet so this is deferred.
-**Fix options:** (a) App screenshot split-layout hero once UI stabilizes, (b) Clean cream/violet layout with no background image (CSS-only, no new assets).
-**Effort:** human ~2h / CC+gstack ~30min once screenshot exists
+### ~~DESIGN-DEBT-001: Hero background photo~~ ✅ RESOLVED (2026-04-12)
+**Completed:** v0.9.3 — Rain photo replaced with violet gradient (`from-primary-900 via-primary-800 to-primary-700`) + radial highlight overlay + two-column layout with `writing-view.png` app screenshot on desktop. `HeroParticles` canvas removed. `HeroImage` updated to `writing-view.png`.
 
-### DESIGN-DEBT-002: Newsletter carousel on homepage
-**What:** The auto-scrolling Substack carousel in HomeClient.tsx distracts from the conversion flow and has no narrative purpose on the homepage.
-**Why:** Both design models flagged it. It attracts attention away from the CTAs and does not advance the purchase/usage decision.
-**Fix:** Remove from homepage or demote it below product proof. Keep component, just don't render on `app/page.tsx`.
-**Effort:** human ~30min / CC+gstack ~5min
+### ~~DESIGN-DEBT-002: Newsletter carousel on homepage~~ ✅ RESOLVED (2026-04-12)
+**Completed:** v0.9.3 — Carousel was already replaced by `CommunityCallout` (GitHub + Substack links) in a prior pass. No carousel renders on `app/page.tsx`. `WaitlistModal.tsx` deleted (orphaned).
 
-### DESIGN-DEBT-003: Value props → proof-based modules
-**What:** The Privacy / Calm Interface / Cross-Platform three-icon section repeats the hero mood claims without adding concrete proof.
-**Why:** Codex design review: "Sections repeating same mood statement" is a hard rejection signal. Three proof-based modules would be more convincing: Privacy (local encryption details), Insight (mood tracking + AI), Availability (platforms).
-**Depends on:** screenshots or feature art
-**Effort:** human ~2h / CC+gstack ~30min
+### ~~DESIGN-DEBT-003: Value props → proof-based modules~~ ✅ RESOLVED (2026-04-12)
+**Completed:** v0.9.3 — `FeaturesGrid.tsx` rewritten with proof-based copy: named algorithm (`PBKDF2, 600k iterations, per-entry random salt`), named files (`crypto.ts`), concrete behaviors (`Ed25519 device identity, QR/PIN pairing, AES-256-GCM transport`). Removed abstract claims.
 
-### DESIGN-DEBT-004: Social proof on homepage
-**What:** No testimonials, user count, GitHub star count, or press mentions. Visitors have no signal the app is used by real people.
-**Why:** CEO and design models both flag this as a conversion gap. A GitHub star badge is 30 minutes.
-**Quick win:** Add `[![GitHub Stars](https://img.shields.io/github/stars/kenlacroix/moodhaven-journal)](...)` to the footer or above the fold.
-**Effort:** human ~30min / CC+gstack ~5min
+### ~~DESIGN-DEBT-004: Social proof on homepage~~ ✅ RESOLVED (2026-04-12)
+**Completed:** v0.9.3 — GitHub star badge added to hero copy block in `HomeClient.tsx`. Links to `kenlacroix/moodhaven-journal`.
 
-### DESIGN-DEBT-005: Pricing section on homepage
-**What:** The website never states that the app is free. Visitors don't know if it's free, freemium, or subscription.
-**Why:** Flagged by both CEO models. "Free to download. Pro for AI and cloud." is one line that converts.
-**Effort:** human ~30min / CC+gstack ~5min (part of a hero or FAQ update)
+### ~~DESIGN-DEBT-005: Pricing section on homepage~~ ✅ RESOLVED (2026-04-12)
+**Completed:** v0.9.3 — FOSS statement added to hero ("Free and open source. No account, no subscription, no cloud required."). FAQ page rewritten to remove Pro tier language and add open-source Q&A. Privacy page cleaned of waitlist/Formspree references.
 
 ---
 
 ## Design System
 
-### D-001: Create DESIGN.md (design source of truth)
-**What:** Run `/design-consultation` to produce `DESIGN.md` — a single document specifying MoodHaven Journal's design system: color tokens, typography scale, spacing, motion, component vocabulary.
-**Why:** Every design review currently infers conventions by grepping the codebase. Without a stated system, reviewers guess, engineers guess, and visual inconsistency accumulates silently.
-**Pros:** All future `/plan-design-review` and `/design-review` passes become significantly more precise. New contributors have a reference. AI-assisted UI work is better calibrated.
-**Cons:** Takes ~30 min with `/design-consultation`; may surface existing inconsistencies that feel like new work.
-**Context:** Flagged during STT Transcript Formatting design review (2026-03-21). No DESIGN.md has ever existed in this repo.
-**Depends on:** None — run `/design-consultation` at any time.
-**Effort:** human ~4h / CC+gstack ~30min
+### ~~D-001: Create DESIGN.md (design source of truth)~~ ✅ RESOLVED (2026-04-12)
+**Completed:** v0.9.3 — `DESIGN.md` created at repo root. Covers: color tokens (primary violet, accent orange, mood scale, neutrals), typography (Inter, size/weight/role table), spacing and layout conventions, motion system (AnimatedReveal parameters, stagger, duration), component vocabulary (buttons, cards, section containers, NavBar, Footer, Hero pattern), app design tokens, Do/Don't table.
 
 ---
 
@@ -111,14 +91,8 @@ Replaced `response.json()` with a streaming reader that aborts and falls back to
 
 ---
 
-### D-003: Spec the voice memos empty state
-**What:** Define the empty-state copy and primary action for the voice memos panel in WritingView — the screen a brand-new STT user sees before their first recording.
-**Why:** Voice journaling is a new behavior for MoodHaven Journal users. Without an onboarding-style empty state, users who enable STT and see a blank panel have no signal about what to do next.
-**Pros:** Converts a moment of confusion into a moment of invitation. Follows the design principle "empty states are features."
-**Cons:** Requires copywriting + small component work.
-**Context:** Identified during STT design review Pass 3 (user journey). The plan adds the voice memo list UI but never specifies its empty state.
-**Depends on:** STT Transcript Formatting PR must ship first.
-**Effort:** human ~2h / CC+gstack ~15min
+### ~~D-003: Spec the voice memos empty state~~ ✅ RESOLVED (2026-04-12)
+**Completed:** v0.9.3 — `WearVoiceMemoPanel` in `WritingView` renders an empty state with first-run copy and a "Get started" prompt when no memos are present.
 
 ---
 
@@ -205,11 +179,8 @@ Added `buildFeatures { buildConfig = true }` to `wear/build.gradle.kts`. Replace
 
 ## Settings Refactor (refactor/settings-page-split-and-capsule-tests — v0.7.14)
 
-### SETTINGS-001: Extract `use2FASetup` hook (P3)
-**What:** Extract the 2FA state machine from `PrivacyTab.tsx` into a `src/hooks/use2FASetup.ts` hook. Covers: `show2FASetup`, `showBackupCodes`, `backupCodes`, `isDisabling2FA`, `showDisable2FAConfirm`, and all 6 associated callbacks.
-**Why:** PrivacyTab is currently the largest tab component (~523 lines). The 2FA state block is self-contained and reusable if a dedicated Security page is ever added.
-**Context:** Deferred from settings refactor plan (2026-04-01). Acceptable as-is since it doesn't affect DX or UX. Extract when PrivacyTab next needs modification.
-**Effort:** human ~1h / CC+gstack ~10min
+### ~~SETTINGS-001: Extract `use2FASetup` hook (P3)~~ ✅ RESOLVED (2026-04-12)
+**Completed:** v0.9.3 — `src/hooks/use2FASetup.ts` extracted from `PrivacyTab.tsx`. Covers all 6 callbacks + state. 6 Vitest tests added in `use2FASetup.test.ts`.
 
 ### SETTINGS-002: `React.lazy()` tab loading (P4)
 **What:** Wrap each tab import in `SettingsPage.tsx` with `React.lazy()` and add a `<Suspense fallback={null}>` wrapper around the rendered tab. Only the active tab's JS chunk is loaded on first render.

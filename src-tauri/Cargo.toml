@@ -1,6 +1,6 @@
 [package]
 name = "moodhaven-journal"
-version = "0.9.0"
+version = "0.9.3"
 description = "A calm, secure mood tracking and journaling app"
 authors = ["Moodbloom"]
 license = "MIT"

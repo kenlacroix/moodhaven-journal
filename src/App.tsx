@@ -6,6 +6,7 @@
  */
 
 import { useEffect, useState, useCallback } from 'react';
+import { useAppBanners } from './hooks/useAppBanners';
 import { BreakoutWriterApp } from './components/breakout/BreakoutWriterApp';
 import { WritingView } from './pages/WritingView';
 import { TimelineView } from './pages/TimelineView';
@@ -96,6 +97,15 @@ function MainApp() {
   const { pendingCapsule, revealCapsule, dismissCapsule } = useTimeCapsule({
     enabled: isUnlocked && !!sessionPassword,
   });
+
+  // F7 streak toasts + F10 On This Day banner — once per session after unlock
+  const {
+    streakToast,
+    dismissStreakToast,
+    onThisDayCount,
+    onThisDayOldestYear,
+    dismissOnThisDay,
+  } = useAppBanners(isUnlocked && !!sessionPassword);
 
   useEffect(() => {
     const init = async () => {
@@ -304,6 +314,56 @@ function MainApp() {
           onSeal={() => { setSealingEntryId(null); setTimelineRefresh((n) => n + 1); }}
           onCancel={() => setSealingEntryId(null)}
         />
+      )}
+
+      {/* F7: Streak milestone toast */}
+      {streakToast && (
+        <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-4 py-3 rounded-xl bg-violet-600 text-white shadow-lg animate-slide-up" role="status">
+          <span className="text-base">🔥</span>
+          <span className="text-sm font-medium">{streakToast}</span>
+          <button
+            type="button"
+            onClick={dismissStreakToast}
+            aria-label="Dismiss"
+            className="ml-1 text-violet-200 hover:text-white transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      )}
+
+      {/* F10: On This Day banner */}
+      {onThisDayCount > 0 && (
+        <div className="fixed bottom-5 right-5 z-50 flex items-start gap-3 px-4 py-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-lg max-w-xs animate-slide-up">
+          <span className="text-base mt-0.5">📅</span>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-slate-800 dark:text-slate-100">On This Day</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              {onThisDayCount === 1
+                ? `You wrote an entry ${onThisDayOldestYear ? `in ${onThisDayOldestYear}` : 'in a past year'} on this day.`
+                : `You wrote ${onThisDayCount} entries on this day in past years${onThisDayOldestYear ? ` (back to ${onThisDayOldestYear})` : ''}.`}
+            </p>
+            <button
+              type="button"
+              onClick={() => { dismissOnThisDay(); handleNavigate('onthisday'); }}
+              className="mt-1.5 text-xs font-medium text-violet-600 dark:text-violet-400 hover:underline"
+            >
+              View memories
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={dismissOnThisDay}
+            aria-label="Dismiss"
+            className="flex-shrink-0 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
       )}
     </ErrorBoundary>
   );

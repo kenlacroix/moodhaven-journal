@@ -8,13 +8,14 @@
  * - Replaces Calendar - no grid view
  */
 
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback, useLayoutEffect } from 'react';
 import { getAllEntries, deleteEntry, patchEntryPinned } from '../lib/services/journalService';
 import { getMoodColor } from '../lib/utils/chartUtils';
 import { getRelativeDateLabel, formatDate, parseEntryTimestamp } from '../lib/utils/dateUtils';
 import { getWeatherEmoji } from '../lib/services/locationWeatherService';
 import { listAllMedia } from '../lib/services/mediaService';
 import { EntryActionsMenu } from '../components/journal/EntryActionsMenu';
+import { TagCloud } from '../components/journal/TagCloud';
 import type { JournalEntry } from '../types/journal';
 import { MOOD_OPTIONS } from '../types/journal';
 import { useBooksStore } from '../stores/booksStore';
@@ -23,6 +24,55 @@ import { logger } from '../lib/services/logger';
 
 // Get current date string for change detection
 const getCurrentDateStr = () => formatDate(new Date());
+
+// ── Virtual list ──────────────────────────────────────────────────────────────
+
+type VirtualRow =
+  | { type: 'header'; key: string; date: string; count: number; sampleEntry: JournalEntry }
+  | { type: 'entry'; key: string; entry: JournalEntry };
+
+const OVERSCAN = 5;
+const DEFAULT_HEADER_HEIGHT = 36;
+const DEFAULT_ENTRY_HEIGHT = 120;
+
+function computeLayout(rows: VirtualRow[], heights: Map<string, number>): { offsets: number[]; totalHeight: number } {
+  const offsets: number[] = [];
+  let top = 0;
+  for (const row of rows) {
+    offsets.push(top);
+    const h = heights.get(row.key) ?? (row.type === 'header' ? DEFAULT_HEADER_HEIGHT : DEFAULT_ENTRY_HEIGHT);
+    top += h;
+  }
+  return { offsets, totalHeight: top };
+}
+
+function getVisibleRange(
+  rows: VirtualRow[],
+  offsets: number[],
+  scrollTop: number,
+  viewportHeight: number
+): { start: number; end: number } {
+  if (rows.length === 0) return { start: 0, end: 0 };
+  const visTop = scrollTop;
+  const visBottom = scrollTop + viewportHeight;
+  let start = 0;
+  let end = rows.length - 1;
+  // Binary search for first visible
+  let lo = 0;
+  let hi = rows.length - 1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    const itemBottom = offsets[mid] + (rows[mid].type === 'entry' ? DEFAULT_ENTRY_HEIGHT : DEFAULT_HEADER_HEIGHT);
+    if (itemBottom < visTop) lo = mid + 1;
+    else hi = mid - 1;
+  }
+  start = Math.max(0, lo - OVERSCAN);
+  // Linear scan for end
+  end = start;
+  while (end < rows.length && offsets[end] < visBottom) end++;
+  end = Math.min(rows.length - 1, end + OVERSCAN);
+  return { start, end };
+}
 
 interface TimelineViewProps {
   onSelectEntry: (entryId: string) => void;
@@ -455,33 +505,12 @@ export function TimelineView({ onSelectEntry, onNewEntry, onSealEntry, refreshTr
       )}
 
       {/* Tag filter chips */}
-      {allTags.length > 0 && (
-        <div className={`flex gap-2 mb-6 overflow-x-auto pb-1 ${isAndroid ? 'px-4 flex-nowrap' : 'flex-wrap'}`}>
-          {allTags.map(([tag, count]) => {
-            const isActive = tagFilter === tag;
-            return (
-              <button
-                key={tag}
-                type="button"
-                onClick={() => setTagFilter(isActive ? null : tag)}
-                className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-all duration-150 ${
-                  isActive
-                    ? 'bg-violet-500 text-white ring-2 ring-violet-300 dark:ring-violet-700'
-                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
-                }`}
-              >
-                <span className={`text-xs ${isActive ? 'text-violet-200' : 'text-slate-400 dark:text-slate-500'}`}>#</span>
-                {tag}
-                <span
-                  className={`text-xs ${isActive ? 'text-violet-200' : 'text-slate-400 dark:text-slate-500'}`}
-                >
-                  {count}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      )}
+      <TagCloud
+        tags={allTags}
+        activeTag={tagFilter}
+        onSelect={setTagFilter}
+        isAndroid={isAndroid}
+      />
 
       {/* Empty state - no entries at all */}
       {entries.length === 0 && (
@@ -625,223 +654,304 @@ export function TimelineView({ onSelectEntry, onNewEntry, onSealEntry, refreshTr
         </div>
       )}
 
-      {/* Entry list grouped by date */}
-      <div className={isAndroid ? '' : 'space-y-8'}>
-        {Object.entries(groupedEntries).map(([date, dateEntries]) => (
-          <div key={`${date}-${activeBookId ?? 'all'}`} className={isAndroid ? 'mb-6' : ''}>
-            {/* Date group header with pill badge */}
-            <div className={`flex items-center gap-2 mb-3 ${isAndroid ? 'px-4' : ''}`}>
+      {/* Entry list grouped by date — virtual scrolling */}
+      <VirtualEntryList
+        groupedEntries={groupedEntries}
+        mediaByEntry={mediaByEntry}
+        isAndroid={isAndroid}
+        getDateHeader={getDateHeader}
+        onSelectEntry={onSelectEntry}
+        onDelete={handleDelete}
+        onSealEntry={onSealEntry}
+        onPinToggle={async (id, pinned) => {
+          handlePinToggle(id, pinned);
+          try { await patchEntryPinned(id, pinned); }
+          catch { handlePinToggle(id, !pinned); }
+        }}
+        filterKey={`${activeBookId ?? ''}-${moodFilter ?? ''}-${dateRange}-${tagFilter ?? ''}-${debouncedQuery}`}
+      />
+    </div>
+  );
+}
+
+// ── VirtualEntryList ──────────────────────────────────────────────────────────
+
+interface VirtualEntryListProps {
+  groupedEntries: Record<string, JournalEntry[]>;
+  mediaByEntry: Map<string, { count: number; hasImages: boolean }>;
+  isAndroid: boolean;
+  getDateHeader: (date: string, sample: JournalEntry) => string;
+  onSelectEntry: (id: string) => void;
+  onDelete: (id: string) => Promise<void>;
+  onSealEntry?: (id: string) => void;
+  onPinToggle: (id: string, pinned: boolean) => Promise<void>;
+  filterKey: string;
+}
+
+function VirtualEntryList({
+  groupedEntries,
+  mediaByEntry,
+  isAndroid,
+  getDateHeader,
+  onSelectEntry,
+  onDelete,
+  onSealEntry,
+  onPinToggle,
+  filterKey,
+}: VirtualEntryListProps) {
+  // Build flat row list
+  const rows = useMemo<VirtualRow[]>(() => {
+    const result: VirtualRow[] = [];
+    for (const [date, dateEntries] of Object.entries(groupedEntries)) {
+      const headerKey = `h:${date}`;
+      result.push({ type: 'header', key: headerKey, date, count: dateEntries.length, sampleEntry: dateEntries[0] });
+      for (const entry of dateEntries) {
+        result.push({ type: 'entry', key: `e:${entry.id}`, entry });
+      }
+    }
+    return result;
+  }, [groupedEntries]);
+
+  // Measure heights
+  const heightsRef = useRef<Map<string, number>>(new Map());
+  const [heightVersion, forceUpdate] = useState(0);
+  const rowRefs = useRef<Map<string, HTMLElement>>(new Map());
+
+  // Reset heights when filter changes (items may be different)
+  useEffect(() => {
+    resizeObserverRef.current?.disconnect();
+    heightsRef.current = new Map();
+    rowRefs.current = new Map();
+    forceUpdate(0);
+  }, [filterKey]);
+
+  // ResizeObserver to track dynamic row heights
+  const resizeObserverRef = useRef<ResizeObserver | null>(null);
+  useLayoutEffect(() => {
+    const ro = new ResizeObserver((entries) => {
+      let changed = false;
+      for (const entry of entries) {
+        const el = entry.target as HTMLElement;
+        const key = el.dataset.rowKey;
+        if (!key) continue;
+        const h = entry.borderBoxSize?.[0]?.blockSize ?? el.offsetHeight;
+        if (heightsRef.current.get(key) !== h) {
+          heightsRef.current.set(key, h);
+          changed = true;
+        }
+      }
+      if (changed) forceUpdate((n) => n + 1);
+    });
+    resizeObserverRef.current = ro;
+    // Observe all currently-rendered rows
+    rowRefs.current.forEach((el) => ro.observe(el));
+    return () => ro.disconnect();
+  }, []);
+
+  const registerRow = useCallback((key: string, el: HTMLElement | null) => {
+    if (el) {
+      rowRefs.current.set(key, el);
+      resizeObserverRef.current?.observe(el);
+    } else {
+      const prev = rowRefs.current.get(key);
+      if (prev) {
+        resizeObserverRef.current?.unobserve(prev);
+        rowRefs.current.delete(key);
+      }
+    }
+  }, []);
+
+  const { offsets, totalHeight } = useMemo(
+    () => computeLayout(rows, heightsRef.current),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rows, heightVersion]
+  );
+
+  // Scroll tracking
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [scrollTop, setScrollTop] = useState(0);
+  const [viewportHeight, setViewportHeight] = useState(600);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    // Find nearest scrollable ancestor (MainLayout's <main overflow-auto>)
+    let scrollEl: HTMLElement | null = container.parentElement;
+    while (scrollEl) {
+      const { overflowY } = window.getComputedStyle(scrollEl);
+      if (overflowY === 'auto' || overflowY === 'scroll') break;
+      scrollEl = scrollEl.parentElement;
+    }
+
+    const handleScroll = () => {
+      const c = containerRef.current;
+      if (!c) return;
+      if (scrollEl) {
+        // How far has the container been scrolled above the scroll parent's top edge?
+        setScrollTop(Math.max(0, scrollEl.getBoundingClientRect().top - c.getBoundingClientRect().top));
+      } else {
+        setScrollTop(Math.max(0, -c.getBoundingClientRect().top));
+      }
+    };
+    const handleResize = () => setViewportHeight(scrollEl ? scrollEl.clientHeight : window.innerHeight);
+
+    const target: EventTarget = scrollEl ?? window;
+    target.addEventListener('scroll', handleScroll, { passive: true });
+    window.addEventListener('resize', handleResize, { passive: true });
+    setViewportHeight(scrollEl ? scrollEl.clientHeight : window.innerHeight);
+    return () => {
+      target.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('resize', handleResize);
+    };
+  }, []);
+
+  const { start, end } = useMemo(
+    () => getVisibleRange(rows, offsets, scrollTop, viewportHeight),
+    [rows, offsets, scrollTop, viewportHeight]
+  );
+
+  const visibleRows = rows.slice(start, end + 1);
+
+  return (
+    <div
+      ref={containerRef}
+      className={isAndroid ? '' : 'relative'}
+      style={{ height: totalHeight || undefined, position: totalHeight ? 'relative' : undefined }}
+    >
+      {visibleRows.map((row, i) => {
+        const top = offsets[start + i];
+        const style = totalHeight ? { position: 'absolute' as const, top, left: 0, right: 0 } : undefined;
+
+        if (row.type === 'header') {
+          return (
+            <div
+              key={row.key}
+              data-row-key={row.key}
+              ref={(el) => registerRow(row.key, el)}
+              style={style}
+              className={`flex items-center gap-2 mb-3 ${start > 0 ? 'pt-6' : 'pt-0'} ${isAndroid ? 'px-4' : ''}`}
+            >
               <h2 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
-                {getDateHeader(date, dateEntries[0])}
+                {getDateHeader(row.date, row.sampleEntry)}
               </h2>
               <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
-                {dateEntries.length}
+                {row.count}
               </span>
             </div>
-            <div className={isAndroid ? '' : 'space-y-2'}>
-              {dateEntries.map((entry, i) => {
-                const hasMood = entry.mood !== null && entry.mood > 0;
-                const moodColor = hasMood ? getMoodColor(entry.mood!) : null;
-                return (
-                  <div
-                    key={entry.id}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => onSelectEntry(entry.id)}
-                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelectEntry(entry.id); } }}
-                    style={{
-                      animationDelay: i < 10 ? `${i * 30}ms` : '0ms',
-                      ...(moodColor ? { borderLeftColor: moodColor } : {}),
-                    }}
-                    className={`relative w-full text-left p-4 bg-white dark:bg-slate-900 border-l-4 border-slate-100 dark:border-slate-800 transition-all duration-150 group animate-entry-in cursor-pointer ${
-                      isAndroid
-                        ? 'border-b active:bg-slate-50 dark:active:bg-slate-800/50 active:scale-[0.99] pl-3'
-                        : 'rounded-xl border shadow-sm hover:border-slate-200 dark:hover:border-slate-700 hover:shadow-md hover:-translate-y-0.5'
-                    }`}
-                  >
-                    {/* Actions dropdown (⋯) */}
-                    <EntryActionsMenu
-                      entry={entry}
-                      onDelete={handleDelete}
-                      onSealEntry={onSealEntry}
-                      onPinToggle={async (pinned) => {
-                        handlePinToggle(entry.id, pinned);
-                        try { await patchEntryPinned(entry.id, pinned); }
-                        catch { handlePinToggle(entry.id, !pinned); }
-                      }}
-                    />
+          );
+        }
 
-                    <div className="flex items-start gap-3">
-                      {/* Mood indicator — 32px fixed, explicit null state */}
-                      <div
-                        className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
-                        style={moodColor ? { backgroundColor: `${moodColor}18` } : undefined}
-                        title={hasMood ? `Mood: ${entry.mood}` : 'No mood recorded'}
-                      >
-                        {hasMood ? (
-                          <span className="text-base leading-none">
-                            {MOOD_OPTIONS.find((o) => o.level === entry.mood)?.emoji}
-                          </span>
-                        ) : (
-                          <span className="text-xs text-slate-300 dark:text-slate-600 font-medium">—</span>
-                        )}
-                      </div>
+        const entry = row.entry;
+        const hasMood = entry.mood !== null && entry.mood > 0;
+        const moodColor = hasMood ? getMoodColor(entry.mood!) : null;
 
-                      <div className="flex-1 min-w-0">
-                        {/* Title */}
-                        {entry.title && (
-                          <h3 className="font-semibold text-slate-800 dark:text-slate-100 mb-1 truncate">
-                            {entry.title}
-                          </h3>
-                        )}
-
-                        {/* Preview */}
-                        <p className="text-sm font-normal text-slate-500 dark:text-slate-400 line-clamp-2">
-                          {entry.content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()}
-                        </p>
-
-                        {/* Tags */}
-                        {entry.tags.length > 0 && (
-                          <div className="flex flex-wrap gap-1.5 mt-2">
-                            {entry.tags.slice(0, 3).map((tag) => (
-                              <span
-                                key={tag}
-                                className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-xs font-medium bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400"
-                              >
-                                <span className="text-[10px] opacity-70">#</span>
-                                {tag}
-                              </span>
-                            ))}
-                            {entry.tags.length > 3 && (
-                              <span className="text-xs text-slate-400 dark:text-slate-500">
-                                +{entry.tags.length - 3} more
-                              </span>
-                            )}
-                          </div>
-                        )}
-
-                        {/* Privacy badge */}
-                        {(entry.privacyMode ?? 0) > 0 && (
-                          <div className="flex items-center gap-1 mt-2">
-                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
-                              entry.privacyMode === 1
-                                ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400'
-                                : 'bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400'
-                            }`}>
-                              {entry.privacyMode === 1 ? (
-                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
-                                </svg>
-                              ) : (
-                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
-                                </svg>
-                              )}
-                              {entry.privacyMode === 1 ? 'Mindful' : 'Private'}
-                            </span>
-                          </div>
-                        )}
-
-                        {/* Capsule badges */}
-                        {(entry.capsuleType === 'anniversary' || (entry.sealedUntil && !entry.unsealedAt)) && (
-                          <div className="flex items-center gap-1 mt-2">
-                            {entry.capsuleType === 'anniversary' && (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-rose-50 dark:bg-rose-900/20 text-rose-500 dark:text-rose-400">
-                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
-                                </svg>
-                                Anniversary
-                              </span>
-                            )}
-                            {entry.sealedUntil && !entry.unsealedAt && (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-50 dark:bg-indigo-900/20 text-indigo-500 dark:text-indigo-400">
-                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
-                                </svg>
-                                Time Capsule
-                              </span>
-                            )}
-                          </div>
-                        )}
-
-                        {/* Edited badge — shown when last edit is >60s after creation */}
-                        {(() => {
-                          const created = parseEntryTimestamp(entry.created_at).getTime();
-                          const updated = parseEntryTimestamp(entry.updated_at).getTime();
-                          if (updated - created > 60_000) {
-                            return (
-                              <span className="inline-flex items-center gap-1 text-[10px] text-slate-400 dark:text-slate-500 mt-1">
-                                <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125" />
-                                </svg>
-                                Edited {parseEntryTimestamp(entry.updated_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}
-                              </span>
-                            );
-                          }
-                          return null;
-                        })()}
-
-                        {/* Footer: time + weather chip + attachment count */}
-                        <div className="flex items-center gap-3 mt-2">
-                          <span className="inline-flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500">
-                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            {parseEntryTimestamp(entry.created_at).toLocaleTimeString([], {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
-                          </span>
-                          {(entry.locationWeather?.temperature !== undefined || entry.locationWeather?.city) && (
-                            <span className="inline-flex items-center gap-0.5 text-[10px] text-slate-400 dark:text-slate-500">
-                              {entry.locationWeather!.city && (
-                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
-                                </svg>
-                              )}
-                              <span>{getWeatherEmoji(entry.locationWeather!.weatherCode)}</span>
-                              {entry.locationWeather!.temperature !== undefined && (
-                                <span>{Math.round(entry.locationWeather!.temperature)}°</span>
-                              )}
-                              {entry.locationWeather!.city && (
-                                <span>· {entry.locationWeather!.city}</span>
-                              )}
-                            </span>
-                          )}
-                          {/* Attachment count chip */}
-                          {mediaByEntry.has(entry.id) && (() => {
-                            const m = mediaByEntry.get(entry.id)!;
-                            return (
-                              <span className="inline-flex items-center gap-1 text-[10px] text-slate-400 dark:text-slate-500">
-                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94A3 3 0 1119.5 7.372L8.552 18.32m.009-.01l-.01.01m5.699-9.941l-7.81 7.81a1.5 1.5 0 002.112 2.13" />
-                                </svg>
-                                {m.hasImages ? '🖼' : '📄'} {m.count}
-                              </span>
-                            );
-                          })()}
-                        </div>
-                      </div>
-
-                      {/* Arrow */}
-                      <svg
-                        className="w-4 h-4 text-slate-300 dark:text-slate-600 group-hover:text-slate-400 dark:group-hover:text-slate-500 group-hover:translate-x-0.5 flex-shrink-0 mt-1 transition-all duration-150"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                        strokeWidth={2}
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                      </svg>
-                    </div>
+        return (
+          <div
+            key={row.key}
+            data-row-key={row.key}
+            ref={(el) => registerRow(row.key, el)}
+            style={{
+              ...(style ?? {}),
+              ...(moodColor ? { borderLeftColor: moodColor } : {}),
+            }}
+            role="button"
+            tabIndex={0}
+            onClick={() => onSelectEntry(entry.id)}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelectEntry(entry.id); } }}
+            className={`relative w-full text-left p-4 bg-white dark:bg-slate-900 border-l-4 border-slate-100 dark:border-slate-800 transition-all duration-150 group cursor-pointer mb-2 ${
+              isAndroid
+                ? 'border-b active:bg-slate-50 dark:active:bg-slate-800/50 active:scale-[0.99] pl-3'
+                : 'rounded-xl border shadow-sm hover:border-slate-200 dark:hover:border-slate-700 hover:shadow-md hover:-translate-y-0.5'
+            }`}
+          >
+            <EntryActionsMenu
+              entry={entry}
+              onDelete={onDelete}
+              onSealEntry={onSealEntry}
+              onPinToggle={async (pinned) => { await onPinToggle(entry.id, pinned); }}
+            />
+            <div className="flex items-start gap-3">
+              <div
+                className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
+                style={moodColor ? { backgroundColor: `${moodColor}18` } : undefined}
+                title={hasMood ? `Mood: ${entry.mood}` : 'No mood recorded'}
+              >
+                {hasMood ? (
+                  <span className="text-base leading-none">
+                    {MOOD_OPTIONS.find((o) => o.level === entry.mood)?.emoji}
+                  </span>
+                ) : (
+                  <span className="text-xs text-slate-300 dark:text-slate-600 font-medium">—</span>
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                {entry.title && (
+                  <h3 className="font-semibold text-slate-800 dark:text-slate-100 mb-1 truncate">{entry.title}</h3>
+                )}
+                <p className="text-sm font-normal text-slate-500 dark:text-slate-400 line-clamp-2">
+                  {entry.content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()}
+                </p>
+                {entry.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {entry.tags.slice(0, 3).map((tag) => (
+                      <span key={tag} className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-xs font-medium bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400">
+                        <span className="text-[10px] opacity-70">#</span>{tag}
+                      </span>
+                    ))}
+                    {entry.tags.length > 3 && (
+                      <span className="text-xs text-slate-400 dark:text-slate-500">+{entry.tags.length - 3} more</span>
+                    )}
                   </div>
-                );
-              })}
+                )}
+                {(entry.privacyMode ?? 0) > 0 && (
+                  <div className="flex items-center gap-1 mt-2">
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${entry.privacyMode === 1 ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400' : 'bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400'}`}>
+                      {entry.privacyMode === 1 ? 'Mindful' : 'Private'}
+                    </span>
+                  </div>
+                )}
+                {(entry.capsuleType === 'anniversary' || (entry.sealedUntil && !entry.unsealedAt)) && (
+                  <div className="flex items-center gap-1 mt-2">
+                    {entry.capsuleType === 'anniversary' && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-rose-50 dark:bg-rose-900/20 text-rose-500 dark:text-rose-400">Anniversary</span>
+                    )}
+                    {entry.sealedUntil && !entry.unsealedAt && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-50 dark:bg-indigo-900/20 text-indigo-500 dark:text-indigo-400">Time Capsule</span>
+                    )}
+                  </div>
+                )}
+                <div className="flex items-center gap-3 mt-2">
+                  <span className="inline-flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500">
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    {parseEntryTimestamp(entry.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                  {(entry.locationWeather?.temperature !== undefined || entry.locationWeather?.city) && (
+                    <span className="inline-flex items-center gap-0.5 text-[10px] text-slate-400 dark:text-slate-500">
+                      <span>{getWeatherEmoji(entry.locationWeather!.weatherCode)}</span>
+                      {entry.locationWeather!.temperature !== undefined && <span>{Math.round(entry.locationWeather!.temperature)}°</span>}
+                      {entry.locationWeather!.city && <span>· {entry.locationWeather!.city}</span>}
+                    </span>
+                  )}
+                  {mediaByEntry.has(entry.id) && (() => {
+                    const m = mediaByEntry.get(entry.id)!;
+                    return (
+                      <span className="inline-flex items-center gap-1 text-[10px] text-slate-400 dark:text-slate-500">
+                        {m.hasImages ? '🖼' : '📄'} {m.count}
+                      </span>
+                    );
+                  })()}
+                </div>
+              </div>
+              <svg className="w-4 h-4 text-slate-300 dark:text-slate-600 group-hover:text-slate-400 dark:group-hover:text-slate-500 group-hover:translate-x-0.5 flex-shrink-0 mt-1 transition-all duration-150" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
             </div>
           </div>
-        ))}
-      </div>
+        );
+      })}
     </div>
   );
 }

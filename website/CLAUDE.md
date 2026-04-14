@@ -18,7 +18,7 @@ npm run build    # production build
 |------|---------|
 | `app/page.tsx` | Home — fetches Substack posts, renders HomeClient |
 | `components/HomeClient.tsx` | Hero, value props, newsletter carousel, founder card |
-| `components/WaitlistModal.tsx` | "Get Desktop App" modal — posts to Formspree `xeogkzgz` |
+| `components/HeroImage.tsx` | App screenshot used standalone on blog/about pages |
 | `components/NavBar.tsx` | Top nav |
 | `components/Footer.tsx` | Social links, "Open Journal App" CTA, copyright |
 | `app/blog/[slug]/page.tsx` | MDX blog post renderer |
@@ -29,4 +29,4 @@ npm run build    # production build
 ## Non-Obvious Notes
 - Blog posts with `publishDate` in the future are hidden (`notFound()`)
 - Substack RSS is fetched at build time (static) — redeploy to refresh
-- `WaitlistModal` Formspree endpoint is hardcoded in the component (`xeogkzgz`)
+- Hero uses `writing-view.png` from `public/images/` — update if screenshot changes

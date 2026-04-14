@@ -7,6 +7,52 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.9.3] — 2026-04-12
+
+### Added
+- **F4 — Mood sparkline**: A 7-day inline SVG sparkline appears in the sidebar (desktop only) showing recent mood trend with mood-colored dots and a connecting path. Silent on no data.
+- **F5 — Keyboard shortcuts**: Press `1`–`5` outside the editor to set mood level; press `?` or `/` to toggle a shortcut cheatsheet overlay. Guards against intercepting editor keypresses via `isContentEditable` check.
+- **F7 — Streak milestone toasts**: A dismissible violet toast fires once per unlock session when the user hits a 7-, 30-, or 100-day writing streak.
+- **F10 — On This Day banner**: A dismissible card appears in the bottom-right corner once per session when past entries exist for today's date. Shows entry count and oldest year; links to the On This Day view.
+- **D-003 — Watch memo panel**: A `WearVoiceMemoPanel` section in WritingView surfaces incoming Wear OS voice memos with timestamps, durations, transcription status, "Use" (insert into editor), and delete buttons. Shows a first-run empty state with Wear OS onboarding copy.
+- **SETTINGS-001 — `use2FASetup` hook**: Extracted all 2FA setup state and handlers out of `PrivacyTab` (was ~70 lines inline) into `src/hooks/use2FASetup.ts`. Reduces PrivacyTab to a pure layout component for that flow.
+- **PRIV-001 — Privacy Guarantees card**: Static checklist in Settings → Privacy → Transparency section listing all data handling commitments.
+- **PRIV-002 — Live privacy state panel**: Real-time panel showing current storage backend, cloud sync, AI, peer sync, STT formatting, telemetry, and account status — colour-coded green/amber.
+- **PRIV-003 — Export Privacy Snapshot**: Button in Transparency section exports a JSON snapshot of the current privacy state and opens the log folder. Uses `get_log_path` + `write_text_file` + `open_log_folder`.
+- **PRIV-004 — "Private by design" onboarding**: A green callout card in the setup wizard Welcome step summarises the three core privacy commitments before the user creates their first journal.
+- **PRIV-005 — `docs/TRANSPARENCY.md`**: Unsigned transparency manifest documenting all data flows, what leaves the device, telemetry (none), and AI/STT behaviour.
+- **`get_entries_on_this_day` Rust command**: On This Day entries now use a dedicated SQL command (`strftime('%m-%d')` filter) instead of fetching and filtering all entries in JS — avoids decrypting the full journal on every unlock.
+- **26 new tests** across 4 files: `TagCloud.test.tsx` (5), `useAppBanners.test.ts` (9), `use2FASetup.test.ts` (6), `browser-invoke.test.ts` (+9 cases including voice memo stubs and `get_entries_on_this_day`).
+
+### Fixed
+- **`write_text_file` param names**: `PrivacyTab` was calling with `{ filePath, content }` instead of the correct `{ path, contents }` — the privacy snapshot export was silently failing.
+- **Windows path separator**: `lastIndexOf('/')` returned -1 on Windows paths from `get_log_path`. Now detects the separator from the path string.
+- **Stale backup codes flash**: `use2FASetup.handleRegenerateBackupCodes` now clears `backupCodes` before awaiting, preventing stale codes from displaying while new ones load.
+- **IPC waterfall in `useAppBanners`**: Streak and On This Day checks were sequential; now run in parallel via `Promise.allSettled`.
+- **`matchMedia` per-render call**: `window.matchMedia('prefers-reduced-motion')` was called inside `WaveformBars` on every render; moved to module-level constant.
+- **`checkAvailability` memoization**: `isAvailableState` was listed in the `useCallback` dependency array, causing the callback to re-create on every status change. Removed — `checkedRef` already guards the early-return path.
+- **Voice memo browser stubs**: `browser-invoke.ts` was logging "unhandled command" warnings for voice memo commands in browser mode; added no-op stubs.
+
+---
+
+## [0.9.2] — 2026-04-11
+
+### Added
+- **STT recording strip**: A live recording indicator now appears below the editor toolbar while dictating — waveform bars, MM:SS elapsed timer, Stop and Cancel buttons. Uses `prefers-reduced-motion` for the waveform fallback.
+- **STT model management UI**: The Speech to Text settings tab now shows all four Whisper models with download progress bars, cancel support, delete, and model selection. B2 fix: model statuses are validated on tab open.
+- **TagCloud component**: Extracted the tag filter chips into a reusable `TagCloud` component (`src/components/journal/TagCloud.tsx`). Wired into `TimelineView` with click-to-filter behaviour unchanged.
+- **TrustedDevicesList last-sync timestamps**: Each paired device in Settings → Devices now shows when it was last synced, loaded from `peer_get_sync_states`.
+
+### Fixed
+- **B10** (`useSpeechToText`): `checkedRef` was blocking the availability check from causing a re-render. Replaced with `isAvailableState` (useState) so the mic button appears/disappears correctly when a model is downloaded or the setting changes.
+- **STT-ERR-1**: Transcription errors now surface as a dismissible amber toast in the editor rather than silently failing.
+- **Virtual scroll height tracking** (`TimelineView`): `heightVersion` (counter) is now the `useMemo` dependency for layout recomputation, not the `forceUpdate` setter (which never changes).
+
+### Changed
+- **Timeline virtual scrolling**: `TimelineView` now renders only visible rows plus overscan via `position: absolute` + `ResizeObserver`-measured heights. Handles variable-height rows (date headers vs entry cards) and async height changes (media badge loads). No third-party library.
+
+---
+
 ## [0.9.1] — 2026-04-10
 
 ### Fixed

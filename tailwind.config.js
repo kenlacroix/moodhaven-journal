@@ -56,6 +56,7 @@ export default {
         'save-bloom': 'saveBloom 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)',
         'wc-glow': 'wcGlow 0.9s cubic-bezier(0.34, 1.56, 0.64, 1)',
         'bar-grow': 'barGrow 0.5s ease-out both',
+        'waveform': 'waveform 0.8s ease-in-out infinite alternate',
       },
       keyframes: {
         fadeIn: {
@@ -116,6 +117,10 @@ export default {
         barGrow: {
           '0%':   { transform: 'scaleX(0)' },
           '100%': { transform: 'scaleX(1)' },
+        },
+        waveform: {
+          '0%':   { height: '3px' },
+          '100%': { height: '16px' },
         },
       },
     },

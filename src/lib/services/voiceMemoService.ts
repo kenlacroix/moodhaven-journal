@@ -98,14 +98,3 @@ export function formatDuration(durationMs: number): string {
   const s = Math.floor(durationMs / 1000);
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
-
-/** Parse heart rate from health_json. Returns null if unavailable. */
-export function extractHeartRate(healthJson: string | null): number | null {
-  if (!healthJson) return null;
-  try {
-    const parsed = JSON.parse(healthJson) as { hr?: number };
-    return typeof parsed.hr === 'number' ? parsed.hr : null;
-  } catch {
-    return null;
-  }
-}

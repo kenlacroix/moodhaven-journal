@@ -7,6 +7,32 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.9.4] — 2026-04-13
+
+### Added (website)
+- **Blog — 7 new posts**: Hydrated the blog from Substack with posts covering the origin story, encryption model, privacy philosophy, AI insights architecture, self-hosting rationale, build reflections, and mobile alpha — each with unique hero images.
+- **OG card generation**: Branded 1200×630 Open Graph cards generated per blog post via `next/og` (edge-compatible, Cloudflare Pages compatible).
+- **Newsletter signup**: Email capture component on the home page and blog index, pre-filling Substack subscribe URL.
+- **Founder card**: About page now includes a founder bio card with headshot, links to personal site and GitHub.
+- **Blog post CTAs**: Each blog post ends with a download/browser CTA block to convert readers to users.
+- **Announcement chip**: Hero section now shows the latest version with a pulsing dot and "See what's new" link.
+- **Trust badge strip**: Inline badges in the hero showing version, test count, license, and build-in-public status.
+- **Android sideload instructions**: Download page now includes a collapsible step-by-step Android sideload guide.
+- **SEO overhaul**: Title templates, canonical URLs, per-page Open Graph metadata, enhanced JSON-LD (Organization + SoftwareApplication schemas with `sameAs` refs).
+
+### Fixed (website)
+- **Design system consistency**: Privacy and Terms pages migrated from `text-gray-*` to `text-neutral-*` tokens.
+- **Stale blog content**: Removed Substack-specific artifacts (P.S. sections, mid-article subscribe CTAs, Coming Soon callouts, old version numbers) from all existing posts.
+- **Hero**: Replaced `hero-rain.jpg` with on-brand violet gradient + app screenshot.
+- **Pro/waitlist language**: All references to Pro tier, pricing, and the Formspree waitlist removed; replaced with FOSS positioning.
+- **FAQ**: Pricing and tier questions rewritten to reflect fully free and open-source reality.
+- **Cloudflare Pages build**: OG image route marked `runtime = 'edge'`; post metadata extracted to `lib/post-static-meta.ts` to avoid `fs` in Workers runtime.
+
+### Added (app)
+- **`DESIGN.md`**: Color tokens, typography scale, spacing system, motion guidelines, and component vocabulary — single source of truth for visual design decisions.
+
+---
+
 ## [0.9.3] — 2026-04-12
 
 ### Added

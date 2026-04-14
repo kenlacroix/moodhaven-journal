@@ -1,14 +1,18 @@
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Privacy Policy — MoodHaven Journal',
+  title: 'Privacy Policy',
+  description:
+    'MoodHaven Journal privacy policy — how we handle your data (short answer: we don\'t collect any). Your journal stays on your device, encrypted, always.',
+  alternates: { canonical: 'https://www.moodhaven.app/privacy' },
+  robots: { index: true, follow: false },
 };
 
 export default function PrivacyPage() {
   return (
-    <div className="max-w-3xl mx-auto px-4 py-16 text-gray-800 space-y-10">
+    <div className="max-w-3xl mx-auto px-4 py-16 text-neutral-700 space-y-10">
       <h1 className="text-3xl font-bold text-primary-700 text-center">Privacy Policy</h1>
-      <p className="text-sm text-gray-400 text-center">Last updated: April 2026</p>
+      <p className="text-sm text-neutral-400 text-center">Last updated: April 2026</p>
 
       <div className="space-y-8">
 

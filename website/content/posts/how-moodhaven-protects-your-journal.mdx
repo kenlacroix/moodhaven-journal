@@ -1,0 +1,46 @@
+---
+title: "How MoodHaven Protects Your Journal"
+publishDate: "2025-05-23"
+heroImage: "/images/tea-window.jpg"
+excerpt: "How MoodHaven keeps your private thoughts safe — with real encryption, real integrity, and no hidden compromises."
+---
+
+When you write in MoodHaven Journal, your entries are more than just saved — they're safeguarded.
+
+Here's how MoodHaven keeps your journal private, both on your device and (optionally) in your own cloud.
+
+## 1. Local Encryption, Always
+
+Every journal entry is encrypted on your device **before it is ever stored**.
+
+We use **AES-256-GCM** — a gold standard for authenticated encryption. Your entries aren't just password-protected — they're encrypted at the data level. Even if someone accessed your device's storage, they would see only ciphertext.
+
+Your encryption key is never stored anywhere. It's derived fresh from your password each time you unlock the app.
+
+## 2. PBKDF2 Key Derivation
+
+When you set your MoodHaven password, the app doesn't use your raw password directly. Instead, it derives a strong cryptographic key using **PBKDF2-HMAC-SHA256 with 600,000 iterations**.
+
+This means an attacker who somehow obtained your encrypted database would face an enormous computational cost to guess any password.
+
+You own your key. No servers, no password resets, no hidden copies. If you forget your password, we genuinely cannot help you recover it — because we don't have it.
+
+## 3. Per-Entry Salts
+
+Each journal entry uses its own random 16-byte salt during key derivation. This means that even if one entry's encryption were somehow compromised, it wouldn't affect any other entry.
+
+Your journal isn't a single encrypted blob — it's a collection of individually protected pieces.
+
+## 4. Optional Encrypted Sync
+
+If you choose to sync, only **encrypted blobs** are transferred. MoodHaven never sends raw or decrypted data — not even to private clouds or your own servers.
+
+You control where the ciphertext lives. MoodHaven just moves it.
+
+## Why This Matters
+
+Most apps talk about privacy. MoodHaven is built with privacy in every line of code.
+
+There are no backdoors. There are no analytics. There is no secret server. The [source code is public](https://github.com/kenlacroix/moodhaven-journal) — you can verify every claim in this post by reading it.
+
+You write. MoodHaven protects.

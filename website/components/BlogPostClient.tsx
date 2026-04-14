@@ -30,7 +30,7 @@ export default function BlogPostClient({
       {/* Mobile “Contents” toggle */}
       <button
         onClick={() => setTocOpen(true)}
-        className="fixed bottom-4 right-4 z-50 sm:hidden bg-white dark:bg-gray-900 p-3 rounded-full shadow-md"
+        className="fixed bottom-4 right-4 z-50 sm:hidden bg-white dark:bg-neutral-900 p-3 rounded-full shadow-md"
         aria-label="Show contents"
       >
         📑
@@ -44,7 +44,7 @@ export default function BlogPostClient({
           accentColor={accentColor}
         />
 
-        <div className="flex-1 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 rounded-xl shadow-sm py-8 px-4 sm:py-12 sm:px-6">
+        <div className="flex-1 bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 rounded-xl shadow-sm py-8 px-4 sm:py-12 sm:px-6">
           {heroImage && (
             <motion.img
               src={heroImage}
@@ -61,7 +61,7 @@ export default function BlogPostClient({
             {title}
           </h1>
 
-          <p className="text-gray-500 text-sm mb-8">
+          <p className="text-neutral-500 text-sm mb-8">
             {publishDate && new Date(publishDate).toLocaleDateString(undefined, {
               year: "numeric",
               month: "long",
@@ -79,6 +79,32 @@ export default function BlogPostClient({
           >
             {mdx}
           </article>
+
+          {/* End-of-post CTA */}
+          <div className="mt-12 pt-8 border-t border-neutral-100">
+            <div className="bg-primary-50 rounded-xl p-6 text-center">
+              <p className="text-xs font-semibold text-neutral-400 uppercase tracking-widest mb-2">Try MoodHaven Journal</p>
+              <p className="text-sm text-neutral-600 leading-relaxed mb-5 max-w-sm mx-auto">
+                Free, open-source, and private. Your journal stays on your device — always encrypted, never shared.
+              </p>
+              <div className="flex flex-wrap gap-3 justify-center">
+                <a
+                  href="https://journal.moodhaven.app"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded-full bg-primary-700 text-white px-5 py-2.5 text-sm font-semibold hover:bg-primary-800 transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-700/60"
+                >
+                  Open in Browser <span aria-hidden="true">→</span>
+                </a>
+                <a
+                  href="/download"
+                  className="rounded-full bg-white text-primary-700 px-5 py-2.5 text-sm font-semibold border border-primary-200 hover:bg-primary-50 transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-700/60"
+                >
+                  Download for Desktop <span aria-hidden="true">↓</span>
+                </a>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </>

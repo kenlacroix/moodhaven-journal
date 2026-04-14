@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
-import Link from "next/link";
+import Image from "next/image";
 import AnimatedReveal from "@/components/AnimatedReveal";
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
@@ -43,7 +43,10 @@ const MILESTONES: Milestone[] = [
   { date: "Sep 2025", title: "Community Growth", description: "Grew to 100+ alpha users sharing insights and suggestions." },
   { date: "Oct 2025", title: "Feature Refinement", description: "Implemented privacy-first encryption, custom prompts, and mood tracking." },
   { date: "Apr 2026", title: "v0.8.0 — Web App", description: "Launched web app at journal.moodhaven.app, Wear OS Phase 4, Time Capsule, and LAN peer sync." },
-  { date: "Nov 2026", title: "Public Beta", description: "Preparing for a wider beta — invite your friends and colleagues!", projected: true },
+  { date: "Apr 2026", title: "v0.9.0 — Security Hardening", description: "Lock guards on sensitive commands, settings refactor, and full security audit pass." },
+  { date: "Apr 2026", title: "v0.9.1 — Unlock & Reset", description: "Factory reset, improved unlock flow, and pre-unlock session error handling." },
+  { date: "Apr 2026", title: "v0.9.3 — Website & Polish", description: "Redesigned landing site, improved download page, and across-the-board UI refinements." },
+  { date: "Late 2026", title: "v1.0 — Public Release", description: "Stable release with full documentation, GitHub Wiki, and broad platform support.", projected: true },
 ];
 
 const TECH_LINKS = [
@@ -66,10 +69,10 @@ const TECH_LINKS = [
     external: true,
   },
   {
-    label: "CHANGELOG",
+    label: "Changelog",
     sublabel: "What's changed in each release",
-    href: "https://github.com/kenlacroix/moodhaven-journal/blob/main/CHANGELOG.md",
-    external: true,
+    href: "/changelog",
+    external: false,
   },
   {
     label: "Contribute",
@@ -269,18 +272,52 @@ export default function AboutPage() {
           </section>
         </AnimatedReveal>
 
+        {/* Founder card */}
+        <AnimatedReveal>
+          <section>
+            <h2 className="text-sm font-semibold text-neutral-500 uppercase tracking-widest mb-6">
+              Built by
+            </h2>
+            <div className="bg-white/90 rounded-xl ring-1 ring-neutral-200 p-6 flex flex-col sm:flex-row items-center sm:items-start gap-5">
+              <Image
+                src="/founder-headshot.png"
+                alt="Ken LaCroix, creator of MoodHaven Journal"
+                width={80}
+                height={80}
+                className="rounded-full object-cover ring-2 ring-primary-100 flex-shrink-0"
+              />
+              <div className="text-center sm:text-left">
+                <p className="font-semibold text-neutral-900 mb-0.5">Ken LaCroix</p>
+                <p className="text-xs text-neutral-400 mb-3">Creator & Maintainer</p>
+                <p className="text-sm text-neutral-600 leading-relaxed mb-4">
+                  I built MoodHaven because I couldn&apos;t find a journaling tool that I actually trusted with my thoughts. Every app either harvested data, required a cloud account, or charged for features that should be basic. MoodHaven is my answer — private, open source, and built to last.
+                </p>
+                <div className="flex flex-wrap justify-center sm:justify-start gap-3">
+                  <a
+                    href="https://www.kennethlacroix.me"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs font-medium text-primary-700 hover:underline"
+                  >
+                    Website ↗
+                  </a>
+                  <a
+                    href="https://github.com/kenlacroix"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs font-medium text-primary-700 hover:underline"
+                  >
+                    GitHub ↗
+                  </a>
+                </div>
+              </div>
+            </div>
+          </section>
+        </AnimatedReveal>
+
         {/* Footer attribution */}
         <p className="text-xs text-neutral-400 text-center pb-2">
-          MoodHaven is built and maintained by{" "}
-          <a
-            href="https://www.kennethlacroix.me"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="underline hover:text-neutral-600"
-          >
-            Ken LaCroix
-          </a>
-          . MIT License.
+          MoodHaven Journal is MIT licensed.
         </p>
 
       </div>

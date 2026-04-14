@@ -4,6 +4,14 @@ import { useState } from "react";
 import Link from "next/link";
 import AnimatedReveal from "./AnimatedReveal";
 
+// Update these at each release (bump version, test count, release date).
+const BUILD_STATS = [
+  { label: "Current version", value: "v0.9.4" },
+  { label: "Automated tests", value: "693" },
+  { label: "License", value: "MIT" },
+  { label: "First commit", value: "Mar 2025" },
+];
+
 export default function CommunityCallout() {
   const [badgeFailed, setBadgeFailed] = useState(false);
 
@@ -15,7 +23,7 @@ export default function CommunityCallout() {
             MoodHaven is open source
           </h2>
 
-          <div className="flex justify-center mb-4" aria-label="GitHub repository stars">
+          <div className="flex justify-center mb-6" aria-label="GitHub repository stars">
             {badgeFailed ? (
               <span className="text-sm text-neutral-500">Open source on GitHub</span>
             ) : (
@@ -27,6 +35,19 @@ export default function CommunityCallout() {
               />
             )}
           </div>
+
+          {/* Build-in-public stats strip */}
+          <dl className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+            {BUILD_STATS.map((stat) => (
+              <div
+                key={stat.label}
+                className="bg-neutral-50 rounded-xl px-3 py-4 flex flex-col items-center gap-1"
+              >
+                <dd className="text-lg font-bold text-primary-700">{stat.value}</dd>
+                <dt className="text-xs text-neutral-500 text-center leading-snug">{stat.label}</dt>
+              </div>
+            ))}
+          </dl>
 
           <p className="text-sm text-neutral-600 mb-8 max-w-sm mx-auto leading-relaxed">
             Built in public. Every line of code visible to you. MIT licensed.

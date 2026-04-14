@@ -1,5 +1,6 @@
 // File: app/blog/[slug]/page.tsx
 
+import type { Metadata } from 'next';
 import { getAllPosts, getPostBySlug } from '@/lib/posts';
 import { getHeadings } from '@/lib/mdx';
 import { buildToc } from '@/lib/build-toc';
@@ -16,6 +17,36 @@ import { Heading } from '@/components/Heading';
 // ---------------------------------------------------------------------------
 export async function generateStaticParams() {
   return getAllPosts().map((post) => ({ slug: post.slug }));
+}
+
+// ---------------------------------------------------------------------------
+// Per-post metadata (title, description, OG image)
+// ---------------------------------------------------------------------------
+export async function generateMetadata(
+  { params }: { params: Promise<{ slug: string }> }
+): Promise<Metadata> {
+  const { slug } = await params;
+  const post = getPostBySlug(slug);
+  const base = 'https://www.moodhaven.app';
+  const url = `${base}/blog/${slug}`;
+
+  return {
+    title: `${post.title} — MoodHaven Journal`,
+    description: post.excerpt,
+    alternates: { canonical: url },
+    openGraph: {
+      title: post.title,
+      description: post.excerpt,
+      url,
+      type: 'article',
+      publishedTime: post.publishDate,
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: post.title,
+      description: post.excerpt,
+    },
+  };
 }
 
 // ---------------------------------------------------------------------------

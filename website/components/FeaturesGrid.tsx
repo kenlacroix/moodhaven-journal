@@ -42,11 +42,14 @@ const FEATURES = [
 
 export default function FeaturesGrid() {
   return (
-    <section className="bg-[var(--background)] px-4 py-14">
+    <section className="bg-[var(--background)] px-4 py-20">
       <div className="max-w-5xl mx-auto">
         <AnimatedReveal>
-          <h2 className="text-center text-sm font-semibold text-neutral-500 uppercase tracking-widest mb-10">
+          <p className="text-center text-xs font-semibold text-neutral-400 uppercase tracking-widest mb-3">
             What you get
+          </p>
+          <h2 className="text-center text-2xl md:text-3xl font-bold text-neutral-900 mb-12">
+            Everything you need, nothing you don&apos;t
           </h2>
         </AnimatedReveal>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -56,7 +59,7 @@ export default function FeaturesGrid() {
               <AnimatedReveal key={feature.name} delay={i * 0.2}>
                 <div className="bg-white/90 rounded-xl p-4 space-y-3 transition-transform duration-300 ease-in-out hover:scale-[1.015] hover:shadow-md hover:shadow-neutral-200/50">
                   <Icon className="w-7 h-7 text-primary-600" aria-hidden="true" />
-                  <h3 className="text-sm font-semibold text-neutral-900">{feature.name}</h3>
+                  <h3 className="text-base font-semibold text-neutral-900">{feature.name}</h3>
                   <p className="text-sm text-neutral-600 leading-relaxed">
                     {feature.description}
                   </p>

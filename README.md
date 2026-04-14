@@ -9,16 +9,17 @@
 <p>
 <a href="https://github.com/kenlacroix/moodhaven-journal/releases"><img src="https://img.shields.io/github/v/release/kenlacroix/moodhaven-journal?style=flat-square&color=7c3aed&label=version" alt="Version"></a>
 <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-22c55e?style=flat-square" alt="License"></a>
+<a href="https://github.com/kenlacroix/moodhaven-journal/stargazers"><img src="https://img.shields.io/github/stars/kenlacroix/moodhaven-journal?style=flat-square&color=f59e0b" alt="GitHub Stars"></a>
+<a href="https://github.com/kenlacroix/moodhaven-journal/actions/workflows/test.yml"><img src="https://img.shields.io/github/actions/workflow/status/kenlacroix/moodhaven-journal/test.yml?style=flat-square&label=tests" alt="Tests"></a>
 <a href="#installation"><img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Web-0ea5e9?style=flat-square" alt="Platform"></a>
 <a href="#watch--phone-companion-beta"><img src="https://img.shields.io/badge/companion-Wear%20OS%20%7C%20Android-f97316?style=flat-square" alt="Companion"></a>
-<a href="#tech-stack"><img src="https://img.shields.io/badge/tests-693%20passing-22c55e?style=flat-square" alt="Tests"></a>
 <a href="https://tauri.app"><img src="https://img.shields.io/badge/built%20with-Tauri%202-ffd866?style=flat-square" alt="Built with Tauri"></a>
 <a href="#security--privacy"><img src="https://img.shields.io/badge/encryption-AES--256--GCM-ef4444?style=flat-square" alt="Encryption"></a>
 </p>
 
 <p>MoodHaven Journal is a zero-knowledge journaling app designed to keep your thoughts safe.<br>Your entries are encrypted end-to-end, and your password never leaves your device.</p>
 
-<p><a href="#installation">Download</a> · <a href="#building-from-source">Build from Source</a> · <a href="#security--privacy">Security Model</a> · <a href="#contributing">Contributing</a></p>
+<p><a href="#installation">Download</a> · <a href="#building-from-source">Build from Source</a> · <a href="#security--privacy">Security Model</a> · <a href="https://github.com/kenlacroix/moodhaven-journal/wiki">Wiki</a> · <a href="#contributing">Contributing</a></p>
 
 </div>
 
@@ -54,15 +55,15 @@
 
 | Platform | Installer |
 |:---|:---|
-| Windows | `MoodHaven_0.9.3_x64-setup.exe` |
-| macOS | `MoodHaven_0.9.3_x64.dmg` |
-| Linux | `moodhaven_0.9.3_amd64.AppImage` or `.deb` |
+| Windows | `MoodHaven_0.9.4_x64-setup.exe` |
+| macOS | `MoodHaven_0.9.4_x64.dmg` |
+| Linux | `moodhaven_0.9.4_amd64.AppImage` or `.deb` |
 
 **Browser** — Run directly in your browser or self-host with the `dist-web/` build. No Rust or install required.
 
 ```bash
-npm run dev:web      # local dev server
-npm run build:web    # production build → dist-web/
+VITE_DEV_MODE=bypass npm run dev:web    # local dev server (skips Tauri auth gate)
+npm run build:web                        # production build → dist-web/
 ```
 
 **Mobile** — Android bridge and Wear OS companion APKs are in [Releases](https://github.com/kenlacroix/moodhaven-journal/releases) as `moodhaven-phone-debug.apk` and `moodhaven-wear-debug.apk`. Requires Android 11+ and Wear OS 3.0+.
@@ -114,10 +115,10 @@ Grab the latest build from the [Releases](https://github.com/kenlacroix/moodhave
 
 | Platform | Installer | Minimum Version |
 |:---|:---|:---|
-| **Windows** | `MoodHaven_0.9.3_x64-setup.exe` | Windows 10 |
-| **macOS** | `MoodHaven_0.9.3_x64.dmg` | macOS 10.15 Catalina |
-| **Linux** | `moodhaven_0.9.3_amd64.AppImage` | Any modern distro |
-| **Linux (Debian)** | `moodhaven_0.9.3_amd64.deb` | Ubuntu 22.04+ |
+| **Windows** | `MoodHaven_0.9.4_x64-setup.exe` | Windows 10 |
+| **macOS** | `MoodHaven_0.9.4_x64.dmg` | macOS 10.15 Catalina |
+| **Linux** | `moodhaven_0.9.4_amd64.AppImage` | Any modern distro |
+| **Linux (Debian)** | `moodhaven_0.9.4_amd64.deb` | Ubuntu 22.04+ |
 | **Web** | `npm run build:web` → serve `dist-web/` | Any modern browser |
 
 ### First Launch
@@ -201,7 +202,7 @@ Encryption Key (256-bit, never stored)
 
 **AI privacy:** when AI features are enabled, journal text is never sent to any external service — only anonymised metadata (mood scores, entry frequency, time-of-day patterns).
 
-Full security model: [.claude/docs/security.md](.claude/docs/security.md)
+Full security model: [SECURITY.md](SECURITY.md)
 
 ---
 
@@ -378,12 +379,25 @@ cd src-tauri && cargo check       # Rust compilation check
 ```
 
 See [CLAUDE.md](CLAUDE.md) for architecture, security guidelines, and conventions.
-Additional docs: [Architecture](docs/architecture.md) · [Tauri Commands](docs/tauri-commands.md) · [Peer Sync Security](docs/peer-sync-security.md) · [Changelog](CHANGELOG.md)
+
+**Documentation:**
+
+| Topic | Link |
+|:---|:---|
+| Architecture overview | [docs/architecture.md](docs/architecture.md) · [Wiki](https://github.com/kenlacroix/moodhaven-journal/wiki/Architecture-Overview) |
+| Tauri command reference | [docs/tauri-commands.md](docs/tauri-commands.md) · [Wiki](https://github.com/kenlacroix/moodhaven-journal/wiki/Tauri-Command-Reference) |
+| Security model | [SECURITY.md](SECURITY.md) · [Wiki](https://github.com/kenlacroix/moodhaven-journal/wiki/Security-Model) |
+| Peer sync protocol | [docs/peer-sync-security.md](docs/peer-sync-security.md) · [Wiki](https://github.com/kenlacroix/moodhaven-journal/wiki/Peer-Sync-Security) |
+| Speech-to-text | [docs/speech-to-text.md](docs/speech-to-text.md) · [Wiki](https://github.com/kenlacroix/moodhaven-journal/wiki/Speech-to-Text) |
+| Watch companion | [docs/watch-companion.md](docs/watch-companion.md) · [Wiki](https://github.com/kenlacroix/moodhaven-journal/wiki/Watch-Companion) |
+| Build guide | [.claude/docs/build.md](.claude/docs/build.md) · [Wiki](https://github.com/kenlacroix/moodhaven-journal/wiki/Building-from-Source) |
+| Changelog | [CHANGELOG.md](CHANGELOG.md) · [moodhaven.app/changelog](https://moodhaven.app/changelog) |
 
 ---
 
 ## Recent Changes
 
+**v0.9.4** — Website overhaul: replaced rain hero with on-brand violet gradient + app screenshot, removed all Pro/waitlist/pricing language, rewrote FAQ as FOSS-first, added GitHub star badge and trust strip, 7 new blog posts from Substack with unique hero images, per-post branded OG cards via `next/og`, newsletter signup, founder card on About, blog post download CTAs, full SEO pass (canonical URLs, JSON-LD, Open Graph), Android sideload guide on Download page.
 **v0.9.3** — Polish, QoL, and /review fixes: live STT recording strip in the editor toolbar, full model download UI in SpeechToTextTab, TagCloud tag filtering in the timeline, virtual scroll for large vaults, per-device last-sync timestamps in Devices tab, Privacy Transparency document, `use2FASetup` hook extraction, `useAppBanners` streak/OTD hook, `get_entries_on_this_day` Rust SQL command. 7 bugs fixed from /review pass. 693 tests.
 **v0.9.2** — STT recording UI, virtual scroll, TagCloud, devices last-sync, Privacy Transparency system, `useAppBanners` hook (streak milestones + On This Day), mood sparkline in sidebar, keyboard shortcuts (`1–5` mood, `?` cheatsheet). 676 tests.
 **v0.9.1** — v0.9.0 regression fixes: unlock was blocked by missing ACL permissions (`verify_password` and 9 others absent from ACL allow-list), factory reset was blocked from the lock screen, wrong-password errors showed the generic message instead of attempt count. Settings service now silently swallows `Session is locked` errors on startup. 667 tests.

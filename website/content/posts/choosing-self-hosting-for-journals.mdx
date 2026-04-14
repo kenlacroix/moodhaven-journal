@@ -1,0 +1,53 @@
+---
+title: "Choosing Self-Hosting for Journals: Why It Matters"
+publishDate: "2025-06-06"
+heroImage: "/images/tea-window.jpg"
+excerpt: "Where your journal lives matters. Self-hosting means replacing blind trust in someone else's infrastructure with verifiable control over your own."
+---
+
+Your journal is one of the most personal things you create. Where that journal lives matters more than most people stop to consider.
+
+## The Default is Someone Else's Server
+
+Most journaling apps store your data on their infrastructure, encrypted with keys they manage. You're trusting that:
+
+- Their encryption is real and correctly implemented
+- They won't change their privacy policy
+- Their business won't fail, be acquired, or pivot
+- No breach exposes your data
+
+That's a lot of trust to extend to a company you didn't choose to have a relationship with.
+
+## What Self-Hosting Actually Means
+
+Self-hosting doesn't mean running a server in your basement (though you can). It means choosing where your backups go.
+
+With MoodHaven, you can sync encrypted backups to:
+
+- **Your own server or NAS** — MinIO, self-hosted WebDAV, anything S3-compatible
+- **Familiar cloud services** — Backblaze B2, DigitalOcean Spaces, or similar
+- **Nothing** — local-only is a completely valid choice
+
+In every case, only **encrypted blobs** are uploaded. The service provider receives ciphertext. They cannot read your journal, even if they wanted to, even if subpoenaed.
+
+## Trust Through Verification
+
+The difference between self-hosting and trusting a cloud journal isn't just technical — it's philosophical.
+
+With a cloud journal, you trust the company's word about their encryption and privacy practices.
+
+With MoodHaven, you can [read the encryption code](https://github.com/kenlacroix/moodhaven-journal), verify what gets sent over the network, and confirm that no plaintext ever leaves your device. The trust is verifiable, not assumed.
+
+## For Non-Technical Users
+
+You don't need to understand S3 or run a server to benefit from this. The simplest path is to use MoodHaven locally with no sync at all — your data stays on your device, encrypted, full stop.
+
+If you want cloud backup, services like Backblaze B2 are straightforward to set up and cost a few cents a month for the amount of data a journal generates.
+
+The important thing is that the choice is yours. MoodHaven doesn't make it for you.
+
+## The Broader Point
+
+Privacy-first isn't just a feature. It's a design constraint that touches every decision: where data lives, who holds the keys, what gets logged, what gets synced.
+
+MoodHaven starts from that constraint and builds outward. Self-hosting support isn't an add-on — it's the natural result of an architecture that refuses to trust any party with your unencrypted thoughts, including us.

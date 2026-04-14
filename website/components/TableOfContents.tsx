@@ -16,7 +16,7 @@ export default function TableOfContents({
   headings,
   isOpen,
   onClose,
-  accentColor,
+  accentColor: _accentColor,
 }: TableOfContentsProps) {
   // Build cleaned TOC
   const tocItems = useMemo(() => {
@@ -163,13 +163,13 @@ export default function TableOfContents({
           print:hidden
           ${isOpen ? 'fixed inset-0 sm:relative sm:block' : 'hidden sm:block'}
           sm:sticky sm:top-24 sm:bottom-4
-          bg-white dark:bg-gray-800 rounded-lg shadow-xl
+          bg-white dark:bg-neutral-800 rounded-lg shadow-xl
           flex flex-col overflow-hidden z-10
         `}
         style={{ width: collapsed ? collapsedW : expandedW }}
       >
         {/* Header + Counter */}
-        <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-700">
+        <div className="px-3 py-2 border-b border-neutral-200 dark:border-neutral-700">
           <div className="flex items-center justify-between">
             {!collapsed && (
               <h3 className="text-lg font-semibold text-[var(--toc-accent)]">
@@ -179,7 +179,7 @@ export default function TableOfContents({
             <button
               onClick={() => setCollapsed(c => !c)}
               aria-label={collapsed ? 'Expand TOC' : 'Collapse TOC'}
-              className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+              className="p-1 rounded hover:bg-neutral-100 dark:hover:bg-neutral-700"
             >
               <svg
                 className={`w-5 h-5 text-[var(--toc-accent)] transform transition-transform ${
@@ -194,7 +194,7 @@ export default function TableOfContents({
             </button>
           </div>
           {!collapsed && (
-            <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+            <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
               {readCount} / {totalCount} sections read
             </p>
           )}
@@ -204,7 +204,7 @@ export default function TableOfContents({
         {!collapsed && isOpen && (
           <button
             onClick={onClose}
-            className="sm:hidden absolute top-2 right-2 p-1 text-gray-500 hover:text-gray-800 dark:hover:text-gray-200"
+            className="sm:hidden absolute top-2 right-2 p-1 text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200"
             aria-label="Close contents"
           >
             ×
@@ -217,7 +217,7 @@ export default function TableOfContents({
           onScroll={onNavScroll}
           className="flex-1 overflow-y-auto px-2 py-4 toc-scrollbar relative"
         >
-          <ul className="space-y-2 text-sm text-gray-700 dark:text-gray-300">
+          <ul className="space-y-2 text-sm text-neutral-700 dark:text-neutral-300">
             {tocItems.map(item => {
               const isActive = activeId === item.id;
               return (
@@ -293,7 +293,7 @@ export default function TableOfContents({
                                 className={`relative block pl-6 pr-2 py-1 transition-colors duration-200 ${
                                   subActive
                                     ? 'text-[var(--toc-accent)] font-semibold'
-                                    : 'text-gray-500 hover:text-[var(--toc-accent)]'
+                                    : 'text-neutral-500 hover:text-[var(--toc-accent)]'
                                 }`}
                               >
                                 {subActive && (

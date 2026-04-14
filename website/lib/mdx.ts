@@ -7,7 +7,7 @@ import { visit } from 'unist-util-visit';
 
 export type Heading = { id: string; text: string; depth: number };
 
-interface MdastChild { type: string; value: string }
+interface MdastChild { type: string; value?: string; children?: MdastChild[] }
 interface MdastHeading {
   type: 'heading';
   depth: number;
@@ -30,13 +30,15 @@ export async function getHeadings(mdxContent: string): Promise<Heading[]> {
 
   // 4. Walk it for headings with data.id
   const headings: Heading[] = [];
-  visit(tree, 'heading', (node: MdastHeading) => {
-    const textNode = node.children.find(c => c.type === 'text');
-    if (textNode && node.data?.id) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  visit(tree, 'heading', (node: any) => {
+    const h = node as MdastHeading;
+    const textNode = h.children.find(c => c.type === 'text');
+    if (textNode && h.data?.id) {
       headings.push({
-        id: node.data.id!,
-        text: textNode.value,
-        depth: node.depth,
+        id: h.data.id!,
+        text: textNode.value ?? '',
+        depth: h.depth,
       });
     }
   });

@@ -24,6 +24,8 @@ interface UseSpeechToTextResult {
   error: string | null;
   permissionModal: MicPermissionModal;
   isAvailable: boolean;
+  /** Elapsed recording time in seconds (from useAudioRecorder). */
+  elapsedSeconds: number;
   quickCapture: boolean;
   toggleQuickCapture: () => void;
   formattedResult: FormattedResult | null;
@@ -40,6 +42,7 @@ export function useSpeechToText(): UseSpeechToTextResult {
     state: recorderState,
     error: recorderError,
     permissionModal,
+    elapsedSeconds,
     startRecording: startAudioRecording,
     proceedAfterConsent: proceedAudioAfterConsent,
     dismissPermissionModal,
@@ -55,40 +58,37 @@ export function useSpeechToText(): UseSpeechToTextResult {
 
   const settings = useSettingsStore((s) => s.settings.speechToText);
   const aiSettings = useSettingsStore((s) => s.settings.ai);
+  // B10: use state (not ref) so the UI re-renders when the check completes.
+  const [isAvailableState, setIsAvailableState] = useState(false);
   const checkedRef = useRef(false);
   // A-05: flag to abort in-flight async chains after cancel() is called
   const cancelledRef = useRef(false);
-  // Stores the last check result so checkAvailability can return it without
-  // closing over the isAvailable state (which would add it to useCallback deps).
-  const availabilityResultRef = useRef(false);
 
-  // Reset the cached check whenever the model selection or enabled state changes
-  // so the next recording attempt re-validates against the real filesystem.
+  // Reset cached check whenever model selection or enabled state changes.
   useEffect(() => {
     checkedRef.current = false;
-    availabilityResultRef.current = false;
+    setIsAvailableState(false);
   }, [settings.model, settings.enabled]);
 
   // Check availability on first use (within the current model/enabled config).
-  // Does NOT include isAvailable in deps — the result is tracked via ref.
   const checkAvailability = useCallback(async () => {
-    if (checkedRef.current) return availabilityResultRef.current;
+    if (checkedRef.current) return isAvailableState;
     checkedRef.current = true;
 
     if (!settings.enabled) {
-      availabilityResultRef.current = false;
+      setIsAvailableState(false);
       return false;
     }
 
     try {
       const status = await checkModelStatus(settings.model);
-      availabilityResultRef.current = status.downloaded;
+      setIsAvailableState(status.downloaded);
       return status.downloaded;
     } catch {
-      availabilityResultRef.current = false;
+      setIsAvailableState(false);
       return false;
     }
-  }, [settings.enabled, settings.model]);
+  }, [settings.enabled, settings.model, isAvailableState]);
 
   const startRecording = useCallback(async () => {
     setTranscribeError(null);
@@ -222,7 +222,8 @@ export function useSpeechToText(): UseSpeechToTextResult {
     state,
     error: transcribeError || recorderError,
     permissionModal,
-    isAvailable: settings.enabled && availabilityResultRef.current,
+    isAvailable: settings.enabled && isAvailableState,
+    elapsedSeconds,
     quickCapture,
     toggleQuickCapture,
     formattedResult,

@@ -810,6 +810,34 @@ pub fn get_entries_by_date_range(
     Ok(entries)
 }
 
+/// Get entries from the same calendar month+day in previous years (On This Day).
+pub fn get_entries_on_this_day(db: &Database) -> Result<Vec<JournalEntryRow>, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT je.id, je.encrypted_content, je.mood, je.privacy_mode, je.location_weather, je.book_id, je.pinned, je.created_at, je.updated_at,
+                    je.sealed_until, je.capsule_type, je.linked_original_id, je.unsealed_at, je.status,
+                    COALESCE(GROUP_CONCAT(t.name, ','), '') as tags
+             FROM journal_entries je
+             LEFT JOIN entry_tags et ON je.id = et.entry_id
+             LEFT JOIN tags t ON et.tag_id = t.id
+             WHERE strftime('%m-%d', je.created_at) = strftime('%m-%d', 'now')
+               AND strftime('%Y', je.created_at) != strftime('%Y', 'now')
+             GROUP BY je.id
+             ORDER BY je.created_at DESC",
+        )
+        .map_err(|e| format!("Prepare failed: {}", e))?;
+
+    let entries = stmt
+        .query_map([], map_entry_row)
+        .map_err(|e| format!("Query failed: {}", e))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("Row parsing failed: {}", e))?;
+
+    Ok(entries)
+}
+
 /// Update an entry's content
 pub fn update_entry(
     db: &Database,

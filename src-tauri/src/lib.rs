@@ -203,6 +203,7 @@ pub fn run() {
             commands::get_journal_entry,
             commands::get_all_journal_entries,
             commands::get_journal_entries_by_date,
+            commands::get_entries_on_this_day,
             commands::update_journal_entry,
             commands::delete_journal_entry,
             commands::patch_entry_location_weather,

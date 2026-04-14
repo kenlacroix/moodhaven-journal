@@ -2,9 +2,10 @@
  * TrustedDevicesList — Shows all paired devices with revoke option.
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import type { TrustedDevice } from '../../types/peerSync';
 import { revokeDevice } from '../../lib/services/peerPairingService';
+import { getPeerSyncStates, type PeerSyncStateRecord } from '../../lib/services/peerSyncEngineService';
 import { usePeerSyncStore } from '../../stores/peerSyncStore';
 import { logger } from '../../lib/services/logger';
 
@@ -47,7 +48,7 @@ function formatDate(iso: string): string {
   }
 }
 
-function TrustedDeviceRow({ device }: { device: TrustedDevice }) {
+function TrustedDeviceRow({ device, lastSyncAt }: { device: TrustedDevice; lastSyncAt?: string }) {
   const [confirming, setConfirming] = useState(false);
   const [removing, setRemoving] = useState(false);
   const removeTrusted = usePeerSyncStore((s) => s.removeTrusted);
@@ -87,6 +88,12 @@ function TrustedDeviceRow({ device }: { device: TrustedDevice }) {
         </div>
         <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5 capitalize">
           {device.deviceType} · Paired {formatDate(device.pairedAt)}
+          {lastSyncAt && (
+            <span> · Synced {formatDate(lastSyncAt)}</span>
+          )}
+          {!lastSyncAt && (
+            <span> · Never synced</span>
+          )}
         </p>
       </div>
       <button
@@ -115,6 +122,22 @@ function TrustedDeviceRow({ device }: { device: TrustedDevice }) {
 
 export function TrustedDevicesList() {
   const trustedDevices = usePeerSyncStore((s) => s.trustedDevices);
+  const [syncStates, setSyncStates] = useState<Record<string, string>>({});
+
+  // Stable key — only re-fetch when device IDs actually change, not on every Zustand emit
+  const deviceListKey = useMemo(() => trustedDevices.map((d) => d.deviceId).join(','), [trustedDevices]);
+
+  useEffect(() => {
+    getPeerSyncStates()
+      .then((states: PeerSyncStateRecord[]) => {
+        const map: Record<string, string> = {};
+        for (const s of states) {
+          map[s.peerDeviceId] = s.lastSyncAt;
+        }
+        setSyncStates(map);
+      })
+      .catch((err: unknown) => { logger.error('Failed to load peer sync states', { error: String(err) }); });
+  }, [deviceListKey]);
 
   if (trustedDevices.length === 0) {
     return (
@@ -136,7 +159,7 @@ export function TrustedDevicesList() {
     <div className="rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
       <div className="px-3">
         {trustedDevices.map((device) => (
-          <TrustedDeviceRow key={device.deviceId} device={device} />
+          <TrustedDeviceRow key={device.deviceId} device={device} lastSyncAt={syncStates[device.deviceId]} />
         ))}
       </div>
     </div>

@@ -197,3 +197,38 @@ describe('native-only no-op commands', () => {
     });
   }
 });
+
+// ---------------------------------------------------------------------------
+// Voice memo stubs — desktop/Wear OS only; must return safe defaults in browser
+// ---------------------------------------------------------------------------
+
+describe('voice memo browser stubs', () => {
+  it('list_voice_memos returns empty array', async () => {
+    expect(await invoke('list_voice_memos')).toEqual([]);
+  });
+
+  const nullStubs = [
+    'get_voice_memo',
+    'delete_voice_memo',
+    'patch_voice_memo_transcription',
+    'link_voice_memo_to_entry',
+    'transcribe_voice_memo',
+    'store_voice_memo',
+  ];
+
+  for (const cmd of nullStubs) {
+    it(`"${cmd}" resolves to null`, async () => {
+      expect(await invoke(cmd)).toBeNull();
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// get_entries_on_this_day — SQL filtered on desktop; returns [] in browser
+// ---------------------------------------------------------------------------
+
+describe('invoke("get_entries_on_this_day")', () => {
+  it('returns an empty array in browser mode', async () => {
+    expect(await invoke('get_entries_on_this_day')).toEqual([]);
+  });
+});

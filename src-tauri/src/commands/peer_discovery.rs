@@ -187,7 +187,7 @@ pub fn get_local_ipv4() -> Option<std::net::Ipv4Addr> {
 
     if !candidates.is_empty() {
         // Highest preference first; stable sort keeps deterministic order within a tier.
-        candidates.sort_by(|a, b| b.0.cmp(&a.0));
+        candidates.sort_by_key(|c| std::cmp::Reverse(c.0));
         log::debug!(
             "[peer] LAN IP candidates: {:?}",
             candidates

@@ -47,9 +47,9 @@ Format: `[vX.Y.Z] decision made — rationale`
 | v0.9.0 | Security + logging + settings | `feat/v0.9.0-security-logging-settings` | [x] |
 | v0.9.1 | Hotfix: unlock/reset regressions | `fix/lock-screen-unlock-reset` | [x] COMPLETE |
 | v0.9.2 | Feature completeness | `feat/v0.9.2-features` | [x] |
-| v0.9.3 | Polish & QoL | `feat/v0.9.3-polish` | [ ] |
-| v0.9.4 | Android/v1.1 prep + website QA + design unification + brand rename | `feat/v0.9.4-android-design` | [ ] |
-| v1.0.0 | Release prep + final audit (desktop only) | `chore/v1.0.0-release` | [ ] |
+| v0.9.3 | Polish & QoL | `feat/v0.9.3-polish` | [x] |
+| v0.9.4 | Website overhaul + design tokens + DESIGN.md | `feat/v0.9.4-website` | [x] |
+| v1.0.0 | Release prep + final audit (desktop only) | `chore/v1.0.0-release` | [ ] in progress |
 | v1.1.0 | Android companion + Play Store | `feat/v1.1.0-android` | [ ] |
 
 > Milestones are **sequential** — each branches off `main` after the previous PR merges.
@@ -814,6 +814,10 @@ skills:   /health (final baseline), /document-release (docs sync),
 [2026-04-09] `readme-revamp-wiki.md` + `v.8.5.1.md` merged → v0.9.3 README Revamp + Wiki Migration section; 9 wiki pages planned; user-focused README rewrite with technical content in wiki
 [2026-04-09] All work through v0.8.5.1 (v0.8.4, android polish, peer sync refactor, browser fix) marked complete
 [2026-04-09] Brand rename and lib restructure confirmed complete ahead of v0.9.3; v0.9.3 risk downgraded from HIGH to MEDIUM; Sprint 5 scope reduced to README/wiki/website only
+[2026-04-13] v0.9.3 shipped (PR #48) — polish, QoL, privacy transparency (PRIV-001–005), /review fixes
+[2026-04-13] v0.9.4 shipped (PR #51) — website landing site overhaul (blog, OG cards, founder card, SEO), DESIGN.md, FOSS/Pro-language cleanup, design system consistency fixes
+[2026-04-13] GitHub Wiki populated — 9 pages live (Home, Security-Model, Peer-Sync-Security, Wear-OS-Companion, Building-from-Source, Keyboard-Shortcuts, Tech-Stack, Beta-Testing, Development-Guide, Changelog); README updated to link to wiki
+[2026-04-16] v1.0.0 release prep branch `chore/v1.0.0-release` opened — archived obsolete plans (vacation-sprints.md, future_work.md) to docs/internal/plans/; SECURITY.md supported versions refreshed + SEC-DEFER-001 resolution noted
 
 ---
 

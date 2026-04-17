@@ -411,11 +411,10 @@ pub async fn download_and_install_update(
         file.write_all(&chunk)
             .map_err(|e| format!("Write error: {e}"))?;
         downloaded += chunk.len() as u64;
-        let percent = if total > 0 {
-            ((downloaded * 100) / total).min(100) as u8
-        } else {
-            0
-        };
+        let percent = (downloaded * 100)
+            .checked_div(total)
+            .map(|p| p.min(100) as u8)
+            .unwrap_or(0);
         let _ = app.emit(
             "update-progress",
             DownloadProgress {

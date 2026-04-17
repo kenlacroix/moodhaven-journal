@@ -374,7 +374,7 @@ mod tests {
     /// must give the same hash as encoding → decoding the salt.
     #[test]
     fn test_salt_must_be_decoded_before_derive() {
-        let password = "parity-check";
+        let password = "parity-check"; // nosemgrep: rust-hardcoded-secret (test fixture only)
         let salt_bytes = [
             0xaau8, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
             0x88, 0x99,

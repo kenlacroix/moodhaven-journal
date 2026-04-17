@@ -16,7 +16,7 @@ No accounts. No cloud required. All encryption on-device.
 ## Architecture & Design
 
 - **[Architecture Overview](Architecture-Overview)** — tech stack, directory structure, data model, encryption design
-- **[Tauri Command Reference](Tauri-Command-Reference)** — all ~135 `invoke()` commands with TypeScript signatures
+- **[Tauri Command Reference](Tauri-Command-Reference)** — all ~127 `invoke()` commands with TypeScript signatures
 - **[Security Model](Security-Model)** — zero-knowledge design, encryption spec, forbidden patterns, checklist
 
 ---

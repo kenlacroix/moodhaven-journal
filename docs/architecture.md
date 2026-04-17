@@ -1,6 +1,6 @@
 # MoodHaven Journal — Architecture Reference
 
-> **Version:** v0.8.4 | **Last Updated:** 2026-04-06
+> **Version:** v0.9.4 | **Last Updated:** 2026-04-16
 
 ---
 
@@ -32,7 +32,7 @@ MoodHaven Journal is a **local-first desktop application** built on Tauri v2 (Ru
 │  Only ciphertext crosses the Tauri IPC boundary                      │
 └───────────────────────────┬─────────────────────────────────────────┘
                             │  Tauri IPC (invoke / emit)
-                            │  ~109 Tauri commands
+                            │  ~135 Tauri commands
 ┌───────────────────────────▼─────────────────────────────────────────┐
 │                        Rust Backend (Tauri)                          │
 │  Command handlers · Database (rusqlite) · Peer sync engine           │
@@ -66,7 +66,7 @@ MoodHaven Journal is a **local-first desktop application** built on Tauri v2 (Ru
 | 2FA | totp-rs + native CTAP2/HID | TOTP + hardware keys |
 | Charts | Custom SVG | No charting library |
 | Logging | tauri-plugin-log + `src/lib/services/logger.ts` | Rotating file (prod), stderr (dev); `set_log_level` at runtime |
-| Testing | Vitest + Testing Library | 646 tests |
+| Testing | Vitest + Testing Library | 693 tests |
 | Build | Vite 8 + Tauri CLI | |
 
 ---
@@ -104,7 +104,7 @@ moodbloom-tauri/
 ├── src-tauri/                  # Rust backend
 │   ├── src/
 │   │   ├── lib.rs              # Tauri builder + command registration
-│   │   ├── commands/           # ~21 command modules (~109 commands)
+│   │   ├── commands/           # ~21 command modules (~135 commands)
 │   │   ├── db/
 │   │   │   └── mod.rs          # SQLite schema, migrations, Database struct
 │   │   └── crypto/             # Rust-side crypto helpers (if any)

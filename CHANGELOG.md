@@ -7,6 +7,45 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.0.0] — 2026-04-17
+
+First stable release. MoodHaven Journal is out of pre-release and ready for daily use across Linux, macOS, and Windows.
+
+### What 1.0.0 means
+- **Zero-knowledge encryption is production-ready**: AES-256-GCM content encryption with a PBKDF2-derived key (600k iterations). The backend never sees plaintext. Password verification runs in native Rust (SEC-DEFER-001 closed in v0.9.0) — the hash never leaves the backend.
+- **Local-first by default**: All data stays on-device in an encrypted SQLite database. No accounts, no mandatory cloud. Optional WebDAV sync and LAN peer sync are both opt-in, both end-to-end encrypted.
+- **Cross-platform parity**: Builds pass on Ubuntu, macOS (Intel + Apple Silicon), and Windows. AppImage/.deb/.msi/.dmg bundles ship from the same tagged release.
+- **FOSS positioning**: MIT-licensed, no paid tier, no analytics, no telemetry. BYOK for OpenAI; Ollama works fully offline.
+
+### Security
+- **dompurify** 3.3.3 → 3.4.0 (GHSA-39q2-94rc-95cp).
+- **Supported-versions policy** in `SECURITY.md` bumped to 0.9.x baseline; SEC-DEFER-001 resolution note added.
+- **Semgrep suppressions** added to confirmed false positives (`journal.rs:377` test fixture, `booksStore.ts:81` tombstone UUIDs) with inline justifications.
+- **npm audit clean**; GitHub Actions all SHA-pinned; CSP strict (`script-src 'self'`).
+
+### Docs
+- `SECURITY.md`, `CLAUDE.md`, `docs/architecture.md`, `docs/tauri-commands.md`, `wiki/Home.md` synced — Tauri command count corrected (~127 actually registered), test count refreshed (693 across 47 files).
+- Shipped plans (v0.9.0–v0.9.4 vacation sprints) archived to `docs/internal/plans/` (gitignored).
+- Roadmap milestones v0.9.3 + v0.9.4 marked shipped.
+
+### Cumulative feature set (v0.8.4 → v1.0.0)
+- **Speech-to-text**: whisper.cpp sidecar with 4 Whisper models, live recording strip in the editor, 3-layer formatting pipeline (local → Ollama → OpenAI with explicit consent).
+- **Peer sync**: mDNS discovery + PIN pairing + Ed25519 identity + AES-256-GCM transport; per-device last-sync timestamps in Settings → Devices.
+- **Time capsules**: seal an entry until a future date; anniversary auto-reveals; mood-delta chip on reveal.
+- **Analytics**: mood distribution, streak stats, day-of-week patterns, calendar heatmap, trend sparkline in sidebar.
+- **AI insights**: opt-in, metadata-only prompts; BYOK OpenAI or local Ollama; per-feature toggles and consent gate.
+- **Oura integration**: health context badge, PAT validated before save.
+- **Wear companion**: Phase 1 complete — voice memo capture, mood taps via Wear OS.
+- **Timeline virtual scroll**: `position: absolute` + `ResizeObserver` — no third-party library.
+- **TagCloud**, **MoodSelector**, **TemplateSelector**, **SearchModal** (Ctrl+K), **keyboard shortcuts** (`1`–`5`, `?`).
+- **DESIGN.md**: color tokens, typography scale, spacing, motion, and component vocabulary — single source of truth for visual design.
+- **Website overhaul** (v0.9.4): 7 blog posts, OG card generation, newsletter signup, trust badges, SEO overhaul.
+
+### Tests
+- 693 tests across 47 files. Coverage tables in `.claude/docs/testing.md`.
+
+---
+
 ## [0.9.4] — 2026-04-13
 
 ### Added (website)

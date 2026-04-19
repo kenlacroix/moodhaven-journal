@@ -43,7 +43,8 @@ const assets = release.assets
       n.endsWith('.AppImage') ||
       n.endsWith('-setup.exe') ||
       n.endsWith('.dmg') ||
-      n.endsWith('.apk')
+      n.endsWith('.apk') ||
+      n.endsWith('.aab')
     );
   })
   .map((a) => ({

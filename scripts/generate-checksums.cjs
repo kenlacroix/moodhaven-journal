@@ -30,8 +30,8 @@ if (!TAG) {
 const ARTIFACTS_DIR = path.join(process.cwd(), 'artifacts');
 const CHECKSUM_FILE = path.join(process.cwd(), 'checksums.txt');
 
-// Extensions we want to checksum (updater assets + installers)
-const ASSET_EXTENSIONS = ['.AppImage', '.exe', '.dmg', '.msi'];
+// Extensions we want to checksum (updater assets + installers + Android bundles)
+const ASSET_EXTENSIONS = ['.AppImage', '.exe', '.dmg', '.msi', '.aab'];
 
 // ── Collect all platform assets ────────────────────────────────────────────────
 function findAssets(dir) {

@@ -170,10 +170,8 @@ Added `buildFeatures { buildConfig = true }` to `wear/build.gradle.kts`. Replace
 `wear/build.gradle.kts` now uses `applicationId = "com.moodhaven.app"` (aligned with phone). Fixed in commit `a4ab1a7`.
 **Completed:** v0.8.3.1 (2026-04-09)
 
-### PS-004: Add checksums for Android AAB artifacts (P3)
-**What:** `scripts/generate-checksums.cjs` only hashes `.AppImage`, `.exe`, `.dmg`, and `.msi`. The new `app-release.aab` and `wear-release.aab` artifacts (added in PS-002) have no integrity metadata in `latest-release.json`.
-**Why:** Without checksums, the updater cannot verify AAB integrity before installation.
-**Effort:** human ~10min / CC ~5min
+### ~~PS-004: Add checksums for Android AAB artifacts (P3)~~ ✅ RESOLVED (2026-04-17)
+**Completed:** Added `.aab` to `ASSET_EXTENSIONS` in `scripts/generate-checksums.cjs` and to the asset filter in `scripts/update-latest-release-json.cjs`. AAB artifacts now appear in `checksums.txt` and `latest-release.json` alongside the desktop installers.
 
 ---
 
@@ -228,9 +226,5 @@ Added `buildFeatures { buildConfig = true }` to `wear/build.gradle.kts`. Replace
 
 ## Packaging Debt
 
-### PKG-001: Move @types/dompurify to devDependencies
-**What:** `@types/dompurify` is currently in `dependencies` (package.json:44) instead of `devDependencies`. Type-only packages should not be in production deps.
-**Why:** Produces a misleading dependency graph; inflates npm audit surface area. No runtime impact (Vite tree-shakes it out).
-**Fix:** `npm install --save-dev @types/dompurify && npm uninstall @types/dompurify` (effectively just move it). Verify `npm run typecheck` passes.
-**Priority:** P4 (cosmetic)
-**Effort:** human ~5min / CC+gstack ~5min
+### ~~PKG-001: Move @types/dompurify to devDependencies~~ ✅ RESOLVED (2026-04-17)
+**Completed:** Moved `@types/dompurify` from `dependencies` to `devDependencies` in `package.json`; refreshed `package-lock.json` (which incidentally caught a stale `version` bump from 0.9.0 → 0.9.4). `npm run typecheck` clean.

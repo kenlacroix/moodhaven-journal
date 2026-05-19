@@ -4,9 +4,9 @@
 
 | Version | Supported |
 |:---|:---|
-| 0.7.x (current) | ✅ Yes |
-| 0.6.x | ✅ Yes (security fixes only) |
-| < 0.6.0 | ❌ No |
+| 0.9.x (current) | ✅ Yes |
+| 0.8.x | ✅ Yes (security fixes only) |
+| < 0.8.0 | ❌ No |
 
 ## Reporting a Vulnerability
 
@@ -29,6 +29,7 @@ MoodHaven Journal is built on a **zero-knowledge, local-first** architecture:
 
 - All journal content is encrypted with **AES-256-GCM** before being written to disk
 - Encryption keys are derived from your password using **PBKDF2 (600,000 iterations)** — the key is never stored
+- As of v0.9.0, password verification runs in the Rust backend (not the WebView) via the `verify_password` Tauri command, reducing the attack surface for unlock bypass
 - The application cannot decrypt your data without your password; there is no master key or backdoor
 - Optional cloud sync (WebDAV) sends only ciphertext — the server never sees plaintext
 - Optional AI features send only aggregated, anonymised metadata — journal text is never transmitted

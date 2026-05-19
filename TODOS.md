@@ -188,17 +188,6 @@ Added `buildFeatures { buildConfig = true }` to `wear/build.gradle.kts`. Replace
 
 ---
 
-## Security — Dependency Tracking
-
-### SEC-DEP-001: Upgrade vite@8 + vitest@4 (GHSA-67mh-4wv8-2f99)
-**What:** esbuild `<=0.24.2` allows any website to make cross-origin requests to the Vite dev server and read responses. Fix requires `vite@8.0.3` + `vitest@4.1.2` (both major bumps).
-**Why:** Dev-server only — no production exposure (Tauri ships a compiled binary, not a web server). Low urgency but should not sit forever.
-**Fix:** `npm install --save-dev vite@8 vitest@4` then verify `npm run typecheck`, `npm test`, `npm run tauri dev` all pass. Expect breaking changes in Vite plugin config and vitest setup file.
-**Context:** Flagged by `npm audit` in pentest run 20260405_043439. Suppression not appropriate — track and fix when major bump is low-risk.
-**Effort:** human ~2h / CC+gstack ~30min
-
----
-
 ## Web Port (feat/web-port — Phase 2+)
 
 ### WP-001: LAN sync bridge daemon (Phase 2)

@@ -51,6 +51,7 @@ Format: `[vX.Y.Z] decision made — rationale`
 | v0.9.4 | Website overhaul + design tokens + DESIGN.md | `feat/v0.9.4-website` | [x] |
 | v1.0.0 | Release prep + final audit (desktop only) | `chore/v1.0.0-release` | [ ] in progress |
 | v1.1.0 | Android companion + Play Store | `feat/v1.1.0-android` | [ ] |
+| v1.2.0 | StillHaven somatic companion module | `feat/v1.2.0-stillhaven` | [ ] |
 
 > Milestones are **sequential** — each branches off `main` after the previous PR merges.
 > Tasks marked `// parallel` within a milestone can be worked simultaneously.
@@ -786,6 +787,113 @@ skills:   /health (final baseline), /document-release (docs sync),
 
 ---
 
+## v1.2.0 — StillHaven Somatic Companion Module
+
+```
+branch:   feat/v1.2.0-stillhaven
+from:     main (after v1.1.0 tagged + stable)
+risk:     low  for Phases 0–1 (skeleton + schema, feature-flagged off in prod)
+          medium for Phase 2 (Web Audio lifecycle + sample-accurate timing)
+          medium for Phase 3 (canvas perf + transitions + reduced-motion fallback)
+          medium for Phase 5 (cross-view handoff into existing TipTap composer)
+depends:  v1.0.0 shipped; v1.1.0 shipped and stable (avoids splitting focus
+          across Android Play Store atomic commit + new module surface)
+commits:  feat:, chore:, docs:
+skills:   /health (baseline), /codex review (engine + AudioContext lifecycle),
+          /design-review (underwater scene + ActivationDial),
+          /qa (loop end-to-end on Tauri + web), /review + /ship (per phase PR)
+```
+
+> One module inside `moodhaven-journal`. New surface at `/still`. Six phases = six PRs.
+> Feature-flagged via `VITE_FEATURE_STILL` — unset in prod until MVP gates pass.
+> No clinical language anywhere (lint-enforced; banned substrings: `EMDR`, `trauma`,
+> `treatment`, `patient`, `diagnose`, `disorder`, `clinical`, `therapy`).
+
+**Pre-flight:**
+- Read `active-plans/stillhaven-module.md` (commit the full design doc here first).
+- Read `src-tauri/src/db/mod.rs` (lines 226–436 — schema bootstrap + ALTER pattern + sync_log triggers).
+- Read `src/pages/WritingView.tsx` lines 179, 918, 1385 (`pendingInsertHtml` handoff path).
+- Read `src/lib/backend/browser.ts` (IndexedDB object store conventions + version bump pattern).
+- Read `DESIGN.md` (tokens used by ActivationDial + control bar).
+- Confirm approved mockups still resolve: `~/.gstack/projects/kenlacroix-stillhaven/designs/underwater-scene-20260518/variant-C.png` and `.../activation-dial-20260518/variant-C.png`.
+
+**Session start:** `TaskCreate` per phase. Each phase = single PR, gate-checked before the next opens.
+
+### Phase 0 — Module skeleton + lint rules
+- [ ] **STILL-P0-1** Create `src/modules/stillhaven/{index.tsx,engine,environments,components,types.ts}` (entry view returns `null` until Phase 4).
+- [ ] **STILL-P0-2** Extend `ViewType` union with `'still'`; wire `App.tsx` switch to gate on `import.meta.env.VITE_FEATURE_STILL`. **No** Sidebar entry, **no** BottomTabBar entry, **no** `Ctrl+Shift+S` shortcut yet (deferred to Phase 4 — decision D4 in design doc).
+- [ ] **STILL-P0-3** Add `wellness-language-banned.txt` at repo root (one word/regex per line; `regex:` prefix optional).
+- [ ] **STILL-P0-4** Local ESLint plugin at `eslint-plugins/no-clinical-language/index.cjs`; reads the banned file; wire via `--rulesdir`; scope `src/**/*.{ts,tsx}`; allowlist via `// allow-clinical: <reason>` on the preceding line.
+- [ ] **STILL-P0-5** `src-tauri/build.rs` walks `src-tauri/src/**`, reads the same banned file, fails `cargo check` on hit.
+- [ ] **STILL-P0-6** Add `.env.local` entry `VITE_FEATURE_STILL=true` for dev; document in `CLAUDE.md` and `.env.example`.
+
+### Phase 1 — Schema + Rust commands
+- [ ] **STILL-P1-1** Append `CREATE TABLE IF NOT EXISTS` for `still_sessions` + `still_activation_samples` + four `CREATE INDEX IF NOT EXISTS` to `src-tauri/src/db/schema.sql`.
+- [ ] **STILL-P1-2** Add `journal_entries.session_id` ALTER in `db/mod.rs` AFTER the privacy_mode/location_weather block and BEFORE the `book_id` ALTER (matches existing ordering convention).
+- [ ] **STILL-P1-3** Add `sync_log` triggers (insert/update/delete) for `still_sessions` + `still_activation_samples` mirroring the `journal_entries` pattern at `db/mod.rs:394–436`. Rationale: prevents dangling FKs on remote devices because `journal_entries` already syncs.
+- [ ] **STILL-P1-4** Add IndexedDB object stores `still_sessions` + `still_activation_samples` to `src/lib/backend/browser.ts`; new index `by-session-id` on `journal_entries`; bump DB version; write idempotent `onupgradeneeded` migration.
+- [ ] **STILL-P1-5** Rust commands in `src-tauri/src/commands/still.rs` (naming pattern: `still_<verb>_<noun>` — matches `oura.rs`): `still_create_session`, `still_record_activation`, `still_complete_session`, `still_abandon_session`, `still_list_sessions`, `still_get_session_with_samples`. Each gates on `require_unlocked(&lock)?` first.
+- [ ] **STILL-P1-6** Register all `still_*` commands in `src-tauri/src/lib.rs` `invoke_handler!` and add to `src-tauri/capabilities/default.json`.
+- [ ] **STILL-P1-7** Browser-invoke shim entries in `src/lib/backend/browser-invoke.ts` for every `still_*` command — web mode must work without Tauri.
+- [ ] **STILL-P1-8** Migration smoke test: open a v1.0/v1.1 DB on a dev build, confirm `session_id` column added without data loss; same on IndexedDB in browser mode.
+
+### Phase 2 — Bilateral audio engine
+- [ ] **STILL-P2-1** Implement `engine/bilateralEngine.ts` with lookahead scheduler (Chris Wilson pattern); singleton owned by StillHaven Zustand store; lazy `AudioContext` on first `start()`.
+- [ ] **STILL-P2-2** AudioContext lifecycle per design doc D3: `start()` called synchronously inside onClick handler (no `await` before `resume()`); `still_create_session` invoke happens AFTER `engine.start()` returns.
+- [ ] **STILL-P2-3** Install `visibilitychange` + AudioContext `statechange` handlers; emit `paused` event on suspend; expose `engine.resume()` synchronously callable from a tap.
+- [ ] **STILL-P2-4** Signal chain: `OscillatorNode` (sine, 200 Hz) → `BiquadFilterNode` (low-pass 800 Hz) → `GainNode` (envelope, 30 ms ramps) → `StereoPannerNode` → master gain.
+- [ ] **STILL-P2-5** Config surface: `speedHz` (0.5–2.0, default 1.0), `toneHz`, `volumeDb`, `envelopeMs`.
+- [ ] **STILL-P2-6** Unit tests: scheduler emits L/R alternation at configured cadence; no clicks (envelope ramps verified by schedule inspection); `setSpeed` updates take effect at next tick boundary.
+
+### Phase 3 — Underwater renderer (2D canvas)
+- [ ] **STILL-P3-1** `environments/underwater/Underwater2D.tsx` — full-bleed `<canvas>`, rAF loop, subscribes to `engine.onTick`.
+- [ ] **STILL-P3-2** Palette per D9-design/C: cobalt `#0a3a5a` → teal `#1a6478` → `#2a8499`; gold rays `#f4d27a`; ambient fish silhouettes `#0a3a5a`; caustic particles pre-allocated (no per-frame allocation).
+- [ ] **STILL-P3-3** Tap-to-reveal control bar (D5-design/A): timer + End + Pause; `bg-black/40 backdrop-blur-md`; auto-hide after 3s.
+- [ ] **STILL-P3-4** Reduced-motion fallback (D11-design/A): both rays static at 60% opacity, fish + particles frozen, submerge transition collapses to 300ms fade. Audio bilateral unchanged.
+- [ ] **STILL-P3-5** Submerge (2.5s descent) + resurface (2.5s reverse) transitions per D8-design/A.
+- [ ] **STILL-P3-6** Perf budget: 60 fps on 5-year-old laptop verified via Chrome DevTools FPS meter.
+
+### Phase 4 — Check-in / check-out UI + protocol picker + nav surface
+- [ ] **STILL-P4-1** Ship the deferred nav: Sidebar entry, BottomTabBar entry, `Ctrl+Shift+S` shortcut — all gated on `VITE_FEATURE_STILL`.
+- [ ] **STILL-P4-2** `<ActivationDial>` per D10-design/C: tactile knob, 280px desktop / 240px mobile, `accent-cta` arc + chip, drag + scroll + arrow keys + `1-9-0` hotkeys.
+- [ ] **STILL-P4-3** `<HrvInput>`: auto-pull from `useOuraContext` when connected (label `(oura)`); silent fallback to manual entry per D7/A — no error toast.
+- [ ] **STILL-P4-4** `<ProtocolPicker>`: MVP exposes only `general_activation` (default) + `fake_danger`; other 4 protocols remain in DB enum but unsurfaced.
+- [ ] **STILL-P4-5** Lock-state gate: `/still` route renders existing `<UnlockPrompt />` when `isUnlocked()` is false. No check-in until unlocked.
+- [ ] **STILL-P4-6** Abandon/resume flow: tab unload, modal close, or nav-away during session sets `abandoned_at`; next visit prompts "Resume the session that started X minutes ago, or discard?"
+- [ ] **STILL-P4-7** Check-out screen: post-activation dial + activation-delta diver visualization (depth gauge as descent metaphor, D6-design/A).
+
+### Phase 5 — Journal handoff
+- [ ] **STILL-P5-1** Lift `pendingInsertHtml` + setter from `WritingView.tsx` into `App.tsx` (or thin `LayoutContext` — pick at implementation time per design doc Q0).
+- [ ] **STILL-P5-2** New IPC: `link_journal_entry_to_session(entry_id, session_id)` Rust command + browser-invoke shim + `journalService.linkEntryToSession()` wrapper.
+- [ ] **STILL-P5-3** `journalService.createEntry()` becomes session-aware: parse incoming HTML for `<span data-still-session-id="...">`, strip it from saved content, link on success (try/catch — link failure logs warn, doesn't fail save). Eliminates the temporal-coincidence race per D2.
+- [ ] **STILL-P5-4** `handoffToJournal()` in `src/modules/stillhaven/handoff.ts` — builds prefilled HTML with hidden session-id marker, calls `setPendingInsertHtml()`, `setCurrentView('writing')`.
+- [ ] **STILL-P5-5** Auto-tag prefilled entries: `still`, `bls`, protocol name — appended via existing tag system at save time.
+
+### Phase 6 — Pattern tracking view
+- [ ] **STILL-P6-1** Add `'stillSessions'` to `ViewType` union (deferred from Phase 0 because data didn't exist yet).
+- [ ] **STILL-P6-2** Activation-delta chart (30 days, before vs after); protocol frequency bar; time-of-day pattern — reuse existing `src/components/analytics/` chart patterns. **No new dependency.**
+- [ ] **STILL-P6-3** Closed-loop hint in `<ProtocolPicker>`: "you've used `fake_danger` 4 times this week — average activation drop 2.5 points" (reads last 7d of session data).
+
+### Gate
+- [ ] `npm run typecheck` — zero errors
+- [ ] `npm run lint` — clean (no-clinical-language passes)
+- [ ] `npm test` — all tests pass; new tests cover engine scheduler + handoff parser + abandon/resume flow + locked-state gate
+- [ ] `cd src-tauri && cargo check` — clean (build.rs lint passes)
+- [ ] `cd src-tauri && cargo test` — all Rust tests pass; sync triggers covered
+- [ ] **Lint fail test**: adding `EMDR` to any TS file fails `npm run lint`; adding `EMDR` to any Rust file fails `cargo check`.
+- [ ] **End-to-end loop on Tauri desktop**: notice → `Ctrl+Shift+S` → check in (dial + Oura HRV pre-fill) → 5-min underwater session → check out → land in pre-filled journal entry → save → entry has `session_id` set.
+- [ ] **End-to-end loop on web build** at `journal.moodhaven.app/still`: same flow, IndexedDB persistence, no Tauri-only commands invoked.
+- [ ] Abandoned session prompt fires correctly on next visit; resume continues session; discard leaves `abandoned_at` set.
+- [ ] Locked-app navigation to `/still` routes to unlock prompt before check-in renders.
+- [ ] Schema migration: existing v1.0/v1.1 DB upgrades without data loss; IndexedDB v1 → v2 migration idempotent.
+- [ ] `/design-review` on underwater scene + ActivationDial — passes against approved mockups.
+- [ ] Bump `1.2.0` in `package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json`.
+- [ ] Update `CHANGELOG.md` — add v1.2.0 entry.
+- [ ] Flip `VITE_FEATURE_STILL=true` in production build config.
+- [ ] Run `/review` → `/ship` → merge to `main`.
+
+---
+
 ## Deferred (post-1.0)
 
 - **WP-001–004** — Web port Phase 2+: LAN sync bridge daemon, whisper.wasm STT, WebAuthn in browser
@@ -818,6 +926,9 @@ skills:   /health (final baseline), /document-release (docs sync),
 [2026-04-13] v0.9.4 shipped (PR #51) — website landing site overhaul (blog, OG cards, founder card, SEO), DESIGN.md, FOSS/Pro-language cleanup, design system consistency fixes
 [2026-04-13] GitHub Wiki populated — 9 pages live (Home, Security-Model, Peer-Sync-Security, Wear-OS-Companion, Building-from-Source, Keyboard-Shortcuts, Tech-Stack, Beta-Testing, Development-Guide, Changelog); README updated to link to wiki
 [2026-04-16] v1.0.0 release prep branch `chore/v1.0.0-release` opened — archived obsolete plans (vacation-sprints.md, future_work.md) to docs/internal/plans/; SECURITY.md supported versions refreshed + SEC-DEFER-001 resolution noted
+[2026-05-18] StillHaven scheduled as v1.2.0, not injected into v1.0.0 — v1.0 charter forbids logic changes; injecting a new module + schema + lint rule would reset the security audit + QA matrix and delay the desktop release. Sequence: ship v1.0.0 → v1.1.0 Android → v1.2.0 StillHaven.
+[2026-05-18] StillHaven slotted AFTER v1.1.0 rather than in parallel — Android v1.1.0 has a HIGH-risk atomic `applicationId` Play Store commit that demands undivided focus; splitting attention across two new module surfaces invites a regression in the more fragile (Play Store) one. Phases 0–1 of StillHaven could land during v1.1.0 since they're feature-flagged-off, but holding single-focus on Android is the lower-variance choice.
+[2026-05-18] StillHaven sync model reversed from "sessions stay local" to "sessions sync with journal_entries" — `journal_entries.session_id` already replicates via existing sync_log, so omitting still_sessions from sync would leave dangling FKs on every remote device. Encrypted-at-rest + user-controlled WebDAV/P2P preserves "privacy absolute" without needing the table-level carve-out. (Resolved in design doc Round 2 reviewer pass.)
 
 ---
 

@@ -23,13 +23,13 @@ export default function NewsletterSignup() {
       <AnimatedReveal>
         <div className="max-w-xl mx-auto text-center">
           <p className="text-xs font-semibold text-neutral-400 uppercase tracking-widest mb-3">
-            The Journal
+            Newsletter
           </p>
           <h2 className="text-xl font-bold text-neutral-900 mb-2">
-            Follow the build
+            Stay in the loop
           </h2>
           <p className="text-sm text-neutral-500 leading-relaxed mb-6 max-w-sm mx-auto">
-            We write about privacy-first software, local-first design, and what we're building. New posts go to Substack first.
+            Writing about privacy-first software, local-first design, and what&apos;s coming next. New posts go to Substack first.
           </p>
 
           <form

@@ -13,7 +13,6 @@ const navLinks = [
   { name: 'Blog', href: '/blog' },
   { name: 'About', href: '/about' },
   { name: 'FAQ', href: '/faq' },
-  { name: 'Contribute', href: '/contribute' },
 ];
 
 export default function NavBar() {

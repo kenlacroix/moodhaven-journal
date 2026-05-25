@@ -24,7 +24,7 @@ First stable release. MoodHaven Journal is out of pre-release and ready for dail
 - **npm audit clean**; GitHub Actions all SHA-pinned; CSP strict (`script-src 'self'`).
 
 ### Docs
-- `SECURITY.md`, `CLAUDE.md`, `docs/architecture.md`, `docs/tauri-commands.md`, `wiki/Home.md` synced — Tauri command count corrected (~127 actually registered), test count refreshed (693 across 47 files).
+- `SECURITY.md`, `CLAUDE.md`, `docs/architecture.md`, `docs/tauri-commands.md`, `wiki/Home.md` synced — Tauri command count corrected (~127 actually registered), test count refreshed (702 across 48 files).
 - Shipped plans (v0.9.0–v0.9.4 vacation sprints) archived to `docs/internal/plans/` (gitignored).
 - Roadmap milestones v0.9.3 + v0.9.4 marked shipped.
 
@@ -42,7 +42,7 @@ First stable release. MoodHaven Journal is out of pre-release and ready for dail
 - **Website overhaul** (v0.9.4): 7 blog posts, OG card generation, newsletter signup, trust badges, SEO overhaul.
 
 ### Tests
-- 693 tests across 47 files. Coverage tables in `.claude/docs/testing.md`.
+- 702 tests across 48 files (includes VSCROLL-TEST + VSCROLL-TEST-2 coverage for TimelineView virtual scroll layout). Coverage tables in `.claude/docs/testing.md`.
 
 ---
 

@@ -19,6 +19,7 @@ const VIEW_LABELS: Record<ViewType, string> = {
   calendar:        'Calendar',
   settings:        'Settings',
   journalOverview: 'Journal',
+  still:           'StillHaven',
 };
 
 const ICON_SUN = (

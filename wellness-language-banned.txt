@@ -1,0 +1,26 @@
+# Words and phrases banned from StillHaven source files (src/**/*.{ts,tsx} and src-tauri/src/**/*.rs)
+# One entry per line. Lines starting with # are comments.
+# Format: plain word (matched with \b word boundaries) OR regex: prefix for patterns.
+#
+# Allowlist in TS:  add a comment  // allow-clinical: <reason>  on the line immediately above.
+# Allowlist in Rust: add a comment  // allow-clinical: <reason>  on the line immediately above.
+
+EMDR
+trauma
+treatment
+patient
+diagnose
+disorder
+clinical
+therapy
+therapeutic
+therapist
+psychotherapy
+psychotherapist
+psychiatry
+psychiatrist
+psychologist
+diagnosis
+prognosis
+contraindication
+regex:treat\b

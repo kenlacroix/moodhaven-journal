@@ -25,6 +25,7 @@ const VIEW_LABELS: Record<ViewType, string> = {
   calendar:        'Calendar',
   settings:        'Settings',
   journalOverview: 'Journal',
+  still:           'StillHaven',
 };
 
 // ── Sentiment helpers (mirrors Sidebar) ─────────────────────────────────────

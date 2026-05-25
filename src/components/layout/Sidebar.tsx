@@ -90,7 +90,7 @@ function MoodSparkline({ collapsed }: { collapsed: boolean }) {
   );
 }
 
-export type ViewType = 'writing' | 'timeline' | 'onthisday' | 'insights' | 'calendar' | 'settings' | 'journalOverview';
+export type ViewType = 'writing' | 'timeline' | 'onthisday' | 'insights' | 'calendar' | 'settings' | 'journalOverview' | 'still';
 
 interface SidebarProps {
   currentView: ViewType;

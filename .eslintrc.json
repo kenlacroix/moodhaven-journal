@@ -28,6 +28,8 @@
     "security/detect-new-buffer": "error",
     "security/detect-no-csrf-before-method-override": "warn",
 
+    "no-clinical-language": ["error"],
+
     "no-restricted-syntax": [
       "error",
       {

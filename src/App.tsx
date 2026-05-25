@@ -15,6 +15,7 @@ import { InsightsView } from './pages/InsightsView';
 import { CalendarPage } from './pages/CalendarPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { JournalOverviewPage } from './pages/JournalOverviewPage';
+import { StillView } from './modules/stillhaven';
 import { useBooksStore } from './stores/booksStore';
 import { LockScreen } from './pages/LockScreen';
 import { SetupScreen } from './pages/SetupScreen';
@@ -290,6 +291,13 @@ function MainApp() {
                 onViewEntries={() => handleNavigate('timeline')}
                 onBack={() => handleNavigate('timeline')}
               />
+            </ErrorBoundary>
+          )}
+
+          {/* StillHaven — somatic companion module (feature-flagged) */}
+          {currentView === 'still' && import.meta.env.VITE_FEATURE_STILL && (
+            <ErrorBoundary>
+              <StillView />
             </ErrorBoundary>
           )}
         </div>

@@ -119,7 +119,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 },
                 "author": { "@id": "https://www.moodhaven.app/#org" },
                 "screenshot": "https://www.moodhaven.app/icons/opengraph-image.png",
-                "softwareVersion": "0.9.4",
+                "softwareVersion": "1.0.0",
                 "license": "https://opensource.org/licenses/MIT"
               }
             ]

@@ -46,7 +46,7 @@ const MILESTONES: Milestone[] = [
   { date: "Apr 2026", title: "v0.9.0 — Security Hardening", description: "Lock guards on sensitive commands, settings refactor, and full security audit pass." },
   { date: "Apr 2026", title: "v0.9.1 — Unlock & Reset", description: "Factory reset, improved unlock flow, and pre-unlock session error handling." },
   { date: "Apr 2026", title: "v0.9.3 — Website & Polish", description: "Redesigned landing site, improved download page, and across-the-board UI refinements." },
-  { date: "Late 2026", title: "v1.0 — Public Release", description: "Stable release with full documentation, GitHub Wiki, and broad platform support.", projected: true },
+  { date: "May 2026", title: "v1.0 — Public Release", description: "Stable release with full documentation, GitHub Wiki, broad platform support, and 702 automated tests." },
 ];
 
 const TECH_LINKS = [

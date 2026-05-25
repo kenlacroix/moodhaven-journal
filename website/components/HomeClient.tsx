@@ -30,7 +30,7 @@ export default function HomeClient() {
                 className="inline-flex items-center gap-2 bg-white/10 border border-white/20 rounded-full px-3.5 py-1.5 mb-6 text-xs font-medium text-primary-100 hover:bg-white/20 transition-colors duration-200"
               >
                 <span className="w-1.5 h-1.5 rounded-full bg-accent-cta animate-pulse" aria-hidden="true" />
-                v0.9.4 just shipped
+                v1.0.0 just shipped
                 <span className="text-white font-semibold">See what&apos;s new →</span>
               </a>
 
@@ -69,8 +69,8 @@ export default function HomeClient() {
               {/* Trust strip */}
               <div className="mt-6 flex flex-wrap justify-center lg:justify-start gap-2">
                 {[
-                  "v0.9.4",
-                  "700+ tests",
+                  "v1.0.0",
+                  "702 tests",
                   "MIT licensed",
                   "Built in public",
                 ].map((label) => (

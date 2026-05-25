@@ -27,15 +27,15 @@ const getCurrentDateStr = () => formatDate(new Date());
 
 // ── Virtual list ──────────────────────────────────────────────────────────────
 
-type VirtualRow =
+export type VirtualRow =
   | { type: 'header'; key: string; date: string; count: number; sampleEntry: JournalEntry }
   | { type: 'entry'; key: string; entry: JournalEntry };
 
 const OVERSCAN = 5;
-const DEFAULT_HEADER_HEIGHT = 36;
-const DEFAULT_ENTRY_HEIGHT = 120;
+export const DEFAULT_HEADER_HEIGHT = 36;
+export const DEFAULT_ENTRY_HEIGHT = 120;
 
-function computeLayout(rows: VirtualRow[], heights: Map<string, number>): { offsets: number[]; totalHeight: number } {
+export function computeLayout(rows: VirtualRow[], heights: Map<string, number>): { offsets: number[]; totalHeight: number } {
   const offsets: number[] = [];
   let top = 0;
   for (const row of rows) {
@@ -46,7 +46,7 @@ function computeLayout(rows: VirtualRow[], heights: Map<string, number>): { offs
   return { offsets, totalHeight: top };
 }
 
-function getVisibleRange(
+export function getVisibleRange(
   rows: VirtualRow[],
   offsets: number[],
   scrollTop: number,
@@ -818,6 +818,7 @@ function VirtualEntryList({
   return (
     <div
       ref={containerRef}
+      data-testid="virtual-entry-list"
       className={isAndroid ? '' : 'relative'}
       style={{ height: totalHeight || undefined, position: totalHeight ? 'relative' : undefined }}
     >

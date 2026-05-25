@@ -26,7 +26,7 @@ const QUESTIONS = [
   {
     icon: Download,
     q: "Can I export my journal?",
-    a: "Yes — export shipped in v0.6.0. You can export your entries as an encrypted .moodhaven backup file or as a plaintext file. Find it under Settings → Data Management.",
+    a: "Yes. You can export your entries as an encrypted .moodhaven backup file or as a plaintext file. Find it under Settings → Data Management.",
   },
   {
     icon: Smartphone,

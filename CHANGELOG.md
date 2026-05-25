@@ -7,7 +7,7 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [1.0.0] — 2026-04-18
+## [1.0.0] — 2026-05-24
 
 First stable release. MoodHaven Journal is out of pre-release and ready for daily use across Linux, macOS, and Windows.
 

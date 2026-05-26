@@ -1,53 +1,267 @@
-// StillHaven — module entry view
-// Phase 3: renders the underwater session scene for testing.
-// Full check-in / check-out UI lands in Phase 4.
-
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Underwater2D } from './environments/underwater/Underwater2D';
 import { SubmergeOverlay } from './environments/underwater/SubmergeOverlay';
 import { useBilateralEngine } from './hooks/useBilateralEngine';
+import { ActivationDial } from './components/ActivationDial';
+import { ProtocolPicker } from './components/ProtocolPicker';
+import { HrvInput } from './components/HrvInput';
+import { AbandonedSessionPrompt } from './components/AbandonedSessionPrompt';
+import {
+  stillCreateSession,
+  stillRecordActivation,
+  stillCompleteSession,
+  stillAbandonSession,
+  stillListSessions,
+  type StillSession,
+} from '../../lib/stillService';
 
-type SceneState = 'idle' | 'submerging' | 'live' | 'ended';
+type SceneState =
+  | 'loading'
+  | 'abandoned-prompt'
+  | 'check-in'
+  | 'submerging'
+  | 'live'
+  | 'check-out'
+  | 'summary';
+
+interface CheckInData {
+  protocol: string | null;
+  preActivation: number | null;
+}
+
+interface CheckOutData {
+  postActivation: number | null;
+  hrv: number | null;
+}
+
+interface SummaryData {
+  preActivation: number;
+  postActivation: number;
+  durationSeconds: number;
+}
 
 export function StillView(): React.JSX.Element {
-  const [scene, setScene] = useState<SceneState>('idle');
+  const [scene, setScene] = useState<SceneState>('loading');
+  const [abandonedSession, setAbandonedSession] = useState<StillSession | null>(null);
+  const [checkIn, setCheckIn] = useState<CheckInData>({ protocol: null, preActivation: null });
+  const [checkOut, setCheckOut] = useState<CheckOutData>({ postActivation: null, hrv: null });
+  const [summary, setSummary] = useState<SummaryData | null>(null);
+
+  const sessionIdRef = useRef<string | null>(null);
+  const sessionStartRef = useRef<number>(0);
+
   const { startEngine, stopEngine } = useBilateralEngine();
+
+  // Detect abandoned sessions on mount
+  useEffect(() => {
+    stillListSessions(1)
+      .then((sessions) => {
+        const s = sessions[0];
+        if (s && s.completed_at === null && s.abandoned_at === null) {
+          setAbandonedSession(s);
+          setScene('abandoned-prompt');
+        } else {
+          setScene('check-in');
+        }
+      })
+      .catch(() => setScene('check-in'));
+  }, []);
+
+  const handleDiscardAbandoned = useCallback(async () => {
+    if (abandonedSession) {
+      await stillAbandonSession({ id: abandonedSession.id, abandonedAt: new Date().toISOString() })
+        .catch(() => {/* silent */});
+    }
+    setAbandonedSession(null);
+    setScene('check-in');
+  }, [abandonedSession]);
+
+  const handleResumeAbandoned = useCallback(() => {
+    if (!abandonedSession) return;
+    sessionIdRef.current = abandonedSession.id;
+    sessionStartRef.current = Date.now() - abandonedSession.duration_seconds * 1000;
+    setScene('check-out');
+  }, [abandonedSession]);
 
   // Called synchronously in onClick — required for AudioContext.resume()
   const handleStart = useCallback(() => {
-    startEngine();
-    setScene('submerging');
-  }, [startEngine]);
+    const { protocol, preActivation } = checkIn;
+    if (!protocol || preActivation === null) return;
 
-  const handleSubmergeComplete = useCallback(() => {
-    setScene('live');
-  }, []);
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    sessionIdRef.current = id;
+    sessionStartRef.current = Date.now();
+
+    // Fire-and-forget DB writes — engine must start synchronously
+    stillCreateSession({
+      id,
+      protocol,
+      environment: 'underwater',
+      bilateralMode: 'audio',
+      durationSeconds: 0,
+      startedAt: now,
+    }).then(() =>
+      stillRecordActivation({ sessionId: id, phase: 'pre', activation: preActivation })
+    ).catch(() => {/* silent — data loss here is acceptable vs blocking the session */});
+
+    startEngine(); // MUST remain synchronous — AudioContext requires user gesture
+    setScene('submerging');
+  }, [checkIn, startEngine]);
+
+  const handleSubmergeComplete = useCallback(() => setScene('live'), []);
 
   const handleEnd = useCallback(() => {
     stopEngine();
-    setScene('ended');
+    setScene('check-out');
   }, [stopEngine]);
 
-  const handlePause = useCallback(() => {
-    // isPaused state is managed inside stillStore via engine.onPause()
+  const handleSaveCheckOut = useCallback(async () => {
+    const { postActivation, hrv } = checkOut;
+    if (postActivation === null) return;
+
+    const id = sessionIdRef.current;
+    if (!id) return;
+
+    const durationSeconds = Math.round((Date.now() - sessionStartRef.current) / 1000);
+    const now = new Date().toISOString();
+
+    try {
+      await stillRecordActivation({
+        sessionId: id,
+        phase: 'post',
+        activation: postActivation,
+        hrvManual: hrv ?? null,
+        hrvSource: hrv !== null ? 'manual' : null,
+      });
+      await stillCompleteSession({ id, completedAt: now, durationSeconds });
+    } catch {
+      // best-effort; don't block the user from seeing summary
+    }
+
+    setSummary({
+      preActivation: checkIn.preActivation ?? postActivation,
+      postActivation,
+      durationSeconds,
+    });
+    setScene('summary');
+  }, [checkOut, checkIn.preActivation]);
+
+  const handleRestart = useCallback(() => {
+    sessionIdRef.current = null;
+    setCheckIn({ protocol: null, preActivation: null });
+    setCheckOut({ postActivation: null, hrv: null });
+    setSummary(null);
+    setScene('check-in');
   }, []);
 
-  const handleResume = useCallback(() => {
-    // resumeEngine() is called inside Underwater2D's resume button
-  }, []);
+  // ── Loading ───────────────────────────────────────────────────────────────
+  if (scene === 'loading') {
+    return <div className="flex items-center justify-center h-full" />;
+  }
 
-  // ── Idle / ended: minimal launch screen ──────────────────────────────────
-  if (scene === 'idle' || scene === 'ended') {
+  // ── Abandoned session prompt ──────────────────────────────────────────────
+  if (scene === 'abandoned-prompt' && abandonedSession) {
     return (
-      <div className="flex flex-col items-center justify-center h-full gap-4 text-neutral-700">
-        <p className="text-sm text-neutral-500">
-          {scene === 'ended' ? 'Session complete.' : 'StillHaven — Phase 3 preview'}
-        </p>
+      <div className="flex flex-col items-center justify-center h-full">
+        <AbandonedSessionPrompt
+          session={abandonedSession}
+          onResume={handleResumeAbandoned}
+          onDiscard={handleDiscardAbandoned}
+        />
+      </div>
+    );
+  }
+
+  // ── Check-in ─────────────────────────────────────────────────────────────
+  if (scene === 'check-in') {
+    const canStart = checkIn.protocol !== null && checkIn.preActivation !== null;
+    return (
+      <div className="flex flex-col items-center justify-center h-full gap-8 px-6 max-w-lg mx-auto">
+        <ProtocolPicker
+          value={checkIn.protocol}
+          onChange={(protocol) => setCheckIn((c) => ({ ...c, protocol }))}
+        />
+        <ActivationDial
+          value={checkIn.preActivation}
+          onChange={(preActivation) => setCheckIn((c) => ({ ...c, preActivation }))}
+          label="How activated do you feel right now?"
+        />
         <button
+          type="button"
+          disabled={!canStart}
           onClick={handleStart}
-          className="px-6 py-3 rounded-full bg-[#F28C38] text-white text-sm font-semibold shadow hover:bg-[#e07c28] transition-colors"
+          className="px-8 py-3 rounded-full bg-[#F28C38] text-white text-sm font-semibold shadow
+                     hover:bg-[#e07c28] transition-colors disabled:opacity-40 disabled:pointer-events-none"
         >
-          {scene === 'ended' ? 'Start again' : 'Start session'}
+          Begin session
+        </button>
+      </div>
+    );
+  }
+
+  // ── Check-out ─────────────────────────────────────────────────────────────
+  if (scene === 'check-out') {
+    const canSave = checkOut.postActivation !== null;
+    return (
+      <div className="flex flex-col items-center justify-center h-full gap-8 px-6 max-w-lg mx-auto">
+        <ActivationDial
+          value={checkOut.postActivation}
+          onChange={(postActivation) => setCheckOut((c) => ({ ...c, postActivation }))}
+          label="How do you feel now?"
+        />
+        <HrvInput
+          value={checkOut.hrv}
+          onChange={(hrv) => setCheckOut((c) => ({ ...c, hrv }))}
+        />
+        <button
+          type="button"
+          disabled={!canSave}
+          onClick={handleSaveCheckOut}
+          className="px-8 py-3 rounded-full bg-[#F28C38] text-white text-sm font-semibold shadow
+                     hover:bg-[#e07c28] transition-colors disabled:opacity-40 disabled:pointer-events-none"
+        >
+          Save
+        </button>
+      </div>
+    );
+  }
+
+  // ── Summary ───────────────────────────────────────────────────────────────
+  if (scene === 'summary' && summary) {
+    const delta = summary.preActivation - summary.postActivation;
+    const mins = Math.floor(summary.durationSeconds / 60);
+    const secs = summary.durationSeconds % 60;
+    return (
+      <div className="flex flex-col items-center justify-center h-full gap-6 px-6 max-w-sm mx-auto text-center">
+        <div className="flex flex-col gap-1">
+          <p className="text-xs font-medium text-neutral-400 uppercase tracking-wide">Session complete</p>
+          <p className="text-lg font-semibold text-neutral-800">
+            {mins}:{String(secs).padStart(2, '0')} minutes
+          </p>
+        </div>
+        <div className="flex gap-6">
+          <div className="flex flex-col items-center gap-0.5">
+            <span className="text-2xl font-bold text-neutral-700">{summary.preActivation}</span>
+            <span className="text-xs text-neutral-400">before</span>
+          </div>
+          <div className="flex items-center text-neutral-300 text-xl">→</div>
+          <div className="flex flex-col items-center gap-0.5">
+            <span className="text-2xl font-bold text-neutral-700">{summary.postActivation}</span>
+            <span className="text-xs text-neutral-400">after</span>
+          </div>
+        </div>
+        {delta !== 0 && (
+          <p className="text-sm text-neutral-500">
+            {delta > 0 ? `${delta} point${delta !== 1 ? 's' : ''} lower` : `${Math.abs(delta)} point${Math.abs(delta) !== 1 ? 's' : ''} higher`}
+          </p>
+        )}
+        <button
+          type="button"
+          onClick={handleRestart}
+          className="px-6 py-2.5 rounded-full border border-neutral-200 text-neutral-600 text-sm hover:bg-neutral-50 transition-colors"
+        >
+          New session
         </button>
       </div>
     );
@@ -56,16 +270,13 @@ export function StillView(): React.JSX.Element {
   // ── Submerging + live ─────────────────────────────────────────────────────
   return (
     <div className="relative w-full h-full">
-      {/* Scene renders behind transition overlay */}
       {(scene === 'submerging' || scene === 'live') && (
         <Underwater2D
           onEnd={handleEnd}
-          onPause={handlePause}
-          onResume={handleResume}
+          onPause={() => {/* isPaused managed inside stillStore */}}
+          onResume={() => {/* resumeEngine called inside Underwater2D */}}
         />
       )}
-
-      {/* Submerge transition sits on top */}
       {scene === 'submerging' && (
         <SubmergeOverlay onComplete={handleSubmergeComplete} />
       )}

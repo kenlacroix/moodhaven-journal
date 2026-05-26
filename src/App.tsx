@@ -16,6 +16,7 @@ import { CalendarPage } from './pages/CalendarPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { JournalOverviewPage } from './pages/JournalOverviewPage';
 import { StillView } from './modules/stillhaven';
+import { StillSessionsView } from './modules/stillhaven/components/StillSessionsView';
 import { useBooksStore } from './stores/booksStore';
 import { LockScreen } from './pages/LockScreen';
 import { SetupScreen } from './pages/SetupScreen';
@@ -343,6 +344,13 @@ function MainApp() {
                   setCurrentView('writing');
                 }}
               />
+            </ErrorBoundary>
+          )}
+
+          {/* StillHaven — session history + pattern tracking */}
+          {currentView === 'stillSessions' && import.meta.env.VITE_FEATURE_STILL && stillhavenEnabled && (
+            <ErrorBoundary>
+              <StillSessionsView onBack={() => setCurrentView('still')} />
             </ErrorBoundary>
           )}
         </div>

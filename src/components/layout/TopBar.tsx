@@ -26,6 +26,7 @@ const VIEW_LABELS: Record<ViewType, string> = {
   settings:        'Settings',
   journalOverview: 'Journal',
   still:           'StillHaven',
+  stillSessions:   'Session History',
 };
 
 // ── Sentiment helpers (mirrors Sidebar) ─────────────────────────────────────

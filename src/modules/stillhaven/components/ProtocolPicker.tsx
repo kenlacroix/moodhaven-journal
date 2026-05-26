@@ -30,18 +30,25 @@ const PROTOCOLS: Protocol[] = [
   },
 ];
 
+interface ProtocolHint {
+  count: number;
+  avgDelta: number | null;
+}
+
 interface Props {
   value: string | null;
   onChange: (id: string) => void;
+  hints?: Record<string, ProtocolHint>;
 }
 
-export function ProtocolPicker({ value, onChange }: Props): React.JSX.Element {
+export function ProtocolPicker({ value, onChange, hints = {} }: Props): React.JSX.Element {
   return (
     <div className="flex flex-col gap-2">
       <p className="text-sm font-medium text-neutral-700 text-center">What brings you here?</p>
       <div className="flex gap-3">
         {PROTOCOLS.map((p) => {
           const selected = value === p.id;
+          const hint = hints[p.id];
           return (
             <button
               key={p.id}
@@ -59,6 +66,14 @@ export function ProtocolPicker({ value, onChange }: Props): React.JSX.Element {
               <span className={selected ? 'text-[#F28C38]' : 'text-neutral-400'}>{p.icon}</span>
               <span className="text-sm font-semibold text-center leading-tight">{p.title}</span>
               <span className="text-xs text-center leading-snug opacity-70">{p.description}</span>
+              {hint && hint.count > 0 && (
+                <span className="text-[10px] text-neutral-400 text-center mt-0.5 leading-snug">
+                  {hint.count}× this week
+                  {hint.avgDelta !== null && hint.avgDelta > 0
+                    ? ` · avg −${hint.avgDelta.toFixed(1)}`
+                    : null}
+                </span>
+              )}
             </button>
           );
         })}

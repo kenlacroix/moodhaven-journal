@@ -25,7 +25,7 @@ export function WellnessDisclaimerScreen({ onAccept }: Props): React.JSX.Element
             If you are in crisis or experiencing significant distress, please reach out to a qualified mental health professional or a crisis line in your area.
           </p>
           <p className="text-sm text-slate-500 dark:text-slate-500 leading-relaxed">
-            The app includes optional somatic wellness features. These are general self-care tools, not clinical tools, and may not be appropriate for everyone.
+            The app includes optional somatic wellness features. These are general self-care tools, not professional healthcare tools, and may not be appropriate for everyone.
           </p>
         </div>
 

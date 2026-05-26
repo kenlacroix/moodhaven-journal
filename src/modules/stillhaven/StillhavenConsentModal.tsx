@@ -30,7 +30,7 @@ export function StillhavenConsentModal({ onConfirm, onCancel }: Props): React.JS
           <p>
             It is not a licensed tool and is not a substitute for working with a mental health professional.
             It uses the same kind of left-right rhythm found in some professional approaches, but without the
-            clinical structure those approaches provide.
+            structured guidance those approaches provide.
           </p>
           <p className="font-medium text-amber-700 dark:text-amber-400">
             It may not be appropriate if you are currently experiencing dissociation, flashbacks, or acute

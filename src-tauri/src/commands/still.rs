@@ -18,6 +18,7 @@ fn require_unlocked(lock: &State<'_, AppLockState>) -> Result<(), String> {
 }
 
 /// Create a new somatic session (call before starting the bilateral engine).
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub fn still_create_session(
     db: State<Database>,
@@ -49,6 +50,7 @@ pub fn still_create_session(
 }
 
 /// Record a pre- or post-session activation sample.
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub fn still_record_activation(
     db: State<Database>,

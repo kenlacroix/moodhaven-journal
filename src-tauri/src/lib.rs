@@ -209,6 +209,7 @@ pub fn run() {
             commands::patch_entry_location_weather,
             commands::patch_entry_pinned,
             commands::patch_entry_status,
+            commands::link_journal_entry_to_session,
             commands::sync_entry_tags,
             commands::get_book_tags,
             // Statistics

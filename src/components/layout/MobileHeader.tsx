@@ -20,6 +20,7 @@ const VIEW_LABELS: Record<ViewType, string> = {
   settings:        'Settings',
   journalOverview: 'Journal',
   still:           'StillHaven',
+  stillSessions:   'Session History',
 };
 
 const ICON_SUN = (

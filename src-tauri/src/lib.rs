@@ -342,6 +342,13 @@ pub fn run() {
             commands::get_due_capsules,
             commands::unseal_entry,
             commands::get_mood_delta,
+            // StillHaven (somatic session module)
+            commands::still_create_session,
+            commands::still_record_activation,
+            commands::still_complete_session,
+            commands::still_abandon_session,
+            commands::still_list_sessions,
+            commands::still_get_session_with_samples,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

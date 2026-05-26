@@ -1,6 +1,8 @@
-import type { AppSettings } from '../../../types/settings';
+import { useState } from 'react';
+import type { AppSettings, WellnessSettings } from '../../../types/settings';
 import { SettingSection, SettingToggle } from '../index';
 import { OuraConnectionCard } from '../../oura/OuraConnectionCard';
+import { StillhavenConsentModal } from '../../../modules/stillhaven/StillhavenConsentModal';
 import { usePlatform } from '../../../hooks/usePlatform';
 
 interface HealthTabProps {
@@ -8,6 +10,7 @@ interface HealthTabProps {
   saveSettings: () => Promise<void>;
   setOuraEnabled: (v: boolean) => void;
   setOuraSettings: (patch: Partial<AppSettings['oura']>) => void;
+  setWellnessSettings: (updates: Partial<WellnessSettings>) => void;
 }
 
 export function HealthTab({
@@ -15,8 +18,30 @@ export function HealthTab({
   saveSettings,
   setOuraEnabled,
   setOuraSettings,
+  setWellnessSettings,
 }: HealthTabProps) {
   const { isBrowser } = usePlatform();
+  const [showConsentModal, setShowConsentModal] = useState(false);
+
+  const stillhavenEnabled = settings.wellness?.stillhavenEnabled ?? false;
+
+  function handleStillhavenToggle(v: boolean) {
+    if (v && !stillhavenEnabled) {
+      setShowConsentModal(true);
+    } else if (!v) {
+      setWellnessSettings({ stillhavenEnabled: false, stillhavenConsentDate: null });
+      void saveSettings();
+    }
+  }
+
+  function handleConsentConfirm() {
+    setShowConsentModal(false);
+    setWellnessSettings({
+      stillhavenEnabled: true,
+      stillhavenConsentDate: new Date().toISOString(),
+    });
+    void saveSettings();
+  }
 
   return (
     <div id="panel-health" role="tabpanel" className="space-y-6">
@@ -79,6 +104,36 @@ export function HealthTab({
         )}
       </SettingSection>
 
+      {import.meta.env.VITE_FEATURE_STILL && (
+        <SettingSection
+          title="StillHaven"
+          description="Bilateral audio stimulation for nervous system settling. Off by default — read the notice before enabling."
+        >
+          <SettingToggle
+            label="Enable StillHaven"
+            description="Adds StillHaven to the sidebar. Enabling requires reading a short notice."
+            checked={stillhavenEnabled}
+            onChange={handleStillhavenToggle}
+          />
+
+          {stillhavenEnabled && (
+            <div className="mt-3 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-800/40 space-y-1.5">
+              <p className="text-xs font-semibold text-amber-700 dark:text-amber-400 uppercase tracking-wide">
+                Wellness tool — not a medical device
+              </p>
+              <p className="text-xs text-amber-800/80 dark:text-amber-300/70 leading-relaxed">
+                StillHaven uses bilateral audio stimulation as a general wellness practice. It is not a licensed tool and is not a substitute for professional mental health support.
+              </p>
+              {settings.wellness?.stillhavenConsentDate && (
+                <p className="text-[11px] text-amber-600/60 dark:text-amber-400/50">
+                  Acknowledged {new Date(settings.wellness.stillhavenConsentDate).toLocaleDateString()}
+                </p>
+              )}
+            </div>
+          )}
+        </SettingSection>
+      )}
+
       <SettingSection
         title="Privacy"
         description="How your health data is handled"
@@ -102,6 +157,13 @@ export function HealthTab({
           </div>
         </div>
       </SettingSection>
+
+      {showConsentModal && (
+        <StillhavenConsentModal
+          onConfirm={handleConsentConfirm}
+          onCancel={() => setShowConsentModal(false)}
+        />
+      )}
     </div>
   );
 }

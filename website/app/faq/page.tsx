@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { ShieldCheck, Download, Smartphone, Coins, Code2, Users, Lock, FileCode2, Brain, Wifi, Terminal } from "lucide-react";
+import { ShieldCheck, Download, Smartphone, Coins, Code2, Users, Lock, FileCode2, Brain, Wifi, Terminal, Waves } from "lucide-react";
 import AnimatedReveal from "@/components/AnimatedReveal";
 import Link from "next/link";
 
@@ -83,6 +83,25 @@ const TECHNICAL = [
     q: "How do I install on Linux?",
     a: "Download the .AppImage from the Downloads page. Make it executable (chmod +x) and run it directly — no installation required. A .deb package is also available for Ubuntu-based distributions.",
     links: [{ label: "Downloads page", href: "/download" }],
+  },
+];
+
+const STILLHAVEN = [
+  {
+    q: "What is StillHaven?",
+    a: "StillHaven is a bilateral audio stimulation tool built into MoodHaven Journal. It plays alternating left-right tones — the same kind of rhythm your brain uses during deep sleep to process the day. Many people find it helps their nervous system settle, especially after stressful events, persistent anxiety, or times when they feel wound up but can't explain why.",
+  },
+  {
+    q: "Is it safe to use on my own?",
+    a: "StillHaven is a general wellness tool suitable for most people in everyday stress situations. It may not be appropriate if you are currently experiencing dissociation, flashbacks, or acute crisis. If you are working through significant past experiences, please consult a qualified mental health professional before using it — and ideally work alongside one rather than using StillHaven as a replacement.",
+  },
+  {
+    q: "How is StillHaven different from professional guided sessions?",
+    a: "A trained mental health professional using bilateral stimulation works with you to identify specific targets — a memory, a belief, a body sensation — and guides the processing. StillHaven provides the bilateral rhythm without that structure. It's a general settling tool, not a guided processing protocol. Think of it like the difference between a stretching routine and a clinical rehabilitation program: both are useful, but they aren't the same thing.",
+  },
+  {
+    q: "What will I notice during a session?",
+    a: "Responses vary. Some people notice physical sensations, a shift in how something feels, or thoughts that arise and pass. Others notice nothing obvious at all during the session but feel calmer afterward. Both are normal — the absence of a noticeable shift doesn't mean it isn't working. Consistent short sessions tend to produce more effect over time than occasional long ones.",
   },
 ];
 
@@ -182,6 +201,29 @@ export default function FAQPage() {
               );
             })}
           </div>
+        </AnimatedReveal>
+
+        {/* StillHaven questions */}
+        <AnimatedReveal delay={0.12}>
+          <p className="text-xs font-semibold text-neutral-400 uppercase tracking-widest mb-5 mt-12">StillHaven — bilateral sessions</p>
+          <div className="divide-y divide-neutral-100 rounded-xl ring-1 ring-neutral-200 overflow-hidden mb-4">
+            {STILLHAVEN.map((item) => (
+              <details key={item.q} className="group bg-white/90">
+                <summary className="flex items-center gap-3 px-5 py-4 cursor-pointer select-none list-none hover:bg-primary-50 transition-colors focus-visible:ring-2 focus-visible:ring-primary-700 focus-visible:outline-none">
+                  <Waves className="w-4 h-4 text-primary-600 flex-shrink-0" aria-hidden="true" />
+                  <span className="flex-1 text-sm font-medium text-neutral-900">{item.q}</span>
+                  <span className="text-neutral-400 group-open:rotate-180 transition-transform duration-200 text-xs" aria-hidden="true">▾</span>
+                </summary>
+                <div className="px-5 pb-5 pt-1 pl-12 text-sm text-neutral-600 leading-relaxed">
+                  <p>{item.a}</p>
+                </div>
+              </details>
+            ))}
+          </div>
+          <p className="text-xs text-neutral-400 leading-relaxed px-1">
+            StillHaven is a wellness tool, not a medical device. It is not a substitute for professional mental health support.
+            If you are working through significant distress, please work with a qualified professional.
+          </p>
         </AnimatedReveal>
 
         {/* Footer CTA */}

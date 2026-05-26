@@ -18,6 +18,7 @@ import type {
   STTFormattingLayer,
   OuraSettings,
   TimeCapsuleSettings,
+  WellnessSettings,
 } from '../types/settings';
 import { createDefaultSettings } from '../types/settings';
 import { setLevel } from '../lib/services/logger';
@@ -114,6 +115,9 @@ interface SettingsState {
 
   // Time Capsule
   setTimeCapsuleSettings: (updates: Partial<TimeCapsuleSettings>) => void;
+
+  // Wellness
+  setWellnessSettings: (updates: Partial<WellnessSettings>) => void;
 
   // Navigation
   setScrollToSection: (section: SettingsScrollTarget) => void;
@@ -684,6 +688,16 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       settings: {
         ...state.settings,
         timeCapsule: { ...state.settings.timeCapsule, ...updates },
+      },
+      hasUnsavedChanges: true,
+    }));
+  },
+
+  setWellnessSettings: (updates) => {
+    set((state) => ({
+      settings: {
+        ...state.settings,
+        wellness: { ...state.settings.wellness, ...updates },
       },
       hasUnsavedChanges: true,
     }));

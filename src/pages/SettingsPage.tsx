@@ -157,6 +157,7 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
     setSttCloudConsent,
     setOuraEnabled,
     setOuraSettings,
+    setWellnessSettings,
     setAutoLocationWeather,
     setTemperatureUnit,
     setAutoTitle,
@@ -640,6 +641,7 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
                     saveSettings={saveSettings}
                     setOuraEnabled={setOuraEnabled}
                     setOuraSettings={setOuraSettings}
+                    setWellnessSettings={setWellnessSettings}
                   />
                 )}
 

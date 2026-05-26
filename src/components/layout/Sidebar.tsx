@@ -140,6 +140,7 @@ export function Sidebar({ currentView, onNavigate, onOpenSync, onNavigateToJourn
   const { books, activeBookId, loadBooks, setActiveBook, addBook } = useBooksStore();
   const savingState = useSettingsStore((s) => s.savingState);
   const lastAutoSaved = useSettingsStore((s) => s.lastAutoSaved);
+  const stillhavenEnabled = useSettingsStore((s) => s.settings.wellness?.stillhavenEnabled ?? false);
 
   // Load books once on mount
   useEffect(() => {
@@ -277,6 +278,19 @@ export function Sidebar({ currentView, onNavigate, onOpenSync, onNavigateToJourn
             </svg>
           }
         />
+        {import.meta.env.VITE_FEATURE_STILL && stillhavenEnabled && (
+          <SidebarItem
+            label="StillHaven"
+            isActive={currentView === 'still'}
+            onClick={() => onNavigate('still')}
+            collapsed={collapsed}
+            icon={
+              <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5c.75-3 3.75-6 8.25-6s7.5 3 8.25 6M3.75 13.5c-.75 3 .75 5.25 3 6s4.5.75 5.25.75 3.75.25 5.25-.75 3.75-3 3-6M3.75 13.5h16.5" />
+              </svg>
+            }
+          />
+        )}
       </nav>
 
       {/* My Books section */}

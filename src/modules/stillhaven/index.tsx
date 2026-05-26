@@ -269,12 +269,14 @@ export function StillView({ onHandoff }: StillViewProps): React.JSX.Element {
       preActivation: effectivePre,
       postActivation,
       durationSeconds,
-      session: sessionRowRef.current ?? {
-        id, protocol: checkIn.protocol ?? 'general_activation',
-        environment: 'underwater', bilateral_mode: 'audio',
-        duration_seconds: durationSeconds, started_at: now,
-        completed_at: now, abandoned_at: null, created_at: now,
-      },
+      session: sessionRowRef.current
+        ? { ...sessionRowRef.current, duration_seconds: durationSeconds }
+        : {
+            id, protocol: checkIn.protocol ?? 'general_activation',
+            environment: 'underwater', bilateral_mode: 'audio',
+            duration_seconds: durationSeconds, started_at: now,
+            completed_at: now, abandoned_at: null, created_at: now,
+          },
       preSample,
       postSample: postSampleFinal,
     });

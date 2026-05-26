@@ -41,6 +41,7 @@ import {
   dbStillUpdateSession,
   dbStillListSessions,
   dbStillGetSessionWithSamples,
+  dbLinkJournalEntryToSession,
   type BrowserEntryRow,
   type BrowserBook,
   type BrowserStillSession,
@@ -510,6 +511,9 @@ async function dispatch(command: string, p: Params): Promise<any> {
     }
     case 'still_get_session_with_samples': {
       return dbStillGetSessionWithSamples(p.id as string);
+    }
+    case 'link_journal_entry_to_session': {
+      return dbLinkJournalEntryToSession(p.entryId as string, p.sessionId as string);
     }
 
     // Session bridge — no-op in browser

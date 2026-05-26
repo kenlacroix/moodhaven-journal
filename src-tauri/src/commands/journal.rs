@@ -236,6 +236,18 @@ pub fn patch_entry_status(
     db::patch_entry_status(&db, &id, &status)
 }
 
+/// Link a journal entry to a StillHaven session.
+#[tauri::command]
+pub fn link_journal_entry_to_session(
+    db: State<Database>,
+    lock: State<'_, AppLockState>,
+    entry_id: String,
+    session_id: String,
+) -> Result<(), String> {
+    require_unlocked(&lock)?;
+    db::link_journal_entry_to_session(&db, &entry_id, &session_id)
+}
+
 /// Sync tags for an entry (replaces all existing tags).
 #[tauri::command]
 pub fn sync_entry_tags(

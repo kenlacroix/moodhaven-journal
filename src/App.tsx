@@ -73,6 +73,7 @@ function MainApp() {
    * without needing to navigate away.
    */
   const [writingKey, setWritingKey] = useState(0);
+  const [handoffHtml, setHandoffHtml] = useState<string | null>(null);
   const [sealingEntryId, setSealingEntryId] = useState<string | null>(null);
   const [timelineRefresh, setTimelineRefresh] = useState(0);
 
@@ -278,6 +279,8 @@ function MainApp() {
               <WritingView
                 key={selectedEntryId ?? `new-${writingKey}`}
                 entryId={selectedEntryId}
+                initialHtml={handoffHtml}
+                onInitialHtmlConsumed={() => setHandoffHtml(null)}
                 onEntrySaved={() => {/* timeline refreshes on next navigation */}}
                 onNewEntry={handleNewEntry}
                 onNavigateToSTTSettings={() => handleNavigateToSettings('speech-to-text')}
@@ -332,7 +335,14 @@ function MainApp() {
           {/* StillHaven — somatic companion module (feature flag + user opt-in) */}
           {currentView === 'still' && import.meta.env.VITE_FEATURE_STILL && stillhavenEnabled && (
             <ErrorBoundary>
-              <StillView />
+              <StillView
+                onHandoff={(html) => {
+                  setHandoffHtml(html);
+                  setSelectedEntryId(null);
+                  setWritingKey((k) => k + 1);
+                  setCurrentView('writing');
+                }}
+              />
             </ErrorBoundary>
           )}
         </div>

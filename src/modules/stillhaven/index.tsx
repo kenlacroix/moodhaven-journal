@@ -14,11 +14,13 @@ import {
   stillAbandonSession,
   stillListSessions,
   type StillSession,
+  type StillActivationSample,
 } from '../../lib/stillService';
 import { getStatus, getContext } from '../../lib/services/ouraService';
 import type { OuraHealthContext } from '../../types/oura';
 import { biometricToSpeed } from './engine/bioMapping';
 import { useStillBioFeedback } from '../../hooks/useStillBioFeedback';
+import { renderSessionTemplate } from './handoff';
 import type { EngineConfig } from './engine/bilateralEngine';
 
 const WELCOME_SEEN_KEY = 'mb_still_welcome_seen';
@@ -57,9 +59,16 @@ interface SummaryData {
   preActivation: number;
   postActivation: number;
   durationSeconds: number;
+  session: StillSession;
+  preSample: StillActivationSample;
+  postSample: StillActivationSample;
 }
 
-export function StillView(): React.JSX.Element {
+interface StillViewProps {
+  onHandoff?: (html: string) => void;
+}
+
+export function StillView({ onHandoff }: StillViewProps): React.JSX.Element {
   const [scene, setScene] = useState<SceneState>('loading');
   const [abandonedSession, setAbandonedSession] = useState<StillSession | null>(null);
   const [checkIn, setCheckIn] = useState<CheckInData>({ protocol: null, preActivation: null });
@@ -68,6 +77,8 @@ export function StillView(): React.JSX.Element {
 
   const sessionIdRef = useRef<string | null>(null);
   const sessionStartRef = useRef<number>(0);
+  const sessionRowRef = useRef<StillSession | null>(null);
+  const preSampleRef = useRef<StillActivationSample | null>(null);
   const ouraCtxRef = useRef<Pick<OuraHealthContext, 'readinessScore' | 'stressSummary'> | null>(null);
   const [ouraConnected, setOuraConnected] = useState(false);
   const protocolSpeedRef = useRef<number>(1.0);
@@ -156,9 +167,12 @@ export function StillView(): React.JSX.Element {
       bilateralMode: 'audio',
       durationSeconds: 0,
       startedAt: now,
-    }).then(() =>
-      stillRecordActivation({ sessionId: id, phase: 'pre', activation: preActivation })
-    ).catch(() => {/* silent — data loss here is acceptable vs blocking the session */});
+    }).then((sess) => {
+      sessionRowRef.current = sess;
+      return stillRecordActivation({ sessionId: id, phase: 'pre', activation: preActivation });
+    }).then((sample) => {
+      preSampleRef.current = sample;
+    }).catch(() => {/* silent — data loss here is acceptable vs blocking the session */});
 
     // MUST remain synchronous — AudioContext requires user gesture.
     // Protocol + activation level determine starting rhythm speed; Oura data refines it.
@@ -188,8 +202,9 @@ export function StillView(): React.JSX.Element {
     const durationSeconds = Math.round((Date.now() - sessionStartRef.current) / 1000);
     const now = new Date().toISOString();
 
+    let postSample: StillActivationSample | null = null;
     try {
-      await stillRecordActivation({
+      postSample = await stillRecordActivation({
         sessionId: id,
         phase: 'post',
         activation: postActivation,
@@ -202,13 +217,34 @@ export function StillView(): React.JSX.Element {
       // best-effort; don't block the user from seeing summary
     }
 
+    const effectivePre = checkIn.preActivation ?? postActivation;
+    // Build synthetic samples for handoff if DB writes failed
+    const preSample: StillActivationSample = preSampleRef.current ?? {
+      id: 0, session_id: id, phase: 'pre', activation: effectivePre,
+      hrv_manual: null, hrv_source: null, note: null,
+      sampled_at: new Date().toISOString(),
+    };
+    const postSampleFinal: StillActivationSample = postSample ?? {
+      id: 0, session_id: id, phase: 'post', activation: postActivation,
+      hrv_manual: hrv ?? null, hrv_source: hrv !== null ? 'manual' : null,
+      note: note.trim() || null, sampled_at: now,
+    };
+
     setSummary({
-      preActivation: checkIn.preActivation ?? postActivation,
+      preActivation: effectivePre,
       postActivation,
       durationSeconds,
+      session: sessionRowRef.current ?? {
+        id, protocol: checkIn.protocol ?? 'general_activation',
+        environment: 'underwater', bilateral_mode: 'audio',
+        duration_seconds: durationSeconds, started_at: now,
+        completed_at: now, abandoned_at: null, created_at: now,
+      },
+      preSample,
+      postSample: postSampleFinal,
     });
     setScene('summary');
-  }, [checkOut, checkIn.preActivation]);
+  }, [checkOut, checkIn.preActivation, checkIn.protocol]);
 
   const handleRestart = useCallback(() => {
     sessionIdRef.current = null;
@@ -357,13 +393,27 @@ export function StillView(): React.JSX.Element {
             {delta > 0 ? `${delta} point${delta !== 1 ? 's' : ''} lower` : `${Math.abs(delta)} point${Math.abs(delta) !== 1 ? 's' : ''} higher`}
           </p>
         )}
-        <button
-          type="button"
-          onClick={handleRestart}
-          className="px-6 py-2.5 rounded-full border border-neutral-200 text-neutral-600 text-sm hover:bg-neutral-50 transition-colors"
-        >
-          New session
-        </button>
+        <div className="flex flex-col gap-2 w-full max-w-xs">
+          {onHandoff && (
+            <button
+              type="button"
+              onClick={() => {
+                const html = renderSessionTemplate(summary.session, summary.preSample, summary.postSample);
+                onHandoff(html);
+              }}
+              className="w-full px-6 py-2.5 rounded-full bg-[#F28C38] text-white text-sm font-semibold shadow hover:bg-[#e07c28] transition-colors"
+            >
+              Write about it
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={handleRestart}
+            className="w-full px-6 py-2.5 rounded-full border border-neutral-200 text-neutral-600 text-sm hover:bg-neutral-50 transition-colors"
+          >
+            New session
+          </button>
+        </div>
       </div>
     );
   }

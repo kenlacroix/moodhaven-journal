@@ -57,6 +57,10 @@ interface WritingViewProps {
   onEntrySaved?: () => void;
   onNewEntry?: () => void;
   onNavigateToSTTSettings?: () => void;
+  /** Pre-filled HTML injected once on mount (e.g. StillHaven handoff). */
+  initialHtml?: string | null;
+  /** Called after initialHtml has been consumed so the parent can clear it. */
+  onInitialHtmlConsumed?: () => void;
   /** Optional ref populated with a function that immediately flushes any
    *  pending auto-save. Useful for callers (e.g. breakout window) that need
    *  to save before closing without waiting for the debounce timer. */
@@ -153,7 +157,7 @@ const PRIVACY_ACTIVE_COLORS: Record<PrivacyMode, string> = {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, onNavigateToSTTSettings, saveRef }: WritingViewProps) {
+export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, onNavigateToSTTSettings, initialHtml, onInitialHtmlConsumed, saveRef }: WritingViewProps) {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [contentText, setContentText] = useState('');
@@ -177,6 +181,15 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
   const [isEditorFocused, setIsEditorFocused] = useState(false);
   const [pendingInsert, setPendingInsert] = useState<string | null>(null);
   const [pendingInsertHtml, setPendingInsertHtml] = useState<string | null>(null);
+
+  // Seed from StillHaven handoff (fires once on mount when initialHtml is provided)
+  useEffect(() => {
+    if (initialHtml) {
+      setPendingInsertHtml(initialHtml);
+      onInitialHtmlConsumed?.();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /**
    * Tracks the DB entry ID created by the first auto-save.

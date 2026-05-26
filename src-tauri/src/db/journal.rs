@@ -41,6 +41,8 @@ pub struct JournalEntryRow {
     pub unsealed_at: Option<String>,
     /// Entry state: 'thinking' | 'complete' | 'revisit' (default: 'complete')
     pub status: Option<String>,
+    /// StillHaven session this entry was written after (nullable)
+    pub session_id: Option<String>,
 }
 
 /// Journal entry metadata (without content, for list views)
@@ -66,7 +68,7 @@ pub fn parse_tags(tags_str: Option<String>) -> Vec<String> {
 /// 4  location_weather, 5  book_id, 6  pinned, 7  created_at,
 /// 8  updated_at, 9  sealed_until, 10 capsule_type,
 /// 11 linked_original_id, 12 unsealed_at, 13 tags (GROUP_CONCAT),
-/// 14 status
+/// 14 status, 15 session_id
 pub fn map_entry_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<JournalEntryRow> {
     let content_json_opt: Option<String> = row.get(1)?;
     let sealed_until: Option<String> = row.get(9)?;
@@ -75,6 +77,7 @@ pub fn map_entry_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<JournalEntryRo
     let unsealed_at: Option<String> = row.get(12)?;
     let tags_str: Option<String> = row.get(13)?;
     let status: Option<String> = row.get(14).ok().flatten();
+    let session_id: Option<String> = row.get(15).ok().flatten();
 
     // Withhold content for entries that are sealed but not yet revealed.
     let is_sealed = sealed_until.is_some() && unsealed_at.is_none();
@@ -108,6 +111,7 @@ pub fn map_entry_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<JournalEntryRo
         unsealed_at,
         tags: parse_tags(tags_str),
         status,
+        session_id,
     })
 }
 
@@ -137,7 +141,7 @@ pub fn create_entry(
 
     conn.query_row(
         "SELECT je.id, je.encrypted_content, je.mood, je.privacy_mode, je.location_weather, je.book_id, je.pinned, je.created_at, je.updated_at,
-                je.sealed_until, je.capsule_type, je.linked_original_id, je.unsealed_at, je.status,
+                je.sealed_until, je.capsule_type, je.linked_original_id, je.unsealed_at, je.status, je.session_id,
                 COALESCE(GROUP_CONCAT(t.name, ','), '') as tags
          FROM journal_entries je
          LEFT JOIN entry_tags et ON je.id = et.entry_id
@@ -174,6 +178,21 @@ pub fn patch_entry_status(db: &Database, id: &str, status: &str) -> Result<(), S
         params![status, id],
     )
     .map_err(|e| format!("Failed to patch status: {}", e))?;
+    Ok(())
+}
+
+/// Link a journal entry to a StillHaven session.
+pub fn link_journal_entry_to_session(
+    db: &Database,
+    entry_id: &str,
+    session_id: &str,
+) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    conn.execute(
+        "UPDATE journal_entries SET session_id = ?1 WHERE id = ?2",
+        params![session_id, entry_id],
+    )
+    .map_err(|e| format!("Failed to link entry to session: {}", e))?;
     Ok(())
 }
 
@@ -266,7 +285,7 @@ pub fn get_entry(db: &Database, id: &str) -> Result<Option<JournalEntryRow>, Str
 
     let result = conn.query_row(
         "SELECT je.id, je.encrypted_content, je.mood, je.privacy_mode, je.location_weather, je.book_id, je.pinned, je.created_at, je.updated_at,
-                je.sealed_until, je.capsule_type, je.linked_original_id, je.unsealed_at, je.status,
+                je.sealed_until, je.capsule_type, je.linked_original_id, je.unsealed_at, je.status, je.session_id,
                 COALESCE(GROUP_CONCAT(t.name, ','), '') as tags
          FROM journal_entries je
          LEFT JOIN entry_tags et ON je.id = et.entry_id
@@ -293,7 +312,7 @@ pub fn get_all_entries(db: &Database, limit: Option<i32>) -> Result<Vec<JournalE
     let mut stmt = conn
         .prepare(&format!(
             "SELECT je.id, je.encrypted_content, je.mood, je.privacy_mode, je.location_weather, je.book_id, je.pinned, je.created_at, je.updated_at,
-                    je.sealed_until, je.capsule_type, je.linked_original_id, je.unsealed_at, je.status,
+                    je.sealed_until, je.capsule_type, je.linked_original_id, je.unsealed_at, je.status, je.session_id,
                     COALESCE(GROUP_CONCAT(t.name, ','), '') as tags
              FROM journal_entries je
              LEFT JOIN entry_tags et ON je.id = et.entry_id
@@ -324,7 +343,7 @@ pub fn get_entries_by_date_range(
     let mut stmt = conn
         .prepare(
             "SELECT je.id, je.encrypted_content, je.mood, je.privacy_mode, je.location_weather, je.book_id, je.pinned, je.created_at, je.updated_at,
-                    je.sealed_until, je.capsule_type, je.linked_original_id, je.unsealed_at, je.status,
+                    je.sealed_until, je.capsule_type, je.linked_original_id, je.unsealed_at, je.status, je.session_id,
                     COALESCE(GROUP_CONCAT(t.name, ','), '') as tags
              FROM journal_entries je
              LEFT JOIN entry_tags et ON je.id = et.entry_id
@@ -351,7 +370,7 @@ pub fn get_entries_on_this_day(db: &Database) -> Result<Vec<JournalEntryRow>, St
     let mut stmt = conn
         .prepare(
             "SELECT je.id, je.encrypted_content, je.mood, je.privacy_mode, je.location_weather, je.book_id, je.pinned, je.created_at, je.updated_at,
-                    je.sealed_until, je.capsule_type, je.linked_original_id, je.unsealed_at, je.status,
+                    je.sealed_until, je.capsule_type, je.linked_original_id, je.unsealed_at, je.status, je.session_id,
                     COALESCE(GROUP_CONCAT(t.name, ','), '') as tags
              FROM journal_entries je
              LEFT JOIN entry_tags et ON je.id = et.entry_id
@@ -400,7 +419,7 @@ pub fn update_entry(
 
     conn.query_row(
         "SELECT je.id, je.encrypted_content, je.mood, je.privacy_mode, je.location_weather, je.book_id, je.pinned, je.created_at, je.updated_at,
-                je.sealed_until, je.capsule_type, je.linked_original_id, je.unsealed_at, je.status,
+                je.sealed_until, je.capsule_type, je.linked_original_id, je.unsealed_at, je.status, je.session_id,
                 COALESCE(GROUP_CONCAT(t.name, ','), '') as tags
          FROM journal_entries je
          LEFT JOIN entry_tags et ON je.id = et.entry_id

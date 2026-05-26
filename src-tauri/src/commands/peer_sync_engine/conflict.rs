@@ -189,6 +189,7 @@ pub fn db_get_entries_full(
                 unsealed_at: r.get(12)?,
                 tags,
                 status: None,
+                session_id: None,
             })
         })
         .map_err(|e| format!("query entries full: {e}"))?

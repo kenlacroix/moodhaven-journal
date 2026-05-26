@@ -144,6 +144,7 @@ pub fn get_due_capsules(
             unsealed_at,
             tags: parse_tags(tags_str),
             status: None,
+            session_id: None,
         })
     });
 

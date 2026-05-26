@@ -131,6 +131,12 @@ impl Database {
             [],
         );
 
+        // Runtime migration: StillHaven session link (J3)
+        let _ = conn.execute(
+            "ALTER TABLE journal_entries ADD COLUMN session_id TEXT",
+            [],
+        );
+
         // Runtime migration: media attachments table
         conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS entry_media (

@@ -132,6 +132,7 @@ export interface BrowserEntryRow {
   linked_original_id: string | null;
   unsealed_at: string | null;
   status: string | null;
+  session_id?: string | null;
 }
 
 // --------------------------------------------------------------------------
@@ -551,6 +552,19 @@ export async function dbStillGetSessionWithSamples(
     .filter((s) => s.session_id === id)
     .sort((a, b) => a.sampled_at.localeCompare(b.sampled_at));
   return { session, samples };
+}
+
+export async function dbLinkJournalEntryToSession(
+  entryId: string,
+  sessionId: string,
+): Promise<void> {
+  const db = await openDB();
+  const t = tx(db, 'journal_entries', 'readwrite');
+  const store = t.objectStore('journal_entries');
+  const existing = await get<BrowserEntryRow>(store, entryId);
+  if (existing) {
+    await put(store, { ...existing, session_id: sessionId });
+  }
 }
 
 // --------------------------------------------------------------------------

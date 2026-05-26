@@ -53,6 +53,7 @@ export interface HealthSnapshotPayload {
   sleepScore?: number;
   readinessScore?: number;
   hrvAvg?: number;
+  heartRate?: number;
   steps?: number;
   source: 'oura' | 'health_connect' | 'manual';
 }

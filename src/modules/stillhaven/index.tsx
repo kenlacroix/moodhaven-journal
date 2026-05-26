@@ -18,6 +18,7 @@ import {
 import { getStatus, getContext } from '../../lib/services/ouraService';
 import type { OuraHealthContext } from '../../types/oura';
 import { biometricToSpeed } from './engine/bioMapping';
+import { useStillBioFeedback } from '../../hooks/useStillBioFeedback';
 import type { EngineConfig } from './engine/bilateralEngine';
 
 const WELCOME_SEEN_KEY = 'mb_still_welcome_seen';
@@ -69,8 +70,14 @@ export function StillView(): React.JSX.Element {
   const sessionStartRef = useRef<number>(0);
   const ouraCtxRef = useRef<Pick<OuraHealthContext, 'readinessScore' | 'stressSummary'> | null>(null);
   const [ouraConnected, setOuraConnected] = useState(false);
+  const protocolSpeedRef = useRef<number>(1.0);
 
   const { startEngine, stopEngine } = useBilateralEngine();
+
+  const { isAdapting } = useStillBioFeedback({
+    enabled: scene === 'live',
+    baseSpeed: protocolSpeedRef.current,
+  });
 
   // Detect abandoned sessions on mount; show welcome card on first ever visit
   useEffect(() => {
@@ -159,6 +166,7 @@ export function StillView(): React.JSX.Element {
     if (ouraCtxRef.current && typeof config.speedHz === 'number') {
       config.speedHz = biometricToSpeed(ouraCtxRef.current, config.speedHz);
     }
+    protocolSpeedRef.current = config.speedHz ?? 1.0;
     startEngine(config);
     setScene('submerging');
   }, [checkIn, startEngine]);
@@ -368,6 +376,7 @@ export function StillView(): React.JSX.Element {
           onEnd={handleEnd}
           onPause={() => {/* isPaused managed inside stillStore */}}
           onResume={() => {/* resumeEngine called inside Underwater2D */}}
+          isAdapting={isAdapting}
         />
       )}
       {scene === 'submerging' && (

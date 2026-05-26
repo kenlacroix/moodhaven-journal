@@ -115,6 +115,27 @@ export function SubmergeOverlay({ onComplete }: Props): React.JSX.Element | null
           }}
         />
       )}
+
+      {/* Orientation text — appears during holding phase, fades with overlay */}
+      <div
+        className="absolute inset-0 flex items-center justify-center px-8"
+        style={{
+          opacity: phase === 'holding' ? 1 : 0,
+          transition: phase === 'holding'
+            ? 'opacity 400ms ease'
+            : phase === 'fading'
+            ? 'opacity 800ms ease'
+            : 'none',
+        }}
+      >
+        <p className="text-white/80 text-sm text-center leading-relaxed max-w-xs font-light tracking-wide">
+          Let the sounds guide your attention.
+          <br />
+          Just notice what&apos;s present.
+          <br />
+          You don&apos;t need to do anything else.
+        </p>
+      </div>
     </div>
   );
 }

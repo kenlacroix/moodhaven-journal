@@ -12,7 +12,7 @@ const SEGMENT_COLORS: Record<number, string> = {
   7: '#f97316', 8: '#f97316', 9: '#ef4444', 10: '#ef4444',
 };
 
-export function ActivationDial({ value, onChange, label = 'How activated do you feel?' }: Props): React.JSX.Element {
+export function ActivationDial({ value, onChange, label = 'How wound up do you feel?' }: Props): React.JSX.Element {
   return (
     <div className="flex flex-col gap-3">
       <p className="text-sm font-medium text-neutral-700 text-center">{label}</p>

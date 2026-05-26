@@ -10,8 +10,8 @@ interface Protocol {
 const PROTOCOLS: Protocol[] = [
   {
     id: 'general_activation',
-    title: 'General Grounding',
-    description: 'Steady your baseline and settle into the present moment.',
+    title: 'Everyday Settling',
+    description: 'Stress, mental noise, or wanting to feel more present in your body.',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="w-6 h-6">
         <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 18.75V21m-4.773-4.227-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z" />
@@ -20,8 +20,8 @@ const PROTOCOLS: Protocol[] = [
   },
   {
     id: 'fake_danger',
-    title: 'Resolving Alarm',
-    description: 'Release a heightened state when your body is in alert mode.',
+    title: 'Heightened State',
+    description: 'Heart racing, can\'t stop replaying something, body won\'t let you relax.',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="w-6 h-6">
         <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
@@ -38,7 +38,7 @@ interface Props {
 export function ProtocolPicker({ value, onChange }: Props): React.JSX.Element {
   return (
     <div className="flex flex-col gap-2">
-      <p className="text-sm font-medium text-neutral-700 text-center">Choose a session type</p>
+      <p className="text-sm font-medium text-neutral-700 text-center">What brings you here?</p>
       <div className="flex gap-3">
         {PROTOCOLS.map((p) => {
           const selected = value === p.id;

@@ -49,6 +49,7 @@ interface CheckInData {
 interface CheckOutData {
   postActivation: number | null;
   hrv: number | null;
+  note: string;
 }
 
 interface SummaryData {
@@ -61,7 +62,7 @@ export function StillView(): React.JSX.Element {
   const [scene, setScene] = useState<SceneState>('loading');
   const [abandonedSession, setAbandonedSession] = useState<StillSession | null>(null);
   const [checkIn, setCheckIn] = useState<CheckInData>({ protocol: null, preActivation: null });
-  const [checkOut, setCheckOut] = useState<CheckOutData>({ postActivation: null, hrv: null });
+  const [checkOut, setCheckOut] = useState<CheckOutData>({ postActivation: null, hrv: null, note: '' });
   const [summary, setSummary] = useState<SummaryData | null>(null);
 
   const sessionIdRef = useRef<string | null>(null);
@@ -170,7 +171,7 @@ export function StillView(): React.JSX.Element {
   }, [stopEngine]);
 
   const handleSaveCheckOut = useCallback(async () => {
-    const { postActivation, hrv } = checkOut;
+    const { postActivation, hrv, note } = checkOut;
     if (postActivation === null) return;
 
     const id = sessionIdRef.current;
@@ -186,6 +187,7 @@ export function StillView(): React.JSX.Element {
         activation: postActivation,
         hrvManual: hrv ?? null,
         hrvSource: hrv !== null ? 'manual' : null,
+        note: note.trim() || null,
       });
       await stillCompleteSession({ id, completedAt: now, durationSeconds });
     } catch {
@@ -203,7 +205,7 @@ export function StillView(): React.JSX.Element {
   const handleRestart = useCallback(() => {
     sessionIdRef.current = null;
     setCheckIn({ protocol: null, preActivation: null });
-    setCheckOut({ postActivation: null, hrv: null });
+    setCheckOut({ postActivation: null, hrv: null, note: '' });
     setSummary(null);
     setScene('check-in');
   }, []);
@@ -247,7 +249,7 @@ export function StillView(): React.JSX.Element {
         <ActivationDial
           value={checkIn.preActivation}
           onChange={(preActivation) => setCheckIn((c) => ({ ...c, preActivation }))}
-          label="How activated do you feel right now?"
+          label="How wound up do you feel right now?"
         />
         <button
           type="button"
@@ -276,7 +278,7 @@ export function StillView(): React.JSX.Element {
   if (scene === 'check-out') {
     const canSave = checkOut.postActivation !== null;
     return (
-      <div className="flex flex-col items-center justify-center h-full gap-8 px-6 max-w-lg mx-auto">
+      <div className="flex flex-col items-center justify-center h-full gap-6 px-6 max-w-lg mx-auto">
         <ActivationDial
           value={checkOut.postActivation}
           onChange={(postActivation) => setCheckOut((c) => ({ ...c, postActivation }))}
@@ -286,6 +288,21 @@ export function StillView(): React.JSX.Element {
           value={checkOut.hrv}
           onChange={(hrv) => setCheckOut((c) => ({ ...c, hrv }))}
         />
+        <div className="flex flex-col gap-1.5 w-full max-w-xs">
+          <label className="text-xs text-neutral-400 text-center">
+            What shifted, if anything? <span className="text-neutral-300">(optional)</span>
+          </label>
+          <textarea
+            value={checkOut.note}
+            onChange={(e) => setCheckOut((c) => ({ ...c, note: e.target.value }))}
+            placeholder="A word or two is fine…"
+            rows={2}
+            maxLength={280}
+            className="w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-700
+                       placeholder:text-neutral-300 resize-none focus:outline-none focus:ring-2 focus:ring-[#F28C38]/40
+                       focus:border-[#F28C38]/60 transition-colors"
+          />
+        </div>
         <button
           type="button"
           disabled={!canSave}

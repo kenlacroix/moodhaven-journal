@@ -93,22 +93,25 @@ pub fn still_record_activation(
 
     let row_id = conn.last_insert_rowid();
 
-    let row = conn.query_row(
-        "SELECT id, session_id, phase, activation, hrv_manual, hrv_source, note, sampled_at
+    let row = conn
+        .query_row(
+            "SELECT id, session_id, phase, activation, hrv_manual, hrv_source, note, sampled_at
          FROM still_activation_samples WHERE id = ?1",
-        params![row_id],
-        |r| Ok(StillActivationSampleRow {
-            id: r.get(0)?,
-            session_id: r.get(1)?,
-            phase: r.get(2)?,
-            activation: r.get(3)?,
-            hrv_manual: r.get(4)?,
-            hrv_source: r.get(5)?,
-            note: r.get(6)?,
-            sampled_at: r.get(7)?,
-        }),
-    )
-    .map_err(|e| format!("Failed to fetch activation sample: {}", e))?;
+            params![row_id],
+            |r| {
+                Ok(StillActivationSampleRow {
+                    id: r.get(0)?,
+                    session_id: r.get(1)?,
+                    phase: r.get(2)?,
+                    activation: r.get(3)?,
+                    hrv_manual: r.get(4)?,
+                    hrv_source: r.get(5)?,
+                    note: r.get(6)?,
+                    sampled_at: r.get(7)?,
+                })
+            },
+        )
+        .map_err(|e| format!("Failed to fetch activation sample: {}", e))?;
 
     Ok(row)
 }
@@ -156,17 +159,19 @@ pub fn still_list_sessions(
     .map_err(|e| e.to_string())?;
 
     let rows = stmt
-        .query_map(params![lim], |r| Ok(StillSessionRow {
-            id: r.get(0)?,
-            protocol: r.get(1)?,
-            environment: r.get(2)?,
-            bilateral_mode: r.get(3)?,
-            duration_seconds: r.get(4)?,
-            started_at: r.get(5)?,
-            completed_at: r.get(6)?,
-            abandoned_at: r.get(7)?,
-            created_at: r.get(8)?,
-        }))
+        .query_map(params![lim], |r| {
+            Ok(StillSessionRow {
+                id: r.get(0)?,
+                protocol: r.get(1)?,
+                environment: r.get(2)?,
+                bilateral_mode: r.get(3)?,
+                duration_seconds: r.get(4)?,
+                started_at: r.get(5)?,
+                completed_at: r.get(6)?,
+                abandoned_at: r.get(7)?,
+                created_at: r.get(8)?,
+            })
+        })
         .map_err(|e| e.to_string())?
         .filter_map(|r| r.ok())
         .collect();
@@ -203,23 +208,26 @@ pub fn still_get_session_with_samples(
         Err(e) => return Err(e.to_string()),
     };
 
-    let mut stmt = conn.prepare(
-        "SELECT id, session_id, phase, activation, hrv_manual, hrv_source, note, sampled_at
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, session_id, phase, activation, hrv_manual, hrv_source, note, sampled_at
          FROM still_activation_samples WHERE session_id = ?1 ORDER BY sampled_at ASC",
-    )
-    .map_err(|e| e.to_string())?;
+        )
+        .map_err(|e| e.to_string())?;
 
     let samples = stmt
-        .query_map(params![id], |r| Ok(StillActivationSampleRow {
-            id: r.get(0)?,
-            session_id: r.get(1)?,
-            phase: r.get(2)?,
-            activation: r.get(3)?,
-            hrv_manual: r.get(4)?,
-            hrv_source: r.get(5)?,
-            note: r.get(6)?,
-            sampled_at: r.get(7)?,
-        }))
+        .query_map(params![id], |r| {
+            Ok(StillActivationSampleRow {
+                id: r.get(0)?,
+                session_id: r.get(1)?,
+                phase: r.get(2)?,
+                activation: r.get(3)?,
+                hrv_manual: r.get(4)?,
+                hrv_source: r.get(5)?,
+                note: r.get(6)?,
+                sampled_at: r.get(7)?,
+            })
+        })
         .map_err(|e| e.to_string())?
         .filter_map(|r| r.ok())
         .collect();

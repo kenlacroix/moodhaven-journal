@@ -3,7 +3,9 @@
 //! Manages sessions, activation samples, and session lifecycle (complete / abandon).
 //! All commands require an unlocked session.
 
-use crate::db::{self, Database, StillActivationSampleRow, StillSessionRow, StillSessionWithSamples};
+use crate::db::{
+    self, Database, StillActivationSampleRow, StillSessionRow, StillSessionWithSamples,
+};
 use crate::AppLockState;
 use tauri::State;
 
@@ -35,7 +37,15 @@ pub fn still_create_session(
     if !valid_protocols.contains(&protocol.as_str()) {
         return Err(format!("Unknown protocol: {protocol}"));
     }
-    db::still_create_session(&db, &id, &protocol, &environment, &bilateral_mode, duration_seconds, &started_at)
+    db::still_create_session(
+        &db,
+        &id,
+        &protocol,
+        &environment,
+        &bilateral_mode,
+        duration_seconds,
+        &started_at,
+    )
 }
 
 /// Record a pre- or post-session activation sample.

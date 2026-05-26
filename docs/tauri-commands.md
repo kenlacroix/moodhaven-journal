@@ -1,6 +1,6 @@
 # Tauri Command Reference
 
-> **Version:** v0.9.4 | **Total commands:** ~127
+> **Version:** v1.1.0 | **Total commands:** ~134
 >
 > This document lists all `#[tauri::command]` functions exposed by MoodHaven Journal's Rust backend.
 > Commands are registered in `src-tauri/src/lib.rs` and permitted in `src-tauri/capabilities/default.json`.
@@ -39,6 +39,7 @@ Parameter names in TypeScript use **camelCase**; Rust receives them as **snake_c
 - [Update Manager](#update-manager)
 - [Session Bridge](#session-bridge)
 - [Writer Window](#writer-window)
+- [StillHaven](#stillhaven)
 - [Logging](#logging)
 
 ---
@@ -1699,6 +1700,113 @@ invoke('get_mood_delta', {
   entryId: string,
   entryCreatedAt: string,   // ISO 8601 creation timestamp of the capsule
 }) → Promise<{ avg_since: number | null; mood_today: number | null }>
+```
+
+---
+
+## StillHaven
+
+**Source:** `src-tauri/src/commands/still.rs`
+**IPC wrappers:** `src/lib/stillService.ts`
+
+StillHaven is the bilateral audio stimulation companion. Sessions are stored locally; activation samples (pre/post) are recorded per session. The feature is gated by `stillhavenEnabled` in user settings — all commands are available once unlocked.
+
+---
+
+### `still_create_session`
+
+Create a new session record at the moment the user taps "Begin session".
+
+```typescript
+invoke('still_create_session', {
+  id: string,
+  protocol: string,          // 'general_activation' | 'fake_danger' | …
+  environment: string,       // 'underwater'
+  bilateralMode: string,     // 'audio'
+  durationSeconds: number,   // 0 at create time; updated on complete
+  startedAt: string,         // ISO 8601
+}) → Promise<StillSession>
+```
+
+---
+
+### `still_record_activation`
+
+Record a pre- or post-session activation sample (1–10 scale).
+
+```typescript
+invoke('still_record_activation', {
+  sessionId: string,
+  phase: 'pre' | 'post',
+  activation: number,        // 1–10
+  hrvManual?: number | null, // ms — user-entered
+  hrvSource?: string | null, // 'manual'
+  note?: string | null,
+}) → Promise<StillActivationSample>
+```
+
+---
+
+### `still_complete_session`
+
+Mark a session as completed and record its final duration.
+
+```typescript
+invoke('still_complete_session', {
+  id: string,
+  completedAt: string,       // ISO 8601
+  durationSeconds: number,
+}) → Promise<void>
+```
+
+---
+
+### `still_abandon_session`
+
+Mark a session as abandoned (user navigated away without completing check-out).
+
+```typescript
+invoke('still_abandon_session', {
+  id: string,
+  abandonedAt: string,       // ISO 8601
+}) → Promise<void>
+```
+
+---
+
+### `still_list_sessions`
+
+List sessions, most recent first.
+
+```typescript
+invoke('still_list_sessions', {
+  limit?: number,            // default 50
+}) → Promise<StillSession[]>
+```
+
+---
+
+### `still_get_session_with_samples`
+
+Get a session and its activation samples together.
+
+```typescript
+invoke('still_get_session_with_samples', {
+  id: string,
+}) → Promise<{ session: StillSession; samples: StillActivationSample[] } | null>
+```
+
+---
+
+### `link_journal_entry_to_session`
+
+Associate a journal entry with a StillHaven session (called after journal handoff creates the entry).
+
+```typescript
+invoke('link_journal_entry_to_session', {
+  entryId: string,
+  sessionId: string,
+}) → Promise<void>
 ```
 
 ---

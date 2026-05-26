@@ -62,12 +62,11 @@ export default defineConfig({
     sourcemap: !!process.env.TAURI_ENV_DEBUG,
   },
 
-  define: useBrowserShim
-    ? {
-        // Stub out Tauri globals so runtime checks work correctly
-        'window.__TAURI_INTERNALS__': 'undefined',
-      }
-    : undefined,
+  define: {
+    ...(useBrowserShim ? { 'window.__TAURI_INTERNALS__': 'undefined' } : {}),
+    // StillHaven is built in to all releases; the in-app toggle controls visibility.
+    'import.meta.env.VITE_FEATURE_STILL': 'true',
+  },
 
   // Environment variable prefix
   envPrefix: ['VITE_', 'TAURI_ENV_'],

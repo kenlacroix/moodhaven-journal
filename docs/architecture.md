@@ -1,6 +1,6 @@
 # MoodHaven Journal — Architecture Reference
 
-> **Version:** v0.9.4 | **Last Updated:** 2026-04-16
+> **Version:** v1.1.0 | **Last Updated:** 2026-05-26
 
 ---
 

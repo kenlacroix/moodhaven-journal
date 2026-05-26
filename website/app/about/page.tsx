@@ -47,6 +47,7 @@ const MILESTONES: Milestone[] = [
   { date: "Apr 2026", title: "v0.9.1 — Unlock & Reset", description: "Factory reset, improved unlock flow, and pre-unlock session error handling." },
   { date: "Apr 2026", title: "v0.9.3 — Website & Polish", description: "Redesigned landing site, improved download page, and across-the-board UI refinements." },
   { date: "May 2026", title: "v1.0 — Public Release", description: "Stable release with full documentation, GitHub Wiki, broad platform support, and 702 automated tests." },
+  { date: "May 2026", title: "v1.1 — StillHaven", description: "Bilateral audio stimulation companion built into all builds. Settle your nervous system before you write — opt-in via Settings → Health." },
 ];
 
 const TECH_LINKS = [

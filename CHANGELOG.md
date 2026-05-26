@@ -7,6 +7,34 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.1.0] — 2026-05-26
+
+### Added
+- **StillHaven** — somatic companion module built into all desktop and browser builds. Uses bilateral audio stimulation (alternating left-right tones, 0.5–2.0 Hz) to help settle the nervous system before journaling. Opt-in: enable in Settings → Health to unlock.
+  - **Check-in screen**: protocol picker (General Grounding, Fake Danger Reset), activation dial (1–10), "Begin session" gating.
+  - **Live session**: real-time bilateral audio engine (`BilateralEngine`), pause/resume, session timer, `isAdapting` indicator when Oura or watch data is active.
+  - **Check-out screen**: post-activation dial, optional manual HRV entry, free-text note.
+  - **Summary screen**: activation delta, formatted duration, "Write about it" → journal handoff, "New session" restart.
+  - **Journal handoff**: pre-fills the writing view with a structured HTML template — protocol used, duration, activation delta, HRV (if recorded), and post-session note. Includes a hidden `data-still-session-id` marker for future linking.
+  - **Session history view** (`stillSessions`): total sessions, avg activation drop, favourite protocol, 30-day trend chart, recent sessions list with time-of-day bucketing.
+  - **Bio-adaptive engine** (Tier A): pulls today's Oura HRV and readiness score at check-in mount; blends into starting engine speed via `biometricToSpeed()`. Graceful fallback when Oura is not connected.
+  - **Bio-adaptive engine** (Tier B): `useStillBioFeedback` hook listens for live `health_snapshot` signals from the Wear OS watch during a session; adjusts engine speed via exponential smoothing; reverts to base speed if no signal arrives within 3 minutes.
+  - **Abandoned session detection**: on mount, checks for a session with `completed_at = null, abandoned_at = null`; prompts resume or discard.
+  - **First-visit welcome card** with safety disclaimer.
+  - **Browser/web support**: full IndexedDB shim covers all 6 `still_*` commands; feature works in the browser app identically to desktop.
+- **`VITE_FEATURE_STILL`** baked into all builds via `vite.config.ts` define — no longer a manual build-time opt-in. The in-app toggle (Settings → Health) remains off by default.
+
+### Fixed
+- **Session duration in journal handoff** showed "0 seconds" because `sessionRowRef.current` stored the initial DB create row (duration_seconds: 0). Fixed by spread-overriding with the computed duration at summary time.
+
+### For contributors
+- New files: `src/modules/stillhaven/` (module root, engine, environments, components), `src/lib/stillService.ts`, `src/stores/stillStore.ts`, `src/hooks/useStillBioFeedback.ts`, `src/modules/stillhaven/engine/bioMapping.ts`
+- New Rust commands: `still_create_session`, `still_record_activation`, `still_complete_session`, `still_abandon_session`, `still_list_sessions`, `still_get_session_with_samples`, `link_journal_entry_to_session` (7 commands, registered in `src-tauri/src/lib.rs`)
+- New IndexedDB stores: `still_sessions`, `still_activation_samples` (in `browser.ts`)
+- `ViewType` union extended: `'still' | 'stillSessions'`
+
+---
+
 ## [1.0.0] — 2026-05-24
 
 First stable release. MoodHaven Journal is out of pre-release and ready for daily use across Linux, macOS, and Windows.

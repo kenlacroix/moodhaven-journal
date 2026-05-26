@@ -261,7 +261,7 @@ Full architecture: [docs/watch-companion.md](docs/watch-companion.md)
 | **Encryption** | AES-256-GCM + PBKDF2 (WebCrypto API) |
 | **Peer identity** | Ed25519 ([ed25519-dalek](https://github.com/dalek-cryptography/curve25519-dalek)) |
 | **2FA** | [totp-rs](https://github.com/constantoine/totp-rs) + native CTAP2/HID |
-| **Testing** | [Vitest](https://vitest.dev) + Testing Library · 693 tests |
+| **Testing** | [Vitest](https://vitest.dev) + Testing Library · 702 tests |
 | **Build** | Vite 8 + Tauri CLI |
 | **Mobile** | Kotlin + Wear OS Data Layer (MessageAPI + ChannelAPI) |
 
@@ -330,23 +330,21 @@ Full cross-platform build guide: [docs/build.md](docs/build.md)
 
 ---
 
-## Beta Testing
+## Testing & Feedback
 
-MoodHaven Journal is in public beta. The core feature set is complete and stable — the app is used daily in production. What beta testers can help with:
+MoodHaven Journal v1.0 is stable and used in daily production. If you encounter a bug or want to contribute a test report:
 
 **Desktop:**
 - **Try the full setup flow** — First-run wizard, password, 2FA, recovery key
 - **Write entries and use Books** — Does auto-save, mood detection, and templates behave as expected?
 - **Test on your OS** — Especially Windows and macOS (primary dev is on Linux)
 - **Exercise peer sync** — If you have two machines on the same LAN, try pairing and syncing
-- **Break it** — Edge cases, unusual input, rapid navigation, large entry counts
+- **StillHaven** — Enable in Settings → Health; run a session and check the journal handoff
 
-**Wear OS companion *(beta — needs testers with Wear OS 3+ hardware)*:**
+**Wear OS companion *(needs Wear OS 3+ hardware)*:**
 - **Record a voice memo** — tap to record, stop, confirm it arrives and transcribes on the desktop
 - **Send mood taps** — do they land in the desktop app even if MoodHaven Journal isn't in the foreground?
 - **Offline queue** — send taps while the phone is out of range, reconnect, confirm they drain
-- **Breathe session** — does pause/resume work? Does the post-session summary show correctly?
-- **Health context** — does the health snapshot attach to the voice memo correctly?
 
 File issues at [GitHub Issues](https://github.com/kenlacroix/moodhaven-journal/issues). Screenshots are always appreciated.
 
@@ -373,7 +371,7 @@ npm run tauri dev
 ```
 
 ```bash
-npm test                          # 693 tests
+npm test                          # 702 tests
 npm run typecheck                 # TypeScript strict check
 cd src-tauri && cargo check       # Rust compilation check
 ```
@@ -397,6 +395,8 @@ See [CLAUDE.md](CLAUDE.md) for architecture, security guidelines, and convention
 
 ## Recent Changes
 
+**v1.1.0** — StillHaven: bilateral audio stimulation companion built into all builds. Enable in Settings → Health to unlock. Check-in (protocol + activation dial) → live session (bilateral audio engine, bio-adaptive speed via Oura/watch) → check-out → summary → journal handoff pre-fills the writing view with session data. Session history view with 30-day trend chart. Browser/web fully supported via IndexedDB shim. 702 tests.
+**v1.0.0** — First stable release. Zero-knowledge AES-256-GCM encryption, local-first SQLite, LAN peer sync (Ed25519 + mDNS + PIN pairing), Wear OS voice memos, AI insights (BYOK/Ollama), time capsules, STT (whisper.cpp, 3-layer pipeline), virtual scroll timeline, full analytics suite. MIT licensed, no paid tier. 702 tests across 48 files.
 **v0.9.4** — Website overhaul: replaced rain hero with on-brand violet gradient + app screenshot, removed all Pro/waitlist/pricing language, rewrote FAQ as FOSS-first, added GitHub star badge and trust strip, 7 new blog posts from Substack with unique hero images, per-post branded OG cards via `next/og`, newsletter signup, founder card on About, blog post download CTAs, full SEO pass (canonical URLs, JSON-LD, Open Graph), Android sideload guide on Download page.
 **v0.9.3** — Polish, QoL, and /review fixes: live STT recording strip in the editor toolbar, full model download UI in SpeechToTextTab, TagCloud tag filtering in the timeline, virtual scroll for large vaults, per-device last-sync timestamps in Devices tab, Privacy Transparency document, `use2FASetup` hook extraction, `useAppBanners` streak/OTD hook, `get_entries_on_this_day` Rust SQL command. 7 bugs fixed from /review pass. 693 tests.
 **v0.9.2** — STT recording UI, virtual scroll, TagCloud, devices last-sync, Privacy Transparency system, `useAppBanners` hook (streak milestones + On This Day), mood sparkline in sidebar, keyboard shortcuts (`1–5` mood, `?` cheatsheet). 676 tests.

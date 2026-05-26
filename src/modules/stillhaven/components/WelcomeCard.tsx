@@ -66,8 +66,8 @@ export function WelcomeCard({ onBegin }: Props): React.JSX.Element {
       <div className="text-[11px] text-neutral-400 leading-relaxed border border-neutral-100 rounded-lg px-3 py-2.5 bg-neutral-50 space-y-1.5">
         <p>
           <strong className="text-neutral-500">StillHaven is a wellness tool, not a medical device.</strong>{' '}
-          It uses the same alternating left-right rhythm found in some therapeutic approaches,
-          but it is not a licensed therapeutic tool and is not a substitute for working with
+          It uses the same alternating left-right rhythm found in some professional wellness
+          approaches, but it is not a licensed tool and is not a substitute for working with
           a mental health professional.
         </p>
         <p>

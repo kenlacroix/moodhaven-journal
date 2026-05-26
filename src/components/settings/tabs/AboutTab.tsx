@@ -133,7 +133,7 @@ export function AboutTab({
             </p>
             <p className="text-xs text-amber-800/80 dark:text-amber-300/70 leading-relaxed">
               StillHaven uses bilateral audio stimulation as a general wellness practice.
-              It is not a licensed therapeutic tool and is not intended to replace working
+              It is not a licensed tool and is not intended to replace working
               with a mental health professional.
             </p>
             <p className="text-xs text-amber-800/80 dark:text-amber-300/70 leading-relaxed">

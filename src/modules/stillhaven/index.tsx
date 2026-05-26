@@ -15,6 +15,9 @@ import {
   stillListSessions,
   type StillSession,
 } from '../../lib/stillService';
+import { getStatus, getContext } from '../../lib/services/ouraService';
+import type { OuraHealthContext } from '../../types/oura';
+import { biometricToSpeed } from './engine/bioMapping';
 import type { EngineConfig } from './engine/bilateralEngine';
 
 const WELCOME_SEEN_KEY = 'mb_still_welcome_seen';
@@ -63,6 +66,8 @@ export function StillView(): React.JSX.Element {
 
   const sessionIdRef = useRef<string | null>(null);
   const sessionStartRef = useRef<number>(0);
+  const ouraCtxRef = useRef<Pick<OuraHealthContext, 'readinessScore' | 'stressSummary'> | null>(null);
+  const [ouraConnected, setOuraConnected] = useState(false);
 
   const { startEngine, stopEngine } = useBilateralEngine();
 
@@ -86,6 +91,23 @@ export function StillView(): React.JSX.Element {
         setScene(welcomeSeen ? 'check-in' : 'welcome');
       });
   }, []);
+
+  // Pre-fetch Oura status + today's context when the check-in screen appears.
+  // Stored in a ref so handleStart stays synchronous (AudioContext gesture constraint).
+  useEffect(() => {
+    if (scene !== 'check-in') return;
+    const today = new Date().toISOString().slice(0, 10);
+    getStatus()
+      .then((status) => {
+        if (!status.connected) return Promise.resolve(null);
+        setOuraConnected(true);
+        return getContext(today);
+      })
+      .then((ctx) => {
+        if (ctx) ouraCtxRef.current = ctx;
+      })
+      .catch(() => { /* Oura not available in this environment — graceful fallback */ });
+  }, [scene]);
 
   const handleDiscardAbandoned = useCallback(async () => {
     if (abandonedSession) {
@@ -131,8 +153,12 @@ export function StillView(): React.JSX.Element {
     ).catch(() => {/* silent — data loss here is acceptable vs blocking the session */});
 
     // MUST remain synchronous — AudioContext requires user gesture.
-    // Protocol + activation level determine starting rhythm speed.
-    startEngine(deriveEngineConfig(protocol, preActivation));
+    // Protocol + activation level determine starting rhythm speed; Oura data refines it.
+    const config = deriveEngineConfig(protocol, preActivation);
+    if (ouraCtxRef.current && typeof config.speedHz === 'number') {
+      config.speedHz = biometricToSpeed(ouraCtxRef.current, config.speedHz);
+    }
+    startEngine(config);
     setScene('submerging');
   }, [checkIn, startEngine]);
 
@@ -232,6 +258,16 @@ export function StillView(): React.JSX.Element {
         >
           Begin session
         </button>
+        {ouraConnected && (
+          <p className="text-xs text-neutral-400 text-center">
+            Session pace adapted using today&apos;s Oura readiness
+          </p>
+        )}
+        {!ouraConnected && import.meta.env.VITE_TARGET !== 'web' && (
+          <p className="text-xs text-neutral-400 text-center">
+            Connect Oura Ring in Settings to adapt session pace to your readiness
+          </p>
+        )}
       </div>
     );
   }

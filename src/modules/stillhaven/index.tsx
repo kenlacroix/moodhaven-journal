@@ -13,6 +13,7 @@ import {
   stillCompleteSession,
   stillAbandonSession,
   stillListSessions,
+  stillGetSessionWithSamples,
   type StillSession,
   type StillActivationSample,
 } from '../../lib/stillService';
@@ -82,6 +83,7 @@ export function StillView({ onHandoff }: StillViewProps): React.JSX.Element {
   const ouraCtxRef = useRef<Pick<OuraHealthContext, 'readinessScore' | 'stressSummary'> | null>(null);
   const [ouraConnected, setOuraConnected] = useState(false);
   const protocolSpeedRef = useRef<number>(1.0);
+  const [protocolHints, setProtocolHints] = useState<Record<string, { count: number; avgDelta: number | null }>>({});
 
   const { startEngine, stopEngine } = useBilateralEngine();
 
@@ -110,6 +112,39 @@ export function StillView({ onHandoff }: StillViewProps): React.JSX.Element {
         setScene(welcomeSeen ? 'check-in' : 'welcome');
       });
   }, []);
+
+  // Load last-7-days protocol stats for the check-in hint.
+  useEffect(() => {
+    if (scene !== 'check-in') return;
+    const cutoff = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
+    stillListSessions(30)
+      .then(async (sessions) => {
+        const recent = sessions.filter(
+          (s) => s.completed_at !== null && s.started_at >= cutoff,
+        );
+        const counts: Record<string, { count: number; deltas: number[] }> = {};
+        await Promise.all(
+          recent.map(async (s) => {
+            const detail = await stillGetSessionWithSamples(s.id);
+            const samples = detail?.samples ?? [];
+            const pre = samples.find((x) => x.phase === 'pre');
+            const post = samples.find((x) => x.phase === 'post');
+            if (!counts[s.protocol]) counts[s.protocol] = { count: 0, deltas: [] };
+            counts[s.protocol].count++;
+            if (pre && post) counts[s.protocol].deltas.push(pre.activation - post.activation);
+          }),
+        );
+        const hints: Record<string, { count: number; avgDelta: number | null }> = {};
+        for (const [proto, { count, deltas }] of Object.entries(counts)) {
+          hints[proto] = {
+            count,
+            avgDelta: deltas.length ? deltas.reduce((s, d) => s + d, 0) / deltas.length : null,
+          };
+        }
+        setProtocolHints(hints);
+      })
+      .catch(() => { /* silent — hints are decorative */ });
+  }, [scene]);
 
   // Pre-fetch Oura status + today's context when the check-in screen appears.
   // Stored in a ref so handleStart stays synchronous (AudioContext gesture constraint).
@@ -289,6 +324,7 @@ export function StillView({ onHandoff }: StillViewProps): React.JSX.Element {
         <ProtocolPicker
           value={checkIn.protocol}
           onChange={(protocol) => setCheckIn((c) => ({ ...c, protocol }))}
+          hints={protocolHints}
         />
         <ActivationDial
           value={checkIn.preActivation}

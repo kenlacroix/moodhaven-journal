@@ -200,9 +200,10 @@ interface Props {
   onEnd: () => void;
   onPause: () => void;
   onResume: () => void;
+  isAdapting?: boolean;
 }
 
-export function Underwater2D({ onEnd, onPause, onResume }: Props): React.JSX.Element {
+export function Underwater2D({ onEnd, onPause, onResume, isAdapting = false }: Props): React.JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { isRunning, isPaused, elapsedSeconds, lastTick, resumeEngine, stopEngine } = useBilateralEngine();
 
@@ -355,10 +356,16 @@ export function Underwater2D({ onEnd, onPause, onResume }: Props): React.JSX.Ele
       />
 
       {/* Elapsed timer — top-left, always visible */}
-      <div className="absolute top-4 left-5 select-none pointer-events-none">
+      <div className="absolute top-4 left-5 select-none pointer-events-none flex items-center gap-2">
         <span className="text-white/60 text-sm tabular-nums font-medium">
           {formatElapsed(elapsedSeconds)}
         </span>
+        {isAdapting && (
+          <span
+            className="w-1.5 h-1.5 rounded-full bg-white/50 animate-pulse"
+            title="Session adapting to biometrics"
+          />
+        )}
       </div>
 
       {/* Paused overlay */}

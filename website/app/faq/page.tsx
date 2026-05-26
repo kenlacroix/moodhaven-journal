@@ -96,8 +96,8 @@ const STILLHAVEN = [
     a: "StillHaven is a general wellness tool suitable for most people in everyday stress situations. It may not be appropriate if you are currently experiencing dissociation, flashbacks, or acute crisis. If you are working through significant past experiences, please consult a qualified mental health professional before using it — and ideally work alongside one rather than using StillHaven as a replacement.",
   },
   {
-    q: "How is StillHaven different from working with a therapist?",
-    a: "A trained therapist using bilateral stimulation works with you to identify specific targets — a memory, a belief, a body sensation — and guides the processing. StillHaven provides the bilateral rhythm without that structure. It's a general settling tool, not a guided processing protocol. Think of it like the difference between a stretching routine and physical therapy: both are useful, but they aren't the same thing.",
+    q: "How is StillHaven different from professional guided sessions?",
+    a: "A trained mental health professional using bilateral stimulation works with you to identify specific targets — a memory, a belief, a body sensation — and guides the processing. StillHaven provides the bilateral rhythm without that structure. It's a general settling tool, not a guided processing protocol. Think of it like the difference between a stretching routine and a clinical rehabilitation program: both are useful, but they aren't the same thing.",
   },
   {
     q: "What will I notice during a session?",

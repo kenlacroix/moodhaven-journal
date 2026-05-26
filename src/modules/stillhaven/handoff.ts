@@ -1,6 +1,14 @@
 import type { ViewType } from '../../components/layout/Sidebar';
 import type { StillSession, StillActivationSample } from '../../lib/stillService';
 
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
 function protocolLabel(protocol: string): string {
   switch (protocol) {
     case 'general_activation': return 'general grounding';
@@ -39,7 +47,7 @@ export function renderSessionTemplate(
 
   const noteLine =
     postSample.note
-      ? `<p><em>${postSample.note}</em></p>`
+      ? `<p><em>${escapeHtml(postSample.note)}</em></p>`
       : '';
 
   return [

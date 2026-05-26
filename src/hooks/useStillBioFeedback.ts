@@ -34,6 +34,8 @@ export function useStillBioFeedback({ enabled, baseSpeed }: Options): Result {
     }
 
     let cancelled = false;
+    let unlistenFn: (() => void) | null = null;
+
     // Dynamic import keeps the web bundle clean — tauri event module is absent there.
     import('@tauri-apps/api/event').then(({ listen }) => {
       if (cancelled) return;
@@ -73,11 +75,15 @@ export function useStillBioFeedback({ enabled, baseSpeed }: Options): Result {
             setIsAdapting(false);
           }
         }, STALE_MS);
+      }).then((unlisten) => {
+        if (cancelled) { unlisten(); return; }
+        unlistenFn = unlisten;
       }).catch(() => { /* Tauri not available */ });
     }).catch(() => { /* module unavailable in web build */ });
 
     return () => {
       cancelled = true;
+      unlistenFn?.();
       if (staleTimerRef.current) clearTimeout(staleTimerRef.current);
     };
   }, [enabled, baseSpeed]);

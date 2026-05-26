@@ -270,6 +270,10 @@ export function StillView(): React.JSX.Element {
             Connect Oura Ring in Settings to adapt session pace to your readiness
           </p>
         )}
+        <p className="text-[11px] text-neutral-300 text-center max-w-xs leading-relaxed">
+          Wellness tool only — not a substitute for professional mental health care.
+          Not suitable during dissociation, flashbacks, or acute crisis.
+        </p>
       </div>
     );
   }

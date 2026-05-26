@@ -126,6 +126,23 @@ export function AboutTab({
             </div>
           </div>
 
+          {/* StillHaven wellness disclaimer */}
+          <div className="p-4 bg-amber-50 dark:bg-amber-900/10 rounded-xl border border-amber-100 dark:border-amber-800/40 space-y-2">
+            <p className="text-xs font-semibold text-amber-700 dark:text-amber-400 uppercase tracking-wide">
+              StillHaven — Wellness Tool Notice
+            </p>
+            <p className="text-xs text-amber-800/80 dark:text-amber-300/70 leading-relaxed">
+              StillHaven uses bilateral audio stimulation as a general wellness practice.
+              It is not a licensed therapeutic tool and is not intended to replace working
+              with a mental health professional.
+            </p>
+            <p className="text-xs text-amber-800/80 dark:text-amber-300/70 leading-relaxed">
+              It may not be appropriate if you are currently experiencing dissociation,
+              flashbacks, or acute crisis. If you are unsure whether it is right for you,
+              please consult a qualified professional before using it.
+            </p>
+          </div>
+
           {/* Links */}
           <div className="flex flex-wrap gap-3 pt-2">
             <a

@@ -53,11 +53,29 @@ export function WelcomeCard({ onBegin }: Props): React.JSX.Element {
         ))}
       </div>
 
-      <p className="text-[11px] text-neutral-400 leading-relaxed border border-neutral-100 rounded-lg px-3 py-2.5 bg-neutral-50">
-        StillHaven is a wellness tool, not a medical device. It is not a substitute
-        for professional mental health support. If you are working through something
-        difficult, please reach out to a qualified professional.
-      </p>
+      <div className="flex flex-col gap-1.5 text-left">
+        <p className="text-xs font-semibold text-neutral-400 uppercase tracking-wide text-center">What you might notice</p>
+        <p className="text-xs text-neutral-500 leading-relaxed text-center">
+          During or after a session, some people experience physical sensations, a shift in
+          how something feels, or thoughts that arise and pass. Others notice nothing obvious.
+          Both are completely normal — the absence of a noticeable shift doesn&apos;t mean
+          it isn&apos;t working.
+        </p>
+      </div>
+
+      <div className="text-[11px] text-neutral-400 leading-relaxed border border-neutral-100 rounded-lg px-3 py-2.5 bg-neutral-50 space-y-1.5">
+        <p>
+          <strong className="text-neutral-500">StillHaven is a wellness tool, not a medical device.</strong>{' '}
+          It uses the same alternating left-right rhythm found in some therapeutic approaches,
+          but it is not a licensed therapeutic tool and is not a substitute for working with
+          a mental health professional.
+        </p>
+        <p>
+          It may not be appropriate if you are currently experiencing dissociation, flashbacks,
+          or acute crisis. If you are unsure whether this is right for you, please consult
+          a qualified professional before using it.
+        </p>
+      </div>
 
       <button
         type="button"

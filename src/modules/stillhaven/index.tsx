@@ -6,6 +6,7 @@ import { ActivationDial } from './components/ActivationDial';
 import { ProtocolPicker } from './components/ProtocolPicker';
 import { HrvInput } from './components/HrvInput';
 import { AbandonedSessionPrompt } from './components/AbandonedSessionPrompt';
+import { WelcomeCard } from './components/WelcomeCard';
 import {
   stillCreateSession,
   stillRecordActivation,
@@ -14,9 +15,22 @@ import {
   stillListSessions,
   type StillSession,
 } from '../../lib/stillService';
+import type { EngineConfig } from './engine/bilateralEngine';
+
+const WELCOME_SEEN_KEY = 'mb_still_welcome_seen';
+
+// Map protocol + pre-activation level to a starting engine speed.
+// general_activation: calm baseline (0.8 Hz); fake_danger: higher arousal (1.2 Hz).
+// Activation level shifts the multiplier: 7–10 adds +20%, 1–3 subtracts 15%.
+function deriveEngineConfig(protocol: string, preActivation: number): Partial<EngineConfig> {
+  const base = protocol === 'fake_danger' ? 1.2 : 0.8;
+  const mod = preActivation >= 7 ? 1.2 : preActivation <= 3 ? 0.85 : 1.0;
+  return { speedHz: Math.min(2.0, Math.max(0.5, base * mod)) };
+}
 
 type SceneState =
   | 'loading'
+  | 'welcome'
   | 'abandoned-prompt'
   | 'check-in'
   | 'submerging'
@@ -52,19 +66,25 @@ export function StillView(): React.JSX.Element {
 
   const { startEngine, stopEngine } = useBilateralEngine();
 
-  // Detect abandoned sessions on mount
+  // Detect abandoned sessions on mount; show welcome card on first ever visit
   useEffect(() => {
+    const welcomeSeen = localStorage.getItem(WELCOME_SEEN_KEY) === 'true';
     stillListSessions(1)
       .then((sessions) => {
         const s = sessions[0];
         if (s && s.completed_at === null && s.abandoned_at === null) {
           setAbandonedSession(s);
           setScene('abandoned-prompt');
+        } else if (!welcomeSeen) {
+          setScene('welcome');
         } else {
           setScene('check-in');
         }
       })
-      .catch(() => setScene('check-in'));
+      .catch(() => {
+        const welcomeSeen = localStorage.getItem(WELCOME_SEEN_KEY) === 'true';
+        setScene(welcomeSeen ? 'check-in' : 'welcome');
+      });
   }, []);
 
   const handleDiscardAbandoned = useCallback(async () => {
@@ -82,6 +102,11 @@ export function StillView(): React.JSX.Element {
     sessionStartRef.current = Date.now() - abandonedSession.duration_seconds * 1000;
     setScene('check-out');
   }, [abandonedSession]);
+
+  const handleWelcomeDone = useCallback(() => {
+    localStorage.setItem(WELCOME_SEEN_KEY, 'true');
+    setScene('check-in');
+  }, []);
 
   // Called synchronously in onClick — required for AudioContext.resume()
   const handleStart = useCallback(() => {
@@ -105,7 +130,9 @@ export function StillView(): React.JSX.Element {
       stillRecordActivation({ sessionId: id, phase: 'pre', activation: preActivation })
     ).catch(() => {/* silent — data loss here is acceptable vs blocking the session */});
 
-    startEngine(); // MUST remain synchronous — AudioContext requires user gesture
+    // MUST remain synchronous — AudioContext requires user gesture.
+    // Protocol + activation level determine starting rhythm speed.
+    startEngine(deriveEngineConfig(protocol, preActivation));
     setScene('submerging');
   }, [checkIn, startEngine]);
 
@@ -158,6 +185,15 @@ export function StillView(): React.JSX.Element {
   // ── Loading ───────────────────────────────────────────────────────────────
   if (scene === 'loading') {
     return <div className="flex items-center justify-center h-full" />;
+  }
+
+  // ── Welcome ───────────────────────────────────────────────────────────────
+  if (scene === 'welcome') {
+    return (
+      <div className="flex flex-col items-center justify-center h-full px-6 overflow-y-auto py-8">
+        <WelcomeCard onBegin={handleWelcomeDone} />
+      </div>
+    );
   }
 
   // ── Abandoned session prompt ──────────────────────────────────────────────

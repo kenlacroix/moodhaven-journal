@@ -9,8 +9,8 @@
  *   - 4 ambient fish silhouettes drifting right→left at ~10px/s
  *   - 40 caustic particles (pre-allocated, pooled on exit)
  *
- * React layer (tap-to-reveal control bar, pause overlay):
- *   - Tap/click: bar slides up from bottom, hides after 3s inactivity
+ * React layer (always-visible control bar, pause overlay):
+ *   - Elapsed timer top-left; Pause + End session buttons at bottom always showing
  *   - isPaused: semi-transparent overlay + resume button
  *
  * Reduced-motion: both rays static at 60% opacity, fish and particles frozen.
@@ -21,7 +21,6 @@ import React, {
   useEffect,
   useLayoutEffect,
   useRef,
-  useState,
 } from 'react';
 import { useBilateralEngine } from '../../hooks/useBilateralEngine';
 import type { Side } from '../../engine/bilateralEngine';
@@ -57,7 +56,6 @@ const RAY_HEIGHT_RATIO = 0.30;
 const RAY_WIDTH_RATIO = 0.08;
 const RAY_ANGLE_DEG = 20;
 const SAND_START = 0.90;
-const CONTROL_BAR_HIDE_MS = 3000;
 const REDUCED_MOTION = typeof window !== 'undefined'
   ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
   : false;
@@ -218,9 +216,8 @@ export function Underwater2D({ onEnd, onPause, onResume }: Props): React.JSX.Ele
   const prevTimestamp = useRef<number>(0);
   const sizeRef = useRef({ w: 0, h: 0, dpr: 1 });
 
-  // ── Control bar state ────────────────────────────────────────────────────
-  const [barVisible, setBarVisible] = useState(false);
-  const barTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // ── Control bar: always visible ──────────────────────────────────────────
+  // (tap-to-reveal removed — End button must always be discoverable)
 
   // ── Sync lastTick → ray intensity ────────────────────────────────────────
   useEffect(() => {
@@ -334,20 +331,9 @@ export function Underwater2D({ onEnd, onPause, onResume }: Props): React.JSX.Ele
     return () => cancelAnimationFrame(rafId.current);
   }, []); // intentionally empty — all mutable state lives in refs
 
-  // ── Tap-to-reveal ─────────────────────────────────────────────────────────
-  const showBar = useCallback(() => {
-    setBarVisible(true);
-    if (barTimerRef.current) clearTimeout(barTimerRef.current);
-    barTimerRef.current = setTimeout(() => setBarVisible(false), CONTROL_BAR_HIDE_MS);
-  }, []);
-
-  const handlePointerDown = useCallback(() => showBar(), [showBar]);
-
   // ── Pause / resume wiring ─────────────────────────────────────────────────
   const handlePause = useCallback(() => {
     onPause();
-    setBarVisible(false);
-    if (barTimerRef.current) clearTimeout(barTimerRef.current);
   }, [onPause]);
 
   const handleResume = useCallback(() => {
@@ -365,16 +351,20 @@ export function Underwater2D({ onEnd, onPause, onResume }: Props): React.JSX.Ele
       <canvas
         ref={canvasRef}
         className="absolute inset-0 w-full h-full"
-        onPointerDown={handlePointerDown}
         style={{ touchAction: 'none' }}
       />
+
+      {/* Elapsed timer — top-left, always visible */}
+      <div className="absolute top-4 left-5 select-none pointer-events-none">
+        <span className="text-white/60 text-sm tabular-nums font-medium">
+          {formatElapsed(elapsedSeconds)}
+        </span>
+      </div>
 
       {/* Paused overlay */}
       {isPaused && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50">
-          <p className="text-white/90 text-sm mb-4 font-medium tracking-wide">
-            Paused
-          </p>
+          <p className="text-white/90 text-sm mb-4 font-medium tracking-wide">Paused</p>
           <button
             onClick={handleResume}
             className="px-6 py-2.5 rounded-full bg-white/20 border border-white/30 text-white text-sm font-medium hover:bg-white/30 transition-colors"
@@ -384,37 +374,27 @@ export function Underwater2D({ onEnd, onPause, onResume }: Props): React.JSX.Ele
         </div>
       )}
 
-      {/* Tap-to-reveal control bar */}
-      <div
-        className={[
-          'absolute bottom-0 inset-x-0 h-20 flex items-center justify-between px-6',
-          'bg-black/40 backdrop-blur-md transition-transform transition-opacity',
-          barVisible ? 'translate-y-0 opacity-100 duration-200' : 'translate-y-full opacity-0 duration-300',
-        ].join(' ')}
-        style={{ pointerEvents: barVisible ? 'auto' : 'none' }}
-      >
-        {/* Timer */}
-        <span className="text-white/80 text-sm tabular-nums font-medium select-none">
-          {formatElapsed(elapsedSeconds)}
-        </span>
-
-        {/* Pause / End buttons */}
-        <div className="flex items-center gap-3">
-          {!isPaused && isRunning && (
-            <button
-              onClick={handlePause}
-              className="px-4 py-1.5 rounded-full border border-white/40 text-white/80 text-sm hover:bg-white/10 transition-colors"
-            >
-              Pause
-            </button>
-          )}
+      {/* Always-visible control bar */}
+      <div className="absolute bottom-0 inset-x-0 h-20 flex items-center justify-between px-6 bg-gradient-to-t from-black/50 to-transparent">
+        {/* Pause button */}
+        {!isPaused && isRunning ? (
           <button
-            onClick={handleEnd}
-            className="px-4 py-1.5 rounded-full border border-white/40 text-white/80 text-sm hover:bg-white/10 transition-colors"
+            onClick={handlePause}
+            className="px-4 py-1.5 rounded-full border border-white/30 text-white/70 text-sm hover:bg-white/10 transition-colors"
           >
-            End
+            Pause
           </button>
-        </div>
+        ) : (
+          <div />
+        )}
+
+        {/* End session — always visible */}
+        <button
+          onClick={handleEnd}
+          className="px-5 py-2 rounded-full bg-white/15 border border-white/30 text-white/90 text-sm font-medium hover:bg-white/25 transition-colors"
+        >
+          End session
+        </button>
       </div>
     </div>
   );

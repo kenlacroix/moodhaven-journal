@@ -13,8 +13,8 @@ vi.mock('../../stores/booksStore', () => ({
 }));
 
 vi.mock('../../stores/settingsStore', () => ({
-  useSettingsStore: (selector: (s: { savingState: string; lastAutoSaved: string | null }) => unknown) =>
-    selector({ savingState: 'idle', lastAutoSaved: null }),
+  useSettingsStore: (selector: (s: { savingState: string; lastAutoSaved: string | null; settings: { wellness: { stillhavenEnabled: boolean } } }) => unknown) =>
+    selector({ savingState: 'idle', lastAutoSaved: null, settings: { wellness: { stillhavenEnabled: false } } }),
 }));
 
 vi.mock('../books/NewBookModal', () => ({ NewBookModal: () => null }));

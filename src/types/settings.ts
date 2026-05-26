@@ -200,6 +200,16 @@ export interface UpdateSettings {
   skippedVersion: string | null;
 }
 
+// Wellness feature settings
+export interface WellnessSettings {
+  /** True once user has acknowledged the app-wide wellness disclaimer (shown once) */
+  hasSeenDisclaimer: boolean;
+  /** StillHaven is off by default; user enables it after reading the consent notice */
+  stillhavenEnabled: boolean;
+  /** ISO timestamp when user consented to StillHaven */
+  stillhavenConsentDate: string | null;
+}
+
 // Complete app settings
 export interface AppSettings {
   version: string; // Settings schema version
@@ -215,6 +225,7 @@ export interface AppSettings {
   updates: UpdateSettings;
   sync: SyncSettings;
   timeCapsule: TimeCapsuleSettings;
+  wellness: WellnessSettings;
   logLevel: 'error' | 'warn' | 'info' | 'debug';
 }
 
@@ -323,6 +334,11 @@ export function createDefaultSettings(): AppSettings {
       enabled: true,
       defaultSealDays: 30,
       anniversaryReveal: true,
+    },
+    wellness: {
+      hasSeenDisclaimer: false,
+      stillhavenEnabled: false,
+      stillhavenConsentDate: null,
     },
     logLevel: 'warn',
   };

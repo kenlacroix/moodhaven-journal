@@ -331,7 +331,7 @@ The prefilled HTML carries the session_id in a hidden marker tag at its top:
 
 Tags `still`, `bls`, and the protocol name are appended to the entry's tag list at save time via the existing tag system (also driven by parsing the prefilled HTML's data attributes).
 
-### Phase 6 — Wire pattern tracking (1 session)
+### Phase 6 — Wire pattern tracking (1 session) ✅ DONE
 
 Add `'stillSessions'` to the ViewType union (deferred from Phase 0 because the data didn't exist yet). The new view queries `still_list_sessions` + activation samples and renders:
 

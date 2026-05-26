@@ -14,12 +14,14 @@ pub mod analytics;
 pub mod books;
 pub mod journal;
 pub mod signals;
+pub mod still;
 pub mod voice_memos;
 
 pub use analytics::*;
 pub use books::*;
 pub use journal::*;
 pub use signals::*;
+pub use still::*;
 pub use voice_memos::*;
 
 /// User settings row
@@ -271,6 +273,48 @@ impl Database {
         ",
         )
         .map_err(|e| format!("Failed to create sync_log triggers: {}", e))?;
+
+        // StillHaven sync_log triggers (still_sessions + still_activation_samples tables
+        // are created via schema.sql above; triggers reference them here)
+        conn.execute_batch(
+            "
+            CREATE TRIGGER IF NOT EXISTS sync_log_still_session_insert
+                AFTER INSERT ON still_sessions FOR EACH ROW
+            BEGIN
+                INSERT INTO sync_log(object_id, object_type, action)
+                VALUES (NEW.id, 'still_session', 'insert');
+            END;
+
+            CREATE TRIGGER IF NOT EXISTS sync_log_still_session_update
+                AFTER UPDATE ON still_sessions FOR EACH ROW
+            BEGIN
+                INSERT INTO sync_log(object_id, object_type, action)
+                VALUES (NEW.id, 'still_session', 'update');
+            END;
+
+            CREATE TRIGGER IF NOT EXISTS sync_log_still_session_delete
+                AFTER DELETE ON still_sessions FOR EACH ROW
+            BEGIN
+                INSERT INTO sync_log(object_id, object_type, action)
+                VALUES (OLD.id, 'still_session', 'delete');
+            END;
+
+            CREATE TRIGGER IF NOT EXISTS sync_log_still_sample_insert
+                AFTER INSERT ON still_activation_samples FOR EACH ROW
+            BEGIN
+                INSERT INTO sync_log(object_id, object_type, action)
+                VALUES (CAST(NEW.id AS TEXT), 'still_sample', 'insert');
+            END;
+
+            CREATE TRIGGER IF NOT EXISTS sync_log_still_sample_delete
+                AFTER DELETE ON still_activation_samples FOR EACH ROW
+            BEGIN
+                INSERT INTO sync_log(object_id, object_type, action)
+                VALUES (CAST(OLD.id AS TEXT), 'still_sample', 'delete');
+            END;
+        ",
+        )
+        .map_err(|e| format!("Failed to create StillHaven sync triggers: {}", e))?;
 
         // voice_memos
         conn.execute_batch(

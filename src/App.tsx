@@ -169,6 +169,19 @@ function MainApp() {
     }
   }, []);
 
+  // Ctrl+Shift+S — jump to StillHaven (only when feature flag is on and app is unlocked)
+  useEffect(() => {
+    if (!import.meta.env.VITE_FEATURE_STILL || !isUnlocked) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.shiftKey && e.key === 'S') {
+        e.preventDefault();
+        handleNavigate('still');
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isUnlocked, handleNavigate]);
+
   // Open an existing entry in writing view
   const handleSelectEntry = useCallback((entryId: string) => {
     setSelectedEntryId(entryId);

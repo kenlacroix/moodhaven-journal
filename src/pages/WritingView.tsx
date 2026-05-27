@@ -1248,7 +1248,7 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
           <div
             onFocus={() => setIsEditorFocused(true)}
             onBlur={() => setIsEditorFocused(false)}
-            className={`flex-1 flex flex-col min-h-0 bg-white dark:bg-slate-900 rounded-2xl px-4 sm:px-6 lg:px-8 pt-4 sm:pt-5 pb-4 sm:pb-7 transition-all duration-300 relative ${
+            className={`editor-surface flex-1 flex flex-col min-h-0 bg-white dark:bg-slate-900 rounded-2xl px-4 sm:px-6 lg:px-8 pt-4 sm:pt-5 pb-4 sm:pb-7 transition-all duration-300 relative ${
               isEditorFocused
                 ? 'shadow-lg shadow-violet-500/10 ring-1 ring-violet-500/10'
                 : 'shadow-sm'

@@ -460,9 +460,13 @@
 /* The editor's CARD background tracks the chosen tint. The outer page
  * background (writing-bg / focus-bg gradients) is intentionally NOT
  * variable-driven — those gradients are ambient atmosphere, separate
- * from the editor surface tint. */
+ * from the editor surface tint.
+ *
+ * !important is required to win over Tailwind's `bg-white dark:bg-slate-900`
+ * on the same element — those utility classes are a fallback for when the
+ * editor renders outside a [data-writing-prefs] ancestor (future reuse). */
 [data-writing-prefs] .editor-surface {
-  background-color: var(--mh-writing-bg);
+  background-color: var(--mh-writing-bg) !important;
   transition: background-color 200ms ease;
 }
 

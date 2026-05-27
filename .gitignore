@@ -84,3 +84,4 @@ scripts/pentest/wordlists/
 
 # Android CI signing — keystore files decoded from secrets at build time
 keystore*.jks
+.claude/scheduled_tasks.lock

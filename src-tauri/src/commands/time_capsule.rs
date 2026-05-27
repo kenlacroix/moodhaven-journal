@@ -428,7 +428,7 @@ mod tests {
         let today_md = "strftime('%m-%d', 'now')";
         let created_at_expr = format!("strftime('%Y', 'now', '-2 years') || '-' || {}", today_md);
         conn.execute(
-            &format!(
+            &format!( // nosemgrep: rust-sql-injection (test fixture — developer-controlled SQLite expressions, not user input)
                 "INSERT INTO journal_entries
                  (id, encrypted_content, mood, created_at, updated_at, sealed_until, capsule_type)
                  VALUES ('e6', '{{}}', 3,

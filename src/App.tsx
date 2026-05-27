@@ -16,6 +16,7 @@ import { CalendarPage } from './pages/CalendarPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { JournalOverviewPage } from './pages/JournalOverviewPage';
 import { StillView } from './modules/stillhaven';
+import { StillSessionsView } from './modules/stillhaven/components/StillSessionsView';
 import { useBooksStore } from './stores/booksStore';
 import { LockScreen } from './pages/LockScreen';
 import { SetupScreen } from './pages/SetupScreen';
@@ -35,6 +36,7 @@ import { TimeCapsuleRevealModal } from './components/timecapsule/TimeCapsuleReve
 import { SealEntryModal } from './components/timecapsule/SealEntryModal';
 import { logger } from './lib/services/logger';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { WellnessDisclaimerScreen } from './components/WellnessDisclaimerScreen';
 
 // Detect special dev modes outside the component so hooks order is stable.
 const IS_BREAKOUT = new URLSearchParams(window.location.search).get('mode') === 'writer';
@@ -51,6 +53,8 @@ function MainApp() {
   const { isUnlocked, isInitialized, checkInitialization, lock, sessionPassword } = useAppStore();
   const loadSettings = useSettingsStore((s) => s.loadSettings);
   const hasSeenTutorial = useSettingsStore((s) => s.settings.tutorial?.hasSeenTutorial);
+  const hasSeenDisclaimer = useSettingsStore((s) => s.settings.wellness?.hasSeenDisclaimer ?? true);
+  const stillhavenEnabled = useSettingsStore((s) => s.settings.wellness?.stillhavenEnabled ?? false);
   const syncMode = useSettingsStore((s) => s.settings.sync?.syncMode);
   const syncIntervalMinutes = useSettingsStore((s) => s.settings.sync?.syncIntervalMinutes ?? 0);
   const webdavConfig = useSettingsStore((s) => s.settings.storage?.webdav);
@@ -61,6 +65,7 @@ function MainApp() {
   const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
   const [journalOverviewBookId, setJournalOverviewBookId] = useState<string | null>(null);
   const [showTutorial, setShowTutorial] = useState(false);
+  const [showDisclaimer, setShowDisclaimer] = useState(false);
   const [showSyncModal, setShowSyncModal] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   /**
@@ -69,6 +74,7 @@ function MainApp() {
    * without needing to navigate away.
    */
   const [writingKey, setWritingKey] = useState(0);
+  const [handoffHtml, setHandoffHtml] = useState<string | null>(null);
   const [sealingEntryId, setSealingEntryId] = useState<string | null>(null);
   const [timelineRefresh, setTimelineRefresh] = useState(0);
 
@@ -117,12 +123,19 @@ function MainApp() {
     init();
   }, [checkInitialization, loadSettings]);
 
-  // Show tutorial on first unlock when user hasn't seen it
+  // Show wellness disclaimer once on first unlock (before tutorial)
   useEffect(() => {
-    if (isUnlocked && hasSeenTutorial === false && !import.meta.env.VITE_DEV_MODE) {
+    if (isUnlocked && hasSeenDisclaimer === false && !import.meta.env.VITE_DEV_MODE) {
+      setShowDisclaimer(true);
+    }
+  }, [isUnlocked, hasSeenDisclaimer]);
+
+  // Show tutorial on first unlock — only after disclaimer is dismissed
+  useEffect(() => {
+    if (isUnlocked && hasSeenTutorial === false && !showDisclaimer && !import.meta.env.VITE_DEV_MODE) {
       setShowTutorial(true);
     }
-  }, [isUnlocked, hasSeenTutorial]);
+  }, [isUnlocked, hasSeenTutorial, showDisclaimer]);
 
   // Helper: run a silent background sync (no UI feedback — fire and forget)
   const runBackgroundSync = useCallback(() => {
@@ -149,6 +162,12 @@ function MainApp() {
     return () => clearInterval(id);
   }, [isUnlocked, syncIntervalMinutes, runBackgroundSync]);
 
+  const handleDisclaimerAccept = useCallback(async () => {
+    setShowDisclaimer(false);
+    useSettingsStore.getState().setWellnessSettings({ hasSeenDisclaimer: true });
+    await useSettingsStore.getState().saveSettings();
+  }, []);
+
   const handleTutorialComplete = useCallback(async () => {
     setShowTutorial(false);
     useSettingsStore.getState().setHasSeenTutorial(true);
@@ -168,6 +187,19 @@ function MainApp() {
       setWritingKey((k) => k + 1);
     }
   }, []);
+
+  // Ctrl+Shift+S — jump to StillHaven (feature flag + runtime setting + unlocked)
+  useEffect(() => {
+    if (!import.meta.env.VITE_FEATURE_STILL || !isUnlocked || !stillhavenEnabled) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.shiftKey && e.key === 'S') {
+        e.preventDefault();
+        handleNavigate('still');
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isUnlocked, stillhavenEnabled, handleNavigate]);
 
   // Open an existing entry in writing view
   const handleSelectEntry = useCallback((entryId: string) => {
@@ -221,6 +253,11 @@ function MainApp() {
     return <LockScreen />;
   }
 
+  // Wellness disclaimer — shown once after first unlock
+  if (showDisclaimer) {
+    return <WellnessDisclaimerScreen onAccept={handleDisclaimerAccept} />;
+  }
+
   // Main app — MobileLayout on Android, MainLayout on desktop
   const Layout = isAndroid ? MobileLayout : MainLayout;
   return (
@@ -243,6 +280,8 @@ function MainApp() {
               <WritingView
                 key={selectedEntryId ?? `new-${writingKey}`}
                 entryId={selectedEntryId}
+                initialHtml={handoffHtml}
+                onInitialHtmlConsumed={() => setHandoffHtml(null)}
                 onEntrySaved={() => {/* timeline refreshes on next navigation */}}
                 onNewEntry={handleNewEntry}
                 onNavigateToSTTSettings={() => handleNavigateToSettings('speech-to-text')}
@@ -294,10 +333,24 @@ function MainApp() {
             </ErrorBoundary>
           )}
 
-          {/* StillHaven — somatic companion module (feature-flagged) */}
-          {currentView === 'still' && import.meta.env.VITE_FEATURE_STILL && (
+          {/* StillHaven — somatic companion module (feature flag + user opt-in) */}
+          {currentView === 'still' && import.meta.env.VITE_FEATURE_STILL && stillhavenEnabled && (
             <ErrorBoundary>
-              <StillView />
+              <StillView
+                onHandoff={(html) => {
+                  setHandoffHtml(html);
+                  setSelectedEntryId(null);
+                  setWritingKey((k) => k + 1);
+                  setCurrentView('writing');
+                }}
+              />
+            </ErrorBoundary>
+          )}
+
+          {/* StillHaven — session history + pattern tracking */}
+          {currentView === 'stillSessions' && import.meta.env.VITE_FEATURE_STILL && stillhavenEnabled && (
+            <ErrorBoundary>
+              <StillSessionsView onBack={() => setCurrentView('still')} />
             </ErrorBoundary>
           )}
         </div>

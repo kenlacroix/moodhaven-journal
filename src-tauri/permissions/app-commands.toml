@@ -168,6 +168,15 @@ commands.allow = [
   "get_due_capsules",
   "unseal_entry",
   "get_mood_delta",
+  # StillHaven (somatic session module)
+  "still_create_session",
+  "still_record_activation",
+  "still_complete_session",
+  "still_abandon_session",
+  "still_list_sessions",
+  "still_get_session_with_samples",
+  # Journal ↔ session link
+  "link_journal_entry_to_session",
 ]
 
 [default]

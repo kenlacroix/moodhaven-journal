@@ -1,0 +1,56 @@
+---
+title: "StillHaven — Settle Before You Write"
+publishDate: "2026-05-26"
+heroImage: "/images/blog/stillhaven-arrives.png"
+excerpt: "v1.1 ships StillHaven, a bilateral audio stimulation companion built into MoodHaven Journal. A short session before you write can make the difference between a defensive entry and an honest one."
+---
+
+Some of the most useful journal entries happen right after something difficult — a tense conversation, a stressful afternoon, a moment that won't leave your head. Those are also the hardest entries to write honestly, because the nervous system is still running hot.
+
+v1.1 ships **StillHaven**, a companion module built into MoodHaven Journal to help with that.
+
+## What it does
+
+StillHaven plays alternating left-right audio tones — bilateral stimulation — at a gentle, adjustable pace. You rate how wound up you feel before and after (1–10), run a session of whatever length feels right, and then write. The session summary drops directly into the writing view as a starting point, with your activation delta, duration, and a blank note field to capture whatever shifted.
+
+It's not a guided therapy session. It's a settling tool, the same way a few minutes of slow breathing or a short walk is a settling tool. The rhythm gives your nervous system something external to track while the intensity of whatever happened starts to metabolise.
+
+## Two protocols
+
+The initial release ships with two protocols:
+
+**General Grounding** — steady bilateral rhythm, 0.8 Hz default. Works for most situations: general stress, a day that felt too full, persistent low-level anxiety.
+
+**Fake Danger Reset** — a slightly faster starting pace, used when the activation feels more like a false alarm than a genuine threat. The body treats anticipatory anxiety and traffic-noise stress the same way it treats real danger. A reset protocol acknowledges that the activation was real even if the danger wasn't.
+
+More protocols are planned. The column is open-text in the database, so adding them later requires no schema migration.
+
+## Bio-adaptive pace
+
+If you have an Oura Ring connected, StillHaven reads today's HRV and readiness score at check-in and adjusts the starting pace accordingly. High HRV and readiness means your system is already relatively settled — the session starts softer. Low scores mean you likely need more help, so the rhythm starts a bit faster to engage the settling response.
+
+If you're on Android with a Wear OS watch, the watch can send live heart rate signals during the session. The engine smooths these with exponential averaging and adjusts speed in near real-time. This requires the watch companion app to be sending `health_snapshot` signals — the desktop half is ready, the watch-side Kotlin code is the next phase.
+
+Neither data source is required. Without them, the session runs at the protocol default and does exactly what it always did.
+
+## Session history
+
+Every session is logged — activation before and after, protocol used, duration, time of day. The Sessions view shows a 30-day trend chart, your average activation drop, and which protocol you reach for most. Over time, this becomes a picture of what actually works for you, not what's supposed to work.
+
+## Privacy
+
+The same rules that apply to your journal apply to StillHaven. Session data stays on your device. The bilateral audio runs entirely client-side — there are no API calls, no external services, no telemetry. HRV data from Oura is cached locally and read only at session start; it is never written into journal content.
+
+## How to use it
+
+StillHaven is off by default. Enable it in **Settings → Health** — there's a toggle with a brief consent notice about what it is and isn't. Once enabled, it appears in the sidebar alongside your other views.
+
+Start with a short session, five minutes or so, and see how you feel before and after. If the activation drop is consistent, it's working. If not, try the other protocol or a different time of day.
+
+It's a tool. Use it if it helps. Ignore it if it doesn't.
+
+## What's next
+
+The immediate roadmap for StillHaven includes more protocols (sleep preparation, post-conflict reset) and deeper integration with the journal itself — linking the activation data to the entry mood score, so you can see over time whether lower pre-write activation correlates with different kinds of entries.
+
+The full source is on [GitHub](https://github.com/kenlacroix/moodhaven-journal). The [FAQ](/faq) has answers to common questions about how StillHaven works and when it's not appropriate.

@@ -36,8 +36,15 @@ import {
   dbDeleteBook,
   dbImportEntries,
   dbExportAll,
+  dbStillCreateSession,
+  dbStillRecordActivation,
+  dbStillUpdateSession,
+  dbStillListSessions,
+  dbStillGetSessionWithSamples,
+  dbLinkJournalEntryToSession,
   type BrowserEntryRow,
   type BrowserBook,
+  type BrowserStillSession,
 } from './browser';
 
 // Injected by vite.config.ts web build; fallback to package.json version at build time
@@ -460,6 +467,53 @@ async function dispatch(command: string, p: Params): Promise<any> {
         : null;
       const today = entries.find((e) => e.created_at.slice(0, 10) === new Date().toISOString().slice(0, 10));
       return { avg_since: avg, mood_today: today?.mood ?? null };
+    }
+
+    // -----------------------------------------------------------------------
+    // StillHaven (somatic sessions)
+    // -----------------------------------------------------------------------
+    case 'still_create_session': {
+      const session: BrowserStillSession = {
+        id: p.id as string,
+        protocol: p.protocol as string,
+        environment: (p.environment as string) ?? 'underwater',
+        bilateral_mode: (p.bilateralMode as string) ?? 'audio',
+        duration_seconds: (p.durationSeconds as number) ?? 0,
+        started_at: p.startedAt as string,
+        completed_at: null,
+        abandoned_at: null,
+        created_at: new Date().toISOString(),
+      };
+      return dbStillCreateSession(session);
+    }
+    case 'still_record_activation': {
+      return dbStillRecordActivation({
+        session_id: p.sessionId as string,
+        phase: p.phase as 'pre' | 'post',
+        activation: p.activation as number,
+        hrv_manual: (p.hrvManual as number | null) ?? null,
+        hrv_source: (p.hrvSource as string | null) ?? null,
+        note: (p.note as string | null) ?? null,
+        sampled_at: new Date().toISOString(),
+      });
+    }
+    case 'still_complete_session': {
+      return dbStillUpdateSession(p.id as string, {
+        completed_at: p.completedAt as string,
+        duration_seconds: p.durationSeconds as number,
+      });
+    }
+    case 'still_abandon_session': {
+      return dbStillUpdateSession(p.id as string, { abandoned_at: p.abandonedAt as string });
+    }
+    case 'still_list_sessions': {
+      return dbStillListSessions((p.limit as number | undefined) ?? 50);
+    }
+    case 'still_get_session_with_samples': {
+      return dbStillGetSessionWithSamples(p.id as string);
+    }
+    case 'link_journal_entry_to_session': {
+      return dbLinkJournalEntryToSession(p.entryId as string, p.sessionId as string);
     }
 
     // Session bridge — no-op in browser

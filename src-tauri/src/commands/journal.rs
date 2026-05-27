@@ -236,6 +236,18 @@ pub fn patch_entry_status(
     db::patch_entry_status(&db, &id, &status)
 }
 
+/// Link a journal entry to a StillHaven session.
+#[tauri::command]
+pub fn link_journal_entry_to_session(
+    db: State<Database>,
+    lock: State<'_, AppLockState>,
+    entry_id: String,
+    session_id: String,
+) -> Result<(), String> {
+    require_unlocked(&lock)?;
+    db::link_journal_entry_to_session(&db, &entry_id, &session_id)
+}
+
 /// Sync tags for an entry (replaces all existing tags).
 #[tauri::command]
 pub fn sync_entry_tags(
@@ -312,6 +324,7 @@ mod tests {
     /// ASCII password round-trip: hash and verify must agree.
     #[test]
     fn test_verify_ascii_password_correct() {
+        // nosemgrep: rust-hardcoded-secret (test fixture — PBKDF2 round-trip test)
         let password = "test123";
         // Use a fixed 16-byte salt (raw) — matches the 16-byte SALT_LENGTH in crypto.ts
         let salt_bytes = [
@@ -335,6 +348,7 @@ mod tests {
     /// Unicode password round-trip — non-ASCII critical path.
     #[test]
     fn test_verify_unicode_password_correct() {
+        // nosemgrep: rust-hardcoded-secret (test fixture — Unicode PBKDF2 round-trip test)
         let password = "日記📝";
         let salt_bytes = [
             0xdeu8, 0xad, 0xbe, 0xef, 0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef, 0xfe, 0xdc,

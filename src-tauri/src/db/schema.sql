@@ -125,3 +125,31 @@ CREATE TABLE IF NOT EXISTS app_settings (
     value TEXT NOT NULL,
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+-- StillHaven: somatic session event log (append-only)
+CREATE TABLE IF NOT EXISTS still_sessions (
+    id               TEXT PRIMARY KEY,
+    protocol         TEXT NOT NULL,
+    environment      TEXT NOT NULL DEFAULT 'underwater',
+    bilateral_mode   TEXT NOT NULL DEFAULT 'audio',
+    duration_seconds INTEGER NOT NULL,
+    started_at       TEXT NOT NULL,
+    completed_at     TEXT,
+    abandoned_at     TEXT,
+    created_at       TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS still_activation_samples (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id  TEXT NOT NULL REFERENCES still_sessions(id) ON DELETE CASCADE,
+    phase       TEXT NOT NULL CHECK (phase IN ('pre', 'post')),
+    activation  INTEGER NOT NULL CHECK (activation >= 1 AND activation <= 10),
+    hrv_manual  INTEGER,
+    hrv_source  TEXT,
+    note        TEXT,
+    sampled_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_still_sessions_started  ON still_sessions(started_at DESC);
+CREATE INDEX IF NOT EXISTS idx_still_sessions_protocol ON still_sessions(protocol);
+CREATE INDEX IF NOT EXISTS idx_still_samples_session   ON still_activation_samples(session_id);

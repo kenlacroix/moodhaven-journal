@@ -13,6 +13,30 @@ import BlogPostClient from '@/components/BlogPostClient';
 import { Heading } from '@/components/Heading';
 
 // ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+function calcReadingTime(content: string): number {
+  const words = content.trim().split(/\s+/).length;
+  return Math.max(1, Math.ceil(words / 200));
+}
+
+function getPublishedSortedPosts() {
+  const todayISO = new Date().toISOString().slice(0, 10);
+  return getAllPosts()
+    .filter(
+      (p) =>
+        p.draft !== true &&
+        p.published !== false &&
+        p.publishDate &&
+        p.publishDate.slice(0, 10) <= todayISO
+    )
+    .sort(
+      (a, b) =>
+        new Date(b.publishDate!).getTime() - new Date(a.publishDate!).getTime()
+    );
+}
+
+// ---------------------------------------------------------------------------
 // Pre-render all blog slugs
 // ---------------------------------------------------------------------------
 export async function generateStaticParams() {
@@ -20,7 +44,7 @@ export async function generateStaticParams() {
 }
 
 // ---------------------------------------------------------------------------
-// Per-post metadata (title, description, OG image)
+// Per-post metadata
 // ---------------------------------------------------------------------------
 export async function generateMetadata(
   { params }: { params: Promise<{ slug: string }> }
@@ -53,13 +77,22 @@ export async function generateMetadata(
 // Page component
 // ---------------------------------------------------------------------------
 export default async function BlogPostPage({ params }: { params: Promise<{ slug: string }> }) {
-  const { slug } = await params;        // works whether ‘params’ is a Promise or plain
+  const { slug } = await params;
   const post = getPostBySlug(slug);
   if (!post.publishDate || new Date(post.publishDate) > new Date()) return notFound();
 
   // Table-of-contents
   const flatHeadings = await getHeadings(post.content);
   const toc = buildToc(flatHeadings);
+
+  // Reading time
+  const readingTime = calcReadingTime(post.content);
+
+  // Prev / next (sorted newest-first, so prev = older = higher index)
+  const sorted = getPublishedSortedPosts();
+  const idx = sorted.findIndex((p) => p.slug === slug);
+  const nextPost = idx > 0 ? { slug: sorted[idx - 1].slug, title: sorted[idx - 1].title } : undefined;
+  const prevPost = idx < sorted.length - 1 ? { slug: sorted[idx + 1].slug, title: sorted[idx + 1].title } : undefined;
 
   // Render MDX
   const mdxContent = (
@@ -84,10 +117,13 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
     <BlogPostClient
       title={post.title}
       publishDate={post.publishDate}
+      readingTime={readingTime}
       mdx={mdxContent}
       heroImage={post.heroImage}
       headings={toc}
       accentColor={post.accentColor}
+      prevPost={prevPost}
+      nextPost={nextPost}
     />
   );
 }

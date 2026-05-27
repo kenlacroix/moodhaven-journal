@@ -1,34 +1,43 @@
 ---
-title: "First Look: MoodHaven's Mobile Companion"
+title: "MoodHaven on Mobile: Browser App and Wear OS Companion"
 publishDate: "2025-06-13"
-heroImage: "/images/app-writing-view.png"
-excerpt: "A mobile journaling companion built around the same privacy-first principles as the desktop app — offline-first, encrypted, no mandatory accounts."
+heroImage: "/images/blog/first-look-moodhavens-mobile-companion.png"
+excerpt: "Your thoughts don't wait until you're at your desk. Here's how MoodHaven goes with you — in your browser and on your wrist."
 ---
 
 The desktop app is where MoodHaven started, but your thoughts don't always wait until you're at your computer.
 
-We're building a mobile companion that brings the same privacy-first principles to your phone.
+Here's how MoodHaven works when you're away from your desk.
 
-## What It's Built Around
+## In Your Browser
 
-The mobile app follows the same architecture as the desktop version:
+[journal.moodhaven.app](https://journal.moodhaven.app) is the full MoodHaven experience in any browser — desktop, tablet, or phone. No install required.
 
-**Local-first, always.** Journal entries are saved only to your device by default. No account required, no cloud dependency, no onboarding that asks you to sign up before you can write.
+The browser build uses IndexedDB instead of SQLite, but the encryption model is identical: AES-256-GCM with a PBKDF2-derived key, all in your browser's memory. Your journal never leaves your device, even in the web-hosted version.
 
-**Optional encrypted sync.** If you want your entries available across devices, you can sync to your own cloud storage — MinIO, Backblaze, DigitalOcean Spaces, or a self-hosted solution. Only encrypted blobs are transferred. The service you sync to never sees plaintext.
+It works offline. Write without a connection, come back later.
 
-**Fully offline.** The app works without internet connectivity. Create entries, revisit past reflections, track your mood — all without a network connection.
+## On Your Wrist: Wear OS Companion
 
-**Calm interface.** The same design philosophy from the desktop app: soft tones, minimal chrome, no notifications you didn't ask for, no streaks, no gamification.
+The Wear OS companion app is built for the moment a thought arrives before you can reach for your phone.
 
-## How It Connects to the Desktop App
+Tap to record. The app captures your voice as a local audio file — 16 kHz mono, no upload, no cloud speech API. When you're back at your desktop, MoodHaven transcribes it using whisper.cpp, a local inference engine that runs entirely on your machine.
 
-The mobile app and desktop app can sync directly over your local network — no intermediary server required. Both devices discover each other via mDNS, authenticate through a QR code pairing flow, and exchange encrypted entries over a direct TCP connection.
+The transcription lands in a review queue. You edit it, add context, set a mood, and it becomes a journal entry. The audio file is deleted after transcription.
 
-Your data travels from device to device as ciphertext. Neither device trusts the other blindly — pairing requires a PIN that you verify in person.
+## How They Connect
 
-## What's Coming
+The desktop app is the hub. The browser app and Wear OS companion connect to it — through encrypted WebDAV sync to your own storage, or directly over your local network with LAN peer sync.
 
-The Wear OS companion (for voice journaling on the go) is already in progress. The watch captures audio, forwards it to your phone, and the desktop app transcribes it locally using whisper.cpp — no cloud speech API.
+Neither path routes data through MoodHaven's servers. Your entries travel as ciphertext between your own devices.
 
-The mobile app is in active development. Watch [GitHub Releases](https://github.com/kenlacroix/moodhaven-journal/releases) for updates.
+## The Privacy Model Holds Everywhere
+
+Whether you're writing on your phone's browser, speaking into your watch, or typing at a keyboard — the rules don't change:
+
+- Journal content is encrypted before storage
+- Audio is transcribed locally, never sent to a cloud API
+- No account required to start writing
+- Sync uses your own storage, not ours
+
+The desktop app for Windows, macOS, and Linux is available on the [download page](/download). The browser app is at [journal.moodhaven.app](https://journal.moodhaven.app).

@@ -59,7 +59,9 @@ fn scan_dir_for_banned(dir: &Path, banned: &[String]) -> Vec<String> {
 
 fn main() {
     // Wellness language lint: fail cargo check if banned clinical terms appear in Rust sources.
-    let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap_or(Path::new(".."));
+    let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap_or(Path::new(".."));
     let banned_file = workspace_root.join("wellness-language-banned.txt");
     let src_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
 

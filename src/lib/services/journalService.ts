@@ -152,13 +152,26 @@ export function getSessionPassword(): string | null {
 /**
  * Create a new journal entry (encrypts content automatically)
  */
+function extractAndStripSessionId(html: string): { cleaned: string; sessionId: string | null } {
+  const match = html.match(/<span[^>]+data-still-session-id="([^"]+)"[^>]*>.*?<\/span>/);
+  if (!match) return { cleaned: html, sessionId: null };
+  return {
+    cleaned: html.replace(match[0], ''),
+    sessionId: match[1],
+  };
+}
+
 export async function createEntry(
   data: JournalEntryFormData & { locationWeather?: LocationWeather; bookId?: string }
 ): Promise<JournalEntry> {
   const password = getPassword();
 
+  // Strip hidden StillHaven session marker before encrypting
+  const { cleaned: cleanedContent, sessionId } = extractAndStripSessionId(data.content);
+  const contentToSave = sessionId ? cleanedContent : data.content;
+
   // Encrypt the content
-  const result = await encrypt(data.content, password);
+  const result = await encrypt(contentToSave, password);
 
   if (!result.success || !result.data) {
     throw new Error(result.error || 'Encryption failed');
@@ -182,10 +195,17 @@ export async function createEntry(
     await invoke('sync_entry_tags', { id, tags: data.tags });
   }
 
+  // Link to StillHaven session if marker was present
+  if (sessionId) {
+    linkEntryToSession(id, sessionId).catch((e) => {
+      console.warn('[journalService] session link failed (non-fatal):', e);
+    });
+  }
+
   // Return decrypted entry
   return {
     id: row.id,
-    content: data.content, // We already have the plaintext
+    content: contentToSave, // plaintext with session marker stripped
     mood: row.mood as MoodLevel,
     privacyMode: (row.privacy_mode ?? 0) as PrivacyMode,
     tags: data.tags,
@@ -469,6 +489,13 @@ export async function patchEntryLocationWeather(
  */
 export async function patchEntryPinned(id: string, pinned: boolean): Promise<void> {
   await invoke('patch_entry_pinned', { id, pinned });
+}
+
+/**
+ * Link a journal entry to a StillHaven session after the entry is created.
+ */
+export async function linkEntryToSession(entryId: string, sessionId: string): Promise<void> {
+  await invoke('link_journal_entry_to_session', { entryId, sessionId });
 }
 
 /**

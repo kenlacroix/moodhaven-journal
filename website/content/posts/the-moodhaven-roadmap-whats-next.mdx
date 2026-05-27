@@ -3,40 +3,28 @@ title: "The MoodHaven Roadmap: What's Next"
 description: "Building towards a future where your journal is always yours."
 publishDate: "2025-05-05"
 tags: ["roadmap", "updates", "encryption", "privacy"]
-excerpt: "Building towards a future where your journal is always yours — mobile sync, AI insights, and a Wear OS companion for voice reflections."
-heroImage: "/images/app-timeline-view.png"
+excerpt: "What shipped, what's coming, and how the project has grown — from the first commit to v1.0."
+heroImage: "/images/blog/the-moodhaven-roadmap-whats-next.png"
 ---
 
 > _Thanks for all the early support — it means the world as MoodHaven Journal takes shape._
 
-Here’s a look at what’s ahead:
+This post was originally written in May 2025, when much of what's described here was still ahead. We're leaving it as a record of where the project started — and updating it with what actually shipped.
 
-## Mobile Companion App
+## What's Shipped (as of v1.0)
 
-A simple, encrypted-first mobile app is on the roadmap.
+**Wear OS companion and browser app.** The Wear OS companion captures voice memos on your wrist and transcribes them locally with whisper.cpp — no cloud speech API. The browser app at [journal.moodhaven.app](https://journal.moodhaven.app) brings the full MoodHaven experience to any device, no install required.
 
-It will sync only fully encrypted blobs to your self-hosted cloud — no server dependencies, no decrypted data outside your device.
+**AI insights.** Mood trends, writing streaks, and pattern nudges run locally on your device. If you want deeper analysis, connect your own OpenAI key or a local Ollama instance — your journal text never leaves your device either way.
 
-## Insights and Charts Plug-in System
+**WebDAV sync.** Connect to Nextcloud, Backblaze B2, DigitalOcean Spaces, or any self-hosted WebDAV endpoint. Only encrypted blobs are ever transferred — the server sees ciphertext, nothing more.
 
-MoodHaven will offer optional local plug-ins for generating insights and charts based on your entries — without ever exposing your private data.
+**LAN peer sync.** Two of your own devices can sync directly over your local network — no relay server, no cloud, just your machines exchanging encrypted entries over a direct TCP connection secured with Ed25519 device identities.
 
-You'll be able to install only the ones you want, keeping your journal experience light, focused, and under your full control.
+**702 automated tests.** Every encryption path, sync edge case, and UI component covered.
 
-## Backup Options (Shipped)
+## What's Next
 
-WebDAV sync is live — connect to Nextcloud, any self-hosted WebDAV server, or compatible cloud providers. S3-compatible services (MinIO, Backblaze B2, DigitalOcean Spaces) are also supported.
+v1.1 planning is underway. The immediate focus is **StillHaven** — a somatic companion module designed to help you settle before you write. Separate from the journal itself, intentionally minimal, built with the same privacy constraints.
 
-Only encrypted blobs are ever transferred. The server sees ciphertext, nothing more.
-
----
-
-Every feature we add stays true to the MoodHaven philosophy:
-
-**Local first. Encrypted first. User first.**
-
----
-
-Thanks for believing in tools that respect your thoughts, your privacy, and your freedom.
-
-MoodHaven Journal is an open-source, privacy-first journaling app. [View the source on GitHub](https://github.com/kenlacroix/moodhaven-journal) or [download the latest release](/download).
+Follow [GitHub Releases](https://github.com/kenlacroix/moodhaven-journal/releases) for updates.

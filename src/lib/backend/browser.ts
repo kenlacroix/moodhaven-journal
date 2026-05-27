@@ -12,7 +12,7 @@
  */
 
 const DB_NAME = 'moodhaven';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 // --------------------------------------------------------------------------
 // DB open / upgrade
@@ -40,6 +40,27 @@ export function openDB(): Promise<IDBDatabase> {
       }
       if (!db.objectStoreNames.contains('webdav_state')) {
         db.createObjectStore('webdav_state', { keyPath: 'id' });
+      }
+      // v2: StillHaven session storage
+      if (!db.objectStoreNames.contains('still_sessions')) {
+        const ss = db.createObjectStore('still_sessions', { keyPath: 'id' });
+        ss.createIndex('started_at', 'started_at');
+        ss.createIndex('protocol', 'protocol');
+      }
+      if (!db.objectStoreNames.contains('still_activation_samples')) {
+        const sa = db.createObjectStore('still_activation_samples', {
+          keyPath: 'id',
+          autoIncrement: true,
+        });
+        sa.createIndex('session_id', 'session_id');
+      }
+      // v2: session_id index on journal_entries
+      if (db.objectStoreNames.contains('journal_entries')) {
+        const t = (e as IDBVersionChangeEvent & { target: IDBOpenDBRequest }).target.transaction!;
+        const jeStore = t.objectStore('journal_entries');
+        if (!jeStore.indexNames.contains('session_id')) {
+          jeStore.createIndex('session_id', 'session_id');
+        }
       }
     };
     req.onsuccess = () => { _db = req.result; resolve(req.result); };
@@ -111,6 +132,7 @@ export interface BrowserEntryRow {
   linked_original_id: string | null;
   unsealed_at: string | null;
   status: string | null;
+  session_id?: string | null;
 }
 
 // --------------------------------------------------------------------------
@@ -444,6 +466,105 @@ export async function dbImportEntries(entries: BrowserEntryRow[]): Promise<numbe
     }
   }
   return entries.length;
+}
+
+// --------------------------------------------------------------------------
+// StillHaven (somatic sessions)
+// --------------------------------------------------------------------------
+
+export interface BrowserStillSession {
+  id: string;
+  protocol: string;
+  environment: string;
+  bilateral_mode: string;
+  duration_seconds: number;
+  started_at: string;
+  completed_at: string | null;
+  abandoned_at: string | null;
+  created_at: string;
+}
+
+export interface BrowserStillActivationSample {
+  id?: number;
+  session_id: string;
+  phase: 'pre' | 'post';
+  activation: number;
+  hrv_manual: number | null;
+  hrv_source: string | null;
+  note: string | null;
+  sampled_at: string;
+}
+
+export async function dbStillCreateSession(session: BrowserStillSession): Promise<BrowserStillSession> {
+  const db = await openDB();
+  const t = tx(db, 'still_sessions', 'readwrite');
+  await put(t.objectStore('still_sessions'), session);
+  return session;
+}
+
+export async function dbStillRecordActivation(
+  sample: BrowserStillActivationSample,
+): Promise<BrowserStillActivationSample> {
+  const db = await openDB();
+  const t = tx(db, 'still_activation_samples', 'readwrite');
+  const store = t.objectStore('still_activation_samples');
+  const id: number = await new Promise((resolve, reject) => {
+    const req = store.add(sample);
+    req.onsuccess = () => resolve(req.result as number);
+    req.onerror = () => reject(req.error);
+  });
+  return { ...sample, id };
+}
+
+export async function dbStillUpdateSession(
+  id: string,
+  patch: Partial<BrowserStillSession>,
+): Promise<void> {
+  const db = await openDB();
+  const t = tx(db, 'still_sessions', 'readwrite');
+  const store = t.objectStore('still_sessions');
+  const existing = await get<BrowserStillSession>(store, id);
+  if (!existing) throw new Error(`StillSession not found: ${id}`);
+  await put(store, { ...existing, ...patch });
+}
+
+export async function dbStillListSessions(limit = 50): Promise<BrowserStillSession[]> {
+  const db = await openDB();
+  const t = tx(db, 'still_sessions', 'readonly');
+  const all_rows = await all<BrowserStillSession>(t.objectStore('still_sessions'));
+  return all_rows
+    .sort((a, b) => b.started_at.localeCompare(a.started_at))
+    .slice(0, limit);
+}
+
+export async function dbStillGetSessionWithSamples(
+  id: string,
+): Promise<{ session: BrowserStillSession; samples: BrowserStillActivationSample[] } | null> {
+  const db = await openDB();
+  const tSess = tx(db, 'still_sessions', 'readonly');
+  const session = await get<BrowserStillSession>(tSess.objectStore('still_sessions'), id);
+  if (!session) return null;
+  const tSamp = tx(db, 'still_activation_samples', 'readonly');
+  const allSamples = await all<BrowserStillActivationSample>(
+    tSamp.objectStore('still_activation_samples'),
+  );
+  const samples = allSamples
+    .filter((s) => s.session_id === id)
+    .sort((a, b) => a.sampled_at.localeCompare(b.sampled_at));
+  return { session, samples };
+}
+
+export async function dbLinkJournalEntryToSession(
+  entryId: string,
+  sessionId: string,
+): Promise<void> {
+  const db = await openDB();
+  const t = tx(db, 'journal_entries', 'readwrite');
+  const store = t.objectStore('journal_entries');
+  const existing = await get<BrowserEntryRow>(store, entryId);
+  if (existing) {
+    await put(store, { ...existing, session_id: sessionId });
+  }
 }
 
 // --------------------------------------------------------------------------

@@ -224,6 +224,28 @@ Added `buildFeatures { buildConfig = true }` to `wear/build.gradle.kts`. Replace
 
 ---
 
+## StillHaven — Bio-Adaptive Engine
+
+### STILL-B-001: Live watch HR adaptation (Tier B) — deferred
+**What:** During an active StillHaven session, receive periodic heart-rate readings from the Wear OS watch via the existing `wear://signal` → `health_snapshot` event pipeline and adjust the bilateral engine speed in real time.
+
+Desktop side (ready to receive — no code changes needed once watch sends signals):
+- `useStillBioFeedback` hook: subscribe to `listen<WearSignalEvent>('wear://signal', …)`, filter `type === 'health_snapshot'`, apply exponential smoothing (`0.7 * smoothed + 0.3 * incoming`), call `stillStore.getState().setSpeed(hz)`. Revert to `baseSpeed` if no signal for 3+ minutes. Return `isAdapting: boolean`.
+- `Underwater2D` prop `isAdapting`: show a subtle pulse indicator on the elapsed timer when bio-feedback is active.
+- `SummaryData.adaptations?: number`: count of speed adjustments; show "Session adapted N times" in summary if > 0.
+- Add `heartRate?: number` to `HealthSnapshotPayload` in `src/types/signals.ts`.
+
+Watch side (blocks this feature — requires Kotlin + Health Services work):
+- `HealthServicesClient.measureClient` to read HR once per 60s during an active session.
+- `MessageAPI`: send `{ type: 'health_snapshot', payload: { heartRate, source: 'health_connect' } }` to phone.
+- `WearListenerService` on phone routes it through `wearBridgeSignal()` unchanged — no phone-side changes needed.
+
+**Why deferred:** The watch companion app does not yet have a real-time HR reading loop. All desktop plumbing can be implemented speculatively; the feature activates automatically once the watch sends `health_snapshot` signals.
+**Effort (desktop):** CC+gstack ~1h | **Effort (watch):** human ~1d native Kotlin
+**Depends on:** Watch companion Phase 5 (AI enrichment / smart signals iteration)
+
+---
+
 ## Packaging Debt
 
 ### ~~PKG-001: Move @types/dompurify to devDependencies~~ ✅ RESOLVED (2026-04-17)

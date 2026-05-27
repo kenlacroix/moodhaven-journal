@@ -324,7 +324,8 @@ mod tests {
     /// ASCII password round-trip: hash and verify must agree.
     #[test]
     fn test_verify_ascii_password_correct() {
-        let password = "test123"; // nosemgrep: rust-hardcoded-secret (test fixture — PBKDF2 round-trip test)
+        // nosemgrep: rust-hardcoded-secret (test fixture — PBKDF2 round-trip test)
+        let password = "test123";
         // Use a fixed 16-byte salt (raw) — matches the 16-byte SALT_LENGTH in crypto.ts
         let salt_bytes = [
             0x61u8, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68, 0x69, 0x6a, 0x6b, 0x6c, 0x6d, 0x6e,
@@ -347,7 +348,8 @@ mod tests {
     /// Unicode password round-trip — non-ASCII critical path.
     #[test]
     fn test_verify_unicode_password_correct() {
-        let password = "日記📝"; // nosemgrep: rust-hardcoded-secret (test fixture — Unicode PBKDF2 round-trip test)
+        // nosemgrep: rust-hardcoded-secret (test fixture — Unicode PBKDF2 round-trip test)
+        let password = "日記📝";
         let salt_bytes = [
             0xdeu8, 0xad, 0xbe, 0xef, 0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef, 0xfe, 0xdc,
             0xba, 0x98,

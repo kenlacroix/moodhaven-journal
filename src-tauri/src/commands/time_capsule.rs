@@ -427,8 +427,9 @@ mod tests {
         // created_at matches today's M-D (use a past year so anniversary logic triggers)
         let today_md = "strftime('%m-%d', 'now')";
         let created_at_expr = format!("strftime('%Y', 'now', '-2 years') || '-' || {}", today_md);
+        // nosemgrep: rust-sql-injection (test fixture — developer-controlled SQLite expressions, not user input)
         conn.execute(
-            &format!( // nosemgrep: rust-sql-injection (test fixture — developer-controlled SQLite expressions, not user input)
+            &format!(
                 "INSERT INTO journal_entries
                  (id, encrypted_content, mood, created_at, updated_at, sealed_until, capsule_type)
                  VALUES ('e6', '{{}}', 3,

@@ -21,6 +21,8 @@ import type {
   WellnessSettings,
 } from '../types/settings';
 import { createDefaultSettings } from '../types/settings';
+import type { WritingAppearance } from '../types/writingAppearance';
+import { clampTextScale } from '../types/writingAppearance';
 import { setLevel } from '../lib/services/logger';
 import {
   loadSettings,
@@ -61,6 +63,7 @@ interface SettingsState {
   setTheme: (theme: 'light' | 'dark' | 'system') => void;
   setCompactMode: (enabled: boolean) => void;
   setAnimationsEnabled: (enabled: boolean) => void;
+  setWritingAppearance: (patch: Partial<WritingAppearance>) => void;
 
   // Privacy
   setAutoLockTimeout: (minutes: number) => void;
@@ -86,6 +89,7 @@ interface SettingsState {
 
   // Tutorial
   setHasSeenTutorial: (seen: boolean) => void;
+  setHasSeenWritingDrawerHint: (seen: boolean) => void;
 
   // Speech-to-Text
   setSTTEnabled: (enabled: boolean) => void;
@@ -338,6 +342,26 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     }));
   },
 
+  setWritingAppearance: (patch) => {
+    set((state) => {
+      // Clamp textScale at write time so callers don't have to worry about it.
+      const safePatch =
+        patch.textScale !== undefined
+          ? { ...patch, textScale: clampTextScale(patch.textScale) }
+          : patch;
+      return {
+        settings: {
+          ...state.settings,
+          appearance: {
+            ...state.settings.appearance,
+            writing: { ...state.settings.appearance.writing, ...safePatch },
+          },
+        },
+        hasUnsavedChanges: true,
+      };
+    });
+  },
+
   // Privacy
   setAutoLockTimeout: (autoLockTimeout) => {
     set((state) => ({
@@ -495,6 +519,16 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       settings: {
         ...state.settings,
         tutorial: { ...state.settings.tutorial, hasSeenTutorial },
+      },
+      hasUnsavedChanges: true,
+    }));
+  },
+
+  setHasSeenWritingDrawerHint: (hasSeenWritingDrawerHint) => {
+    set((state) => ({
+      settings: {
+        ...state.settings,
+        tutorial: { ...state.settings.tutorial, hasSeenWritingDrawerHint },
       },
       hasUnsavedChanges: true,
     }));

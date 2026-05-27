@@ -248,6 +248,7 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
   const setShowPrompts = useSettingsStore((s) => s.setShowPrompts);
   const showPrompts = useSettingsStore((s) => s.settings.journal.showPrompts);
   const distractionFree = useSettingsStore((s) => s.distractionFree);
+  const writingAppearance = useSettingsStore((s) => s.settings.appearance.writing);
   const { isAndroid, isBrowser } = usePlatform();
   const setDistractionFree = useSettingsStore((s) => s.setDistractionFree);
   const sttModel = useSettingsStore((s) => s.settings.speechToText.model);
@@ -1124,7 +1125,20 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
 
   // ── Desktop layout ────────────────────────────────────────────────────────────
   return (
-    <div className={`h-full flex flex-col transition-all duration-500 ${distractionFree ? 'focus-bg' : 'writing-bg'}`}>
+    <div
+      data-writing-prefs
+      data-writing-font={writingAppearance.fontFamily}
+      data-writing-size={writingAppearance.fontSize}
+      data-writing-line-height={writingAppearance.lineHeight}
+      data-writing-paragraph-spacing={writingAppearance.paragraphSpacing}
+      data-writing-tint={writingAppearance.backgroundTint}
+      data-writing-width={writingAppearance.writingWidth}
+      data-writing-focus-mode={writingAppearance.focusMode ? 'true' : 'false'}
+      data-writing-high-contrast={writingAppearance.highContrast ? 'true' : 'false'}
+      data-writing-dyslexia={writingAppearance.dyslexiaProfile ? 'true' : 'false'}
+      style={{ ['--mh-writing-text-scale' as string]: String(writingAppearance.textScale) }}
+      className={`h-full flex flex-col transition-all duration-500 ${distractionFree ? 'focus-bg' : 'writing-bg'}`}
+    >
       <div className="flex-1 flex flex-col min-h-0 px-4 sm:px-8 lg:px-12 py-4 sm:py-7 lg:py-10">
         <div className="flex-1 flex flex-col w-full min-h-0 relative">
 

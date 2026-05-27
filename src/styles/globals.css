@@ -417,6 +417,45 @@
   --mh-writing-fg: #FFFFFF;
 }
 
+/* Force every editor element to the high-contrast foreground. The TipTap
+ * editor injects per-element style rules (h2/h3/blockquote/code/etc.) with
+ * higher specificity than our [data-writing-prefs] .ProseMirror rule, so
+ * we need explicit per-element overrides here. !important wins over both
+ * the inline <style> block in RichTextEditor.tsx and any dark-mode utility
+ * variants applied to the editor wrapper. */
+[data-writing-prefs][data-writing-high-contrast='true'] .ProseMirror,
+[data-writing-prefs][data-writing-high-contrast='true'] .ProseMirror p,
+[data-writing-prefs][data-writing-high-contrast='true'] .ProseMirror h1,
+[data-writing-prefs][data-writing-high-contrast='true'] .ProseMirror h2,
+[data-writing-prefs][data-writing-high-contrast='true'] .ProseMirror h3,
+[data-writing-prefs][data-writing-high-contrast='true'] .ProseMirror h4,
+[data-writing-prefs][data-writing-high-contrast='true'] .ProseMirror li,
+[data-writing-prefs][data-writing-high-contrast='true'] .ProseMirror blockquote,
+[data-writing-prefs][data-writing-high-contrast='true'] .ProseMirror strong,
+[data-writing-prefs][data-writing-high-contrast='true'] .ProseMirror em,
+[data-writing-prefs][data-writing-high-contrast='true'] .ProseMirror a,
+[data-writing-prefs][data-writing-high-contrast='true'] .ProseMirror code {
+  color: var(--mh-writing-fg) !important;
+}
+
+/* Blockquote and code backgrounds: strip the soft tints in high contrast
+ * so the editor reads as pure on-pure. */
+[data-writing-prefs][data-writing-high-contrast='true'] .ProseMirror blockquote {
+  border-left-color: var(--mh-writing-fg) !important;
+  font-style: normal;
+}
+[data-writing-prefs][data-writing-high-contrast='true'] .ProseMirror code,
+[data-writing-prefs][data-writing-high-contrast='true'] .ProseMirror pre {
+  background: transparent !important;
+  border: 1px solid var(--mh-writing-fg);
+}
+
+/* Title input + placeholder: also high-contrast aware. */
+[data-writing-prefs][data-writing-high-contrast='true'] .ProseMirror p.is-editor-empty:first-child::before {
+  color: var(--mh-writing-fg) !important;
+  opacity: 0.55;
+}
+
 /* ── Focus mode — dim non-active paragraphs ── */
 
 [data-writing-prefs][data-writing-focus-mode='true'] :is(p, h1, h2, h3, h4, ul, ol, blockquote):not(:hover):not(:focus-within) {

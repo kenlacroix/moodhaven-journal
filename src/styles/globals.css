@@ -424,6 +424,48 @@
   transition: opacity 250ms ease;
 }
 
+/* ── First-visit pulse for the appearance toggle ──
+ * Three soft pulses on the violet brand color, then settles. Honors
+ * prefers-reduced-motion via the existing global rule above. */
+@keyframes drawer-hint-pulse-kf {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0); }
+  20%      { box-shadow: 0 0 0 6px rgba(139, 92, 246, 0.35); }
+  40%      { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0); }
+  60%      { box-shadow: 0 0 0 6px rgba(139, 92, 246, 0.35); }
+  80%      { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0); }
+}
+.drawer-hint-pulse {
+  animation: drawer-hint-pulse-kf 3000ms ease-out 1;
+}
+
+/* ── Editor surface consumption — the .ProseMirror node reads the variables ── */
+
+[data-writing-prefs] .ProseMirror {
+  font-family: var(--mh-writing-font);
+  font-size: calc(var(--mh-writing-font-size) * var(--mh-writing-text-scale, 1));
+  line-height: var(--mh-writing-line-height);
+  letter-spacing: var(--mh-writing-letter-spacing, normal);
+  color: var(--mh-writing-fg);
+  max-width: var(--mh-writing-max-width);
+  margin-inline: auto;
+  /* Transition kept short and on color-only — never on font-size or letter-spacing
+   * (those would make typing feel laggy when the user tweaks). */
+  transition: color 150ms ease;
+}
+
+[data-writing-prefs] .ProseMirror p {
+  margin: var(--mh-writing-para-spacing) 0;
+}
+
+/* The editor's CARD background tracks the chosen tint. The outer page
+ * background (writing-bg / focus-bg gradients) is intentionally NOT
+ * variable-driven — those gradients are ambient atmosphere, separate
+ * from the editor surface tint. */
+[data-writing-prefs] .editor-surface {
+  background-color: var(--mh-writing-bg);
+  transition: background-color 200ms ease;
+}
+
 /* ── Android / touch device polish ──────────────────────────────────────────
  *
  * Applied via (hover: none) media query so it targets touch screens only,

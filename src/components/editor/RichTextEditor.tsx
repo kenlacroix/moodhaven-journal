@@ -140,7 +140,12 @@ export function RichTextEditor({
     autofocus: autoFocus ? 'end' : false,
     editorProps: {
       attributes: {
-        class: 'outline-none min-h-full text-lg leading-[1.8] text-slate-700 dark:text-slate-200',
+        // Font, size, line-height, and letter-spacing are driven by CSS vars
+        // declared on the [data-writing-prefs] ancestor in WritingView. See
+        // active-plans/writing-experience-customization.md. The dark text
+        // fallback below applies only when the editor is rendered outside a
+        // data-writing-prefs ancestor (e.g. future reuse in other contexts).
+        class: 'outline-none min-h-full text-slate-700 dark:text-slate-200',
       },
     },
     onUpdate: ({ editor }) => {
@@ -542,7 +547,8 @@ export function RichTextEditor({
           height: 0;
         }
 
-        /* Paragraph spacing */
+        /* Paragraph spacing — overridden by var(--mh-writing-para-spacing) when
+         * the editor is inside a [data-writing-prefs] ancestor (see globals.css). */
         .ProseMirror p {
           margin: 0.75em 0;
         }

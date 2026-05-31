@@ -78,12 +78,14 @@ moodbloom-tauri/
 ├── src/                        # React frontend
 │   ├── App.tsx                 # Root: routing, lock screen, first-run wizard
 │   ├── components/             # UI components by feature
+│   │   ├── editor/             # RichTextEditor + EditorToolbar, EditorRecording, EditorLinkDialog, EditorIcons, EditorStyles.css
 │   │   ├── journal/            # MoodSelector, TemplateSelector, EntryActionsMenu …
-│   │   ├── layout/             # TopBar, Sidebar, MainLayout
+│   │   ├── layout/             # TopBar, Sidebar + SidebarHeader/Navigation/Books/Prompts, MainLayout
+│   │   ├── peer-sync/          # DevicesTab + sub-components, PairingModal + sub-components
 │   │   ├── search/             # SearchModal (Ctrl+K)
-│   │   ├── sync/               # SyncDetailsModal, CloudSyncChip
+│   │   ├── sync/               # SyncDetailsModal
 │   │   ├── oura/               # OuraConnectionCard, HealthContextBadge
-│   │   └── settings/           # SettingsPage tabs
+│   │   └── settings/           # SettingsPage tabs + Privacy sub-sections
 │   ├── features/               # Full page views
 │   │   ├── writing/            # WritingView (main editor)
 │   │   ├── timeline/           # TimelineView (All Entries)

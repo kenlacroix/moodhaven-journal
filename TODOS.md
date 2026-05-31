@@ -145,10 +145,8 @@ Replaced `response.json()` with a streaming reader that aborts and falls back to
 
 ## Logging (feat/logging-debug — v0.7.9)
 
-### LOG-001: Per-module log level configuration (P3)
-**What:** Allow setting different verbosity per logical module (e.g., `[sync]` at `debug`, `[ai]` at `warn`). Currently a global level applies to all log output.
-**Why:** Debug-level sync logs are extremely verbose and would bury unrelated debug output from other modules.
-**Effort:** human ~4h / CC+gstack ~30min
+### ~~LOG-001: Per-module log level configuration (P3)~~ ✅ RESOLVED (2026-05-31)
+**Completed:** Per-module log levels shipped in v1.2.0 — `logger.forModule('sync')`, `logger.forModule('ai')` etc. in `logger.ts`; `set_log_level` Rust command accepts module prefix. Settings → About shows level badge.
 
 ### ~~LOG-002: Log level badge / indicator (P4)~~ ✅ RESOLVED (2026-05-31)
 **Completed:** Amber banner under log level selector in AboutTab when `debug` active; muted banner when `error`. Both disappear when level is `warn` or `info`.

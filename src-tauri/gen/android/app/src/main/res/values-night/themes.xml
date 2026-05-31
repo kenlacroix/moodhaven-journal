@@ -1,4 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Night-mode color overrides for Theme.MoodHaven.
+  Structural attributes inherit from values/themes.xml — only color tokens differ.
+-->
 <resources>
 
   <style name="Theme.MoodHaven" parent="Theme.MaterialComponents.DayNight.NoActionBar">

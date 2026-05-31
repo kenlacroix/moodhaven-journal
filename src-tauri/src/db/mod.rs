@@ -347,6 +347,24 @@ impl Database {
             [],
         );
 
+        // Runtime migrations: voice memo draft columns (Phase 5)
+        let _ = conn.execute(
+            "ALTER TABLE voice_memos ADD COLUMN context TEXT",
+            [],
+        );
+        let _ = conn.execute(
+            "ALTER TABLE voice_memos ADD COLUMN inferred_mood INTEGER",
+            [],
+        );
+        let _ = conn.execute(
+            "ALTER TABLE voice_memos ADD COLUMN book_id TEXT NOT NULL DEFAULT 'default'",
+            [],
+        );
+        let _ = conn.execute(
+            "ALTER TABLE voice_memos ADD COLUMN reviewed INTEGER NOT NULL DEFAULT 0",
+            [],
+        );
+
         // Ensure settings table exists early so the sync engine can query it.
         conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS settings (

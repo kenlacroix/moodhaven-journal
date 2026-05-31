@@ -17,8 +17,10 @@
 //! therefore consistent without any extra configuration.
 
 use crate::db::{self, Database, VoiceMemoRow};
+use rusqlite::params;
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_shell::ShellExt;
+use uuid::Uuid;
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -240,4 +242,163 @@ pub fn link_voice_memo_to_entry(
     entry_id: String,
 ) -> Result<(), String> {
     db::link_voice_memo_to_entry(&db, &memo_id, &entry_id)
+}
+
+/// Patch the context note on a voice memo draft.
+/// Optionally also updates `health_json` when location/weather resolves after recording.
+#[tauri::command]
+pub fn patch_voice_memo_context(
+    db: State<Database>,
+    id: String,
+    context: String,
+    location_weather_json: Option<String>,
+) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+
+    if let Some(ref lw) = location_weather_json {
+        conn.execute(
+            "UPDATE voice_memos SET context = ?1, health_json = ?2 WHERE id = ?3",
+            params![context, lw, id],
+        )
+        .map_err(|e| format!("Failed to patch context: {}", e))?;
+    } else {
+        conn.execute(
+            "UPDATE voice_memos SET context = ?1 WHERE id = ?2",
+            params![context, id],
+        )
+        .map_err(|e| format!("Failed to patch context: {}", e))?;
+    }
+
+    Ok(())
+}
+
+/// Set the AI-inferred mood score on a voice memo draft.
+#[tauri::command]
+pub fn patch_voice_memo_mood(
+    db: State<Database>,
+    id: String,
+    inferred_mood: i64,
+) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+
+    conn.execute(
+        "UPDATE voice_memos SET inferred_mood = ?1 WHERE id = ?2",
+        params![inferred_mood, id],
+    )
+    .map_err(|e| format!("Failed to patch inferred_mood: {}", e))?;
+
+    Ok(())
+}
+
+/// Publish a voice memo draft as a journal entry.
+///
+/// - Inserts a new row into `journal_entries` with the provided encrypted content.
+/// - Sets `entry_id` and `reviewed = 1` on the voice memo row.
+/// - Returns the created journal entry as JSON.
+///
+/// DB mutex is acquired and released before any further work — no cross-await holding.
+#[tauri::command]
+pub fn publish_voice_memo_draft(
+    db: State<Database>,
+    id: String,
+    encrypted_content: serde_json::Value,
+    mood: i64,
+    book_id: String,
+    privacy_mode: i64,
+) -> Result<serde_json::Value, String> {
+    let entry_id = Uuid::new_v4().to_string();
+    let content_json = serde_json::to_string(&encrypted_content)
+        .map_err(|e| format!("Failed to serialize encrypted_content: {}", e))?;
+
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+
+    // Insert journal entry
+    conn.execute(
+        "INSERT INTO journal_entries
+             (id, encrypted_content, mood, privacy_mode, book_id, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5,
+                 strftime('%Y-%m-%dT%H:%M:%S','now','localtime'),
+                 strftime('%Y-%m-%dT%H:%M:%S','now','localtime'))",
+        params![entry_id, content_json, mood, privacy_mode, book_id],
+    )
+    .map_err(|e| format!("Failed to insert journal entry: {}", e))?;
+
+    // Mark memo as reviewed and link entry
+    conn.execute(
+        "UPDATE voice_memos SET entry_id = ?1, reviewed = 1 WHERE id = ?2",
+        params![entry_id, id],
+    )
+    .map_err(|e| format!("Failed to update voice memo: {}", e))?;
+
+    // Fetch the created entry as JSON
+    let entry_json: String = conn
+        .query_row(
+            "SELECT je.id, je.encrypted_content, je.mood, je.privacy_mode,
+                    je.location_weather, je.book_id, je.pinned,
+                    je.created_at, je.updated_at
+             FROM journal_entries je
+             WHERE je.id = ?1",
+            params![entry_id],
+            |r| {
+                let obj = serde_json::json!({
+                    "id": r.get::<_, String>(0)?,
+                    "encrypted_content": r.get::<_, Option<String>>(1)?,
+                    "mood": r.get::<_, i64>(2)?,
+                    "privacy_mode": r.get::<_, i64>(3)?,
+                    "location_weather": r.get::<_, Option<String>>(4)?,
+                    "book_id": r.get::<_, Option<String>>(5)?.unwrap_or_else(|| "default".to_string()),
+                    "pinned": r.get::<_, i64>(6)? != 0,
+                    "created_at": r.get::<_, String>(7)?,
+                    "updated_at": r.get::<_, String>(8)?,
+                    "tags": [],
+                });
+                // rusqlite closures must return rusqlite::Result
+                Ok(obj.to_string())
+            },
+        )
+        .map_err(|e| format!("Failed to fetch created entry: {}", e))?;
+
+    serde_json::from_str(&entry_json)
+        .map_err(|e| format!("Failed to parse entry JSON: {}", e))
+}
+
+/// Discard a voice memo draft: deletes the audio file and the DB row.
+#[tauri::command]
+pub fn discard_voice_memo_draft(
+    app: AppHandle,
+    db: State<Database>,
+    id: String,
+) -> Result<(), String> {
+    // Fetch file path before acquiring the lock for deletion, to avoid
+    // holding the lock across filesystem calls.
+    let file_path = {
+        let row = db::get_voice_memo(&db, &id)?;
+        row.map(|r| r.file_path)
+    };
+
+    // Delete the DB row
+    {
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        conn.execute("DELETE FROM voice_memos WHERE id = ?1", params![id])
+            .map_err(|e| format!("Failed to delete voice memo: {}", e))?;
+    }
+
+    // Best-effort file deletion
+    if let Some(rel_path) = file_path {
+        if let Ok(data_dir) = app.path().app_data_dir() {
+            let abs_path = data_dir.join(&rel_path);
+            let _ = std::fs::remove_file(&abs_path);
+        }
+    }
+
+    Ok(())
+}
+
+/// List voice memo drafts that are transcribed but not yet published or discarded.
+#[tauri::command]
+pub fn list_pending_drafts(
+    db: State<Database>,
+    limit: Option<i64>,
+) -> Result<Vec<VoiceMemoRow>, String> {
+    db::list_pending_drafts(&db, limit)
 }

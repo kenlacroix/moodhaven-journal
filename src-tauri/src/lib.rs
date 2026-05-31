@@ -317,6 +317,12 @@ pub fn run() {
             commands::patch_voice_memo_transcription,
             commands::link_voice_memo_to_entry,
             commands::transcribe_voice_memo,
+            // Voice memo drafts (Phase 5)
+            commands::patch_voice_memo_context,
+            commands::patch_voice_memo_mood,
+            commands::publish_voice_memo_draft,
+            commands::discard_voice_memo_draft,
+            commands::list_pending_drafts,
             // Peer-to-peer sync (Phase 1: identity + discovery)
             commands::peer_get_identity,
             commands::peer_rename_device,

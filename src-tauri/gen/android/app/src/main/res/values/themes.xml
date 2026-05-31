@@ -1,6 +1,36 @@
-<resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- Base application theme. -->
-    <style name="Theme.moodhaven" parent="Theme.MaterialComponents.DayNight.NoActionBar">
-        <!-- Customize your theme here. -->
-    </style>
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  MoodHaven theme for the Android phone companion.
+
+  Inherits from Theme.MaterialComponents.DayNight.NoActionBar so all
+  Material widgets, edge-to-edge behavior, and the Tauri WebView host
+  work correctly. Only brand-relevant color attributes are overridden.
+
+  The WebView renders the full journal UI — these theme values appear
+  during splash, in the status/nav bars, and in any native dialogs
+  the Tauri layer surfaces.
+-->
+<resources>
+
+  <style name="Theme.MoodHaven" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+    <item name="colorPrimary">@color/brand_primary_500</item>
+    <item name="colorPrimaryVariant">@color/brand_primary_700</item>
+    <item name="colorOnPrimary">@android:color/white</item>
+    <item name="colorSecondary">@color/brand_primary_400</item>
+    <item name="colorSecondaryVariant">@color/brand_primary_600</item>
+    <item name="colorOnSecondary">@android:color/white</item>
+    <item name="android:colorBackground">@color/brand_cream</item>
+    <item name="colorSurface">@color/phone_surface</item>
+    <item name="colorOnSurface">@color/phone_on_surface</item>
+  </style>
+
+  <!-- Splash screen theme — applied to MainActivity on launch only.
+       The SplashScreen API removes the splash and transitions to Theme.MoodHaven
+       automatically once the first frame is drawn. -->
+  <style name="Theme.MoodHaven.Splash" parent="Theme.SplashScreen">
+    <item name="windowSplashScreenBackground">@color/brand_cream</item>
+    <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_foreground</item>
+    <item name="postSplashScreenTheme">@style/Theme.MoodHaven</item>
+  </style>
+
 </resources>

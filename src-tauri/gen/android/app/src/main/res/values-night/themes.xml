@@ -1,6 +1,22 @@
-<resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- Base application theme. -->
-    <style name="Theme.moodhaven" parent="Theme.MaterialComponents.DayNight.NoActionBar">
-        <!-- Customize your theme here. -->
-    </style>
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+  <style name="Theme.MoodHaven" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+    <item name="colorPrimary">@color/brand_primary_400</item>
+    <item name="colorPrimaryVariant">@color/brand_primary_600</item>
+    <item name="colorOnPrimary">@color/brand_primary_950</item>
+    <item name="colorSecondary">@color/brand_primary_300</item>
+    <item name="colorSecondaryVariant">@color/brand_primary_500</item>
+    <item name="colorOnSecondary">@color/brand_primary_950</item>
+    <item name="android:colorBackground">@color/phone_surface_dark</item>
+    <item name="colorSurface">@color/phone_surface_dark</item>
+    <item name="colorOnSurface">@color/phone_on_surface_dark</item>
+  </style>
+
+  <style name="Theme.MoodHaven.Splash" parent="Theme.SplashScreen">
+    <item name="windowSplashScreenBackground">@color/phone_surface_dark</item>
+    <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_foreground</item>
+    <item name="postSplashScreenTheme">@style/Theme.MoodHaven</item>
+  </style>
+
 </resources>

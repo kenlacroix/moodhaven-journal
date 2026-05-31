@@ -42,9 +42,16 @@ Landed on branch `chore/codebase-cleanup`. 60+ hex color literals replaced with 
 11. **Splash icon drawable.** Generate an adaptive icon variant of the logo at appropriate sizes; the existing launcher icon may already work via `mipmap-anydpi-v26/ic_launcher.xml`.
 12. **Verify on device.** Splash duration, brand color appears correctly, no flash to gray theme.
 
-## Phase D — companion app polish (separate scope)
+## Phase D — companion app polish ✅
 
-13. The **phone companion app** at `src-tauri/gen/android/app/` likely has similar drift. Mirror Phase A/B/C there if not already done.
+13. The **phone companion app** at `src-tauri/gen/android/app/` mirrored Phase A/B/C:
+    - `strings.xml`: "MoodBloom" → "MoodHaven" (app_name + main_activity_title)
+    - `colors.xml`: replaced 7 generic Material purple/teal colors with full MoodHaven brand palette (violet scale, cream, mood scale, phone-specific light/dark surfaces)
+    - `values/themes.xml`: renamed `Theme.moodhaven` → `Theme.MoodHaven`, wired Material Components color attributes, added `Theme.MoodHaven.Splash`
+    - `values-night/themes.xml`: dark-mode overrides (violet-400 primary, deep `#1A1A2E` surface)
+    - `AndroidManifest.xml`: updated `<application>` theme + set `Theme.MoodHaven.Splash` on `<activity>`
+    - `build.gradle.kts`: added `androidx.core:core-splashscreen:1.0.1`
+    - `MainActivity.kt`: added `installSplashScreen()` before `enableEdgeToEdge()`
 
 ## Not in scope
 

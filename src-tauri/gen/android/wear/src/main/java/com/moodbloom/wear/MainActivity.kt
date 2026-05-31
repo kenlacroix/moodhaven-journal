@@ -9,6 +9,7 @@ import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.lifecycleScope
 import androidx.viewpager2.adapter.FragmentStateAdapter
 import androidx.viewpager2.widget.ViewPager2
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -49,6 +50,7 @@ class MainActivity : FragmentActivity(),
     private lateinit var queuedEmoji:         TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        installSplashScreen(this)
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 

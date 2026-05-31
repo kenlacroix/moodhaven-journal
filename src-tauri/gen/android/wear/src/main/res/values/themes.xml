@@ -27,4 +27,13 @@
     <item name="android:colorAccent">@color/brand_primary_400</item>
   </style>
 
+  <!-- Splash screen theme — applied to MainActivity on launch only.
+       The SplashScreen API removes the splash and transitions to Theme.MoodHaven
+       automatically once the first frame is drawn. -->
+  <style name="Theme.MoodHaven.Splash" parent="Theme.SplashScreen">
+    <item name="windowSplashScreenBackground">@color/wear_surface</item>
+    <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_foreground</item>
+    <item name="postSplashScreenTheme">@style/Theme.MoodHaven</item>
+  </style>
+
 </resources>

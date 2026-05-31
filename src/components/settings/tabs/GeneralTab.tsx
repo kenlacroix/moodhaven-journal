@@ -2,13 +2,11 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import type { RefObject } from 'react';
 import type { AppSettings, ReminderFrequency, STTModel, STTFormattingLayer, DayOfWeek } from '../../../types/settings';
 import { STT_MODELS } from '../../../types/settings';
-import {
-  SettingSection,
-  SettingToggle,
-  SettingSelect,
-  SettingInput,
-  DaySelector,
-} from '../index';
+import { SettingSection } from '../SettingSection';
+import { SettingToggle } from '../SettingToggle';
+import { SettingSelect } from '../SettingSelect';
+import { SettingInput } from '../SettingInput';
+import { DaySelector } from '../DaySelector';
 import { useSettingsStore } from '../../../stores/settingsStore';
 import {
   checkModelStatus,

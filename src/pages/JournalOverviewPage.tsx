@@ -5,7 +5,7 @@
  * name/description, and per-journal settings toggles.
  */
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useBooksStore } from '../stores/booksStore';
 import { getAllEntries } from '../lib/services/journalService';
 import type { BookSettings, JournalEntry } from '../types/journal';
@@ -135,7 +135,7 @@ export function JournalOverviewPage({ bookId, onViewEntries, onBack }: JournalOv
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  const settings: BookSettings = book?.settings ?? {};
+  const settings = useMemo<BookSettings>(() => book?.settings ?? {}, [book]);
 
   // Load stats on mount
   useEffect(() => {

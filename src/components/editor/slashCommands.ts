@@ -19,7 +19,7 @@ export interface SlashCommandItem {
   command: (editor: Editor) => void;
 }
 
-export const slashCommandItems: SlashCommandItem[] = [
+const slashCommandItems: SlashCommandItem[] = [
   {
     title: 'Heading 2',
     description: 'Large section heading',

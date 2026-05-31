@@ -79,6 +79,9 @@ dependencies {
     // Wear OS View-based UI (WearableRecyclerView, WearableLinearLayoutManager)
     implementation("androidx.wear:wear:1.3.0")
 
+    // Splash screen (Phase C brand alignment)
+    implementation("androidx.core:core-splashscreen:1.0.1")
+
     // Wear OS Data Layer (MessageClient / NodeClient)
     implementation("com.google.android.gms:play-services-wearable:18.2.0")
 

@@ -1,6 +1,6 @@
 # Wear OS Brand Alignment
 
-**Status:** Phase A landed 2026-05-27 (low-risk additive infrastructure). Phases B–D queued for a hands-on PR with on-device testing.
+**Status:** Phases A + B complete. Phase C (splash screen) landed. Phase D (companion app) queued.
 **Scope:** Tactical polish pass, no office-hours design needed.
 
 ## Why
@@ -24,12 +24,16 @@ Wear OS companion app doesn't reflect the MoodHaven brand identity. Now that the
 4. **Drawable XMLs** updated to reference `@color/*` instead of hex literals (`btn_outline.xml`, `circle_dot.xml`, `ic_record_btn.xml`).
 5. **Manifest theme switched** — `android:theme="@android:style/Theme.DeviceDefault"` → `@style/Theme.MoodHaven` on the application, and `@style/Theme.MoodHaven.Translucent` on `TileActionActivity`.
 
-## Phase B — queued (needs on-device build)
+## Phase B — complete ✅
+
+Landed on branch `chore/codebase-cleanup`. 60+ hex color literals replaced with `@color/` references across all 13 layout XMLs. 13 new named color entries added to `colors.xml` (alpha white variants, surface cards, amber, mood_low_accent).
 
 6. **Layout sweep.** Replace hardcoded hex colors in all 15 layout XMLs (`activity_*.xml`, `fragment_*.xml`, `item_*.xml`) with `@color/` references from the new palette. Key swap: any `#3B82F6` blue → `@color/brand_primary_500`, any `#8B9EFF` lavender → `@color/brand_primary_300`, the existing `#C4B5FD` is already brand and just needs the named reference. Mechanical change, high volume (~50-80 edits).
 7. **Verify on device.** Build the Wear APK, install on a Pixel Watch or emulator, walk through every screen, screenshot before/after.
 
-## Phase C — splash screen (needs gradle + theme work)
+## Phase C — complete ✅
+
+`Theme.MoodHaven.Splash` added to `themes.xml`; `androidx.core:core-splashscreen:1.0.1` added to `build.gradle.kts`; `MainActivity` launches with the splash theme; adaptive icon reused as splash icon via `windowSplashScreenAnimatedIcon`.
 
 8. **Add splash dep** to `src-tauri/gen/android/wear/build.gradle.kts`:
    `implementation("androidx.core:core-splashscreen:1.0.1")`

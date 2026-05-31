@@ -23,7 +23,8 @@ import type {
 import { createDefaultSettings } from '../types/settings';
 import type { WritingAppearance } from '../types/writingAppearance';
 import { clampTextScale } from '../types/writingAppearance';
-import { setLevel } from '../lib/services/logger';
+import { setLevel, setModuleLevel } from '../lib/services/logger';
+import type { LogModule, LogLevel } from '../lib/services/logger';
 import {
   loadSettings,
   saveSettings,
@@ -123,6 +124,9 @@ interface SettingsState {
   // Wellness
   setWellnessSettings: (updates: Partial<WellnessSettings>) => void;
 
+  // Per-module log levels
+  setModuleLogLevel: (module: LogModule, level: LogLevel | null) => void;
+
   // Navigation
   setScrollToSection: (section: SettingsScrollTarget) => void;
 
@@ -161,6 +165,10 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       // Apply theme and log level immediately
       applyTheme(settings.appearance.theme);
       setLevel(settings.logLevel ?? 'warn');
+      const moduleLevels = settings.moduleLogLevels ?? {};
+      for (const [mod, lvl] of Object.entries(moduleLevels) as [LogModule, LogLevel][]) {
+        setModuleLevel(mod, lvl);
+      }
     } catch (error) {
       set({
         error: error instanceof Error ? error.message : 'Failed to load settings',
@@ -735,6 +743,23 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       },
       hasUnsavedChanges: true,
     }));
+  },
+
+  setModuleLogLevel: (module, level) => {
+    setModuleLevel(module, level);
+    set((state) => {
+      const existing = state.settings.moduleLogLevels ?? {};
+      const next = { ...existing };
+      if (level === null) {
+        delete next[module];
+      } else {
+        next[module] = level;
+      }
+      return {
+        settings: { ...state.settings, moduleLogLevels: next },
+        hasUnsavedChanges: true,
+      };
+    });
   },
 
   // Navigation

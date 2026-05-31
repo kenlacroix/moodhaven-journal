@@ -55,9 +55,9 @@
 
 | Platform | Installer |
 |:---|:---|
-| Windows | `MoodHaven_1.1.0_x64-setup.exe` |
-| macOS | `MoodHaven_1.1.0_x64.dmg` |
-| Linux | `moodhaven_1.1.0_amd64.AppImage` or `.deb` |
+| Windows | `MoodHaven_1.2.0_x64-setup.exe` |
+| macOS | `MoodHaven_1.2.0_x64.dmg` |
+| Linux | `moodhaven_1.2.0_amd64.AppImage` or `.deb` |
 
 **Browser** — Run directly in your browser or self-host with the `dist-web/` build. No Rust or install required.
 
@@ -89,7 +89,8 @@ npm run build:web                        # production build → dist-web/
 | Focus mode — hides UI, enables typewriter scroll | On This Day — resurfaces past entries by date |
 | Speech-to-text via offline whisper.cpp sidecar | Full-text search with mood and date filters (`Ctrl+K`) |
 | Time capsules — seal an entry until a future date | Sentiment and emotional trends — all computed locally |
-| Location & weather context at entry creation | |
+| Location & weather context at entry creation | Voice memo draft pipeline — review and edit before publishing |
+| Writing appearance drawer — font, size, line height, tint | |
 
 | Protect | Sync |
 |:---|:---|
@@ -115,10 +116,10 @@ Grab the latest build from the [Releases](https://github.com/kenlacroix/moodhave
 
 | Platform | Installer | Minimum Version |
 |:---|:---|:---|
-| **Windows** | `MoodHaven_1.1.0_x64-setup.exe` | Windows 10 |
-| **macOS** | `MoodHaven_1.1.0_x64.dmg` | macOS 10.15 Catalina |
-| **Linux** | `moodhaven_1.1.0_amd64.AppImage` | Any modern distro |
-| **Linux (Debian)** | `moodhaven_1.1.0_amd64.deb` | Ubuntu 22.04+ |
+| **Windows** | `MoodHaven_1.2.0_x64-setup.exe` | Windows 10 |
+| **macOS** | `MoodHaven_1.2.0_x64.dmg` | macOS 10.15 Catalina |
+| **Linux** | `moodhaven_1.2.0_amd64.AppImage` | Any modern distro |
+| **Linux (Debian)** | `moodhaven_1.2.0_amd64.deb` | Ubuntu 22.04+ |
 | **Web** | `npm run build:web` → serve `dist-web/` | Any modern browser |
 
 ### First Launch
@@ -261,7 +262,7 @@ Full architecture: [docs/watch-companion.md](docs/watch-companion.md)
 | **Encryption** | AES-256-GCM + PBKDF2 (WebCrypto API) |
 | **Peer identity** | Ed25519 ([ed25519-dalek](https://github.com/dalek-cryptography/curve25519-dalek)) |
 | **2FA** | [totp-rs](https://github.com/constantoine/totp-rs) + native CTAP2/HID |
-| **Testing** | [Vitest](https://vitest.dev) + Testing Library · 736 tests |
+| **Testing** | [Vitest](https://vitest.dev) + Testing Library · 743 tests |
 | **Build** | Vite 8 + Tauri CLI |
 | **Mobile** | Kotlin + Wear OS Data Layer (MessageAPI + ChannelAPI) |
 
@@ -371,7 +372,7 @@ npm run tauri dev
 ```
 
 ```bash
-npm test                          # 736 tests across 50 files
+npm test                          # 743 tests across 50 files
 npm run typecheck                 # TypeScript strict check
 cd src-tauri && cargo check       # Rust compilation check
 ```
@@ -395,6 +396,7 @@ See [CLAUDE.md](CLAUDE.md) for architecture, security guidelines, and convention
 
 ## Recent Changes
 
+**v1.2.0** — Voice memo draft pipeline: watch recordings surface as reviewable draft cards in the Timeline with transcription preview, inferred mood, biometric context, and hashtag suggestions. Full TipTap editor to edit before publishing. Writing appearance drawer: inline font, size, line height, paragraph spacing, background tint, and accessibility options (high contrast, reduced motion, dyslexia profile) in WritingView. Wear OS Phase B brand sweep (60+ hex colors to @color/ references), Phase C splash screen, Phase 2e/5a polish (shortcut row, ambient mood wash, steps + activity in HealthSnapshot). Codebase cleanup: 5 large components split, dead code removed. 743 tests.
 **v1.1.0** — StillHaven: bilateral audio stimulation companion built into all builds. Enable in Settings → Health to unlock. Check-in (protocol + activation dial) → live session (bilateral audio engine, bio-adaptive speed via Oura/watch) → check-out → summary → journal handoff pre-fills the writing view with session data. Session history view with 30-day trend chart. Browser/web fully supported via IndexedDB shim. 736 tests.
 **v1.0.0** — First stable release. Zero-knowledge AES-256-GCM encryption, local-first SQLite, LAN peer sync (Ed25519 + mDNS + PIN pairing), Wear OS voice memos, AI insights (BYOK/Ollama), time capsules, STT (whisper.cpp, 3-layer pipeline), virtual scroll timeline, full analytics suite. MIT licensed, no paid tier. 736 tests across 48 files.
 **v0.9.4** — Website overhaul: replaced rain hero with on-brand violet gradient + app screenshot, removed all Pro/waitlist/pricing language, rewrote FAQ as FOSS-first, added GitHub star badge and trust strip, 7 new blog posts from Substack with unique hero images, per-post branded OG cards via `next/og`, newsletter signup, founder card on About, blog post download CTAs, full SEO pass (canonical URLs, JSON-LD, Open Graph), Android sideload guide on Download page.

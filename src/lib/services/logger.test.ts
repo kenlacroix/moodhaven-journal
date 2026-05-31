@@ -1,13 +1,13 @@
 import { debug, info, warn, error } from '@tauri-apps/plugin-log';
-import { logger, setLevel } from './logger';
+import { logger, setLevel, setModuleLevel, forModule } from './logger';
 
 const mockDebug = vi.mocked(debug);
 const mockInfo = vi.mocked(info);
 const mockWarn = vi.mocked(warn);
 const mockError = vi.mocked(error);
 
-beforeEach(() => { vi.clearAllMocks(); setLevel('debug'); });
-afterEach(() => { setLevel('warn'); });
+beforeEach(() => { vi.clearAllMocks(); setLevel('debug'); setModuleLevel('sync', null); });
+afterEach(() => { setLevel('warn'); setModuleLevel('sync', null); });
 
 describe('logger', () => {
   it('info calls plugin info with msg', () => {
@@ -103,5 +103,65 @@ describe('setLevel', () => {
     setLevel('error');
     logger.error('always');
     expect(mockError).toHaveBeenCalledWith('always');
+  });
+});
+
+describe('forModule', () => {
+  it('uses module-level override when set', () => {
+    setLevel('warn');
+    setModuleLevel('sync', 'debug');
+    const syncLog = forModule('sync');
+    syncLog.debug('sync detail');
+    expect(mockDebug).toHaveBeenCalledWith('sync detail');
+  });
+
+  it('falls back to global level when no override set', () => {
+    setLevel('warn');
+    const syncLog = forModule('sync');
+    syncLog.debug('should be suppressed');
+    syncLog.warn('should pass');
+    expect(mockDebug).not.toHaveBeenCalled();
+    expect(mockWarn).toHaveBeenCalledWith('should pass');
+  });
+
+  it('setModuleLevel(mod, null) clears the override and falls back to global', () => {
+    setLevel('warn');
+    setModuleLevel('sync', 'debug');
+    setModuleLevel('sync', null);
+    const syncLog = forModule('sync');
+    syncLog.debug('cleared');
+    expect(mockDebug).not.toHaveBeenCalled();
+  });
+
+  it('module override does not affect other modules', () => {
+    setLevel('warn');
+    setModuleLevel('sync', 'debug');
+    const aiLog = forModule('ai');
+    aiLog.debug('ai suppressed');
+    expect(mockDebug).not.toHaveBeenCalled();
+  });
+
+  it('module override does not affect the global logger', () => {
+    setLevel('warn');
+    setModuleLevel('sync', 'debug');
+    logger.debug('global suppressed');
+    expect(mockDebug).not.toHaveBeenCalled();
+  });
+
+  it('module override at error level suppresses warn', () => {
+    setLevel('debug');
+    setModuleLevel('peer', 'error');
+    const peerLog = forModule('peer');
+    peerLog.warn('peer warn suppressed');
+    peerLog.error('peer error passes');
+    expect(mockWarn).not.toHaveBeenCalled();
+    expect(mockError).toHaveBeenCalledWith('peer error passes');
+  });
+
+  it('forModule passes context formatting through', () => {
+    setModuleLevel('stt', 'debug');
+    const sttLog = forModule('stt');
+    sttLog.info('transcribed', { words: 42 });
+    expect(mockInfo).toHaveBeenCalledWith('transcribed | words=42');
   });
 });

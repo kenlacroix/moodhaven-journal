@@ -23,8 +23,10 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   listVoiceMemos,
   transcribeVoiceMemo,
+  patchVoiceMemoMood,
   type VoiceMemo,
 } from '../lib/services/voiceMemoService';
+import { scoreContentMood } from '../lib/utils/metadataExtractor';
 
 // ── Hook options ───────────────────────────────────────────────────────────────
 
@@ -111,6 +113,19 @@ export function useWearVoiceMemos({
       setMemos((prev) =>
         prev.map((m) => (m.id === id ? { ...m, transcription: text } : m))
       );
+
+      // Infer mood from transcript text (Phase 5)
+      const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
+      if (wordCount >= 5) {
+        const inferredMood = scoreContentMood(text);
+        if (inferredMood !== null) {
+          await patchVoiceMemoMood(id, inferredMood).catch(() => {});
+          setMemos((prev) =>
+            prev.map((m) => (m.id === id ? { ...m, inferred_mood: inferredMood } : m))
+          );
+        }
+      }
+
       // Build the updated memo object for the callback
       setMemos((prev) => {
         const updated = prev.find((m) => m.id === id);
@@ -127,11 +142,14 @@ export function useWearVoiceMemos({
         return next;
       });
     }
-  }, [model]);
+  }, [model]); // eslint-disable-line react-hooks/exhaustive-deps -- memos read only for duration_ms; memo is always present when this is called
 
   // ── Auto-transcribe untranscribed memos after load ───────────────────────
 
   const didAutoTranscribe = useRef(false);
+  // Reset the flag when the model changes so pending memos get re-queued
+  // with the new model (e.g. user switches tiny → base in Settings).
+  useEffect(() => { didAutoTranscribe.current = false; }, [model]);
   useEffect(() => {
     if (!enabled || !model || didAutoTranscribe.current || memos.length === 0) return;
     didAutoTranscribe.current = true;

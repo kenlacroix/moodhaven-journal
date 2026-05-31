@@ -17,6 +17,7 @@ import type {
 } from '../../types/ai';
 import type { AppSettings } from '../../types/settings';
 import { cleanTranscript } from '../utils/transcriptFormatter';
+import { httpFetch } from './http';
 
 // ============================================
 // AI SERVICE CONFIGURATION
@@ -176,7 +177,7 @@ async function callOllama(
   model: string,
   prompt: string
 ): Promise<string> {
-  const response = await fetch(`${endpoint}/api/generate`, {
+  const response = await httpFetch(`${endpoint}/api/generate`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -678,7 +679,7 @@ export async function formatTranscript(
     const ollamaController = new AbortController();
     const ollamaTimeoutId = setTimeout(() => ollamaController.abort(), 15_000);
     try {
-      const response = await fetch(`${endpoint}/api/generate`, {
+      const response = await httpFetch(`${endpoint}/api/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

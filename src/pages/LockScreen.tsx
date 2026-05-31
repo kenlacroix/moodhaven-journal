@@ -539,6 +539,7 @@ export function LockScreen() {
           {step === '2fa' && twoFactorStatus && (
             <TwoFactorVerify
               method={twoFactorStatus.method}
+              password={verifiedPassword ?? ''}
               onSuccess={handle2FASuccess}
               onCancel={handle2FACancel}
             />

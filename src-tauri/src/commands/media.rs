@@ -175,14 +175,50 @@ fn decrypt_mbmf(data: &[u8], password: &str) -> Result<Vec<u8>, String> {
 // ── Filesystem helpers ─────────────────────────────────────────────────────────
 
 fn get_media_dir(app: &AppHandle, entry_id: &str) -> Result<std::path::PathBuf, String> {
-    let dir = app
+    // Reject any entry_id that could escape the media directory via path components.
+    // Normal entry IDs are UUIDs; crafted IDs from a malicious peer could contain
+    // '..', '/', or NUL bytes and traverse outside app_data_dir.
+    if entry_id.is_empty()
+        || entry_id.contains('/')
+        || entry_id.contains('\\')
+        || entry_id.contains('\0')
+        || entry_id.split('/').any(|p| p == "..")
+        || entry_id.starts_with('.')
+    {
+        return Err(format!(
+            "Invalid entry_id for media directory: {:?}",
+            entry_id
+        ));
+    }
+
+    let base = app
         .path()
         .app_data_dir()
-        .map_err(|e| format!("app_data_dir: {}", e))?
-        .join("media")
-        .join(entry_id);
+        .map_err(|e| format!("app_data_dir: {}", e))?;
+    let dir = base.join("media").join(entry_id);
+
+    // Canonicalize and verify containment — mirrors the abs_enc_path pattern.
+    // canonicalize() fails if the path doesn't exist yet; fall back to the
+    // non-canonical path and re-verify after create_dir_all.
+    let base_canonical = base.canonicalize().unwrap_or_else(|_| base.clone());
+    if let Ok(canonical) = dir.canonicalize() {
+        if !canonical.starts_with(&base_canonical) {
+            return Err("Refusing to access path outside app data directory".to_string());
+        }
+    }
+
     std::fs::create_dir_all(&dir).map_err(|e| format!("create_dir_all: {}", e))?;
-    Ok(dir)
+
+    // Re-verify after the directory is created.
+    let canonical = dir
+        .canonicalize()
+        .map_err(|e| format!("canonicalize media dir: {}", e))?;
+    if !canonical.starts_with(&base_canonical) {
+        let _ = std::fs::remove_dir(&canonical);
+        return Err("Refusing to access path outside app data directory".to_string());
+    }
+
+    Ok(canonical)
 }
 
 fn get_preview_dir(app: &AppHandle) -> Result<std::path::PathBuf, String> {

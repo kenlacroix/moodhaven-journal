@@ -179,5 +179,59 @@ commands.allow = [
   "link_journal_entry_to_session",
 ]
 
+[[permission]]
+identifier = "allow-writer-commands"
+description = "Minimal command set for the breakout writer window. Excludes factory_reset, export_data, peer sync, 2FA management, and other main-window-only operations."
+commands.allow = [
+  # Auth (writer must unlock via session bridge)
+  "verify_password",
+  "unlock_app",
+  "check_password_exists",
+  "get_password_hash",
+  # Session bridge (password hand-off)
+  "retrieve_session_password",
+  # Journal CRUD
+  "create_journal_entry",
+  "get_journal_entry",
+  "get_all_journal_entries",
+  "update_journal_entry",
+  "patch_entry_pinned",
+  "patch_entry_status",
+  "patch_entry_location_weather",
+  "sync_entry_tags",
+  "get_book_tags",
+  # Books (read-only needed for writer)
+  "list_books",
+  # Analytics (streak / stats shown in writer)
+  "get_streak_stats",
+  "get_overall_statistics",
+  # Settings
+  "get_setting",
+  "set_setting",
+  "get_app_version",
+  # Media
+  "save_media_attachment",
+  "list_entry_media",
+  "open_media_attachment",
+  "get_media_thumbnail",
+  "delete_media_attachment",
+  "sweep_preview_temp",
+  # Voice memos
+  "store_voice_memo",
+  "list_voice_memos",
+  "get_voice_memo",
+  "delete_voice_memo",
+  "patch_voice_memo_transcription",
+  "link_voice_memo_to_entry",
+  "transcribe_voice_memo",
+  # Speech-to-Text
+  "stt_check_sidecar",
+  "stt_check_model",
+  "stt_transcribe",
+  "stt_transcribe_timestamped",
+  # StillHaven session link (for journal handoff)
+  "link_journal_entry_to_session",
+]
+
 [default]
 permissions = ["allow-all-app-commands"]

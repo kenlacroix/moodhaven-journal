@@ -36,33 +36,35 @@ export async function getBackupCodesCount(): Promise<number> {
 // ============================================================================
 
 /**
- * Generate a new TOTP secret for setup
- * Returns QR code URL and manual entry secret
+ * Generate a new TOTP secret for setup.
+ * The password is required so Rust can encrypt the secret before storage.
  */
-export async function generateTotpSecret(): Promise<TotpSetupData> {
-  return invoke('generate_totp_secret');
+export async function generateTotpSecret(password: string): Promise<TotpSetupData> {
+  return invoke('generate_totp_secret', { password });
 }
 
 /**
- * Verify a TOTP code (during setup or for testing)
+ * Verify a TOTP code (during setup or for testing).
+ * The password is required to decrypt the stored secret.
  */
-export async function verifyTotpCode(code: string): Promise<boolean> {
-  return invoke('verify_totp_code', { code });
+export async function verifyTotpCode(code: string, password: string): Promise<boolean> {
+  return invoke('verify_totp_code', { code, password });
 }
 
 /**
- * Enable TOTP after successful verification
- * Returns backup codes that must be shown to user
+ * Enable TOTP after successful verification.
+ * Returns backup codes that must be shown to user.
  */
-export async function enableTotp(code: string): Promise<BackupCodes> {
-  return invoke('enable_totp', { code });
+export async function enableTotp(code: string, password: string): Promise<BackupCodes> {
+  return invoke('enable_totp', { code, password });
 }
 
 /**
- * Verify TOTP code during login
+ * Verify TOTP code during login.
+ * The password is required to decrypt the stored secret.
  */
-export async function verify2FATotp(code: string): Promise<boolean> {
-  return invoke('verify_2fa_totp', { code });
+export async function verify2FATotp(code: string, password: string): Promise<boolean> {
+  return invoke('verify_2fa_totp', { code, password });
 }
 
 // ============================================================================

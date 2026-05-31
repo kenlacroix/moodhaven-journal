@@ -36,6 +36,16 @@ MoodHaven Journal is built on a **zero-knowledge, local-first** architecture:
 
 Full details are in [`CLAUDE.md`](CLAUDE.md) under **Section 2: Security Guidance**.
 
+### Two-Factor Authentication
+
+TOTP provides an additional verification step during active sessions. As of v1.2.0, the TOTP seed is encrypted at rest using AES-256-GCM with a key derived from your password (same PBKDF2 stack as journal entries). Prior versions stored the TOTP seed as plaintext in the database; if you are upgrading from v1.1.x or earlier, re-enable TOTP after upgrading to re-encrypt the seed.
+
+TOTP backup codes are stored as SHA-256 hashes — the plaintext codes are shown once and never stored.
+
+### Development Model
+
+This codebase is developed with significant AI assistance (Claude Code). The cryptographic primitives (AES-256-GCM, PBKDF2, Ed25519, X25519 ECDH) are standard and correctly parameterised. The codebase has undergone internal security review but **has not been audited by an independent third-party security firm**. We invite security researchers to review the code and report findings via GitHub Security Advisories. Treat the "you can read and audit it" invitation in our documentation as "the source is available for review", not as an assurance that the code has been professionally audited.
+
 ---
 
 ## Scope

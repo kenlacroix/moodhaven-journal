@@ -13,7 +13,7 @@ import {
   getBackupCodesCount,
 } from '../lib/services/twoFactorService';
 import type { TwoFactorStatus } from '../types/twoFactor';
-import { verifyUserPassword } from '../lib/services/journalService';
+import { verifyUserPassword, getSessionPassword } from '../lib/services/journalService';
 import type { UseUpdateCheckReturn } from '../hooks/useUpdateCheck';
 import {
   loadRateLimitState,
@@ -605,6 +605,7 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
                     exportProgress={exportProgress}
                     handleExport={handleExport}
                     setAutoLockTimeout={setAutoLockTimeout}
+                    sessionPassword={getSessionPassword() ?? ''}
                   />
                 )}
 

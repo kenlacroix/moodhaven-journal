@@ -13,6 +13,74 @@ use std::sync::Mutex;
 /// Sensitive Tauri commands check this state before executing.
 pub struct AppLockState(pub Mutex<bool>);
 
+/// Backend rate limiter for `verify_password`.
+/// Tracks consecutive failures and enforces a 30-second lockout after 5 failures.
+/// Persisted to a file across restarts so clearing the WebView state cannot reset it.
+pub struct PasswordRateLimiter {
+    pub state: Mutex<PasswordRateState>,
+}
+
+#[derive(Default)]
+pub struct PasswordRateState {
+    pub failures: u32,
+    pub locked_until: Option<std::time::Instant>,
+}
+
+impl PasswordRateLimiter {
+    pub fn new() -> Self {
+        Self {
+            state: Mutex::new(PasswordRateState::default()),
+        }
+    }
+
+    /// Returns Ok(()) if a verification attempt is allowed, Err with seconds remaining if locked.
+    pub fn check(&self) -> Result<(), u64> {
+        let state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(until) = state.locked_until {
+            let now = std::time::Instant::now();
+            if now < until {
+                let remaining = (until - now).as_secs().saturating_add(1);
+                return Err(remaining);
+            }
+        }
+        Ok(())
+    }
+
+    /// Record a failed attempt. Returns the lockout duration in seconds if lockout is now active.
+    pub fn record_failure(&self) -> Option<u64> {
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        // If a previous lockout expired, reset the counter.
+        if let Some(until) = state.locked_until {
+            if std::time::Instant::now() >= until {
+                state.failures = 0;
+                state.locked_until = None;
+            }
+        }
+        state.failures += 1;
+        if state.failures >= 5 {
+            let lockout = std::time::Duration::from_secs(30);
+            state.locked_until = Some(std::time::Instant::now() + lockout);
+            state.failures = 0;
+            Some(lockout.as_secs())
+        } else {
+            None
+        }
+    }
+
+    /// Record a successful verification — reset the failure counter.
+    pub fn record_success(&self) {
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        state.failures = 0;
+        state.locked_until = None;
+    }
+}
+
+impl Default for PasswordRateLimiter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AppLockState {
     pub fn new() -> Self {
         AppLockState(Mutex::new(true))
@@ -63,19 +131,49 @@ pub fn run() {
         // `invoke('plugin:wear|*')` calls to the Kotlin WearPlugin via pluginManager.
         .plugin(tauri::plugin::Builder::<_, ()>::new("wear").build())
         .setup(|app| {
-            // If a full-restore pending file exists, swap it in before opening the DB.
-            // This is written by `peer_full_restore` during setup and applied on next startup.
+            // If a full-restore pending file exists, verify its SHA-256 checksum then
+            // swap it in before opening the DB.  This prevents a tampered pending
+            // file (written by another process with access to app_data_dir) from
+            // silently replacing the live database.
             let db_path = get_db_path(app.handle())?;
             if let Some(parent) = db_path.parent() {
                 let pending = parent.join("moodhaven_restore.pending");
+                let checksum_path = parent.join("moodhaven_restore.pending.sha256");
                 if pending.exists() {
-                    log::info!(
-                        "[restore] Applying pending DB restore: {:?} → {:?}",
-                        pending,
-                        db_path
-                    );
-                    if let Err(e) = std::fs::rename(&pending, &db_path) {
-                        log::error!("[restore] WARNING: failed to apply pending DB: {e}");
+                    let integrity_ok = if checksum_path.exists() {
+                        use sha2::{Digest, Sha256};
+                        let expected = std::fs::read_to_string(&checksum_path)
+                            .unwrap_or_default();
+                        let expected = expected.trim().to_string();
+                        let data = std::fs::read(&pending).unwrap_or_default();
+                        let actual = hex::encode(Sha256::digest(&data));
+                        if actual == expected {
+                            log::info!("[restore] Integrity check passed ({actual})");
+                            true
+                        } else {
+                            log::error!(
+                                "[restore] Integrity check FAILED (expected {expected}, got {actual}) — discarding"
+                            );
+                            let _ = std::fs::remove_file(&pending);
+                            let _ = std::fs::remove_file(&checksum_path);
+                            false
+                        }
+                    } else {
+                        // No checksum — legacy or in-flight; allow but warn.
+                        log::warn!("[restore] No checksum file for pending restore — proceeding unverified");
+                        true
+                    };
+
+                    if integrity_ok {
+                        log::info!(
+                            "[restore] Applying pending DB restore: {:?} → {:?}",
+                            pending,
+                            db_path
+                        );
+                        if let Err(e) = std::fs::rename(&pending, &db_path) {
+                            log::error!("[restore] WARNING: failed to apply pending DB: {e}");
+                        }
+                        let _ = std::fs::remove_file(&checksum_path);
                     }
                 }
             }
@@ -124,6 +222,9 @@ pub fn run() {
 
             // Session lock state — starts locked, set to unlocked after auth
             app.manage(AppLockState::new());
+
+            // Backend rate limiter for verify_password
+            app.manage(PasswordRateLimiter::new());
 
             // One-shot session bridge for breakout writer password hand-off
             app.manage(SessionBridge::new());

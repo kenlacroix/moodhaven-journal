@@ -319,6 +319,12 @@ pub fn merge_settings_json(local_json: &str, remote_json: &str) -> Result<String
     serde_json::to_string(&local).map_err(|e| format!("serialize merged settings: {e}"))
 }
 
+/// Keys that may be synced from a remote peer.  Any setting key sent by a peer
+/// that is NOT in this list is silently dropped.  This prevents a compromised
+/// trusted device from injecting arbitrary rows (e.g. `password_hash`,
+/// `totp_secret`, or service credentials) into the local settings table.
+const SYNC_ALLOWED_SETTINGS: &[&str] = &["app_settings"];
+
 /// Upsert a setting received from a peer, applying whitelist merge for app_settings.
 /// Returns true if the local DB was changed.
 pub fn db_upsert_setting(
@@ -327,6 +333,10 @@ pub fn db_upsert_setting(
     remote_value: &str,
     remote_updated_at: &str,
 ) -> Result<bool, String> {
+    if !SYNC_ALLOWED_SETTINGS.contains(&key) {
+        log::warn!("[sync] Peer attempted to sync disallowed setting key {:?} — dropped", key);
+        return Ok(false);
+    }
     let local = db_get_setting_for_sync(conn, key)?;
     let new_value = match &local {
         None => remote_value.to_string(),

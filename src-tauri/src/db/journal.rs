@@ -120,6 +120,7 @@ pub fn map_entry_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<JournalEntryRo
 }
 
 /// Create a new journal entry
+#[allow(clippy::too_many_arguments)]
 pub fn create_entry(
     db: &Database,
     id: &str,

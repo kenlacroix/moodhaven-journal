@@ -192,3 +192,189 @@ pub fn list_pending_drafts(db: &Database, limit: Option<i64>) -> Result<Vec<Voic
 
     Ok(rows)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rusqlite::Connection;
+    use std::sync::Mutex;
+
+    fn test_db() -> Database {
+        let conn = Connection::open_in_memory().expect("in-memory DB");
+        conn.execute_batch(
+            "CREATE TABLE voice_memos (
+                id                TEXT PRIMARY KEY,
+                timestamp         TEXT NOT NULL,
+                duration_ms       INTEGER NOT NULL DEFAULT 0,
+                health_json       TEXT,
+                file_path         TEXT NOT NULL,
+                transcription     TEXT,
+                entry_id          TEXT,
+                source            TEXT NOT NULL DEFAULT 'watch',
+                created_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%S','now')),
+                raw_transcription TEXT,
+                context           TEXT,
+                inferred_mood     INTEGER,
+                book_id           TEXT NOT NULL DEFAULT 'default',
+                reviewed          INTEGER NOT NULL DEFAULT 0
+            );
+            CREATE TABLE journal_entries (
+                id                TEXT PRIMARY KEY,
+                encrypted_content TEXT NOT NULL,
+                mood              INTEGER NOT NULL,
+                privacy_mode      INTEGER NOT NULL DEFAULT 0,
+                location_weather  TEXT,
+                book_id           TEXT NOT NULL DEFAULT 'default',
+                pinned            INTEGER NOT NULL DEFAULT 0,
+                created_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%S','now')),
+                updated_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%S','now'))
+            );",
+        )
+        .expect("create tables");
+        Database { conn: Mutex::new(conn) }
+    }
+
+    fn insert_raw(db: &Database, id: &str, transcription: Option<&str>, entry_id: Option<&str>, reviewed: i64) {
+        let conn = db.conn.lock().unwrap();
+        conn.execute(
+            "INSERT INTO voice_memos (id, timestamp, duration_ms, file_path, source, transcription, entry_id, reviewed)
+             VALUES (?1, '2026-01-01T00:00:00', 1000, 'voice_memos/test.m4a', 'watch', ?2, ?3, ?4)",
+            params![id, transcription, entry_id, reviewed],
+        ).unwrap();
+    }
+
+    // ── list_pending_drafts ──────────────────────────────────────────────────
+
+    #[test]
+    fn pending_drafts_only_returns_matching_rows() {
+        let db = test_db();
+        insert_raw(&db, "m1", Some("hello"), None, 0);
+        insert_raw(&db, "m2", None, None, 0);                // no transcription
+        insert_raw(&db, "m3", Some("world"), Some("e1"), 0); // has entry_id
+        insert_raw(&db, "m4", Some("foo"), None, 1);         // reviewed
+
+        let drafts = list_pending_drafts(&db, None).unwrap();
+        assert_eq!(drafts.len(), 1);
+        assert_eq!(drafts[0].id, "m1");
+    }
+
+    #[test]
+    fn pending_drafts_respects_limit() {
+        let db = test_db();
+        for i in 0..5u8 {
+            insert_raw(&db, &format!("m{i}"), Some("text"), None, 0);
+        }
+        let drafts = list_pending_drafts(&db, Some(3)).unwrap();
+        assert_eq!(drafts.len(), 3);
+    }
+
+    #[test]
+    fn pending_drafts_empty_when_none_qualify() {
+        let db = test_db();
+        insert_raw(&db, "m1", None, None, 0);
+        insert_raw(&db, "m2", Some("x"), None, 1);
+        let drafts = list_pending_drafts(&db, None).unwrap();
+        assert!(drafts.is_empty());
+    }
+
+    // ── create / get ─────────────────────────────────────────────────────────
+
+    #[test]
+    fn create_returns_correct_row() {
+        let db = test_db();
+        let row = create_voice_memo(&db, "vm1", "2026-01-01T10:00:00", 5000, None, "voice_memos/vm1.m4a", "watch").unwrap();
+        assert_eq!(row.id, "vm1");
+        assert_eq!(row.duration_ms, 5000);
+        assert_eq!(row.reviewed, 0);
+        assert!(row.transcription.is_none());
+    }
+
+    #[test]
+    fn get_returns_none_for_missing_id() {
+        let db = test_db();
+        let result = get_voice_memo(&db, "nonexistent").unwrap();
+        assert!(result.is_none());
+    }
+
+    // ── delete ───────────────────────────────────────────────────────────────
+
+    #[test]
+    fn delete_removes_row() {
+        let db = test_db();
+        create_voice_memo(&db, "vm1", "2026-01-01T10:00:00", 1000, None, "voice_memos/vm1.m4a", "watch").unwrap();
+        delete_voice_memo(&db, "vm1").unwrap();
+        assert!(get_voice_memo(&db, "vm1").unwrap().is_none());
+    }
+
+    // ── patch_transcription ───────────────────────────────────────────────────
+
+    #[test]
+    fn patch_transcription_preserves_raw_on_first_write() {
+        let db = test_db();
+        create_voice_memo(&db, "vm1", "2026-01-01T10:00:00", 1000, None, "voice_memos/vm1.m4a", "watch").unwrap();
+        patch_voice_memo_transcription(&db, "vm1", "original").unwrap();
+        patch_voice_memo_transcription(&db, "vm1", "edited").unwrap();
+
+        let conn = db.conn.lock().unwrap();
+        let (tx, raw): (String, String) = conn
+            .query_row(
+                "SELECT transcription, raw_transcription FROM voice_memos WHERE id = 'vm1'",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(tx, "edited");
+        assert_eq!(raw, "original");
+    }
+
+    // ── publish contract (SQL-level simulation) ───────────────────────────────
+
+    #[test]
+    fn publish_contract_inserts_entry_and_marks_reviewed() {
+        let db = test_db();
+        insert_raw(&db, "vm1", Some("hello"), None, 0);
+
+        let conn = db.conn.lock().unwrap();
+        conn.execute_batch(
+            "BEGIN;
+             INSERT INTO journal_entries (id, encrypted_content, mood, book_id, created_at, updated_at)
+             VALUES ('e1', '{}', 3, 'default',
+                     strftime('%Y-%m-%dT%H:%M:%S','now'),
+                     strftime('%Y-%m-%dT%H:%M:%S','now'));
+             UPDATE voice_memos SET entry_id = 'e1', reviewed = 1 WHERE id = 'vm1';
+             COMMIT;",
+        ).unwrap();
+
+        let reviewed: i64 = conn
+            .query_row("SELECT reviewed FROM voice_memos WHERE id = 'vm1'", [], |r| r.get(0))
+            .unwrap();
+        let entry_id: String = conn
+            .query_row("SELECT entry_id FROM voice_memos WHERE id = 'vm1'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(reviewed, 1);
+        assert_eq!(entry_id, "e1");
+    }
+
+    #[test]
+    fn publish_on_missing_id_affects_zero_rows() {
+        let db = test_db();
+        let conn = db.conn.lock().unwrap();
+        let affected = conn
+            .execute("UPDATE voice_memos SET reviewed = 1 WHERE id = 'ghost'", [])
+            .unwrap();
+        assert_eq!(affected, 0);
+    }
+
+    // ── discard contract (SQL-level simulation) ───────────────────────────────
+
+    #[test]
+    fn discard_contract_removes_row() {
+        let db = test_db();
+        insert_raw(&db, "vm1", Some("text"), None, 0);
+        {
+            let conn = db.conn.lock().unwrap();
+            conn.execute("DELETE FROM voice_memos WHERE id = 'vm1'", []).unwrap();
+        }
+        assert!(get_voice_memo(&db, "vm1").unwrap().is_none());
+    }
+}

@@ -69,6 +69,12 @@ class MainActivity : FragmentActivity(),
         )
 
         viewPager.adapter = MainPagerAdapter(this)
+        viewPager.setPageTransformer { page, position ->
+            val absPos = Math.abs(position)
+            page.alpha = 1f - absPos * 0.5f
+            page.scaleX = 1f - absPos * 0.08f
+            page.scaleY = page.scaleX
+        }
 
         // BreatheSummaryActivity can request a specific start page
         val startPage = intent.getIntExtra(EXTRA_START_PAGE, PAGE_RECORD)
@@ -89,6 +95,7 @@ class MainActivity : FragmentActivity(),
 
     override fun onMoodSelected(mood: MoodItem) {
         hapticTap(this)
+        window.decorView.postDelayed({ hapticTap(this) }, 80)
         MoodHistory.record(this, mood.level)
 
         lifecycleScope.launch {

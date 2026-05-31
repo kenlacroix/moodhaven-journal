@@ -2,12 +2,14 @@ package com.moodbloom.wear
 
 import android.animation.ObjectAnimator
 import android.animation.ValueAnimator
+import android.graphics.Color
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ScrollView
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
@@ -44,6 +46,9 @@ class RecordFragment : Fragment() {
     private lateinit var queueBadge:       TextView
     private lateinit var longPressHint:    TextView
     private lateinit var arcProgress:      ArcProgressView
+    private lateinit var moodShortcutBtn:  TextView
+    private lateinit var breatheShortcutBtn: TextView
+    private lateinit var pageRoot:         ScrollView
 
     // ── State ─────────────────────────────────────────────────────────────────
 
@@ -80,6 +85,7 @@ class RecordFragment : Fragment() {
     ): View = inflater.inflate(R.layout.fragment_record, container, false)
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        pageRoot           = view as ScrollView
         recordBtn          = view.findViewById(R.id.recordBtn)
         recordIcon         = view.findViewById(R.id.recordIcon)
         durationText       = view.findViewById(R.id.durationText)
@@ -88,9 +94,13 @@ class RecordFragment : Fragment() {
         queueBadge         = view.findViewById(R.id.queueBadge)
         longPressHint      = view.findViewById(R.id.longPressHint)
         arcProgress        = view.findViewById(R.id.arcProgress)
+        moodShortcutBtn    = view.findViewById(R.id.moodShortcutBtn)
+        breatheShortcutBtn = view.findViewById(R.id.breatheShortcutBtn)
 
         recordBtn.setOnClickListener { onRecordTap() }
         recordBtn.setOnLongClickListener { onRecordLongPress(); true }
+        moodShortcutBtn.setOnClickListener { (activity as? Callback)?.onNavigateToMoodPicker() }
+        breatheShortcutBtn.setOnClickListener { (activity as? Callback)?.onNavigateToBreathe() }
 
         setIdleUI()
         refreshQueueBadge()
@@ -98,6 +108,7 @@ class RecordFragment : Fragment() {
 
     override fun onResume() {
         super.onResume()
+        applyAmbientMoodWash()
         refreshQueueBadge()
         if (session == null) {
             lifecycleScope.launch {
@@ -215,6 +226,23 @@ class RecordFragment : Fragment() {
     }
 
     // ── UI helpers ────────────────────────────────────────────────────────────
+
+    private fun applyAmbientMoodWash() {
+        val lastMood = MoodHistory.load(requireContext()).firstOrNull()?.mood
+        if (lastMood != null) {
+            try {
+                val base = Color.parseColor(lastMood.colorHex)
+                val r = (Color.red(base)   * 0.12f).toInt()
+                val g = (Color.green(base) * 0.12f).toInt()
+                val b = (Color.blue(base)  * 0.12f).toInt()
+                pageRoot.setBackgroundColor(Color.rgb(r, g, b))
+            } catch (_: Exception) {
+                pageRoot.setBackgroundColor(Color.BLACK)
+            }
+        } else {
+            pageRoot.setBackgroundColor(Color.BLACK)
+        }
+    }
 
     private fun setIdleUI() {
         recordBtn.isActivated     = false

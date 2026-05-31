@@ -118,6 +118,46 @@
             android:paddingStart="4dp"
             android:paddingEnd="4dp" />
 
+        <!-- Shortcut row: Mood + Breathe -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="12dp">
+
+            <TextView
+                android:id="@+id/moodShortcutBtn"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="😊 Mood"
+                android:textSize="11sp"
+                android:textColor="#CCFFFFFF"
+                android:background="@drawable/ic_record_btn"
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp"
+                android:paddingTop="5dp"
+                android:paddingBottom="5dp"
+                android:layout_marginEnd="8dp"
+                android:clickable="true"
+                android:focusable="true" />
+
+            <TextView
+                android:id="@+id/breatheShortcutBtn"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="🧘 Breathe"
+                android:textSize="11sp"
+                android:textColor="#CCFFFFFF"
+                android:background="@drawable/ic_record_btn"
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp"
+                android:paddingTop="5dp"
+                android:paddingBottom="5dp"
+                android:clickable="true"
+                android:focusable="true" />
+
+        </LinearLayout>
+
     </LinearLayout>
 
     </androidx.wear.widget.BoxInsetLayout>

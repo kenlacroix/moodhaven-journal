@@ -27,6 +27,22 @@
 #   --watch-avd <n>       Watch AVD (default: Wear_OS_Large_Round)
 #   --no-snapshot            Start emulators fresh (no quick-boot)
 #
+# Network requirements for dev (hot-reload) builds:
+#   Tauri bakes the laptop's detected LAN IP into the debug APK at build time.
+#   The phone must be able to reach that IP:1420 at runtime.
+#
+#   Home WiFi (phone + laptop both on 192.168.x.x):
+#     Works if you run this script from a real terminal (not Claude Code or a
+#     backgrounded shell) so Tauri's interactive device picker can run.
+#     Tauri will detect the laptop's home-network IP automatically.
+#
+#   Phone is the hotspot (phone AP, laptop client — laptop gets 10.42.0.x):
+#     Also works — Tauri detects the hotspot interface IP.  A previously-built
+#     APK baked with a hotspot IP (10.42.0.1) will fail on home WiFi and vice
+#     versa.  Always rebuild after switching network topology.
+#
+#   Use --laptop-ap to make the laptop the AP instead of the phone:
+#
 # Laptop AP (creates a Wi-Fi hotspot so phone can reach the Vite dev server):
 #   --laptop-ap              Create a Wi-Fi hotspot on the laptop before launching.
 #                            Tauri replaces devUrl with the laptop's detected IP — the
@@ -37,6 +53,18 @@
 #   --ap-ssid <name>         Hotspot network name     (default: MoodBloomDev)
 #   --ap-password <pass>     Hotspot WPA2 password    (default: moodbloom123)
 #   --ap-iface <iface>       Wi-Fi interface to use   (default: wlo1, env: MOODBLOOM_WIFI_IFACE)
+#
+# Release / standalone builds (no dev server needed):
+#   For QA and audit use cases where hot-reload isn't needed, build a release
+#   APK that bundles all assets — no network connection required at runtime:
+#     JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 \
+#       npm run tauri android build -- --target aarch64 --apk
+#   Then install: adb -s <serial> install -r path/to/app-arm64-release-unsigned.apk
+#   (No signing needed for debug/sideload installs with developer mode enabled.)
+#
+# Troubleshooting: if Gradle fails with "No matching variant of project :tauri-plugin-*",
+#   run scripts/sync-android-settings.sh to regenerate tauri.settings.gradle from
+#   Cargo.lock.  This happens after `cargo update` bumps Tauri plugin versions.
 #
 # Other:
 #   --install-wear           Sideload wear APK onto phone (companion pairing)

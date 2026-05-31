@@ -19,21 +19,21 @@ describe('EnvironmentPicker', () => {
   });
 
   it('calls onChange with the correct id when an option is clicked', async () => {
-    const onChange = vi.fn<[EnvironmentId], void>();
+    const onChange = vi.fn<(v: EnvironmentId) => void>();
     render(<EnvironmentPicker value="underwater" onChange={onChange} />);
     await userEvent.click(screen.getByRole('button', { name: /Forest/ }));
     expect(onChange).toHaveBeenCalledWith('forest');
   });
 
   it('calls onChange with sky when sky is clicked', async () => {
-    const onChange = vi.fn<[EnvironmentId], void>();
+    const onChange = vi.fn<(v: EnvironmentId) => void>();
     render(<EnvironmentPicker value="underwater" onChange={onChange} />);
     await userEvent.click(screen.getByRole('button', { name: /Sky/ }));
     expect(onChange).toHaveBeenCalledWith('sky');
   });
 
   it('does not call onChange when the already-selected option is clicked', async () => {
-    const onChange = vi.fn<[EnvironmentId], void>();
+    const onChange = vi.fn<(v: EnvironmentId) => void>();
     render(<EnvironmentPicker value="underwater" onChange={onChange} />);
     await userEvent.click(screen.getByRole('button', { name: /Underwater/ }));
     expect(onChange).toHaveBeenCalledWith('underwater');

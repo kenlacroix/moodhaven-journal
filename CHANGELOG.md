@@ -43,6 +43,16 @@ Versions follow [Semantic Versioning](https://semver.org/).
 - **Factory reset completeness** — Reset now deletes `voice_memos/`, `media/`, `pw_lockout.json`, `device.json`, `moodhaven_restore.pending`, and `moodhaven_restore.pending.sha256` in addition to the database and peer identity files.
 - **StillHaven input validation** — `still_create_session` now validates `environment` and `bilateral_mode` against allowlists, matching the existing `protocol` validation.
 
+### Added (v1.5.0 scaffold in this commit)
+- **Wrist Loop foundation** — watch can now send a `still_trigger` signal to request a StillHaven protocol start on desktop. New `useWristLoop` hook manages pending-trigger state; `WristLoopBanner` renders a dismissable toast with "Start StillHaven" / "Not now" actions. Signal-to-session links stored in new `still_signal_links` table via `still_link_signal_to_session` Rust command.
+- **Time of Day Insight card** — shows which time of day you write most with a slot bar and streak message. Displayed in the Insights view when local metadata is ready, no AI required.
+- **Writing Momentum card** — shows your journaling cadence ("On a roll", "Building momentum", "Getting started", "Just warming up") with a weekly goal progress bar. Displayed alongside the Time of Day card.
+- **45 new tests** — page-level coverage for `CalendarPage`, `InsightsView`, `OnThisDayView`; component coverage for `GratitudeStreakCard`, `WeeklyReflectionCard`, `MoodWeatherCard`, `WristLoopBanner`, `TimeOfDayInsightCard`, `WritingMomentumCard`; hook coverage for `useWristLoop`; service coverage for `stillLinkSignalToSession`.
+
+### Fixed (v1.5.0 scaffold)
+- `app-commands.toml` — `still_get_session_brief`, `still_get_journal_brief_for_session`, `still_get_wellbeing_context`, and `still_link_signal_to_session` were missing from the Tauri ACL; all four commands were silently unreachable at runtime.
+- `WritingMomentumCard` — goal bar no longer produces `Infinity%` when `weeklyGoal` is 0; denominator is now `Math.max(1, weeklyGoal)`.
+
 ---
 
 ## [1.3.0.1] — 2026-05-31

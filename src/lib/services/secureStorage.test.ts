@@ -22,7 +22,7 @@ const mockEncrypt = vi.mocked(encrypt);
 const mockDecrypt = vi.mocked(decrypt);
 
 const PASSWORD = 'test-password-123';
-const PLAINTEXT = 'sk-proj-abc123';
+const PLAINTEXT = 'sk-proj-abc123'; // nosemgrep: no-hardcoded-api-key (test fixture — verifies encryption of API-key-shaped values)
 const MARKER = '__enc_v1:';
 const FAKE_ENC_DATA = { ciphertext: 'abc', iv: 'def', salt: 'ghi', version: 1 };
 

@@ -144,7 +144,12 @@ export function RichTextEditor({
     autofocus: autoFocus ? 'end' : false,
     editorProps: {
       attributes: {
-        class: 'outline-none min-h-full text-lg leading-[1.8] text-slate-700 dark:text-slate-200',
+        // Font, size, line-height, and letter-spacing are driven by CSS vars
+        // declared on the [data-writing-prefs] ancestor in WritingView. See
+        // active-plans/writing-experience-customization.md. The dark text
+        // fallback below applies only when the editor is rendered outside a
+        // data-writing-prefs ancestor (e.g. future reuse in other contexts).
+        class: 'outline-none min-h-full text-slate-700 dark:text-slate-200',
       },
     },
     onUpdate: ({ editor }) => {
@@ -492,6 +497,193 @@ export function RichTextEditor({
         isOpen={permissionModal === 'blocked'}
         onDismiss={dismissPermissionModal}
       />
+
+        /* Paragraph spacing — overridden by var(--mh-writing-para-spacing) when
+         * the editor is inside a [data-writing-prefs] ancestor (see globals.css). */
+        .ProseMirror p {
+          margin: 0.75em 0;
+        }
+
+        /* Headings */
+        .ProseMirror h2 {
+          font-size: 1.5em;
+          font-weight: 700;
+          line-height: 1.3;
+          margin: 1em 0 0.4em;
+          color: rgb(30 41 59);
+        }
+        .dark .ProseMirror h2 {
+          color: rgb(226 232 240);
+        }
+        .ProseMirror h3 {
+          font-size: 1.25em;
+          font-weight: 600;
+          line-height: 1.4;
+          margin: 0.8em 0 0.3em;
+          color: rgb(51 65 85);
+        }
+        .dark .ProseMirror h3 {
+          color: rgb(203 213 225);
+        }
+
+        /* Blockquote */
+        .ProseMirror blockquote {
+          border-left: 3px solid rgb(139 92 246);
+          padding-left: 1em;
+          margin: 0.75em 0;
+          color: rgb(100 116 139);
+          font-style: italic;
+        }
+        .dark .ProseMirror blockquote {
+          border-left-color: rgb(167 139 250);
+          color: rgb(148 163 184);
+        }
+
+        /* Code block */
+        .ProseMirror pre {
+          background: rgb(241 245 249);
+          border-radius: 0.5em;
+          padding: 0.75em 1em;
+          margin: 0.75em 0;
+          overflow-x: auto;
+          font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+          font-size: 0.9em;
+          line-height: 1.5;
+          color: rgb(30 41 59);
+        }
+        .dark .ProseMirror pre {
+          background: rgb(30 41 59);
+          color: rgb(226 232 240);
+        }
+        .ProseMirror pre code {
+          background: none;
+          padding: 0;
+          border-radius: 0;
+          font-size: inherit;
+          color: inherit;
+        }
+
+        /* Inline code */
+        .ProseMirror code {
+          background: rgb(241 245 249);
+          border-radius: 0.25em;
+          padding: 0.15em 0.35em;
+          font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+          font-size: 0.9em;
+          color: rgb(139 92 246);
+        }
+        .dark .ProseMirror code {
+          background: rgb(30 41 59);
+          color: rgb(167 139 250);
+        }
+
+        /* Horizontal rule */
+        .ProseMirror hr {
+          border: none;
+          border-top: 2px solid rgb(226 232 240);
+          margin: 1.5em 0;
+        }
+        .dark .ProseMirror hr {
+          border-top-color: rgb(51 65 85);
+        }
+
+        /* Lists */
+        .ProseMirror ul {
+          list-style-type: disc;
+          padding-left: 1.5em;
+          margin: 0.5em 0;
+        }
+        .ProseMirror ol {
+          list-style-type: decimal;
+          padding-left: 1.5em;
+          margin: 0.5em 0;
+        }
+        .ProseMirror li {
+          margin: 0.25em 0;
+        }
+        .ProseMirror li p {
+          margin: 0;
+        }
+
+        /* Task list */
+        .ProseMirror ul[data-type="taskList"] {
+          list-style: none;
+          padding-left: 0;
+          margin: 0.5em 0;
+        }
+        .ProseMirror ul[data-type="taskList"] li {
+          display: flex;
+          align-items: flex-start;
+          gap: 0.5em;
+          margin: 0.35em 0;
+        }
+        .ProseMirror ul[data-type="taskList"] li > label {
+          flex-shrink: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          margin-top: 0.25em;
+          user-select: none;
+        }
+        .ProseMirror ul[data-type="taskList"] li > label input[type="checkbox"] {
+          appearance: none;
+          -webkit-appearance: none;
+          width: 1.15em;
+          height: 1.15em;
+          border: 2px solid rgb(203 213 225);
+          border-radius: 0.25em;
+          cursor: pointer;
+          position: relative;
+          transition: all 150ms ease;
+        }
+        .dark .ProseMirror ul[data-type="taskList"] li > label input[type="checkbox"] {
+          border-color: rgb(100 116 139);
+        }
+        .ProseMirror ul[data-type="taskList"] li > label input[type="checkbox"]:checked {
+          background: rgb(139 92 246);
+          border-color: rgb(139 92 246);
+        }
+        .dark .ProseMirror ul[data-type="taskList"] li > label input[type="checkbox"]:checked {
+          background: rgb(167 139 250);
+          border-color: rgb(167 139 250);
+        }
+        .ProseMirror ul[data-type="taskList"] li > label input[type="checkbox"]:checked::after {
+          content: '';
+          position: absolute;
+          top: 0.05em;
+          left: 0.25em;
+          width: 0.35em;
+          height: 0.6em;
+          border: solid white;
+          border-width: 0 2px 2px 0;
+          transform: rotate(45deg);
+        }
+        .ProseMirror ul[data-type="taskList"] li > div {
+          flex: 1;
+        }
+        .ProseMirror ul[data-type="taskList"] li[data-checked="true"] > div > p {
+          text-decoration: line-through;
+          color: rgb(148 163 184);
+        }
+        .dark .ProseMirror ul[data-type="taskList"] li[data-checked="true"] > div > p {
+          color: rgb(100 116 139);
+        }
+
+        /* Nested task lists */
+        .ProseMirror ul[data-type="taskList"] ul[data-type="taskList"] {
+          margin: 0.25em 0;
+          padding-left: 1.5em;
+        }
+
+        /* Slash command menu — CSS variables for dark mode */
+        :root {
+          --slash-menu-bg: white;
+          --slash-menu-border: rgb(226 232 240);
+        }
+        .dark {
+          --slash-menu-bg: rgb(15 23 42);
+          --slash-menu-border: rgb(51 65 85);
+        }
     </div>
   );
 }

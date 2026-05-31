@@ -110,7 +110,7 @@ export const useAppStore = create<AppState>((set) => ({
     }
 
     // Persist preference
-    localStorage.setItem('theme', theme);
+    localStorage.setItem('theme', theme); // nosemgrep: no-localstorage-secrets (UI theme value, not a secret)
   },
 }));
 

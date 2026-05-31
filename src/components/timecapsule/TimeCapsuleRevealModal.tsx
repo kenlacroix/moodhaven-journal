@@ -130,6 +130,7 @@ export function TimeCapsuleRevealModal({ capsule, password, onReveal, onWriteRes
           ) : (
             <div
               className="prose prose-sm dark:prose-invert max-w-none text-slate-700 dark:text-slate-200"
+              // nosemgrep: dangerouslySetInnerHTML-pattern (DOMPurify-sanitized at setState call site)
               dangerouslySetInnerHTML={{ __html: decryptedContent }}
             />
           )}

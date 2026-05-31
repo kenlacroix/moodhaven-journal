@@ -7,6 +7,24 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.1.0.1] — 2026-05-31
+
+### Removed
+- Deleted dead components with zero imports: `CloudSyncChip`, `JournalPage`, `stillhaven/types.ts`
+- Removed unused npm packages: `react-router-dom`, `@tiptap/extension-bubble-menu`, `playwright`
+- Deleted dead barrel files (`types/index.ts`, `lib/index.ts`, `settings/index.ts`) and inlined their imports
+
+### Changed
+- Split `RichTextEditor.tsx` (1 424 lines) into `EditorToolbar`, `EditorRecording`, `EditorLinkDialog`, `EditorIcons`, and `EditorStyles.css` — orchestrator now ~320 lines
+- Split `Sidebar.tsx` (514 lines) into `SidebarHeader`, `SidebarNavigation`, `SidebarBooks`, `SidebarPrompts`
+- Split `DevicesTab.tsx` (578 lines) into `DeviceIconSet`, `DevicesThisDevice`, `DevicesNearby`, `DevicesSyncOptions`
+- Split `PairingModal.tsx` (629 lines) into `PairingHooks`, `PairingUIComponents`, `PairingShowCodeTab`, `PairingEnterCodeTab`
+- Split `PrivacyTab.tsx` (660 lines) into `PrivacyAutoLock`, `PrivacyBiometric`, `PrivacyTwoFactor`, `PrivacyDataManagement`, `PrivacyTransparency`
+- Archived completed StillHaven plan from `active-plans/` to `docs/internal/plans/`
+- Removed `export` from four unused constants (`slashCommandItems`, `TRANSCRIPT_FORMAT_PROMPTS`, `MILESTONES`, `ENGINE_DEFAULTS`)
+
+---
+
 ## [1.1.0] — 2026-05-26
 
 ### Added

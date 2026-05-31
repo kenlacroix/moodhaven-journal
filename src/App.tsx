@@ -93,6 +93,10 @@ function MainApp() {
   useWearSignals({
     password: sessionPassword ?? '',
     enabled: isUnlocked && !!sessionPassword,
+    onStillhavenStart:
+      import.meta.env.VITE_FEATURE_STILL && stillhavenEnabled
+        ? () => setCurrentView('still')
+        : undefined,
   });
 
   // Peer-to-peer sync — initializes device identity and starts mDNS discovery.

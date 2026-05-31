@@ -17,6 +17,9 @@ object WearProtocol {
     /** ChannelAPI path for audio stream transfers from the watch. */
     const val CHANNEL_AUDIO = "/audio_channel"
 
+    /** MessageAPI path for "start a StillHaven grounding session on the desktop" from watch → phone. */
+    const val PATH_STILLHAVEN_START = "/stillhaven/start"
+
     /** MessageAPI path for haptic feedback sent from phone → watch. */
     const val PATH_FEEDBACK = "/feedback"
 

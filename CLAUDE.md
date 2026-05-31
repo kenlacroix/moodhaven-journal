@@ -48,7 +48,7 @@ Platforms: Windows, Linux, macOS.
 | `src-tauri/tauri.conf.json` | App config, sidecar binaries |
 | `src-tauri/Cargo.toml` | Rust dependencies |
 | `src-tauri/capabilities/default.json` | Tauri ACL — permitted commands + plugins |
-| `src-tauri/src/lib.rs` | All ~148 Tauri command registrations |
+| `src-tauri/src/lib.rs` | All ~150 Tauri command registrations |
 | `src-tauri/src/db/mod.rs` | SQLite schema, migrations, Database struct |
 | `src/App.tsx` | React root |
 | `src/stores/` | 4 Zustand stores (app, settings, books, …) |
@@ -96,6 +96,7 @@ Platforms: Windows, Linux, macOS.
 | `src/components/voice-memo/VoiceDraftEditor.tsx` | Full-screen draft editor with hashtag pills; encrypts on publish |
 | `src/hooks/useVoiceMemoDrafts.ts` | Draft list state + publishDraft + discardDraft |
 | `src/components/writing/AppearanceDrawer.tsx` | WritingView appearance panel — font, size, line height, tint, a11y options |
+| `src/modules/stillhaven/components/StillEffectCard.tsx` | Per-protocol effect stats table + best-protocol recommendation chip in Session History |
 | `vitest.config.ts` | Test runner config |
 | `src/test/setup.ts` | Global test setup + Tauri IPC mock |
 

@@ -45,8 +45,7 @@ const fakeEntry: JournalEntry = {
   id: 'entry-new',
   content: '',
   mood: 4,
-  privacy_mode: 0,
-  location_weather: null,
+  privacyMode: 0,
   book_id: 'default',
   pinned: false,
   created_at: '2026-05-31T09:01:00Z',
@@ -59,8 +58,8 @@ beforeEach(() => {
   // Default: encrypt succeeds
   mockEncrypt.mockResolvedValue({
     success: true,
-    data: { iv: 'iv', data: 'data', salt: 'salt' },
-    error: null,
+    data: { iv: 'iv', ciphertext: 'data', salt: 'salt', version: 1 },
+    error: undefined,
   });
 });
 
@@ -184,7 +183,7 @@ describe('publishDraft()', () => {
   it('throws when encryption fails', async () => {
     const draft = makeDraft({ id: 'draft-enc-fail' });
     mockInvoke.mockResolvedValueOnce([draft]); // list_pending_drafts
-    mockEncrypt.mockResolvedValueOnce({ success: false, data: null, error: 'Bad key' });
+    mockEncrypt.mockResolvedValueOnce({ success: false, data: undefined, error: 'Bad key' });
 
     const { result } = renderHook(() => useVoiceMemoDrafts());
     await waitFor(() => expect(result.current.drafts).toHaveLength(1));

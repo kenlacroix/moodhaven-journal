@@ -44,8 +44,9 @@ const fakeMemo: VoiceMemo = {
 
 const fakeEncryptedData: EncryptedData = {
   iv: 'aaaaaa',
-  data: 'bbbbbb',
+  ciphertext: 'bbbbbb',
   salt: 'cccccc',
+  version: 1,
 };
 
 // ── IPC wrappers ──────────────────────────────────────────────────────────────

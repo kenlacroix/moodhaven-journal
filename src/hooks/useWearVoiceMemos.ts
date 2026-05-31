@@ -142,11 +142,14 @@ export function useWearVoiceMemos({
         return next;
       });
     }
-  }, [model]);
+  }, [model]); // eslint-disable-line react-hooks/exhaustive-deps -- memos read only for duration_ms; memo is always present when this is called
 
   // ── Auto-transcribe untranscribed memos after load ───────────────────────
 
   const didAutoTranscribe = useRef(false);
+  // Reset the flag when the model changes so pending memos get re-queued
+  // with the new model (e.g. user switches tiny → base in Settings).
+  useEffect(() => { didAutoTranscribe.current = false; }, [model]);
   useEffect(() => {
     if (!enabled || !model || didAutoTranscribe.current || memos.length === 0) return;
     didAutoTranscribe.current = true;

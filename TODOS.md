@@ -5,6 +5,24 @@
 
 ---
 
+## Test Coverage (from /ship review, v1.2.0)
+
+**Priority:** P2 — no existing tests were broken; these are new code with no coverage.
+
+### TEST-001: Voice memo service + hooks
+- `src/lib/services/voiceMemoService.test.ts` — missing entirely. Cover: 5 new IPC wrappers (correct command + payload), `suggestHashtags` (stopwords, dedup, length bounds 3–12, slice to 3, empty string)
+- `src/hooks/useVoiceMemoDrafts.test.ts` — missing entirely. Cover: initial load, refresh swallows errors, publishDraft encrypts then removes from state, discardDraft removes from state
+- Mood inference branch in `useWearVoiceMemos`: word count < 5 skips; `scoreContentMood` null skips; `patchVoiceMemoMood` rejection swallowed; happy path sets `inferred_mood`
+
+### TEST-002: Voice memo UI components
+- `VoiceMemoDraftCard.test.tsx` — missing entirely. Cover: duration formatting, `Transcribing…` when null, ellipsis on long transcript, Review button disabled when null, mood dots, context chip
+- `VoiceDraftEditor.test.tsx` — missing entirely. Cover: close/backdrop close, Publish triggers onPublish + onClose, error state on rejection, hashtag pill inserts content, null transcript renders safely
+
+### TEST-003: Rust voice memo commands
+- Add `#[cfg(test)] mod tests` in `src-tauri/src/db/voice_memos.rs`. Cover: `list_pending_drafts` filtering (reviewed=0, transcription IS NOT NULL, entry_id IS NULL); `publish_voice_memo_draft` inserts entry + sets reviewed=1; `discard_voice_memo_draft` removes row; missing-id case for `publish`
+
+---
+
 ## Website Design Debt (from design-unification autoplan review, 2026-04-04)
 
 ### ~~DESIGN-DEBT-001: Hero background photo~~ ✅ RESOLVED (2026-04-12)
@@ -132,10 +150,8 @@ Replaced `response.json()` with a streaming reader that aborts and falls back to
 **Why:** Debug-level sync logs are extremely verbose and would bury unrelated debug output from other modules.
 **Effort:** human ~4h / CC+gstack ~30min
 
-### LOG-002: Log level badge / indicator (P4)
-**What:** Show a small indicator in the About tab (or sidebar footer) when the log level is set to `debug` or `error` so users don't forget they changed it.
-**Why:** A user who left `debug` on for a troubleshooting session has no reminder that verbose logging is still active.
-**Effort:** human ~30min / CC+gstack ~5min
+### ~~LOG-002: Log level badge / indicator (P4)~~ ✅ RESOLVED (2026-05-31)
+**Completed:** Amber banner under log level selector in AboutTab when `debug` active; muted banner when `error`. Both disappear when level is `warn` or `info`.
 
 ---
 

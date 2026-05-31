@@ -334,7 +334,10 @@ pub fn db_upsert_setting(
     remote_updated_at: &str,
 ) -> Result<bool, String> {
     if !SYNC_ALLOWED_SETTINGS.contains(&key) {
-        log::warn!("[sync] Peer attempted to sync disallowed setting key {:?} — dropped", key);
+        log::warn!(
+            "[sync] Peer attempted to sync disallowed setting key {:?} — dropped",
+            key
+        );
         return Ok(false);
     }
     let local = db_get_setting_for_sync(conn, key)?;
@@ -500,7 +503,7 @@ pub fn db_set_peer_sync_at(conn: &Connection, peer_id: &str, at: &str) -> Result
 
 #[cfg(test)]
 mod tests {
-    use super::{db_upsert_setting};
+    use super::db_upsert_setting;
 
     fn make_test_conn() -> rusqlite::Connection {
         let conn = rusqlite::Connection::open_in_memory().unwrap();
@@ -529,7 +532,12 @@ mod tests {
     #[test]
     fn totp_secret_key_is_dropped() {
         let conn = make_test_conn();
-        let result = db_upsert_setting(&conn, "totp_secret", "JBSWY3DPEHPK3PXP", "2099-01-01T00:00:00Z");
+        let result = db_upsert_setting(
+            &conn,
+            "totp_secret",
+            "JBSWY3DPEHPK3PXP",
+            "2099-01-01T00:00:00Z",
+        );
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), false);
     }

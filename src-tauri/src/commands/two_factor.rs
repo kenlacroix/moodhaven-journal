@@ -108,8 +108,12 @@ fn decrypt_totp_secret(stored: &str, password: &str) -> Result<String, String> {
     }
 
     let b64 = base64::engine::general_purpose::STANDARD;
-    let salt = b64.decode(parts[0]).map_err(|_| "bad salt b64".to_string())?;
-    let nonce_bytes = b64.decode(parts[1]).map_err(|_| "bad nonce b64".to_string())?;
+    let salt = b64
+        .decode(parts[0])
+        .map_err(|_| "bad salt b64".to_string())?;
+    let nonce_bytes = b64
+        .decode(parts[1])
+        .map_err(|_| "bad nonce b64".to_string())?;
     let ct = b64.decode(parts[2]).map_err(|_| "bad ct b64".to_string())?;
 
     // Validate decoded lengths before use — Nonce::from_slice panics on wrong size.
@@ -505,7 +509,12 @@ pub fn disable_2fa(db: State<Database>) -> Result<bool, String> {
 pub fn totp_needs_reencryption(db: State<Database>) -> Result<bool, String> {
     let row = get_2fa_row(&db)?;
     match row {
-        Some(r) if r.enabled && r.method.as_deref().map_or(false, |m| m == "totp" || m == "both") => {
+        Some(r)
+            if r.enabled
+                && r.method
+                    .as_deref()
+                    .is_some_and(|m| m == "totp" || m == "both") =>
+        {
             let needs = r
                 .totp_secret
                 .map(|s| !s.starts_with(TOTP_ENC_PREFIX))

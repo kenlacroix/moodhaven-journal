@@ -185,7 +185,10 @@ pub(crate) fn validate_entry_id(entry_id: &str) -> Result<(), String> {
         || entry_id == ".."
         || entry_id.starts_with('.')
     {
-        return Err(format!("Invalid entry_id for media directory: {:?}", entry_id));
+        return Err(format!(
+            "Invalid entry_id for media directory: {:?}",
+            entry_id
+        ));
     }
     Ok(())
 }
@@ -247,10 +250,7 @@ fn abs_enc_path(app: &AppHandle, rel_path: &str) -> Result<std::path::PathBuf, S
     // semantic containment check — "app_data/../evil" would pass it.  Checking
     // components explicitly closes this gap without requiring the path to exist.
     use std::path::Component;
-    if joined
-        .components()
-        .any(|c| c == Component::ParentDir)
-    {
+    if joined.components().any(|c| c == Component::ParentDir) {
         return Err(
             "Refusing to access path containing '..' components outside app data directory"
                 .to_string(),

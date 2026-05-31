@@ -250,10 +250,12 @@ pub fn link_voice_memo_to_entry(
 #[tauri::command]
 pub fn patch_voice_memo_context(
     db: State<Database>,
+    lock: State<'_, AppLockState>,
     id: String,
     context: String,
     location_weather_json: Option<String>,
 ) -> Result<(), String> {
+    if lock.is_locked() { return Err("Session is locked".to_string()); }
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
     if let Some(ref lw) = location_weather_json {
@@ -277,9 +279,12 @@ pub fn patch_voice_memo_context(
 #[tauri::command]
 pub fn patch_voice_memo_mood(
     db: State<Database>,
+    lock: State<'_, AppLockState>,
     id: String,
     inferred_mood: i64,
 ) -> Result<(), String> {
+    if lock.is_locked() { return Err("Session is locked".to_string()); }
+    if !(1..=5).contains(&inferred_mood) { return Err("inferred_mood must be 1–5".to_string()); }
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
     conn.execute(
@@ -318,23 +323,31 @@ pub fn publish_voice_memo_draft(
 
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
-    // Insert journal entry
-    conn.execute(
-        "INSERT INTO journal_entries
-             (id, encrypted_content, mood, privacy_mode, book_id, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5,
-                 strftime('%Y-%m-%dT%H:%M:%S','now','localtime'),
-                 strftime('%Y-%m-%dT%H:%M:%S','now','localtime'))",
-        params![entry_id, content_json, mood, privacy_mode, book_id],
-    )
-    .map_err(|e| format!("Failed to insert journal entry: {}", e))?;
+    // Atomic: insert + link in one transaction so peer sync never sees an orphan entry
+    conn.execute("BEGIN IMMEDIATE", []).map_err(|e| e.to_string())?;
+    let result = (|| {
+        conn.execute(
+            "INSERT INTO journal_entries
+                 (id, encrypted_content, mood, privacy_mode, book_id, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5,
+                     strftime('%Y-%m-%dT%H:%M:%S','now','localtime'),
+                     strftime('%Y-%m-%dT%H:%M:%S','now','localtime'))",
+            params![entry_id, content_json, mood, privacy_mode, book_id],
+        )
+        .map_err(|e| format!("Failed to insert journal entry: {}", e))?;
 
-    // Mark memo as reviewed and link entry
-    conn.execute(
-        "UPDATE voice_memos SET entry_id = ?1, reviewed = 1 WHERE id = ?2",
-        params![entry_id, id],
-    )
-    .map_err(|e| format!("Failed to update voice memo: {}", e))?;
+        conn.execute(
+            "UPDATE voice_memos SET entry_id = ?1, reviewed = 1 WHERE id = ?2",
+            params![entry_id, id],
+        )
+        .map_err(|e| format!("Failed to update voice memo: {}", e))?;
+
+        Ok::<(), String>(())
+    })();
+    match result {
+        Ok(()) => { conn.execute("COMMIT", []).map_err(|e| e.to_string())?; }
+        Err(e) => { let _ = conn.execute("ROLLBACK", []); return Err(e); }
+    }
 
     // Fetch the created entry as JSON
     let entry_json: String = conn
@@ -372,8 +385,10 @@ pub fn publish_voice_memo_draft(
 pub fn discard_voice_memo_draft(
     app: AppHandle,
     db: State<Database>,
+    lock: State<'_, AppLockState>,
     id: String,
 ) -> Result<(), String> {
+    if lock.is_locked() { return Err("Session is locked".to_string()); }
     // Fetch file path before acquiring the lock for deletion, to avoid
     // holding the lock across filesystem calls.
     let file_path = {
@@ -403,7 +418,9 @@ pub fn discard_voice_memo_draft(
 #[tauri::command]
 pub fn list_pending_drafts(
     db: State<Database>,
+    lock: State<'_, AppLockState>,
     limit: Option<i64>,
 ) -> Result<Vec<VoiceMemoRow>, String> {
+    if lock.is_locked() { return Err("Session is locked".to_string()); }
     db::list_pending_drafts(&db, limit)
 }

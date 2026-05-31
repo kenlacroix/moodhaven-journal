@@ -131,7 +131,7 @@ export async function publishVoiceMemoDraft(
 
 /**
  * Discard a pending draft — marks it reviewed without creating a journal entry.
- * Does NOT delete the audio file; call deleteVoiceMemo separately if cleanup is needed.
+ * Deletes both the DB row and the audio file (best-effort). Do not call deleteVoiceMemo afterward.
  */
 export async function discardVoiceMemoDraft(id: string): Promise<void> {
   return invoke<void>('discard_voice_memo_draft', { id });

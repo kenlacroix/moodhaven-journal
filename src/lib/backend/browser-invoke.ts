@@ -217,6 +217,9 @@ async function dispatch(command: string, p: Params): Promise<any> {
     case 'list_all_media': {
       return [];
     }
+    case 'list_entry_media': {
+      return [];
+    }
 
     // -----------------------------------------------------------------------
     // Settings

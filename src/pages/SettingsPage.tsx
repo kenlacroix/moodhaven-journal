@@ -165,6 +165,7 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
     setSyncMode,
     setSyncIntervalMinutes,
     setTimeCapsuleSettings,
+    setModuleLogLevel,
     updateSettings,
   } = useSettingsStore();
 
@@ -563,6 +564,7 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
           appVersion={appVersion}
           logPath={logPath}
           handleLogLevelChange={handleLogLevelChange}
+          setModuleLogLevel={setModuleLogLevel}
         />
       )}
     </>

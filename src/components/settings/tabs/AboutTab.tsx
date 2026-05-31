@@ -1,11 +1,14 @@
+import { useState } from 'react';
 import type { AppSettings } from '../../../types/settings';
 import { SettingSection } from '../SettingSection';
 import { UpdatePanel } from '../../updater/UpdatePanel';
 import type { UseUpdateCheckReturn } from '../../../hooks/useUpdateCheck';
 import { invoke } from '@tauri-apps/api/core';
 import { logger } from '../../../lib/services/logger';
-import type { LogLevel } from '../../../lib/services/logger';
+import type { LogLevel, LogModule } from '../../../lib/services/logger';
 import { usePlatform } from '../../../hooks/usePlatform';
+
+const LOG_MODULES: LogModule[] = ['sync', 'ai', 'stt', 'peer', 'crypto', 'db'];
 
 interface AboutTabProps {
   settings: AppSettings;
@@ -13,6 +16,7 @@ interface AboutTabProps {
   appVersion: string;
   logPath: string | null;
   handleLogLevelChange: (level: LogLevel) => void;
+  setModuleLogLevel: (module: LogModule, level: LogLevel | null) => void;
 }
 
 export function AboutTab({
@@ -21,8 +25,10 @@ export function AboutTab({
   appVersion,
   logPath,
   handleLogLevelChange,
+  setModuleLogLevel,
 }: AboutTabProps) {
   const { isBrowser } = usePlatform();
+  const [moduleOverridesOpen, setModuleOverridesOpen] = useState(false);
   return (
     <div id="panel-about" role="tabpanel" className="space-y-6">
 
@@ -62,22 +68,80 @@ export function AboutTab({
 
           {!isBrowser && (
             <>
-              <div className="flex items-center justify-between py-3 border-b border-slate-100 dark:border-slate-700">
-                <div>
-                  <p className="text-slate-700 dark:text-slate-200">Log Level</p>
-                  <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Debug is verbose — use only for troubleshooting</p>
+              <div className="py-3 border-b border-slate-100 dark:border-slate-700 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-slate-700 dark:text-slate-200">Log Level</p>
+                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Debug is verbose — use only for troubleshooting</p>
+                  </div>
+                  <select
+                    aria-label="Log level"
+                    value={settings.logLevel ?? 'warn'}
+                    onChange={(e) => handleLogLevelChange(e.target.value as LogLevel)}
+                    className="px-3 py-1 text-sm rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 border-0 cursor-pointer"
+                  >
+                    <option value="error">Error</option>
+                    <option value="warn">Warn</option>
+                    <option value="info">Info</option>
+                    <option value="debug">Debug</option>
+                  </select>
                 </div>
-                <select
-                  aria-label="Log level"
-                  value={settings.logLevel ?? 'warn'}
-                  onChange={(e) => handleLogLevelChange(e.target.value as LogLevel)}
-                  className="px-3 py-1 text-sm rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 border-0 cursor-pointer"
+                {settings.logLevel === 'debug' && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/40 rounded-md px-2 py-1">
+                    Verbose logging active — disable after troubleshooting
+                  </p>
+                )}
+                {settings.logLevel === 'error' && (
+                  <p className="text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md px-2 py-1">
+                    Minimal logging — warnings and info are suppressed
+                  </p>
+                )}
+              </div>
+
+              <div className="py-3 border-b border-slate-100 dark:border-slate-700">
+                <button
+                  type="button"
+                  onClick={() => setModuleOverridesOpen((v) => !v)}
+                  className="flex items-center justify-between w-full text-left"
                 >
-                  <option value="error">Error</option>
-                  <option value="warn">Warn</option>
-                  <option value="info">Info</option>
-                  <option value="debug">Debug</option>
-                </select>
+                  <div>
+                    <p className="text-slate-700 dark:text-slate-200">Module overrides</p>
+                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Per-module verbosity (overrides global level)</p>
+                  </div>
+                  <svg
+                    className={`w-4 h-4 text-slate-400 transition-transform ${moduleOverridesOpen ? 'rotate-180' : ''}`}
+                    fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                {moduleOverridesOpen && (
+                  <div className="mt-3 space-y-2">
+                    {LOG_MODULES.map((mod) => {
+                      const current = settings.moduleLogLevels?.[mod] ?? null;
+                      return (
+                        <div key={mod} className="flex items-center justify-between">
+                          <span className="text-sm font-mono text-slate-600 dark:text-slate-400">[{mod}]</span>
+                          <select
+                            aria-label={`Log level for ${mod} module`}
+                            value={current ?? ''}
+                            onChange={(e) => {
+                              const val = e.target.value as LogLevel | '';
+                              setModuleLogLevel(mod, val === '' ? null : val);
+                            }}
+                            className="px-2 py-1 text-sm rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 border-0 cursor-pointer"
+                          >
+                            <option value="">— (global)</option>
+                            <option value="error">Error</option>
+                            <option value="warn">Warn</option>
+                            <option value="info">Info</option>
+                            <option value="debug">Debug</option>
+                          </select>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center justify-between py-3 border-b border-slate-100 dark:border-slate-700">

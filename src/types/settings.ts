@@ -238,6 +238,7 @@ export interface AppSettings {
   timeCapsule: TimeCapsuleSettings;
   wellness: WellnessSettings;
   logLevel: 'error' | 'warn' | 'info' | 'debug';
+  moduleLogLevels?: Partial<Record<import('../lib/services/logger').LogModule, import('../lib/services/logger').LogLevel>>;
 }
 
 // Default settings factory

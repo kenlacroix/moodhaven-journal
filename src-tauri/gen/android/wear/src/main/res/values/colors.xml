@@ -58,4 +58,28 @@
   <color name="brand_primary_500_alpha20">#338B5CF6</color>
   <color name="brand_primary_300_alpha33">#55C4B5FD</color>
 
+  <!-- Semi-transparent white overlays (text hints, subtitles) -->
+  <color name="wear_text_primary_alpha10">#1AFFFFFF</color>
+  <color name="wear_text_primary_alpha27">#44FFFFFF</color>
+  <color name="wear_text_primary_alpha33">#55FFFFFF</color>
+  <color name="wear_text_primary_alpha40">#66FFFFFF</color>
+  <color name="wear_text_primary_alpha53">#88FFFFFF</color>
+  <color name="wear_text_primary_alpha67">#AAFFFFFF</color>
+  <color name="wear_text_primary_alpha80">#CCFFFFFF</color>
+
+  <!-- Additional surface variants -->
+  <color name="wear_surface_deep">#1A1A2E</color>
+  <color name="wear_surface_card">#222222</color>
+  <color name="wear_surface_card_alt">#1F2937</color>
+  <color name="wear_surface_dismiss">#374151</color>
+
+  <!-- Mood queued overlay background -->
+  <color name="wear_mood_queued_bg">#1E293B</color>
+
+  <!-- Breathing suggestion chip (amber) -->
+  <color name="brand_accent_amber">#FCD34D</color>
+
+  <!-- Mood low accent (DESIGN.md canonical: #F97316) -->
+  <color name="mood_low_accent">#F97316</color>
+
 </resources>

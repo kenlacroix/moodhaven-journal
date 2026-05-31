@@ -9,7 +9,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#000000"
+    android:background="@color/wear_surface"
     android:fillViewport="true">
 
     <androidx.wear.widget.BoxInsetLayout
@@ -34,7 +34,7 @@
             android:visibility="gone"
             android:text="Hold to discard"
             android:textSize="9sp"
-            android:textColor="#44FFFFFF" />
+            android:textColor="@color/wear_text_primary_alpha27" />
 
         <!--
           116 dp outer frame = 96 dp button + 10 dp gap each side for the arc stroke.
@@ -78,7 +78,7 @@
             android:layout_marginTop="8dp"
             android:text="0:00"
             android:textSize="22sp"
-            android:textColor="#FFFFFF"
+            android:textColor="@color/wear_text_primary"
             android:textStyle="bold"
             android:visibility="gone" />
 
@@ -90,7 +90,7 @@
             android:layout_marginTop="6dp"
             android:text="Tap to record"
             android:textSize="12sp"
-            android:textColor="#AAFFFFFF"
+            android:textColor="@color/wear_text_primary_alpha67"
             android:gravity="center" />
 
         <!-- Transfer / queue confirmation (appears briefly after stop) -->
@@ -101,7 +101,7 @@
             android:layout_marginTop="4dp"
             android:text=""
             android:textSize="10sp"
-            android:textColor="#66FFFFFF"
+            android:textColor="@color/wear_text_primary_alpha40"
             android:gravity="center"
             android:visibility="gone" />
 
@@ -114,7 +114,7 @@
             android:visibility="gone"
             android:text="● 0 queued"
             android:textSize="9sp"
-            android:textColor="#FFF97316"
+            android:textColor="@color/mood_low_accent"
             android:paddingStart="4dp"
             android:paddingEnd="4dp" />
 

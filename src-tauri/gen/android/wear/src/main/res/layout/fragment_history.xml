@@ -2,7 +2,7 @@
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#000000">
+    android:background="@color/wear_surface">
 
     <!-- Small page label — positioned in safe area (below bezel clip zone) -->
     <TextView
@@ -12,7 +12,7 @@
         android:layout_marginTop="28dp"
         android:text="Recent Moods"
         android:textSize="11sp"
-        android:textColor="#66FFFFFF" />
+        android:textColor="@color/wear_text_primary_alpha40" />
 
     <androidx.wear.widget.WearableRecyclerView
         android:id="@+id/historyList"
@@ -30,7 +30,7 @@
         android:visibility="gone"
         android:text="No moods logged yet"
         android:textSize="13sp"
-        android:textColor="#55FFFFFF"
+        android:textColor="@color/wear_text_primary_alpha33"
         android:gravity="center" />
 
 </FrameLayout>

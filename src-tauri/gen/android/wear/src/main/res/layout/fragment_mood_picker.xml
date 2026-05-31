@@ -9,7 +9,7 @@
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#000000">
+    android:background="@color/wear_surface">
 
     <!-- Ambient tint: mood colour at ~15% opacity, animated on scroll -->
     <View
@@ -32,7 +32,7 @@
         android:layout_marginTop="26dp"
         android:text="How are you?"
         android:textSize="10sp"
-        android:textColor="#66FFFFFF" />
+        android:textColor="@color/wear_text_primary_alpha40" />
 
     <!-- Queue pending badge — top-end corner -->
     <TextView
@@ -45,7 +45,7 @@
         android:visibility="gone"
         android:text="● 0"
         android:textSize="9sp"
-        android:textColor="#FFF97316"
+        android:textColor="@color/mood_low_accent"
         android:paddingStart="4dp"
         android:paddingEnd="4dp" />
 

@@ -1,5 +1,7 @@
 import type { AppSettings } from '../../../types/settings';
-import { SettingSection, SettingSelect, SettingToggle } from '../index';
+import { SettingSection } from '../SettingSection';
+import { SettingSelect } from '../SettingSelect';
+import { SettingToggle } from '../SettingToggle';
 
 interface AppearanceTabProps {
   settings: AppSettings;

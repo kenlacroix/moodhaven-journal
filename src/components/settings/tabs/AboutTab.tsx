@@ -1,5 +1,5 @@
 import type { AppSettings } from '../../../types/settings';
-import { SettingSection } from '../index';
+import { SettingSection } from '../SettingSection';
 import { UpdatePanel } from '../../updater/UpdatePanel';
 import type { UseUpdateCheckReturn } from '../../../hooks/useUpdateCheck';
 import { invoke } from '@tauri-apps/api/core';

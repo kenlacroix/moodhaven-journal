@@ -523,14 +523,20 @@ async function dispatch(command: string, p: Params): Promise<any> {
 
     // Voice memos — not available in browser (Wear OS / desktop-only feature)
     case 'list_voice_memos':
+    case 'list_pending_drafts':
       return [];
     case 'get_voice_memo':
     case 'delete_voice_memo':
     case 'patch_voice_memo_transcription':
+    case 'patch_voice_memo_context':
+    case 'patch_voice_memo_mood':
+    case 'discard_voice_memo_draft':
     case 'link_voice_memo_to_entry':
     case 'transcribe_voice_memo':
     case 'store_voice_memo':
       return null;
+    case 'publish_voice_memo_draft':
+      throw new Error('publish_voice_memo_draft not supported in browser mode');
 
     default:
       console.warn(`[browser-invoke] unhandled command: ${command}`, p);

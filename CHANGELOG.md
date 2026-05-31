@@ -10,7 +10,7 @@ Versions follow [Semantic Versioning](https://semver.org/).
 ### Fixed
 - **Journaling streak counted wrong for users who skip today** — the "allow missing today" path in the streak calculation used the wrong date for comparison, making it unreachable; a user who last journaled yesterday now correctly shows a streak of 1+ instead of 0.
 - **StillHaven session completion/abandonment on wrong ID was silent** — `still_complete_session` and `still_abandon_session` now return an error when the session ID doesn't exist, instead of silently returning success with 0 rows affected.
-- **StillHaven session brief could return wrong activation values** — `get_session_brief` used a LEFT JOIN that could produce a cartesian product when a session had multiple activation samples for one phase; now uses scalar subqueries that always pick the most recent sample per phase.
+- **StillHaven session brief showed wrong activation values** — the activation delta displayed after a session could be incorrect if you recorded more than one check-in sample for a phase; now always picks the most recent sample per phase.
 - **Streak query was unbounded** — `get_wellbeing_context` loaded all distinct journal entry dates into memory; now bounded to the last 1,000 entries (covers 2.7+ years of daily journaling).
 - **`onWordsWritten` could hold stale `isVisible` value** — wrapped in `useCallback` so memoized consumers always see the current card visibility state.
 - Nosemgrep suppression comment in `journal.rs` test moved to its own line for consistency with `cargo fmt`.

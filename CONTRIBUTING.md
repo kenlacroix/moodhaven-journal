@@ -53,7 +53,7 @@ npm run tauri dev      # Hot-reload dev server
 ### Verify the Setup
 
 ```bash
-npm test               # All 641 tests should pass
+npm test               # All 1172 tests should pass
 npm run typecheck      # No TypeScript errors
 cd src-tauri && cargo check    # Rust compiles cleanly
 ```

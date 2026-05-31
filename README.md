@@ -55,9 +55,9 @@
 
 | Platform | Installer |
 |:---|:---|
-| Windows | `MoodHaven_1.3.0.1_x64-setup.exe` |
-| macOS | `MoodHaven_1.3.0.1_x64.dmg` |
-| Linux | `moodhaven_1.3.0.1_amd64.AppImage` or `.deb` |
+| Windows | `MoodHaven_1.3.2.0_x64-setup.exe` |
+| macOS | `MoodHaven_1.3.2.0_x64.dmg` |
+| Linux | `moodhaven_1.3.2.0_amd64.AppImage` or `.deb` |
 
 **Browser** — Run directly in your browser or self-host with the `dist-web/` build. No Rust or install required.
 
@@ -116,10 +116,10 @@ Grab the latest build from the [Releases](https://github.com/kenlacroix/moodhave
 
 | Platform | Installer | Minimum Version |
 |:---|:---|:---|
-| **Windows** | `MoodHaven_1.3.0.1_x64-setup.exe` | Windows 10 |
-| **macOS** | `MoodHaven_1.3.0.1_x64.dmg` | macOS 10.15 Catalina |
-| **Linux** | `moodhaven_1.3.0.1_amd64.AppImage` | Any modern distro |
-| **Linux (Debian)** | `moodhaven_1.3.0.1_amd64.deb` | Ubuntu 22.04+ |
+| **Windows** | `MoodHaven_1.3.2.0_x64-setup.exe` | Windows 10 |
+| **macOS** | `MoodHaven_1.3.2.0_x64.dmg` | macOS 10.15 Catalina |
+| **Linux** | `moodhaven_1.3.2.0_amd64.AppImage` | Any modern distro |
+| **Linux (Debian)** | `moodhaven_1.3.2.0_amd64.deb` | Ubuntu 22.04+ |
 | **Web** | `npm run build:web` → serve `dist-web/` | Any modern browser |
 
 ### First Launch
@@ -262,7 +262,7 @@ Full architecture: [docs/watch-companion.md](docs/watch-companion.md)
 | **Encryption** | AES-256-GCM + PBKDF2 (WebCrypto API) |
 | **Peer identity** | Ed25519 ([ed25519-dalek](https://github.com/dalek-cryptography/curve25519-dalek)) |
 | **2FA** | [totp-rs](https://github.com/constantoine/totp-rs) + native CTAP2/HID |
-| **Testing** | [Vitest](https://vitest.dev) + Testing Library · 1166 tests |
+| **Testing** | [Vitest](https://vitest.dev) + Testing Library · 1172 tests |
 | **Build** | Vite 8 + Tauri CLI |
 | **Mobile** | Kotlin + Wear OS Data Layer (MessageAPI + ChannelAPI) |
 
@@ -372,7 +372,7 @@ npm run tauri dev
 ```
 
 ```bash
-npm test                          # 1166 tests across 72 files
+npm test                          # 1172 tests across 71 files
 npm run typecheck                 # TypeScript strict check
 cd src-tauri && cargo check       # Rust compilation check
 ```
@@ -396,7 +396,7 @@ See [CLAUDE.md](CLAUDE.md) for architecture, security guidelines, and convention
 
 ## Recent Changes
 
-**v1.3.0.1** — Bug fixes: WellbeingCard now retries readiness data 4s after load when Oura sync is still in-flight at app open. StillHaven speed refs and adaptation count reset at session start, preventing stale values from bleeding into new sessions. Summary screen shows "Session adapted N times to your biometrics" when biofeedback was active. 1166 tests.
+**v1.3.2.0** — Bug fixes: journaling streak now correctly counts when you skip today, StillHaven session brief shows the right activation delta after multiple check-in samples, `still_complete_session` and `still_abandon_session` now surface an error on unknown IDs (no more silent no-ops), streak query bounded to 1,000 entries, `onWordsWritten` stale-closure fix. 1172 tests (25 new Rust + 7 new TypeScript).
 **v1.3.0** — Word count tracking: `word_count` column added to journal entries, displayed below tags in Timeline. Session linkage: entries can be linked to StillHaven sessions; WellbeingCard morning context card shows once per day. Three new StillHaven commands (`still_get_wellbeing_context`, `still_get_session_brief`, `still_get_journal_brief_for_session`). 1165 tests.
 **v1.2.1** — Security hardening: TOTP secrets encrypted at rest (AES-256-GCM, amber migration banner for v1.1.x users), path traversal fix in media storage, writer window scoped to ~30 commands only, backend rate limiting on `verify_password` (5 failures → 30s lockout), settings sync allowlist, full-restore SHA-256 integrity check, CSP narrowed.
 **v1.2.0** — Voice memo draft pipeline: watch recordings surface as reviewable draft cards in the Timeline with transcription preview, inferred mood, biometric context, and hashtag suggestions. Full TipTap editor to edit before publishing. Writing appearance drawer: inline font, size, line height, paragraph spacing, background tint, and accessibility options (high contrast, reduced motion, dyslexia profile) in WritingView. Wear OS Phase B brand sweep (60+ hex colors to @color/ references), Phase C splash screen, Phase 2e/5a polish (shortcut row, ambient mood wash, steps + activity in HealthSnapshot). Codebase cleanup: 5 large components split, dead code removed. 1143 tests.

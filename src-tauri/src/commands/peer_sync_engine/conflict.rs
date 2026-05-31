@@ -518,7 +518,7 @@ mod tests {
         let conn = make_test_conn();
         let result = db_upsert_setting(&conn, "app_settings", "{}", "2026-01-01T00:00:00Z");
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), true);
+        assert!(result.unwrap());
     }
 
     #[test]
@@ -526,7 +526,7 @@ mod tests {
         let conn = make_test_conn();
         let result = db_upsert_setting(&conn, "password_hash", "evil", "2099-01-01T00:00:00Z");
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), false);
+        assert!(!result.unwrap());
     }
 
     #[test]
@@ -539,7 +539,7 @@ mod tests {
             "2099-01-01T00:00:00Z",
         );
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), false);
+        assert!(!result.unwrap());
     }
 
     #[test]
@@ -547,7 +547,7 @@ mod tests {
         let conn = make_test_conn();
         let result = db_upsert_setting(&conn, "oura_pat", "secret_token", "2099-01-01T00:00:00Z");
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), false);
+        assert!(!result.unwrap());
     }
 
     #[test]
@@ -556,10 +556,10 @@ mod tests {
         // Insert a newer local value first
         let r1 = db_upsert_setting(&conn, "app_settings", "{\"v\":1}", "2026-01-02T00:00:00Z");
         assert!(r1.is_ok());
-        assert_eq!(r1.unwrap(), true);
+        assert!(r1.unwrap());
         // Attempt to upsert an older remote value — should be dropped
         let r2 = db_upsert_setting(&conn, "app_settings", "{\"v\":0}", "2026-01-01T00:00:00Z");
         assert!(r2.is_ok());
-        assert_eq!(r2.unwrap(), false);
+        assert!(!r2.unwrap());
     }
 }

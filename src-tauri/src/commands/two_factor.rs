@@ -571,7 +571,6 @@ pub fn verify_2fa_totp(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use base64::Engine as _;
 
     #[test]
     fn encrypt_decrypt_round_trip() {

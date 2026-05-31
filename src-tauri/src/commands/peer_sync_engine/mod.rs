@@ -1734,6 +1734,7 @@ mod tests {
             linked_original_id: None,
             unsealed_at: None,
             status: None,
+            session_id: None,
         }
     }
 

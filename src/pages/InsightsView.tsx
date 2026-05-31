@@ -29,6 +29,8 @@ import { GratitudeStreakCard } from '../components/ai/GratitudeStreakCard';
 import { WeeklyStreakCard } from '../components/ai/WeeklyStreakCard';
 import { InsightsPanel } from '../components/ai/InsightsPanel';
 import { WeeklyReflectionCard } from '../components/ai/WeeklyReflectionCard';
+import { TimeOfDayInsightCard } from '../components/ai/TimeOfDayInsightCard';
+import { WritingMomentumCard } from '../components/ai/WritingMomentumCard';
 import {
   StatsSummary,
   MoodDistributionChart,
@@ -252,6 +254,20 @@ export function InsightsView({ onNavigateToSettings }: InsightsViewProps) {
               isLoading={isLoading}
             />
           </div>
+
+          {/* Time of day + Writing momentum (shown when local metadata is ready) */}
+          {localMetadata && !isLoading && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4 animate-entry-in" style={{ animationDelay: '240ms' }}>
+              <TimeOfDayInsightCard
+                bestTimeOfDay={localMetadata.patterns.bestTimeOfDay}
+                currentStreak={localMetadata.patterns.currentStreak}
+              />
+              <WritingMomentumCard
+                frequency={localMetadata.patterns.frequency}
+                entriesThisWeek={entriesThisWeek}
+              />
+            </div>
+          )}
         </>
       )}
 

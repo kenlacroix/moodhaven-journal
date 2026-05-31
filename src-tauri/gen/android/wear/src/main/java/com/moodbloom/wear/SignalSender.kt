@@ -24,6 +24,7 @@ object SignalSender {
 
     private const val TAG = "MoodBloomWear"
     private const val SIGNAL_PATH = "/signal"
+    private const val STILLHAVEN_PATH = "/stillhaven/start"
 
     /**
      * Send a mood tap signal to all connected phone nodes.
@@ -69,6 +70,32 @@ object SignalSender {
             }
             Log.i(TAG, "drainAndSend: sent $sent/${pending.size}")
             sent
+        }
+
+    /**
+     * Send a "start StillHaven grounding session on the desktop" request to the phone.
+     * Fire-and-forget — not queued offline. If the phone is unreachable the tap is silently
+     * dropped; the user can retry by tapping the button again.
+     * Returns true if the message was accepted by the local Data Layer for at least one node.
+     */
+    suspend fun sendStillhavenStart(context: Context): Boolean =
+        withContext(Dispatchers.IO) {
+            try {
+                val nodes = Tasks.await(Wearable.getNodeClient(context).connectedNodes)
+                if (nodes.isEmpty()) {
+                    Log.w(TAG, "sendStillhavenStart: no connected nodes")
+                    return@withContext false
+                }
+                val msgClient = Wearable.getMessageClient(context)
+                for (node in nodes) {
+                    Tasks.await(msgClient.sendMessage(node.id, STILLHAVEN_PATH, ByteArray(0)))
+                    Log.i(TAG, "StillHaven start → ${node.displayName} (${node.id})")
+                }
+                true
+            } catch (e: Exception) {
+                Log.e(TAG, "sendStillhavenStart failed: ${e.message}")
+                false
+            }
         }
 
     // ── Internal ──────────────────────────────────────────────────────────────

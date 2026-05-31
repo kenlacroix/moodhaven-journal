@@ -53,6 +53,9 @@ class WearPlugin(private val activity: Activity) : Plugin(activity) {
         /** Tauri event name for connection state changes */
         const val EVENT_CONNECTION = "wear://connection"
 
+        /** Tauri event name emitted when the watch requests a StillHaven session start */
+        const val EVENT_STILLHAVEN_START = "wear://stillhaven_start"
+
         @Volatile
         private var _instance: WearPlugin? = null
 
@@ -141,6 +144,21 @@ class WearPlugin(private val activity: Activity) : Plugin(activity) {
         }
         trigger(EVENT_VOICE_MEMO, event)
         Log.d(TAG, "Emitted $EVENT_VOICE_MEMO: id=$id duration=${durationMs}ms")
+    }
+
+    // ── Bridge from WearListenerService (StillHaven start) ───────────────────
+
+    /**
+     * Called by WearListenerService when the watch sends a /stillhaven/start message.
+     * Emits a Tauri event so the TypeScript layer can navigate to the StillHaven view.
+     */
+    fun bridgeStillhavenStart(nodeId: String) {
+        val event = JSObject().apply {
+            put("nodeId", nodeId)
+            put("requestedAt", nowIso8601())
+        }
+        trigger(EVENT_STILLHAVEN_START, event)
+        Log.d(TAG, "Emitted $EVENT_STILLHAVEN_START from node=$nodeId")
     }
 
     // ── Foreground ChannelAPI audio processing ────────────────────────────────

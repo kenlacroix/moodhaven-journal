@@ -46,9 +46,10 @@ class RecordFragment : Fragment() {
     private lateinit var queueBadge:       TextView
     private lateinit var longPressHint:    TextView
     private lateinit var arcProgress:      ArcProgressView
-    private lateinit var moodShortcutBtn:  TextView
+    private lateinit var moodShortcutBtn:    TextView
     private lateinit var breatheShortcutBtn: TextView
-    private lateinit var pageRoot:         ScrollView
+    private lateinit var groundShortcutBtn:  TextView
+    private lateinit var pageRoot:           ScrollView
 
     // ── State ─────────────────────────────────────────────────────────────────
 
@@ -96,11 +97,13 @@ class RecordFragment : Fragment() {
         arcProgress        = view.findViewById(R.id.arcProgress)
         moodShortcutBtn    = view.findViewById(R.id.moodShortcutBtn)
         breatheShortcutBtn = view.findViewById(R.id.breatheShortcutBtn)
+        groundShortcutBtn  = view.findViewById(R.id.groundShortcutBtn)
 
         recordBtn.setOnClickListener { onRecordTap() }
         recordBtn.setOnLongClickListener { onRecordLongPress(); true }
         moodShortcutBtn.setOnClickListener { (activity as? Callback)?.onNavigateToMoodPicker() }
         breatheShortcutBtn.setOnClickListener { (activity as? Callback)?.onNavigateToBreathe() }
+        groundShortcutBtn.setOnClickListener { onGroundTap() }
 
         setIdleUI()
         refreshQueueBadge()
@@ -132,6 +135,16 @@ class RecordFragment : Fragment() {
 
     private fun onRecordTap() {
         if (session?.isRecording == true) stopRecording() else startRecording()
+    }
+
+    private fun onGroundTap() {
+        if (session?.isRecording == true) return  // don't interrupt a recording
+        hapticTap(requireContext())
+        statusText.text = "Starting on desktop…"
+        lifecycleScope.launch {
+            SignalSender.sendStillhavenStart(requireContext())
+            view?.postDelayed({ if (isAdded) setIdleUI() }, 2_000)
+        }
     }
 
     private fun onRecordLongPress() {

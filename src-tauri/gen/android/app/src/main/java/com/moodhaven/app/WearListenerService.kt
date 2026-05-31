@@ -58,9 +58,10 @@ class WearListenerService : WearableListenerService() {
         }
 
         when (event.path) {
-            WearProtocol.PATH_SIGNAL          -> handleSignalMessage(event.sourceNodeId, payload)
-            WearProtocol.PATH_VOICE_MEMO_META -> Log.i(TAG, "Legacy /voice_memo message ignored — using ChannelAPI")
-            else                              -> Log.w(TAG, "Unhandled path: ${event.path}")
+            WearProtocol.PATH_SIGNAL           -> handleSignalMessage(event.sourceNodeId, payload)
+            WearProtocol.PATH_STILLHAVEN_START -> handleStillhavenStart(event.sourceNodeId)
+            WearProtocol.PATH_VOICE_MEMO_META  -> Log.i(TAG, "Legacy /voice_memo message ignored — using ChannelAPI")
+            else                               -> Log.w(TAG, "Unhandled path: ${event.path}")
         }
     }
 
@@ -93,6 +94,12 @@ class WearListenerService : WearableListenerService() {
             WearSignalBuffer.enqueue(rawJson)
             Log.w(TAG, "WearPlugin not ready; buffered signal $id")
         }
+    }
+
+    private fun handleStillhavenStart(nodeId: String) {
+        Log.i(TAG, "StillHaven start requested from watch node=$nodeId")
+        WearPlugin.getInstance()?.bridgeStillhavenStart(nodeId)
+            ?: Log.w(TAG, "WearPlugin not ready; StillHaven start dropped")
     }
 
     // ── ChannelAPI (audio transfer) ───────────────────────────────────────────

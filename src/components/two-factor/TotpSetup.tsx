@@ -35,12 +35,16 @@ export function TotpSetup({ password, onComplete, onCancel }: TotpSetupProps) {
     try {
       setError(null);
       const data = await generateTotpSecret(password);
+      if (!data) {
+        setError('TOTP setup is not available in this build.');
+        return;
+      }
       setSetupData(data);
       setStep('scan');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to generate secret');
     }
-  }, []);
+  }, [password]);
 
   // Start setup on mount
   useEffect(() => {

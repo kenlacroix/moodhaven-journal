@@ -368,7 +368,7 @@ export function LockScreen() {
   // After password unlock: offer to enroll biometrics
   const handleBiometricEnrollOffer = useCallback(async (accept: boolean) => {
     const password = pendingPasswordRef.current;
-    if (!password) { await unlock(''); return; } // fallback — should not happen
+    if (!password) { setStep('password'); return; } // fallback — should not happen
 
     if (accept) {
       try {

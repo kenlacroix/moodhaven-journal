@@ -112,6 +112,14 @@ fn decrypt_totp_secret(stored: &str, password: &str) -> Result<String, String> {
     let nonce_bytes = b64.decode(parts[1]).map_err(|_| "bad nonce b64".to_string())?;
     let ct = b64.decode(parts[2]).map_err(|_| "bad ct b64".to_string())?;
 
+    // Validate decoded lengths before use — Nonce::from_slice panics on wrong size.
+    if nonce_bytes.len() != 12 {
+        return Err(format!(
+            "malformed totp blob: expected 12-byte nonce, got {}",
+            nonce_bytes.len()
+        ));
+    }
+
     let mut key = [0u8; 32];
     pbkdf2::<Hmac<Sha256>>(password.as_bytes(), &salt, TOTP_PBKDF2_ITERATIONS, &mut key)
         .map_err(|e| format!("pbkdf2: {e}"))?;

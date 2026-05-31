@@ -7,6 +7,8 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
+import type { EncryptedData } from './crypto';
+import type { JournalEntry } from '../../types/journal';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -29,6 +31,14 @@ export interface VoiceMemo {
   /** Origin: "watch" | "phone" */
   source: string;
   created_at: string;
+  /** Free-text context summary (health, location, etc.) attached after transcription */
+  context?: string;
+  /** Mood inferred from transcript text (1–5) */
+  inferred_mood?: number;
+  /** Book the draft will be published into (defaults to 'default') */
+  book_id: string;
+  /** 0 = pending review, 1 = reviewed/published or discarded */
+  reviewed: number;
 }
 
 // ── Commands ──────────────────────────────────────────────────────────────────
@@ -91,10 +101,73 @@ export async function linkVoiceMemoToEntry(
   return invoke<void>('link_voice_memo_to_entry', { memoId, entryId });
 }
 
+/** Attach a context summary string (health, location, etc.) to a memo. */
+export async function patchVoiceMemoContext(
+  id: string,
+  context: string,
+  locationWeatherJson?: string,
+): Promise<void> {
+  return invoke<void>('patch_voice_memo_context', { id, context, locationWeatherJson: locationWeatherJson ?? null });
+}
+
+/** Store the locally-inferred mood score (1–5) on the memo row. */
+export async function patchVoiceMemoMood(id: string, inferredMood: number): Promise<void> {
+  return invoke<void>('patch_voice_memo_mood', { id, inferredMood });
+}
+
+/**
+ * Promote a draft voice memo into a journal entry.
+ * Marks the memo as reviewed and links it to the created entry.
+ */
+export async function publishVoiceMemoDraft(
+  id: string,
+  encryptedContent: EncryptedData,
+  mood: number,
+  bookId: string,
+  privacyMode: number,
+): Promise<JournalEntry> {
+  return invoke<JournalEntry>('publish_voice_memo_draft', { id, encryptedContent, mood, bookId, privacyMode });
+}
+
+/**
+ * Discard a pending draft — marks it reviewed without creating a journal entry.
+ * Does NOT delete the audio file; call deleteVoiceMemo separately if cleanup is needed.
+ */
+export async function discardVoiceMemoDraft(id: string): Promise<void> {
+  return invoke<void>('discard_voice_memo_draft', { id });
+}
+
+/** List voice memos that have been transcribed but not yet reviewed (reviewed = 0). */
+export async function listPendingDrafts(limit?: number): Promise<VoiceMemo[]> {
+  return invoke<VoiceMemo[]>('list_pending_drafts', { limit: limit ?? null });
+}
+
 // ── Utilities ─────────────────────────────────────────────────────────────────
 
 /** Format a duration in ms as "M:SS". */
 export function formatDuration(durationMs: number): string {
   const s = Math.floor(durationMs / 1000);
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
+/**
+ * Extract up to 3 hashtag suggestions from a transcript.
+ * Filters stopwords and returns short keywords formatted as #tag.
+ */
+export function suggestHashtags(transcript: string): string[] {
+  const stopwords = new Set([
+    'the', 'a', 'an', 'and', 'or', 'but', 'is', 'was', 'are', 'were',
+    'be', 'been', 'have', 'has', 'had', 'do', 'does', 'did', 'will',
+    'would', 'could', 'should', 'may', 'might', 'this', 'that', 'these',
+    'those', 'it', 'its', 'i', 'me', 'my', 'we', 'our', 'you', 'your',
+    'he', 'she', 'they', 'their',
+  ]);
+  return transcript
+    .toLowerCase()
+    .replace(/[^a-z\s]/g, '')
+    .split(/\s+/)
+    .filter((w) => w.length >= 3 && w.length <= 12 && !stopwords.has(w))
+    .reduce<string[]>((acc, w) => (acc.includes(w) ? acc : [...acc, w]), [])
+    .slice(0, 3)
+    .map((w) => `#${w}`);
 }

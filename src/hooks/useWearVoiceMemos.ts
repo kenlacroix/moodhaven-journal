@@ -23,8 +23,10 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   listVoiceMemos,
   transcribeVoiceMemo,
+  patchVoiceMemoMood,
   type VoiceMemo,
 } from '../lib/services/voiceMemoService';
+import { scoreContentMood } from '../lib/utils/metadataExtractor';
 
 // ── Hook options ───────────────────────────────────────────────────────────────
 
@@ -111,6 +113,19 @@ export function useWearVoiceMemos({
       setMemos((prev) =>
         prev.map((m) => (m.id === id ? { ...m, transcription: text } : m))
       );
+
+      // Infer mood from transcript text (Phase 5)
+      const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
+      if (wordCount >= 5) {
+        const inferredMood = scoreContentMood(text);
+        if (inferredMood !== null) {
+          await patchVoiceMemoMood(id, inferredMood).catch(() => {});
+          setMemos((prev) =>
+            prev.map((m) => (m.id === id ? { ...m, inferred_mood: inferredMood } : m))
+          );
+        }
+      }
+
       // Build the updated memo object for the callback
       setMemos((prev) => {
         const updated = prev.find((m) => m.id === id);

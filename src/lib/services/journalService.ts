@@ -435,6 +435,7 @@ async function decryptEntry(
     linkedOriginalId: row.linked_original_id ?? null,
     unsealedAt: row.unsealed_at ?? null,
     sessionId: row.session_id ?? null,
+    wordCount: row.word_count ?? null,
   };
 }
 

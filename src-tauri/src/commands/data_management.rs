@@ -410,8 +410,13 @@ pub async fn import_data(app: AppHandle, data: String) -> Result<i32, String> {
 
         let book_id = entry.get("book_id").and_then(|v| v.as_str());
 
+        let word_count = entry
+            .get("word_count")
+            .and_then(|v| v.as_i64())
+            .map(|v| v as i32);
+
         // Try to create entry (skip if already exists)
-        match db::create_entry(&db, id, &ec, mood, privacy_mode, location_weather, book_id, None) {
+        match db::create_entry(&db, id, &ec, mood, privacy_mode, location_weather, book_id, word_count) {
             Ok(_) => imported_count += 1,
             Err(e) if e.contains("UNIQUE constraint") => continue,
             Err(e) => return Err(e),

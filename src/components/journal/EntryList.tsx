@@ -165,6 +165,13 @@ function EntryCard({
             )}
           </div>
         )}
+        {/* Word count */}
+        {entry.wordCount != null && entry.wordCount > 0 && (
+          <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">
+            {entry.wordCount.toLocaleString()} {entry.wordCount === 1 ? 'word' : 'words'}
+          </p>
+        )}
+
         {/* StillHaven session badge — lazy-loads activation delta on hover */}
         {entry.sessionId && (
           <div className="mt-2 flex">

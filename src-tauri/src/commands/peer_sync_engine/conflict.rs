@@ -148,6 +148,7 @@ pub fn db_get_entries_full(
                 je.location_weather, je.book_id, je.pinned, \
                 je.created_at, je.updated_at, \
                 je.sealed_until, je.capsule_type, je.linked_original_id, je.unsealed_at, \
+                je.status, je.session_id, je.word_count, \
                 COALESCE(GROUP_CONCAT(t.name, ','), '') AS tags \
          FROM journal_entries je \
          LEFT JOIN entry_tags et ON et.entry_id = je.id \
@@ -159,7 +160,7 @@ pub fn db_get_entries_full(
         .map_err(|e| format!("prepare entries full: {e}"))?
         .query_map(rusqlite::params_from_iter(ids.iter()), |r| {
             let ec_json: String = r.get(1)?;
-            let tags_str: Option<String> = r.get(13)?;
+            let tags_str: Option<String> = r.get(16)?;
             let tags = crate::db::parse_tags(tags_str);
             let ec: crate::db::EncryptedContent = serde_json::from_str(&ec_json).map_err(|e| {
                 rusqlite::Error::FromSqlConversionFailure(
@@ -188,9 +189,9 @@ pub fn db_get_entries_full(
                 linked_original_id: r.get(11)?,
                 unsealed_at: r.get(12)?,
                 tags,
-                status: None,
-                session_id: None,
-                word_count: None,
+                status: r.get(13).ok().flatten(),
+                session_id: r.get(14).ok().flatten(),
+                word_count: r.get(15).ok().flatten(),
             })
         })
         .map_err(|e| format!("query entries full: {e}"))?

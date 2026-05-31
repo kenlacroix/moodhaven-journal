@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { stillListSessions, stillGetSessionWithSamples } from '../../../lib/stillService';
-import type { StillSession, StillActivationSample } from '../../../lib/stillService';
+import { stillListSessions, stillGetSessionWithSamples, stillGetEffectStats } from '../../../lib/stillService';
+import type { StillSession, StillActivationSample, StillEffectStats } from '../../../lib/stillService';
+import { StillEffectCard } from './StillEffectCard';
 import { generateLinePath, mapToChartCoordinates } from '../../../lib/utils/chartUtils';
 
 interface SessionWithDelta {
@@ -42,13 +43,17 @@ const PAD = { top: 16, right: 12, bottom: 28, left: 32 };
 
 export function StillSessionsView({ onBack }: Props): React.JSX.Element {
   const [rows, setRows] = useState<SessionWithDelta[]>([]);
+  const [effectStats, setEffectStats] = useState<StillEffectStats | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
     async function load() {
       try {
-        const sessions = await stillListSessions(90);
+        const [sessions, effect] = await Promise.all([
+          stillListSessions(90),
+          stillGetEffectStats(),
+        ]);
         const enriched = await Promise.all(
           sessions.map(async (s) => {
             const detail = await stillGetSessionWithSamples(s.id);
@@ -59,7 +64,10 @@ export function StillSessionsView({ onBack }: Props): React.JSX.Element {
             return { session: s, pre, post, delta };
           }),
         );
-        if (!cancelled) setRows(enriched.filter((r) => r.session.completed_at !== null));
+        if (!cancelled) {
+          setRows(enriched.filter((r) => r.session.completed_at !== null));
+          setEffectStats(effect);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -195,6 +203,9 @@ export function StillSessionsView({ onBack }: Props): React.JSX.Element {
               </div>
             </div>
           )}
+
+          {/* StillHaven Effect — correlation card + protocol recommendation */}
+          {effectStats && <StillEffectCard stats={effectStats} />}
 
           {/* Activation delta line chart — last 30 days */}
           {last30.length >= 2 && linePoints && (

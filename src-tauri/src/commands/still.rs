@@ -4,8 +4,8 @@
 //! All commands require an unlocked session.
 
 use crate::db::{
-    self, Database, JournalBrief, StillActivationSampleRow, StillSessionBrief, StillSessionRow,
-    StillSessionWithSamples, WellbeingContext,
+    self, Database, JournalBrief, StillActivationSampleRow, StillEffectStats, StillSessionBrief,
+    StillSessionRow, StillSessionWithSamples, WellbeingContext,
 };
 use crate::AppLockState;
 use tauri::State;
@@ -165,6 +165,19 @@ pub fn still_get_wellbeing_context(
 ) -> Result<WellbeingContext, String> {
     require_unlocked(&lock)?;
     db::get_wellbeing_context(&db)
+}
+
+// ── v1.4.0 StillHaven Effect ──────────────────────────────────────────────────
+
+/// Per-protocol effect statistics: activation delta correlated with post-session
+/// journal mood. Powers the StillEffectCard in Session History.
+#[tauri::command]
+pub fn still_get_effect_stats(
+    db: State<Database>,
+    lock: State<'_, AppLockState>,
+) -> Result<StillEffectStats, String> {
+    require_unlocked(&lock)?;
+    db::get_effect_stats(&db)
 }
 
 #[cfg(test)]

@@ -4,7 +4,8 @@
 //! All commands require an unlocked session.
 
 use crate::db::{
-    self, Database, StillActivationSampleRow, StillSessionRow, StillSessionWithSamples,
+    self, Database, JournalBrief, StillActivationSampleRow, StillSessionBrief, StillSessionRow,
+    StillSessionWithSamples, WellbeingContext,
 };
 use crate::AppLockState;
 use tauri::State;
@@ -125,4 +126,41 @@ pub fn still_get_session_with_samples(
 ) -> Result<Option<StillSessionWithSamples>, String> {
     require_unlocked(&lock)?;
     db::still_get_session_with_samples(&db, &id)
+}
+
+// ── v1.3.0 narrative layer ────────────────────────────────────────────────────
+
+/// Lightweight session metadata for the timeline badge hover popover.
+/// Called lazily on hover — not during timeline load.
+#[tauri::command]
+pub fn still_get_session_brief(
+    db: State<Database>,
+    lock: State<'_, AppLockState>,
+    session_id: String,
+) -> Result<Option<StillSessionBrief>, String> {
+    require_unlocked(&lock)?;
+    db::get_session_brief(&db, &session_id)
+}
+
+/// Journal entry metadata for the session history card.
+/// Returns the journal entry written after a given session, if any.
+#[tauri::command]
+pub fn still_get_journal_brief_for_session(
+    db: State<Database>,
+    lock: State<'_, AppLockState>,
+    session_id: String,
+) -> Result<Option<JournalBrief>, String> {
+    require_unlocked(&lock)?;
+    db::get_journal_brief_for_session(&db, &session_id)
+}
+
+/// Bundled wellbeing context for the morning card in WritingView.
+/// Single lock acquisition — all queries run under one mutex hold.
+#[tauri::command]
+pub fn still_get_wellbeing_context(
+    db: State<Database>,
+    lock: State<'_, AppLockState>,
+) -> Result<WellbeingContext, String> {
+    require_unlocked(&lock)?;
+    db::get_wellbeing_context(&db)
 }

@@ -42,6 +42,8 @@ interface EncryptedJournalEntryRow {
   capsule_type?: string | null;
   linked_original_id?: string | null;
   unsealed_at?: string | null;
+  session_id?: string | null;
+  word_count?: number | null;
 }
 
 
@@ -152,6 +154,11 @@ export function getSessionPassword(): string | null {
 /**
  * Create a new journal entry (encrypts content automatically)
  */
+function countWords(html: string): number {
+  const text = html.replace(/<[^>]*>/g, ' ').replace(/&[a-z]+;/gi, ' ').replace(/\s+/g, ' ').trim();
+  return text ? text.split(/\s+/).length : 0;
+}
+
 function extractAndStripSessionId(html: string): { cleaned: string; sessionId: string | null } {
   const match = html.match(/<span[^>]+data-still-session-id="([^"]+)"[^>]*>.*?<\/span>/);
   if (!match) return { cleaned: html, sessionId: null };
@@ -169,6 +176,9 @@ export async function createEntry(
   // Strip hidden StillHaven session marker before encrypting
   const { cleaned: cleanedContent, sessionId } = extractAndStripSessionId(data.content);
   const contentToSave = sessionId ? cleanedContent : data.content;
+
+  // Compute word count from plaintext before encryption
+  const wordCount = countWords(contentToSave);
 
   // Encrypt the content
   const result = await encrypt(contentToSave, password);
@@ -188,6 +198,7 @@ export async function createEntry(
     privacyMode: data.privacyMode,
     locationWeather: data.locationWeather ? JSON.stringify(data.locationWeather) : null,
     bookId: data.bookId ?? null,
+    wordCount,
   });
 
   // Persist tags to the entry_tags table
@@ -205,7 +216,7 @@ export async function createEntry(
   // Return decrypted entry
   return {
     id: row.id,
-    content: contentToSave, // plaintext with session marker stripped
+    content: contentToSave,
     mood: row.mood as MoodLevel,
     privacyMode: (row.privacy_mode ?? 0) as PrivacyMode,
     tags: data.tags,
@@ -214,6 +225,7 @@ export async function createEntry(
     pinned: row.pinned ?? false,
     created_at: row.created_at,
     updated_at: row.updated_at,
+    sessionId: row.session_id ?? null,
   };
 }
 
@@ -299,11 +311,14 @@ export async function updateEntry(
     throw new Error(result.error || 'Encryption failed');
   }
 
+  const wordCount = countWords(data.content);
+
   const row = await invoke<EncryptedJournalEntryRow>('update_journal_entry', {
     id,
     encryptedContent: result.data,
     mood: data.mood,
     privacyMode: data.privacyMode,
+    wordCount,
   });
 
   // Sync tags (always — this replaces the previous set)
@@ -319,6 +334,7 @@ export async function updateEntry(
     pinned: row.pinned ?? false,
     created_at: row.created_at,
     updated_at: row.updated_at,
+    sessionId: row.session_id ?? null,
   };
 }
 
@@ -418,6 +434,8 @@ async function decryptEntry(
     capsuleType: (row.capsule_type ?? null) as 'letter' | 'vault' | 'anniversary' | null,
     linkedOriginalId: row.linked_original_id ?? null,
     unsealedAt: row.unsealed_at ?? null,
+    sessionId: row.session_id ?? null,
+    wordCount: row.word_count ?? null,
   };
 }
 

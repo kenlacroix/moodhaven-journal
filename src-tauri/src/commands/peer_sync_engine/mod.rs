@@ -1735,6 +1735,7 @@ mod tests {
             unsealed_at: None,
             status: None,
             session_id: None,
+            word_count: None,
         }
     }
 

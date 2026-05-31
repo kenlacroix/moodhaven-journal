@@ -43,6 +43,8 @@ pub struct JournalEntryRow {
     pub status: Option<String>,
     /// StillHaven session this entry was written after (nullable)
     pub session_id: Option<String>,
+    /// Word count computed from decrypted content at write time (nullable for legacy entries)
+    pub word_count: Option<i32>,
 }
 
 /// Journal entry metadata (without content, for list views)
@@ -67,17 +69,18 @@ pub fn parse_tags(tags_str: Option<String>) -> Vec<String> {
 /// 0  id, 1  encrypted_content, 2  mood, 3  privacy_mode,
 /// 4  location_weather, 5  book_id, 6  pinned, 7  created_at,
 /// 8  updated_at, 9  sealed_until, 10 capsule_type,
-/// 11 linked_original_id, 12 unsealed_at, 13 tags (GROUP_CONCAT),
-/// 14 status, 15 session_id
+/// 11 linked_original_id, 12 unsealed_at, 13 status,
+/// 14 session_id, 15 word_count, 16 tags (GROUP_CONCAT)
 pub fn map_entry_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<JournalEntryRow> {
     let content_json_opt: Option<String> = row.get(1)?;
     let sealed_until: Option<String> = row.get(9)?;
     let capsule_type: Option<String> = row.get(10)?;
     let linked_original_id: Option<String> = row.get(11)?;
     let unsealed_at: Option<String> = row.get(12)?;
-    let tags_str: Option<String> = row.get(13)?;
-    let status: Option<String> = row.get(14).ok().flatten();
-    let session_id: Option<String> = row.get(15).ok().flatten();
+    let status: Option<String> = row.get(13).ok().flatten();
+    let session_id: Option<String> = row.get(14).ok().flatten();
+    let word_count: Option<i32> = row.get(15).ok().flatten();
+    let tags_str: Option<String> = row.get(16)?;
 
     // Withhold content for entries that are sealed but not yet revealed.
     let is_sealed = sealed_until.is_some() && unsealed_at.is_none();
@@ -112,10 +115,12 @@ pub fn map_entry_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<JournalEntryRo
         tags: parse_tags(tags_str),
         status,
         session_id,
+        word_count,
     })
 }
 
 /// Create a new journal entry
+#[allow(clippy::too_many_arguments)]
 pub fn create_entry(
     db: &Database,
     id: &str,
@@ -124,6 +129,7 @@ pub fn create_entry(
     privacy_mode: i32,
     location_weather: Option<&str>,
     book_id: Option<&str>,
+    word_count: Option<i32>,
 ) -> Result<JournalEntryRow, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
@@ -133,15 +139,15 @@ pub fn create_entry(
     let bid = book_id.unwrap_or("default");
 
     conn.execute(
-        "INSERT INTO journal_entries (id, encrypted_content, mood, privacy_mode, location_weather, book_id, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, strftime('%Y-%m-%dT%H:%M:%S', 'now', 'localtime'), strftime('%Y-%m-%dT%H:%M:%S', 'now', 'localtime'))",
-        params![id, content_json, mood, privacy_mode, location_weather, bid],
+        "INSERT INTO journal_entries (id, encrypted_content, mood, privacy_mode, location_weather, book_id, word_count, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, strftime('%Y-%m-%dT%H:%M:%S', 'now', 'localtime'), strftime('%Y-%m-%dT%H:%M:%S', 'now', 'localtime'))",
+        params![id, content_json, mood, privacy_mode, location_weather, bid, word_count],
     )
     .map_err(|e| format!("Failed to create entry: {}", e))?;
 
     conn.query_row(
         "SELECT je.id, je.encrypted_content, je.mood, je.privacy_mode, je.location_weather, je.book_id, je.pinned, je.created_at, je.updated_at,
-                je.sealed_until, je.capsule_type, je.linked_original_id, je.unsealed_at, je.status, je.session_id,
+                je.sealed_until, je.capsule_type, je.linked_original_id, je.unsealed_at, je.status, je.session_id, je.word_count,
                 COALESCE(GROUP_CONCAT(t.name, ','), '') as tags
          FROM journal_entries je
          LEFT JOIN entry_tags et ON je.id = et.entry_id
@@ -285,7 +291,7 @@ pub fn get_entry(db: &Database, id: &str) -> Result<Option<JournalEntryRow>, Str
 
     let result = conn.query_row(
         "SELECT je.id, je.encrypted_content, je.mood, je.privacy_mode, je.location_weather, je.book_id, je.pinned, je.created_at, je.updated_at,
-                je.sealed_until, je.capsule_type, je.linked_original_id, je.unsealed_at, je.status, je.session_id,
+                je.sealed_until, je.capsule_type, je.linked_original_id, je.unsealed_at, je.status, je.session_id, je.word_count,
                 COALESCE(GROUP_CONCAT(t.name, ','), '') as tags
          FROM journal_entries je
          LEFT JOIN entry_tags et ON je.id = et.entry_id
@@ -312,7 +318,7 @@ pub fn get_all_entries(db: &Database, limit: Option<i32>) -> Result<Vec<JournalE
     let mut stmt = conn
         .prepare(&format!(
             "SELECT je.id, je.encrypted_content, je.mood, je.privacy_mode, je.location_weather, je.book_id, je.pinned, je.created_at, je.updated_at,
-                    je.sealed_until, je.capsule_type, je.linked_original_id, je.unsealed_at, je.status, je.session_id,
+                    je.sealed_until, je.capsule_type, je.linked_original_id, je.unsealed_at, je.status, je.session_id, je.word_count,
                     COALESCE(GROUP_CONCAT(t.name, ','), '') as tags
              FROM journal_entries je
              LEFT JOIN entry_tags et ON je.id = et.entry_id
@@ -343,7 +349,7 @@ pub fn get_entries_by_date_range(
     let mut stmt = conn
         .prepare(
             "SELECT je.id, je.encrypted_content, je.mood, je.privacy_mode, je.location_weather, je.book_id, je.pinned, je.created_at, je.updated_at,
-                    je.sealed_until, je.capsule_type, je.linked_original_id, je.unsealed_at, je.status, je.session_id,
+                    je.sealed_until, je.capsule_type, je.linked_original_id, je.unsealed_at, je.status, je.session_id, je.word_count,
                     COALESCE(GROUP_CONCAT(t.name, ','), '') as tags
              FROM journal_entries je
              LEFT JOIN entry_tags et ON je.id = et.entry_id
@@ -370,7 +376,7 @@ pub fn get_entries_on_this_day(db: &Database) -> Result<Vec<JournalEntryRow>, St
     let mut stmt = conn
         .prepare(
             "SELECT je.id, je.encrypted_content, je.mood, je.privacy_mode, je.location_weather, je.book_id, je.pinned, je.created_at, je.updated_at,
-                    je.sealed_until, je.capsule_type, je.linked_original_id, je.unsealed_at, je.status, je.session_id,
+                    je.sealed_until, je.capsule_type, je.linked_original_id, je.unsealed_at, je.status, je.session_id, je.word_count,
                     COALESCE(GROUP_CONCAT(t.name, ','), '') as tags
              FROM journal_entries je
              LEFT JOIN entry_tags et ON je.id = et.entry_id
@@ -398,6 +404,7 @@ pub fn update_entry(
     encrypted_content: &EncryptedContent,
     mood: i32,
     privacy_mode: i32,
+    word_count: Option<i32>,
 ) -> Result<JournalEntryRow, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
@@ -407,9 +414,9 @@ pub fn update_entry(
     let rows_affected = conn
         .execute(
             "UPDATE journal_entries
-             SET encrypted_content = ?1, mood = ?2, privacy_mode = ?3
+             SET encrypted_content = ?1, mood = ?2, privacy_mode = ?3, word_count = ?5
              WHERE id = ?4",
-            params![content_json, mood, privacy_mode, id],
+            params![content_json, mood, privacy_mode, id, word_count],
         )
         .map_err(|e| format!("Failed to update entry: {}", e))?;
 
@@ -419,7 +426,7 @@ pub fn update_entry(
 
     conn.query_row(
         "SELECT je.id, je.encrypted_content, je.mood, je.privacy_mode, je.location_weather, je.book_id, je.pinned, je.created_at, je.updated_at,
-                je.sealed_until, je.capsule_type, je.linked_original_id, je.unsealed_at, je.status, je.session_id,
+                je.sealed_until, je.capsule_type, je.linked_original_id, je.unsealed_at, je.status, je.session_id, je.word_count,
                 COALESCE(GROUP_CONCAT(t.name, ','), '') as tags
          FROM journal_entries je
          LEFT JOIN entry_tags et ON je.id = et.entry_id

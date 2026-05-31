@@ -47,6 +47,8 @@ const MILESTONES: Milestone[] = [
   { date: "Apr 2026", title: "v0.9.3 — Website & Polish", description: "Redesigned landing site, improved download page, and across-the-board UI refinements." },
   { date: "May 2026", title: "v1.0 — Public Release", description: "Stable release with full documentation, GitHub Wiki, broad platform support, and 702 automated tests." },
   { date: "May 2026", title: "v1.1 — StillHaven", description: "Bilateral audio stimulation companion built into all builds. Settle your nervous system before you write — opt-in via Settings → Health." },
+  { date: "May 2026", title: "v1.2 — Voice Memo Drafts", description: "Watch recordings surface as reviewable draft cards in the Timeline. Edit, annotate, and publish to your journal — or discard. Includes WearOS Phase 2-5, writing appearance drawer, and per-module log levels." },
+  { date: "May 2026", title: "v1.2.1 — Security Hardening", description: "TOTP secrets encrypted at rest, writer window scoped capability, backend rate limiting on unlock, settings sync allowlist, full-restore integrity check, and CSP narrowed." },
 ];
 
 const TECH_LINKS = [

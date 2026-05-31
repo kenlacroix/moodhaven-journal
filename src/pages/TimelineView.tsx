@@ -944,6 +944,9 @@ function VirtualEntryList({
                     )}
                   </div>
                 )}
+                {entry.wordCount != null && entry.wordCount > 0 && (
+                  <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">{entry.wordCount} words</p>
+                )}
                 {(entry.privacyMode ?? 0) > 0 && (
                   <div className="flex items-center gap-1 mt-2">
                     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${entry.privacyMode === 1 ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400' : 'bg-violet-50 dark:bg-violet-900/20 text-violet-600 dark:text-violet-400'}`}>

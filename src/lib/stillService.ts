@@ -74,3 +74,43 @@ export async function stillGetSessionWithSamples(
 ): Promise<StillSessionWithSamples | null> {
   return invoke('still_get_session_with_samples', { id });
 }
+
+// ── v1.3.0 narrative layer ────────────────────────────────────────────────────
+
+export interface StillSessionBrief {
+  protocol: string;
+  duration_seconds: number;
+  pre_activation: number | null;
+  post_activation: number | null;
+}
+
+export interface JournalBrief {
+  entry_id: string;
+  mood: number;
+  word_count: number | null;
+  created_at: string;
+}
+
+export interface WellbeingContext {
+  oura_readiness_today: number | null;
+  last_still_session_days_ago: number | null;
+  yesterday_mood_avg: number | null;
+  yesterday_entry_count: number;
+  streak_days: number;
+}
+
+export async function stillGetSessionBrief(
+  sessionId: string,
+): Promise<StillSessionBrief | null> {
+  return invoke('still_get_session_brief', { sessionId });
+}
+
+export async function stillGetJournalBriefForSession(
+  sessionId: string,
+): Promise<JournalBrief | null> {
+  return invoke('still_get_journal_brief_for_session', { sessionId });
+}
+
+export async function stillGetWellbeingContext(): Promise<WellbeingContext> {
+  return invoke('still_get_wellbeing_context');
+}

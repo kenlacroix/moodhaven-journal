@@ -5,6 +5,20 @@ All notable changes to MoodHaven Journal are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.3.0] — 2026-05-31
+
+### Added
+- **Word count tracking** — `word_count` column added to `journal_entries` via additive DB migration. `JournalEntry.wordCount` exposed on the TypeScript type; populated from `countWords()` on every save and import. Displayed below tags in the Timeline entry cards.
+- **`session_id` on journal entries** — `session_id` column links an entry to the StillHaven session it was written after. Surfaced in the TypeScript type and populated by `link_journal_entry_to_session`.
+- **Session badge in Timeline** — lazy hover on a session-linked entry loads activation delta via `still_get_session_brief`.
+- **`WellbeingCard`** — morning context card shown once per day in the Timeline; collapses after 5 words of journaling. Driven by `useWellbeingContext` hook.
+- **Three new Rust commands**: `still_get_wellbeing_context`, `still_get_session_brief`, `still_get_journal_brief_for_session`.
+
+### Fixed
+- `map_entry_row` column-index bug: `status`, `session_id`, and `word_count` were reading wrong SQLite column indices since `status` was added after the original comment.
+- Peer sync `db_get_entries_full` SELECT: `status`, `session_id`, `word_count` columns and tag index 16 corrected.
+- `data_management.rs` import: `word_count` field now populated from backup JSON during import.
+
 ---
 
 ## [1.2.1] — 2026-05-31

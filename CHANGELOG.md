@@ -87,7 +87,11 @@ Versions follow [Semantic Versioning](https://semver.org/).
 - **Session badge in Timeline** — lazy hover on a session-linked entry loads activation delta via `still_get_session_brief`.
 - **`WellbeingCard`** — morning context card shown once per day in the Timeline; collapses after 5 words of journaling. Driven by `useWellbeingContext` hook.
 - **Three new Rust commands**: `still_get_wellbeing_context`, `still_get_session_brief`, `still_get_journal_brief_for_session`.
+- **Android companion splash screen**: launch splash now shows the MoodHaven logo on a warm cream background (light mode) or deep navy (dark mode) before the Tauri WebView loads.
 
+### Changed
+- **Android companion app name**: "MoodBloom" → "MoodHaven" in app label and window title.
+- **Android companion brand**: phone companion app colors, theme, and splash screen aligned with the MoodHaven design system — violet primary scale, warm cream light-mode background, deep navy dark-mode background. Replaces the previous generic Material purple placeholder palette.
 ### Fixed
 - `map_entry_row` column-index bug: `status`, `session_id`, and `word_count` were reading wrong SQLite column indices since `status` was added after the original comment.
 - Peer sync `db_get_entries_full` SELECT: `status`, `session_id`, `word_count` columns and tag index 16 corrected.

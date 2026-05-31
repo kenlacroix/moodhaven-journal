@@ -1,6 +1,6 @@
 # MoodHaven Journal — Architecture Reference
 
-> **Version:** v1.3.1.0 | **Last Updated:** 2026-05-31
+> **Version:** v1.3.0 | **Last Updated:** 2026-05-31
 
 ---
 
@@ -66,7 +66,7 @@ MoodHaven Journal is a **local-first desktop application** built on Tauri v2 (Ru
 | 2FA | totp-rs + native CTAP2/HID | TOTP + hardware keys |
 | Charts | Custom SVG | No charting library |
 | Logging | tauri-plugin-log + `src/lib/services/logger.ts` | Rotating file (prod), stderr (dev); `set_log_level` at runtime |
-| Testing | Vitest + Testing Library | 1245 tests |
+| Testing | Vitest + Testing Library | 743 tests |
 | Build | Vite 8 + Tauri CLI | |
 
 ---
@@ -236,12 +236,6 @@ signal_entry_links (
   signal_id    TEXT REFERENCES signals(id) ON DELETE CASCADE,
   entry_id     TEXT REFERENCES journal_entries(id) ON DELETE CASCADE,
   PRIMARY KEY (signal_id, entry_id)
-)
-
-still_signal_links (
-  signal_id    TEXT NOT NULL,             -- ID of the still_trigger signal from the watch
-  session_id   TEXT NOT NULL,             -- ID of the StillHaven session it spawned (v1.5.0)
-  PRIMARY KEY (signal_id, session_id)
 )
 ```
 

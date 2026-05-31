@@ -1,7 +1,7 @@
 # MoodHaven Journal Watch Companion
 
-> **Status:** Phase 1 (core recording pipeline) complete. Phase 2 (UX polish) in progress.
-> **Platform:** Wear OS (Android)
+> **Status:** Phases 1–5 and D complete. Phone companion brand aligned with MoodHaven design system.
+> **Platform:** Wear OS (Android) + Android phone companion
 
 ---
 
@@ -169,6 +169,7 @@ At the time of recording, the watch captures a health snapshot — heart rate, s
 | C — Splash Screen | ✅ Complete | `Theme.MoodHaven.Splash` using `androidx.core:core-splashscreen`; OLED-black background |
 | 5a — HealthSnapshot | ✅ Complete | Steps delta + coarse activity classification added to `HealthSnapshot.capture()` |
 | 5 — Draft Pipeline | ✅ Complete | Desktop voice memo draft cards in Timeline; `VoiceMemoDraftCard`, `VoiceDraftEditor`, `useVoiceMemoDrafts`, 5 new Tauri commands |
+| D — Phone Brand | ✅ Complete | Phone companion app name, colors, theme, and splash screen aligned with MoodHaven design system; `androidx.core:core-splashscreen` added |
 | 3 — Phone Integration | Upcoming | Journal creation from watch, sync status display on watch |
 | 4 — Deep Integration | Upcoming | Watch-side entry preview, mood correlation, activity badges |
 

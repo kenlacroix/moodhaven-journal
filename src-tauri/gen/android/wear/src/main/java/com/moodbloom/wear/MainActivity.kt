@@ -50,7 +50,7 @@ class MainActivity : FragmentActivity(),
     private lateinit var queuedEmoji:         TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        installSplashScreen(this)
+        installSplashScreen()
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 

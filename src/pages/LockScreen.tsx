@@ -368,7 +368,7 @@ export function LockScreen() {
   // After password unlock: offer to enroll biometrics
   const handleBiometricEnrollOffer = useCallback(async (accept: boolean) => {
     const password = pendingPasswordRef.current;
-    if (!password) { await unlock(''); return; } // fallback — should not happen
+    if (!password) { setStep('password'); return; } // fallback — should not happen
 
     if (accept) {
       try {
@@ -539,6 +539,7 @@ export function LockScreen() {
           {step === '2fa' && twoFactorStatus && (
             <TwoFactorVerify
               method={twoFactorStatus.method}
+              password={verifiedPassword ?? ''}
               onSuccess={handle2FASuccess}
               onCancel={handle2FACancel}
             />

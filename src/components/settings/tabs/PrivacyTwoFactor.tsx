@@ -1,5 +1,7 @@
+import { useState, useEffect } from 'react';
 import type { TwoFactorStatus } from '../../../types/twoFactor';
 import { SettingSection } from '../SettingSection';
+import { totpNeedsReencryption } from '../../../lib/services/twoFactorService';
 
 interface PrivacyTwoFactorProps {
   twoFactorStatus: TwoFactorStatus | null;
@@ -20,6 +22,13 @@ export function PrivacyTwoFactor({
   onRegenerateBackupCodes,
   onShowDisableConfirm,
 }: PrivacyTwoFactorProps) {
+  const [totpLegacy, setTotpLegacy] = useState(false);
+
+  useEffect(() => {
+    if (!twoFactorStatus?.enabled) return;
+    totpNeedsReencryption().then(setTotpLegacy).catch(() => {});
+  }, [twoFactorStatus?.enabled]);
+
   return (
     <SettingSection
       title="Two-Factor Authentication"
@@ -44,6 +53,12 @@ export function PrivacyTwoFactor({
               </p>
             </div>
           </div>
+
+          {totpLegacy && (
+            <div className="rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
+              Your authenticator secret was set before v1.2.0 and is stored without encryption. Disable and re-enable Authenticator App to encrypt it.
+            </div>
+          )}
 
           {/* Backup codes status */}
           <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg">

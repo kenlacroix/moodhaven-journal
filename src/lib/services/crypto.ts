@@ -61,20 +61,32 @@ function generateRandomBytes(length: number): Uint8Array {
   return crypto.getRandomValues(new Uint8Array(length));
 }
 
-// Session-scoped key cache: `salt:passwordHash` → derived CryptoKey
+// Session-scoped key cache: `base64(salt):base64(passwordToken)` → derived CryptoKey
 // Avoids re-running 600k PBKDF2 iterations for the same (password, salt) pair.
 // Cleared on lockJournal() via clearKeyCache().
-// The cache key uses a fast djb2 hash of the password rather than the plaintext
-// password string, so the plaintext is not retained as a Map key in the JS heap.
+//
+// The cache key uses HMAC-SHA-256(sessionNonce, password) truncated to 128 bits.
+// This avoids storing the plaintext password as a Map key AND avoids the
+// 32-bit collision risk of the previous djb2 approach.  A fresh sessionNonce is
+// generated once per JS module load (i.e. once per app session).
 const sessionKeyCache = new Map<string, CryptoKey>();
 
-/** djb2 hash — fast, synchronous, avoids storing plaintext password in the Map key. */
-function djb2Hash(s: string): number {
-  let h = 5381;
-  for (let i = 0; i < s.length; i++) {
-    h = (((h << 5) + h) + s.charCodeAt(i)) | 0;
-  }
-  return h >>> 0; // unsigned 32-bit
+// One-time session nonce — generated once at module load, never persisted.
+// Used as the HMAC key so the cache token is session-scoped.
+const SESSION_NONCE = crypto.getRandomValues(new Uint8Array(32));
+
+/** Derive a 128-bit session token for the password using HMAC-SHA-256. */
+async function passwordCacheToken(password: string): Promise<string> {
+  const key = await crypto.subtle.importKey(
+    'raw',
+    SESSION_NONCE,
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(password));
+  // Use only the first 16 bytes (128 bits) — more than sufficient for cache uniqueness.
+  return bufferToBase64(sig.slice(0, 16));
 }
 
 export function clearKeyCache(): void {
@@ -97,14 +109,16 @@ function timingSafeEqual(a: string, b: string): boolean {
 }
 
 /**
- * Derive an AES-256 key from password using PBKDF2
- * Returns cached key if the same salt was used earlier this session.
+ * Derive an AES-256 key from password using PBKDF2.
+ * Returns cached key if the same (salt, password) pair was used earlier this session.
+ * Cache key uses HMAC-SHA-256(sessionNonce, password) to avoid storing plaintext.
  */
 async function deriveKey(
   password: string,
   salt: Uint8Array
 ): Promise<CryptoKey> {
-  const saltKey = `${bufferToBase64(salt.buffer as ArrayBuffer)}:${djb2Hash(password)}`;
+  const token = await passwordCacheToken(password);
+  const saltKey = `${bufferToBase64(salt.buffer as ArrayBuffer)}:${token}`;
   const cached = sessionKeyCache.get(saltKey);
   if (cached) return cached;
 
@@ -167,6 +181,7 @@ export async function encrypt(
       {
         name: ALGORITHM,
         iv: iv as BufferSource,
+        tagLength: 128, // explicit: WebCrypto default, but stated clearly
       },
       key,
       encodedText
@@ -218,6 +233,7 @@ export async function decrypt(
       {
         name: ALGORITHM,
         iv,
+        tagLength: 128,
       },
       key,
       ciphertext

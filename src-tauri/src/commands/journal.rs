@@ -4,7 +4,7 @@
 //! Backend only stores/retrieves encrypted blobs.
 
 use crate::db::{self, Database, EncryptedContent, JournalEntryRow, UserSettings};
-use crate::AppLockState;
+use crate::{AppLockState, PasswordRateLimiter};
 use base64::Engine;
 use hmac::Hmac;
 use pbkdf2::pbkdf2;
@@ -43,13 +43,24 @@ pub fn get_password_hash(db: State<Database>) -> Result<Option<UserSettings>, St
 /// - PBKDF2-HMAC-SHA-256, 600 000 iterations, 32-byte output
 /// - Salt is stored as standard base64 (btoa/atob) and must be decoded before use
 /// - Hash comparison is constant-time to prevent timing attacks
+/// - Backend rate limiter (5 failures → 30s lockout) prevents brute force from
+///   WebView code regardless of frontend lockout state.
 ///
-/// Returns `Ok(true)` on match, `Ok(false)` on mismatch, `Err` on bad inputs.
+/// Returns `Ok(true)` on match, `Ok(false)` on mismatch, `Err` on bad inputs or lockout.
 #[tauri::command]
-pub fn verify_password(db: State<Database>, password: String) -> Result<bool, String> {
+pub fn verify_password(
+    db: State<Database>,
+    rate_limiter: State<'_, PasswordRateLimiter>,
+    password: String,
+) -> Result<bool, String> {
     if password.is_empty() {
         return Err("empty password".to_string());
     }
+
+    // Check rate limit before doing any crypto work.
+    rate_limiter
+        .check()
+        .map_err(|secs| format!("Too many failed attempts. Try again in {secs}s."))?;
 
     let settings = db::get_password_hash(&db)?;
     let settings = match settings {
@@ -70,7 +81,13 @@ pub fn verify_password(db: State<Database>, password: String) -> Result<bool, St
     let derived_b64 = base64::engine::general_purpose::STANDARD.encode(derived);
 
     // Constant-time comparison
-    Ok(constant_time_eq(&derived_b64, &settings.password_hash))
+    let matched = constant_time_eq(&derived_b64, &settings.password_hash);
+    if matched {
+        rate_limiter.record_success();
+    } else {
+        rate_limiter.record_failure();
+    }
+    Ok(matched)
 }
 
 fn constant_time_eq(a: &str, b: &str) -> bool {

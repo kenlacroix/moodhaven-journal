@@ -1,0 +1,14 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "identifier": "writer",
+  "description": "Minimal capability for the breakout writer window — entry CRUD, media, STT, and session bridge only. Excludes factory_reset, export, peer sync, 2FA, hardware key, and Oura commands.",
+  "windows": ["writer"],
+  "permissions": [
+    "core:default",
+    "log:default",
+    "core:window:allow-close",
+    "dialog:default",
+    "fs:default",
+    "allow-writer-commands"
+  ]
+}

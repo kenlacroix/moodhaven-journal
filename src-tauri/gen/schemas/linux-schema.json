@@ -2361,6 +2361,12 @@
           "markdownDescription": "Allow all MoodHaven Journal app-level commands registered in invoke_handler!."
         },
         {
+          "description": "Minimal command set for the breakout writer window. Excludes factory_reset, export_data, peer sync, 2FA management, and other main-window-only operations.",
+          "type": "string",
+          "const": "allow-writer-commands",
+          "markdownDescription": "Minimal command set for the breakout writer window. Excludes factory_reset, export_data, peer sync, 2FA management, and other main-window-only operations."
+        },
+        {
           "description": "Default core plugins set.\n#### This default permission set includes:\n\n- `core:path:default`\n- `core:event:default`\n- `core:window:default`\n- `core:webview:default`\n- `core:app:default`\n- `core:image:default`\n- `core:resources:default`\n- `core:menu:default`\n- `core:tray:default`",
           "type": "string",
           "const": "core:default",

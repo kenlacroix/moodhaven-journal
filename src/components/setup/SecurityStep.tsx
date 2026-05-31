@@ -8,6 +8,7 @@ interface SecurityStepProps {
   onSetupModeChange: (mode: 'none' | 'totp' | 'hardwarekey') => void;
   twoFactorComplete: boolean;
   onTwoFactorComplete: (complete: boolean) => void;
+  sessionPassword: string;
 }
 
 export function SecurityStep({
@@ -17,12 +18,14 @@ export function SecurityStep({
   onSetupModeChange,
   twoFactorComplete,
   onTwoFactorComplete,
+  sessionPassword,
 }: SecurityStepProps) {
   const { isBrowser } = usePlatform();
   return (
     <div className="space-y-6">
       {twoFactorSetupMode === 'totp' && (
         <TotpSetup
+          password={sessionPassword}
           onComplete={() => {
             onTwoFactorComplete(true);
             onSetupModeChange('none');

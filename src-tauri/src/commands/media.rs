@@ -174,15 +174,56 @@ fn decrypt_mbmf(data: &[u8], password: &str) -> Result<Vec<u8>, String> {
 
 // ── Filesystem helpers ─────────────────────────────────────────────────────────
 
+/// Returns Ok(()) if entry_id is safe to use as a path component, Err otherwise.
+/// Extracted from get_media_dir for unit testing.
+pub(crate) fn validate_entry_id(entry_id: &str) -> Result<(), String> {
+    if entry_id.is_empty()
+        || entry_id.contains('/')
+        || entry_id.contains('\\')
+        || entry_id.contains('\0')
+        || entry_id.contains(':')
+        || entry_id == ".."
+        || entry_id.starts_with('.')
+    {
+        return Err(format!(
+            "Invalid entry_id for media directory: {:?}",
+            entry_id
+        ));
+    }
+    Ok(())
+}
+
 fn get_media_dir(app: &AppHandle, entry_id: &str) -> Result<std::path::PathBuf, String> {
-    let dir = app
+    validate_entry_id(entry_id)?;
+
+    let base = app
         .path()
         .app_data_dir()
-        .map_err(|e| format!("app_data_dir: {}", e))?
-        .join("media")
-        .join(entry_id);
+        .map_err(|e| format!("app_data_dir: {}", e))?;
+    let dir = base.join("media").join(entry_id);
+
+    // Canonicalize and verify containment — mirrors the abs_enc_path pattern.
+    // canonicalize() fails if the path doesn't exist yet; fall back to the
+    // non-canonical path and re-verify after create_dir_all.
+    let base_canonical = base.canonicalize().unwrap_or_else(|_| base.clone());
+    if let Ok(canonical) = dir.canonicalize() {
+        if !canonical.starts_with(&base_canonical) {
+            return Err("Refusing to access path outside app data directory".to_string());
+        }
+    }
+
     std::fs::create_dir_all(&dir).map_err(|e| format!("create_dir_all: {}", e))?;
-    Ok(dir)
+
+    // Re-verify after the directory is created.
+    let canonical = dir
+        .canonicalize()
+        .map_err(|e| format!("canonicalize media dir: {}", e))?;
+    if !canonical.starts_with(&base_canonical) {
+        let _ = std::fs::remove_dir(&canonical);
+        return Err("Refusing to access path outside app data directory".to_string());
+    }
+
+    Ok(canonical)
 }
 
 fn get_preview_dir(app: &AppHandle) -> Result<std::path::PathBuf, String> {
@@ -201,11 +242,24 @@ fn abs_enc_path(app: &AppHandle, rel_path: &str) -> Result<std::path::PathBuf, S
         .app_data_dir()
         .map_err(|e| format!("app_data_dir: {}", e))?;
     let joined = base.join(rel_path);
-    // Canonicalize the joined path to resolve any `..` components, then verify
-    // it still starts with the app data dir. This prevents path traversal via
-    // crafted rel_path values (e.g. "../../.ssh/authorized_keys").
-    let canonical = joined.canonicalize().unwrap_or_else(|_| joined.clone());
+
+    // Reject paths containing `..` at the component level.  This must be done
+    // before the canonicalize fallback, because when the target file does not
+    // yet exist, `canonicalize()` fails and we fall back to the raw `joined`
+    // path.  `starts_with()` on raw paths is a string-prefix check, not a
+    // semantic containment check — "app_data/../evil" would pass it.  Checking
+    // components explicitly closes this gap without requiring the path to exist.
+    use std::path::Component;
+    if joined.components().any(|c| c == Component::ParentDir) {
+        return Err(
+            "Refusing to access path containing '..' components outside app data directory"
+                .to_string(),
+        );
+    }
+
+    // Canonicalize to resolve symlinks if the file already exists.
     let base_canonical = base.canonicalize().unwrap_or(base.clone());
+    let canonical = joined.canonicalize().unwrap_or_else(|_| joined.clone());
     if !canonical.starts_with(&base_canonical) {
         return Err("Refusing to access path outside app data directory".to_string());
     }
@@ -616,4 +670,59 @@ pub fn sweep_preview_temp(app: AppHandle) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_entry_id;
+
+    #[test]
+    fn valid_uuid_accepted() {
+        assert!(validate_entry_id("550e8400-e29b-41d4-a716-446655440000").is_ok());
+    }
+
+    #[test]
+    fn valid_alphanum_accepted() {
+        assert!(validate_entry_id("abc123XYZ").is_ok());
+    }
+
+    #[test]
+    fn empty_rejected() {
+        assert!(validate_entry_id("").is_err());
+    }
+
+    #[test]
+    fn slash_rejected() {
+        assert!(validate_entry_id("../../etc").is_err());
+    }
+
+    #[test]
+    fn backslash_rejected() {
+        assert!(validate_entry_id("..\\etc").is_err());
+    }
+
+    #[test]
+    fn null_byte_rejected() {
+        assert!(validate_entry_id("evil\0id").is_err());
+    }
+
+    #[test]
+    fn colon_rejected() {
+        assert!(validate_entry_id("NUL:COM1").is_err());
+    }
+
+    #[test]
+    fn dot_dot_rejected() {
+        assert!(validate_entry_id("..").is_err());
+    }
+
+    #[test]
+    fn dot_prefix_rejected() {
+        assert!(validate_entry_id(".hidden").is_err());
+    }
+
+    #[test]
+    fn path_traversal_rejected() {
+        assert!(validate_entry_id("evil/../../../etc/passwd").is_err());
+    }
 }

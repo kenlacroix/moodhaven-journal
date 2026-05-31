@@ -55,9 +55,9 @@
 
 | Platform | Installer |
 |:---|:---|
-| Windows | `MoodHaven_1.3.2.0_x64-setup.exe` |
-| macOS | `MoodHaven_1.3.2.0_x64.dmg` |
-| Linux | `moodhaven_1.3.2.0_amd64.AppImage` or `.deb` |
+| Windows | `MoodHaven_1.3.1_x64-setup.exe` |
+| macOS | `MoodHaven_1.3.1_x64.dmg` |
+| Linux | `moodhaven_1.3.1_amd64.AppImage` or `.deb` |
 
 **Browser** — Run directly in your browser or self-host with the `dist-web/` build. No Rust or install required.
 
@@ -116,10 +116,10 @@ Grab the latest build from the [Releases](https://github.com/kenlacroix/moodhave
 
 | Platform | Installer | Minimum Version |
 |:---|:---|:---|
-| **Windows** | `MoodHaven_1.3.2.0_x64-setup.exe` | Windows 10 |
-| **macOS** | `MoodHaven_1.3.2.0_x64.dmg` | macOS 10.15 Catalina |
-| **Linux** | `moodhaven_1.3.2.0_amd64.AppImage` | Any modern distro |
-| **Linux (Debian)** | `moodhaven_1.3.2.0_amd64.deb` | Ubuntu 22.04+ |
+| **Windows** | `MoodHaven_1.3.1_x64-setup.exe` | Windows 10 |
+| **macOS** | `MoodHaven_1.3.1_x64.dmg` | macOS 10.15 Catalina |
+| **Linux** | `moodhaven_1.3.1_amd64.AppImage` | Any modern distro |
+| **Linux (Debian)** | `moodhaven_1.3.1_amd64.deb` | Ubuntu 22.04+ |
 | **Web** | `npm run build:web` → serve `dist-web/` | Any modern browser |
 
 ### First Launch
@@ -262,7 +262,7 @@ Full architecture: [docs/watch-companion.md](docs/watch-companion.md)
 | **Encryption** | AES-256-GCM + PBKDF2 (WebCrypto API) |
 | **Peer identity** | Ed25519 ([ed25519-dalek](https://github.com/dalek-cryptography/curve25519-dalek)) |
 | **2FA** | [totp-rs](https://github.com/constantoine/totp-rs) + native CTAP2/HID |
-| **Testing** | [Vitest](https://vitest.dev) + Testing Library · 1177 tests |
+| **Testing** | [Vitest](https://vitest.dev) + Testing Library · 1245 tests |
 | **Build** | Vite 8 + Tauri CLI |
 | **Mobile** | Kotlin + Wear OS Data Layer (MessageAPI + ChannelAPI) |
 
@@ -372,7 +372,7 @@ npm run tauri dev
 ```
 
 ```bash
-npm test                          # 1177 tests across 71 files
+npm test                          # 1245 tests across 82 files
 npm run typecheck                 # TypeScript strict check
 cd src-tauri && cargo check       # Rust compilation check
 ```
@@ -396,8 +396,8 @@ See [CLAUDE.md](CLAUDE.md) for architecture, security guidelines, and convention
 
 ## Recent Changes
 
-**v1.3.2.0** — Bug fixes: journaling streak now correctly counts when you skip today, StillHaven session brief shows the right activation delta after multiple check-in samples, `still_complete_session` and `still_abandon_session` now surface an error on unknown IDs (no more silent no-ops), streak query bounded to 1,000 entries, `onWordsWritten` stale-closure fix. 1172 tests (25 new Rust + 7 new TypeScript).
-**v1.3.0** — Word count tracking: `word_count` column added to journal entries, displayed below tags in Timeline. Session linkage: entries can be linked to StillHaven sessions; WellbeingCard morning context card shows once per day. StillHaven Effect card: per-protocol activation drop + post-session mood table in Session History, with a recommendation chip once you have 3+ qualifying sessions. Four new StillHaven commands (`still_get_wellbeing_context`, `still_get_session_brief`, `still_get_journal_brief_for_session`, `still_get_effect_stats`). 1177 tests.
+**v1.3.1.0** — Wrist Loop foundation: watch can now send a `still_trigger` signal to request a StillHaven session start on desktop; `WristLoopBanner` renders a dismissable toast. Time of Day Insight card and Writing Momentum card added to the Insights view (no AI required). ACL fix: four StillHaven commands were silently unreachable at runtime. 1245 tests.
+**v1.3.0** — Word count tracking: `word_count` column added to journal entries, displayed below tags in Timeline. Session linkage: entries can be linked to StillHaven sessions; WellbeingCard morning context card shows once per day. Three new StillHaven commands (`still_get_wellbeing_context`, `still_get_session_brief`, `still_get_journal_brief_for_session`). 1165 tests.
 **v1.2.1** — Security hardening: TOTP secrets encrypted at rest (AES-256-GCM, amber migration banner for v1.1.x users), path traversal fix in media storage, writer window scoped to ~30 commands only, backend rate limiting on `verify_password` (5 failures → 30s lockout), settings sync allowlist, full-restore SHA-256 integrity check, CSP narrowed.
 **v1.2.0** — Voice memo draft pipeline: watch recordings surface as reviewable draft cards in the Timeline with transcription preview, inferred mood, biometric context, and hashtag suggestions. Full TipTap editor to edit before publishing. Writing appearance drawer: inline font, size, line height, paragraph spacing, background tint, and accessibility options (high contrast, reduced motion, dyslexia profile) in WritingView. Wear OS Phase B brand sweep (60+ hex colors to @color/ references), Phase C splash screen, Phase 2e/5a polish (shortcut row, ambient mood wash, steps + activity in HealthSnapshot). Codebase cleanup: 5 large components split, dead code removed. 1143 tests.
 **v1.1.0** — StillHaven: bilateral audio stimulation companion built into all builds. Enable in Settings → Health to unlock. Check-in (protocol + activation dial) → live session (bilateral audio engine, bio-adaptive speed via Oura/watch) → check-out → summary → journal handoff pre-fills the writing view with session data. Session history view with 30-day trend chart. Browser/web fully supported via IndexedDB shim. 736 tests.

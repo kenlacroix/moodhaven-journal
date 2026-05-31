@@ -23,6 +23,30 @@
 
 ---
 
+## StillHaven Hardening (from /ship adversarial review, v1.3.2.0)
+
+**Priority:** P2 — deferred from fix/retro-findings-2026-05-31 to keep that PR test-only scoped.
+
+### STILL-001: Frontend tolerance for "Session not found" error
+- `still_complete_session` / `still_abandon_session` now return `Err` for missing IDs (fixed in v1.3.2.0).
+- The Tauri command propagates this as a rejected Promise on the frontend.
+- Watch companion reconnect flow may call `still_complete_session` on a session that was never created (crash recovery case).
+- Fix: wrap `stillCompleteSession` / `stillAbandonSession` calls in `try/catch`; treat "Session not found" as a no-op, not an error modal.
+- Files: `src/modules/stillhaven/`, `src/stores/stillStore.ts`
+
+### STILL-002: Oura cache key timezone mismatch in `get_wellbeing_context`
+- `last_still_session_days_ago` uses `julianday('now')` (UTC) but `completed_at` is stored as local-time ISO 8601.
+- Off-by-one for users in UTC+ timezones completing sessions late evening local time.
+- Fix: store `completed_at` as UTC, or use `julianday('now', 'localtime')` in the query.
+- Files: `src-tauri/src/db/still.rs:369`, `src-tauri/src/commands/still.rs`
+
+### STILL-003: `duration_seconds` accepts negative values
+- No validation in `still_complete_session` command — a UI bug or crash could write `-1` to `still_sessions.duration_seconds`.
+- Fix: add `if duration_seconds < 0 { return Err(...) }` in the command layer.
+- File: `src-tauri/src/commands/still.rs`
+
+---
+
 ## Website Design Debt (from design-unification autoplan review, 2026-04-04)
 
 ### ~~DESIGN-DEBT-001: Hero background photo~~ ✅ RESOLVED (2026-04-12)

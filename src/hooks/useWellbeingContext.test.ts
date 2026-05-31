@@ -73,6 +73,16 @@ describe('initial load', () => {
     await act(async () => {});
     expect(result.current.isVisible).toBe(false);
   });
+
+  it('context is null when wellbeing fetch rejects', async () => {
+    mockGetWellbeing.mockRejectedValue(new Error('backend error'));
+
+    const { result } = renderHook(() => useWellbeingContext());
+    await act(async () => { await Promise.resolve(); });
+
+    expect(result.current.context).toBeNull();
+    expect(result.current.isVisible).toBe(false);
+  });
 });
 
 describe('dismiss', () => {

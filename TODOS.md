@@ -18,7 +18,7 @@
 - `VoiceMemoDraftCard.test.tsx` — missing entirely. Cover: duration formatting, `Transcribing…` when null, ellipsis on long transcript, Review button disabled when null, mood dots, context chip
 - `VoiceDraftEditor.test.tsx` — missing entirely. Cover: close/backdrop close, Publish triggers onPublish + onClose, error state on rejection, hashtag pill inserts content, null transcript renders safely
 
-### TEST-003: Rust voice memo commands
+### ~~TEST-003: Rust voice memo commands~~ ✅ RESOLVED (2026-05-31)
 - Add `#[cfg(test)] mod tests` in `src-tauri/src/db/voice_memos.rs`. Cover: `list_pending_drafts` filtering (reviewed=0, transcription IS NOT NULL, entry_id IS NULL); `publish_voice_memo_draft` inserts entry + sets reviewed=1; `discard_voice_memo_draft` removes row; missing-id case for `publish`
 
 ---

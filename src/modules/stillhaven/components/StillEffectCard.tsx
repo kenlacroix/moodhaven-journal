@@ -43,6 +43,8 @@ export function StillEffectCard({ stats }: Props) {
     (p) => p.avg_activation_delta !== null || p.avg_mood_after !== null,
   );
 
+  if (rows.length === 0) return null;
+
   return (
     <div
       className="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-100 dark:border-slate-700"
@@ -75,9 +77,11 @@ export function StillEffectCard({ stats }: Props) {
               }`}
             >
               {p.avg_activation_delta !== null
-                ? p.avg_activation_delta >= 0
+                ? p.avg_activation_delta > 0.001
                   ? `−${p.avg_activation_delta.toFixed(1)}`
-                  : `+${Math.abs(p.avg_activation_delta).toFixed(1)}`
+                  : p.avg_activation_delta < -0.001
+                    ? `+${Math.abs(p.avg_activation_delta).toFixed(1)}`
+                    : '±0.0'
                 : '—'}
             </span>
             <span

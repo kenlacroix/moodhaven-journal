@@ -50,9 +50,11 @@ export function StillSessionsView({ onBack }: Props): React.JSX.Element {
     let cancelled = false;
     async function load() {
       try {
+        // stillGetEffectStats failure is non-fatal — decouple so a migrated/restored
+        // DB that lacks session_id data doesn't blank the entire session history.
         const [sessions, effect] = await Promise.all([
           stillListSessions(90),
-          stillGetEffectStats(),
+          stillGetEffectStats().catch(() => null),
         ]);
         const enriched = await Promise.all(
           sessions.map(async (s) => {

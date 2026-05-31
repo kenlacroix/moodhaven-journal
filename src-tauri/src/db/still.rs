@@ -476,27 +476,36 @@ pub struct StillEffectStats {
 pub fn get_effect_stats(db: &Database) -> Result<StillEffectStats, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
-    // CTEs isolate the first pre/post sample per session so multiple samples
-    // or multiple linked journal entries don't fan out the join row count.
+    // CTEs use correlated MIN(rowid) subqueries to select one row per session,
+    // avoiding fan-out when multiple samples or entries share a session_id.
     let mut stmt = conn
         .prepare(
             "WITH pre AS (
                SELECT session_id, activation
                FROM still_activation_samples
                WHERE phase = 'pre'
-               GROUP BY session_id HAVING rowid = MIN(rowid)
+                 AND rowid IN (
+                   SELECT MIN(rowid) FROM still_activation_samples
+                   WHERE phase = 'pre' GROUP BY session_id
+                 )
              ),
              post AS (
                SELECT session_id, activation
                FROM still_activation_samples
                WHERE phase = 'post'
-               GROUP BY session_id HAVING rowid = MIN(rowid)
+                 AND rowid IN (
+                   SELECT MIN(rowid) FROM still_activation_samples
+                   WHERE phase = 'post' GROUP BY session_id
+                 )
              ),
              first_entry AS (
                SELECT session_id, mood
                FROM journal_entries
                WHERE session_id IS NOT NULL
-               GROUP BY session_id HAVING rowid = MIN(rowid)
+                 AND rowid IN (
+                   SELECT MIN(rowid) FROM journal_entries
+                   WHERE session_id IS NOT NULL GROUP BY session_id
+                 )
              )
              SELECT
                  s.protocol,
@@ -528,12 +537,19 @@ pub fn get_effect_stats(db: &Database) -> Result<StillEffectStats, String> {
 
     let sessions_with_data: i32 = per_protocol.iter().map(|p| p.session_count).sum();
 
-    let avg_mood_after: Option<f64> = if sessions_with_data > 0 {
+    // Weight only protocols that have linked journal entries (mood data available).
+    let mood_sessions: i32 = per_protocol
+        .iter()
+        .filter(|p| p.avg_mood_after.is_some())
+        .map(|p| p.session_count)
+        .sum();
+
+    let avg_mood_after: Option<f64> = if mood_sessions > 0 {
         let total_mood: f64 = per_protocol
             .iter()
             .filter_map(|p| p.avg_mood_after.map(|m| m * p.session_count as f64))
             .sum();
-        Some(total_mood / sessions_with_data as f64)
+        Some(total_mood / mood_sessions as f64)
     } else {
         None
     };

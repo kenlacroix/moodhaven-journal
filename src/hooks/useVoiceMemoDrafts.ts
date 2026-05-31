@@ -35,7 +35,7 @@ export function useVoiceMemoDrafts(): UseVoiceMemoDraftsResult {
   const refresh = useCallback(async () => {
     try {
       const pending = await listPendingDrafts();
-      setDrafts(pending);
+      setDrafts(pending ?? []);
     } catch {
       // non-critical
     }

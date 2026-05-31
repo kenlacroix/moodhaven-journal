@@ -7,7 +7,7 @@
  * 3. Show backup codes
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { generateTotpSecret, enableTotp } from '../../lib/services/twoFactorService';
 import { BackupCodesDisplay } from './BackupCodesDisplay';
@@ -43,9 +43,9 @@ export function TotpSetup({ password, onComplete, onCancel }: TotpSetupProps) {
   }, []);
 
   // Start setup on mount
-  useState(() => {
+  useEffect(() => {
     initSetup();
-  });
+  }, [initSetup]);
 
   // Handle verification
   const handleVerify = async () => {

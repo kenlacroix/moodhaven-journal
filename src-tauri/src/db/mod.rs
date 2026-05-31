@@ -345,10 +345,7 @@ impl Database {
         );
 
         // Runtime migrations: voice memo draft columns (Phase 5)
-        let _ = conn.execute(
-            "ALTER TABLE voice_memos ADD COLUMN context TEXT",
-            [],
-        );
+        let _ = conn.execute("ALTER TABLE voice_memos ADD COLUMN context TEXT", []);
         let _ = conn.execute(
             "ALTER TABLE voice_memos ADD COLUMN inferred_mood INTEGER",
             [],

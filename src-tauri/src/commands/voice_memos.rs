@@ -358,8 +358,7 @@ pub fn publish_voice_memo_draft(
         )
         .map_err(|e| format!("Failed to fetch created entry: {}", e))?;
 
-    serde_json::from_str(&entry_json)
-        .map_err(|e| format!("Failed to parse entry JSON: {}", e))
+    serde_json::from_str(&entry_json).map_err(|e| format!("Failed to parse entry JSON: {}", e))
 }
 
 /// Discard a voice memo draft: deletes the audio file and the DB row.

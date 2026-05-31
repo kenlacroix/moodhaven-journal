@@ -97,7 +97,7 @@ object HealthSnapshot {
         val sensor = sm.getDefaultSensor(Sensor.TYPE_STEP_COUNTER) ?: return null
 
         val totalSteps = withTimeoutOrNull(ACCEL_TIMEOUT_MS) {
-            suspendCancellableCoroutine { cont ->
+            suspendCancellableCoroutine<Long> { cont ->
                 val listener = object : SensorEventListener {
                     override fun onSensorChanged(event: SensorEvent) {
                         val value = event.values.firstOrNull() ?: return

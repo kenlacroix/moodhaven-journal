@@ -56,8 +56,7 @@ fn map_memo_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<VoiceMemoRow> {
     })
 }
 
-const SELECT_COLS: &str =
-    "id, timestamp, duration_ms, health_json, file_path,
+const SELECT_COLS: &str = "id, timestamp, duration_ms, health_json, file_path,
      transcription, entry_id, source, created_at,
      context, inferred_mood, book_id, reviewed";
 
@@ -83,10 +82,7 @@ pub fn create_voice_memo(
     )
     .map_err(|e| format!("Failed to insert voice memo: {}", e))?;
 
-    let sql = format!(
-        "SELECT {} FROM voice_memos WHERE id = ?1",
-        SELECT_COLS
-    );
+    let sql = format!("SELECT {} FROM voice_memos WHERE id = ?1", SELECT_COLS);
     conn.query_row(&sql, params![id], map_memo_row)
         .map_err(|e| format!("Failed to fetch created voice memo: {}", e))
 }
@@ -115,10 +111,7 @@ pub fn list_voice_memos(db: &Database, limit: Option<i32>) -> Result<Vec<VoiceMe
 pub fn get_voice_memo(db: &Database, id: &str) -> Result<Option<VoiceMemoRow>, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
-    let sql = format!(
-        "SELECT {} FROM voice_memos WHERE id = ?1",
-        SELECT_COLS
-    );
+    let sql = format!("SELECT {} FROM voice_memos WHERE id = ?1", SELECT_COLS);
     let result = conn.query_row(&sql, params![id], map_memo_row);
 
     match result {

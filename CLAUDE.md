@@ -163,7 +163,7 @@ Key routing rules:
 - Config file: ~/.gbrain/config.json (mode 0600)
 - Setup date: 2026-05-31
 - MCP registered: yes (user scope)
-- Artifacts sync: full (GitHub repo — run `~/.claude/skills/gstack/bin/gstack-artifacts-init` to finish wiring)
+- Artifacts sync: full → https://github.com/kenlacroix/gstack-artifacts-ken (private)
 - Current repo policy: read-write (kenlacroix/moodhaven-journal)
 - Note: OpenAI embedding key needs updating — OPENAI_API_KEY in env returns 401. Vector search degraded until fixed; text search works.
 

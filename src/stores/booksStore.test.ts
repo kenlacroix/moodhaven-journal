@@ -210,7 +210,7 @@ describe('booksStore', () => {
       useBooksStore.setState({ books: [book] });
       mockUpdateBook.mockResolvedValue(undefined);
 
-      const newSettings = { defaultPrivacyMode: 1 as const };
+      const newSettings = { privacyDefault: 1 as const };
       await useBooksStore.getState().patchBookSettings('b1', newSettings);
 
       expect(mockUpdateBook).toHaveBeenCalledWith(
@@ -228,7 +228,7 @@ describe('booksStore', () => {
       useBooksStore.setState({ books: [book] });
       mockUpdateBook.mockResolvedValue(undefined);
 
-      const newSettings = { defaultPrivacyMode: 2 as const };
+      const newSettings = { privacyDefault: 2 as const };
       await useBooksStore.getState().patchBookSettings('b1', newSettings);
 
       const updated = useBooksStore.getState().books.find((b) => b.id === 'b1');
@@ -238,7 +238,7 @@ describe('booksStore', () => {
     it('is a no-op when book id does not exist', async () => {
       useBooksStore.setState({ books: [makeBook({ id: 'b1' })] });
 
-      await useBooksStore.getState().patchBookSettings('nonexistent', { defaultPrivacyMode: 1 as const });
+      await useBooksStore.getState().patchBookSettings('nonexistent', { privacyDefault: 1 as const });
 
       expect(mockUpdateBook).not.toHaveBeenCalled();
     });

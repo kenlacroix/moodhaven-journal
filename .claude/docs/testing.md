@@ -72,7 +72,7 @@ For heavy crypto files, use Node environment: `// @vitest-environment node` at t
 - E2E, visual regression (future work)
 - React hooks in isolation — test through components
 
-## Current Coverage (as of v1.0.0)
+## Current Coverage (as of v1.2.0)
 | Test File | Tests |
 |-----------|-------|
 | `backend/browser.test.ts` | 43 |
@@ -88,6 +88,7 @@ For heavy crypto files, use Node environment: `// @vitest-environment node` at t
 | `components/transcript/CloudConsentModal.test.tsx` | 7 |
 | `components/transcript/TranscriptPreviewOverlay.test.tsx` | 11 |
 | `components/updater/UpdatePanel.test.tsx` | 4 |
+| `components/writing/AppearanceDrawer.test.tsx` | (new) |
 | `hooks/useInsights.test.ts` | 7 |
 | `hooks/useSpeechToText.test.ts` | 7 |
 | `lib/aiService.test.ts` | 28 |
@@ -114,4 +115,5 @@ For heavy crypto files, use Node environment: `// @vitest-environment node` at t
 | `stores/settingsStore.test.ts` | 18 |
 | `backend/browser-invoke.test.ts` | 5 |
 | `lib/services/settingsService.test.ts` | 10 |
-| **Total** | **702** |
+| `types/writingAppearance.test.ts` | (new) |
+| **Total** | **743** |

@@ -1,6 +1,6 @@
 # MoodHaven Journal — Architecture Reference
 
-> **Version:** v1.1.0 | **Last Updated:** 2026-05-26
+> **Version:** v1.2.0 | **Last Updated:** 2026-05-31
 
 ---
 
@@ -32,7 +32,7 @@ MoodHaven Journal is a **local-first desktop application** built on Tauri v2 (Ru
 │  Only ciphertext crosses the Tauri IPC boundary                      │
 └───────────────────────────┬─────────────────────────────────────────┘
                             │  Tauri IPC (invoke / emit)
-                            │  ~127 Tauri commands
+                            │  ~132 Tauri commands
 ┌───────────────────────────▼─────────────────────────────────────────┐
 │                        Rust Backend (Tauri)                          │
 │  Command handlers · Database (rusqlite) · Peer sync engine           │
@@ -66,7 +66,7 @@ MoodHaven Journal is a **local-first desktop application** built on Tauri v2 (Ru
 | 2FA | totp-rs + native CTAP2/HID | TOTP + hardware keys |
 | Charts | Custom SVG | No charting library |
 | Logging | tauri-plugin-log + `src/lib/services/logger.ts` | Rotating file (prod), stderr (dev); `set_log_level` at runtime |
-| Testing | Vitest + Testing Library | 693 tests |
+| Testing | Vitest + Testing Library | 743 tests |
 | Build | Vite 8 + Tauri CLI | |
 
 ---
@@ -84,6 +84,8 @@ moodbloom-tauri/
 │   │   ├── peer-sync/          # DevicesTab + sub-components, PairingModal + sub-components
 │   │   ├── search/             # SearchModal (Ctrl+K)
 │   │   ├── sync/               # SyncDetailsModal
+│   │   ├── voice-memo/         # VoiceMemoDraftCard, VoiceDraftEditor
+│   │   ├── writing/            # AppearanceDrawer (font/size/tint/a11y)
 │   │   ├── oura/               # OuraConnectionCard, HealthContextBadge
 │   │   └── settings/           # SettingsPage tabs + Privacy sub-sections
 │   ├── features/               # Full page views
@@ -106,7 +108,7 @@ moodbloom-tauri/
 ├── src-tauri/                  # Rust backend
 │   ├── src/
 │   │   ├── lib.rs              # Tauri builder + command registration
-│   │   ├── commands/           # ~21 command modules (~127 commands)
+│   │   ├── commands/           # ~21 command modules (~132 commands)
 │   │   ├── db/
 │   │   │   └── mod.rs          # SQLite schema, migrations, Database struct
 │   │   └── crypto/             # Rust-side crypto helpers (if any)
@@ -213,7 +215,12 @@ voice_memos (
   health_json  TEXT,                    -- JSON health context at record time
   transcription TEXT,                   -- whisper.cpp output (populated async)
   entry_id     TEXT,                    -- set after linking to a journal entry
-  created_at   TEXT NOT NULL
+  created_at   TEXT NOT NULL,
+  -- Phase 5 draft pipeline columns (v1.2.0, additive migration)
+  context      TEXT,                    -- JSON biometric context chip (hr, steps, activity)
+  inferred_mood INTEGER,                -- 1–5 auto-inferred via scoreContentMood; NULL = not yet inferred
+  book_id      TEXT DEFAULT 'default',  -- target book when published as a journal entry
+  reviewed     INTEGER NOT NULL DEFAULT 0  -- 0=pending, 1=reviewed (published or discarded)
 )
 
 signals (
@@ -330,7 +337,8 @@ Hooks are the primary abstraction between stores/services and UI components. Eac
 | `useCalendar` | Calendar data, daily timeline |
 | `useOuraContext` | Oura health data, `buildHealthSummary()` |
 | `usePeerSync` | Discovery, pairing, sync orchestration |
-| `useWearVoiceMemos` | Incoming audio from Wear OS companion |
+| `useWearVoiceMemos` | Incoming audio from Wear OS companion; post-transcription mood inference |
+| `useVoiceMemoDrafts` | Draft list state, `publishDraft`, `discardDraft` |
 | `useWearSignals` | Mood taps and health snapshots from watch |
 | `useAudioRecorder` | Mic recording (STT input) |
 | `useSpeechToText` | Model download, transcription |

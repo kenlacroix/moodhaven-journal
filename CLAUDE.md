@@ -48,7 +48,7 @@ Platforms: Windows, Linux, macOS.
 | `src-tauri/tauri.conf.json` | App config, sidecar binaries |
 | `src-tauri/Cargo.toml` | Rust dependencies |
 | `src-tauri/capabilities/default.json` | Tauri ACL — permitted commands + plugins |
-| `src-tauri/src/lib.rs` | All ~127 Tauri command registrations |
+| `src-tauri/src/lib.rs` | All ~132 Tauri command registrations |
 | `src-tauri/src/db/mod.rs` | SQLite schema, migrations, Database struct |
 | `src/App.tsx` | React root |
 | `src/stores/` | 4 Zustand stores (app, settings, books, …) |
@@ -92,6 +92,10 @@ Platforms: Windows, Linux, macOS.
 | `src/components/settings/tabs/PrivacyBiometric.tsx` | Biometric unlock (Android only) |
 | `src/components/settings/tabs/PrivacyAutoLock.tsx` | Auto-lock timeout + clipboard clear |
 | `src/components/settings/tabs/PrivacyTransparency.tsx` | TransparencySection + PrivacyStatRow |
+| `src/components/voice-memo/VoiceMemoDraftCard.tsx` | Compact Timeline draft card — duration, context chip, mood dots, Review/Discard CTAs |
+| `src/components/voice-memo/VoiceDraftEditor.tsx` | Full-screen draft editor with hashtag pills; encrypts on publish |
+| `src/hooks/useVoiceMemoDrafts.ts` | Draft list state + publishDraft + discardDraft |
+| `src/components/writing/AppearanceDrawer.tsx` | WritingView appearance panel — font, size, line height, tint, a11y options |
 | `vitest.config.ts` | Test runner config |
 | `src/test/setup.ts` | Global test setup + Tauri IPC mock |
 

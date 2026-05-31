@@ -10,7 +10,7 @@
  *   TipTap editor (initial content = transcription)
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
@@ -37,8 +37,11 @@ export function VoiceDraftEditor({ memo, onPublish, onClose, activeBookId }: Voi
   const [isPublishing, setIsPublishing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const initialContent = memo.transcription
-    ? `<p>${memo.transcription.replace(/\n/g, '</p><p>')}</p>`
+  const escapedTranscript = memo.transcription
+    ? memo.transcription.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    : '';
+  const initialContent = escapedTranscript
+    ? `<p>${escapedTranscript.replace(/\n/g, '</p><p>')}</p>`
     : '<p></p>';
 
   const editor = useEditor({
@@ -50,7 +53,7 @@ export function VoiceDraftEditor({ memo, onPublish, onClose, activeBookId }: Voi
     autofocus: true,
   });
 
-  const hashtags = suggestHashtags(memo.transcription ?? '');
+  const hashtags = useMemo(() => suggestHashtags(memo.transcription ?? ''), [memo.transcription]);
 
   const handleInsertHashtag = useCallback(
     (tag: string) => {

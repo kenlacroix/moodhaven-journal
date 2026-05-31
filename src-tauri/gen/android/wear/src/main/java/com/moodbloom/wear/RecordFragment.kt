@@ -85,7 +85,7 @@ class RecordFragment : Fragment() {
     ): View = inflater.inflate(R.layout.fragment_record, container, false)
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        pageRoot           = view as ScrollView
+        pageRoot           = view.findViewById(R.id.pageRoot)
         recordBtn          = view.findViewById(R.id.recordBtn)
         recordIcon         = view.findViewById(R.id.recordIcon)
         durationText       = view.findViewById(R.id.durationText)
@@ -179,9 +179,10 @@ class RecordFragment : Fragment() {
 
         setSendingUI()
 
+        val ctx = requireContext()
         lifecycleScope.launch {
             val healthJson = withContext(Dispatchers.IO) {
-                runCatching { HealthSnapshot.capture(requireContext()) }.getOrNull()
+                runCatching { HealthSnapshot.capture(ctx) }.getOrNull()
             }
 
             val pending = AudioQueue.PendingAudio(

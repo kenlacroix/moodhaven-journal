@@ -118,6 +118,7 @@ object HealthSnapshot {
             0
         } else {
             val delta = (totalSteps - baseline).coerceAtLeast(0L).toInt()
+            prefs.edit().putLong(KEY_STEPS_BASELINE, totalSteps).apply()
             delta
         }
     }

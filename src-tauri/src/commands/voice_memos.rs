@@ -17,6 +17,7 @@
 //! therefore consistent without any extra configuration.
 
 use crate::db::{self, Database, VoiceMemoRow};
+use crate::AppLockState;
 use rusqlite::params;
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_shell::ShellExt;
@@ -300,12 +301,17 @@ pub fn patch_voice_memo_mood(
 #[tauri::command]
 pub fn publish_voice_memo_draft(
     db: State<Database>,
+    lock: State<'_, AppLockState>,
     id: String,
     encrypted_content: serde_json::Value,
     mood: i64,
     book_id: String,
     privacy_mode: i64,
 ) -> Result<serde_json::Value, String> {
+    if lock.is_locked() { return Err("Session is locked".to_string()); }
+    if !(1..=5).contains(&mood) { return Err("mood must be 1–5".to_string()); }
+    if !(0..=2).contains(&privacy_mode) { return Err("privacy_mode must be 0–2".to_string()); }
+
     let entry_id = Uuid::new_v4().to_string();
     let content_json = serde_json::to_string(&encrypted_content)
         .map_err(|e| format!("Failed to serialize encrypted_content: {}", e))?;

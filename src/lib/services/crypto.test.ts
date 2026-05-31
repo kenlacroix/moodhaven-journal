@@ -1,6 +1,34 @@
 // @vitest-environment node
 import { encrypt, decrypt, verifyPassword, hashPassword, verifyPasswordHash, clearKeyCache } from './crypto';
 
+// ── PBKDF2 cross-language vector ──────────────────────────────────────────────
+// Verifies that TypeScript's WebCrypto PBKDF2 (hashPassword / verifyPasswordHash)
+// produces the same output as Rust's pbkdf2::pbkdf2::<Hmac<Sha256>> for the same
+// inputs.  The expected hash was pre-computed with the Rust implementation using
+// the test in src-tauri/src/commands/journal.rs (test_verify_ascii_password_correct).
+// If these diverge, verify_password (Rust) and verifyPasswordHash (TS) would
+// silently disagree, meaning the unlock flow would break for affected users.
+describe('PBKDF2 cross-language vector', () => {
+  it('matches the Rust PBKDF2-HMAC-SHA-256 output for the same (password, salt)', async () => {
+    // Known vector: password = "test123", salt = 0x6162636465666768696a6b6c6d6e6f70
+    // Expected hash verified against Python hashlib.pbkdf2_hmac('sha256', b'test123', salt, 600000)
+    // and cross-checked against the Rust test in journal.rs::tests::test_verify_ascii_password_correct
+    const password = 'test123';
+    const saltHex = '6162636465666768696a6b6c6d6e6f70'; // "abcdefghijklmnop" in hex
+    const expectedHashB64 = 'PQCnBCnAGh9xK0nFfNyw4ajx4IutGSq+wYD3nrAXlPQ=';
+
+    const saltBytes = new Uint8Array(saltHex.match(/.{2}/g)!.map(b => parseInt(b, 16)));
+    const saltB64 = btoa(String.fromCharCode(...saltBytes));
+
+    const { hash } = await hashPassword(password, saltBytes);
+    expect(hash).toBe(expectedHashB64);
+
+    // verifyPasswordHash must agree
+    expect(await verifyPasswordHash(password, expectedHashB64, saltB64)).toBe(true);
+    expect(await verifyPasswordHash('wrong', expectedHashB64, saltB64)).toBe(false);
+  }, 10_000);
+});
+
 describe('crypto', () => {
   // Note: These tests use real WebCrypto with PBKDF2 (600K iterations).
   // Each encrypt/decrypt may take 100-500ms. This is expected and correct.

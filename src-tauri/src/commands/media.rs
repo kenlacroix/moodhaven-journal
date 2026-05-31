@@ -174,23 +174,24 @@ fn decrypt_mbmf(data: &[u8], password: &str) -> Result<Vec<u8>, String> {
 
 // ── Filesystem helpers ─────────────────────────────────────────────────────────
 
-fn get_media_dir(app: &AppHandle, entry_id: &str) -> Result<std::path::PathBuf, String> {
-    // Reject any entry_id that could escape the media directory via path components.
-    // Normal entry IDs are UUIDs; crafted IDs from a malicious peer could contain
-    // '..', '/', or NUL bytes and traverse outside app_data_dir.
+/// Returns Ok(()) if entry_id is safe to use as a path component, Err otherwise.
+/// Extracted from get_media_dir for unit testing.
+pub(crate) fn validate_entry_id(entry_id: &str) -> Result<(), String> {
     if entry_id.is_empty()
         || entry_id.contains('/')
         || entry_id.contains('\\')
         || entry_id.contains('\0')
-        || entry_id.contains(':')  // Windows alternate data streams / reserved names (NUL, COM1 …)
+        || entry_id.contains(':')
         || entry_id == ".."
         || entry_id.starts_with('.')
     {
-        return Err(format!(
-            "Invalid entry_id for media directory: {:?}",
-            entry_id
-        ));
+        return Err(format!("Invalid entry_id for media directory: {:?}", entry_id));
     }
+    Ok(())
+}
+
+fn get_media_dir(app: &AppHandle, entry_id: &str) -> Result<std::path::PathBuf, String> {
+    validate_entry_id(entry_id)?;
 
     let base = app
         .path()
@@ -669,4 +670,59 @@ pub fn sweep_preview_temp(app: AppHandle) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_entry_id;
+
+    #[test]
+    fn valid_uuid_accepted() {
+        assert!(validate_entry_id("550e8400-e29b-41d4-a716-446655440000").is_ok());
+    }
+
+    #[test]
+    fn valid_alphanum_accepted() {
+        assert!(validate_entry_id("abc123XYZ").is_ok());
+    }
+
+    #[test]
+    fn empty_rejected() {
+        assert!(validate_entry_id("").is_err());
+    }
+
+    #[test]
+    fn slash_rejected() {
+        assert!(validate_entry_id("../../etc").is_err());
+    }
+
+    #[test]
+    fn backslash_rejected() {
+        assert!(validate_entry_id("..\\etc").is_err());
+    }
+
+    #[test]
+    fn null_byte_rejected() {
+        assert!(validate_entry_id("evil\0id").is_err());
+    }
+
+    #[test]
+    fn colon_rejected() {
+        assert!(validate_entry_id("NUL:COM1").is_err());
+    }
+
+    #[test]
+    fn dot_dot_rejected() {
+        assert!(validate_entry_id("..").is_err());
+    }
+
+    #[test]
+    fn dot_prefix_rejected() {
+        assert!(validate_entry_id(".hidden").is_err());
+    }
+
+    #[test]
+    fn path_traversal_rejected() {
+        assert!(validate_entry_id("evil/../../../etc/passwd").is_err());
+    }
 }

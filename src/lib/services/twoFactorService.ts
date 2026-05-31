@@ -67,6 +67,14 @@ export async function verify2FATotp(code: string, password: string): Promise<boo
   return invoke('verify_2fa_totp', { code, password });
 }
 
+/**
+ * Returns true if 2FA TOTP is enabled but the secret is stored as legacy plaintext
+ * (predates v1.2.0 encryption). User should re-enable TOTP to re-encrypt.
+ */
+export async function totpNeedsReencryption(): Promise<boolean> {
+  return invoke('totp_needs_reencryption');
+}
+
 // ============================================================================
 // Hardware Key (Native FIDO2)
 // ============================================================================

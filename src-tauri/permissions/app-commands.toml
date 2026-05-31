@@ -70,6 +70,7 @@ commands.allow = [
   "get_2fa_status",
   "disable_2fa",
   "verify_2fa_totp",
+  "totp_needs_reencryption",
   # Hardware key (native FIDO2)
   "hardware_key_feature_available",
   "hardware_key_detect",

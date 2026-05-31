@@ -10,6 +10,7 @@ import { usePlatform } from '../../../hooks/usePlatform';
 import { TotpSetup, HardwareKeySetup, BackupCodesDisplay } from '../../two-factor';
 import { logger } from '../../../lib/services/logger';
 import { use2FASetup } from '../../../hooks/use2FASetup';
+import { totpNeedsReencryption } from '../../../lib/services/twoFactorService';
 
 interface PrivacyTabProps {
   settings: AppSettings;
@@ -58,6 +59,12 @@ export function PrivacyTab({
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [biometricEnrolled, setBiometricEnrolled] = useState(false);
   const [biometricDisabling, setBiometricDisabling] = useState(false);
+  const [totpLegacy, setTotpLegacy] = useState(false);
+
+  useEffect(() => {
+    if (!sessionPassword || !twoFactorStatus?.enabled) return;
+    totpNeedsReencryption().then(setTotpLegacy).catch(() => {});
+  }, [sessionPassword, twoFactorStatus?.enabled]);
 
   useEffect(() => {
     if (!isAndroid) return;
@@ -182,6 +189,12 @@ export function PrivacyTab({
                   </p>
                 </div>
               </div>
+
+              {totpLegacy && (
+                <div className="rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
+                  Your authenticator secret was set before v1.2.0 and is stored without encryption. Disable and re-enable Authenticator App to encrypt it.
+                </div>
+              )}
 
               {/* Backup codes status */}
               <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg">

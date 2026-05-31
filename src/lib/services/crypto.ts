@@ -181,6 +181,7 @@ export async function encrypt(
       {
         name: ALGORITHM,
         iv: iv as BufferSource,
+        tagLength: 128, // explicit: WebCrypto default, but stated clearly
       },
       key,
       encodedText
@@ -232,6 +233,7 @@ export async function decrypt(
       {
         name: ALGORITHM,
         iv,
+        tagLength: 128,
       },
       key,
       ciphertext

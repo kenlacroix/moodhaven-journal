@@ -499,6 +499,23 @@ pub fn disable_2fa(db: State<Database>) -> Result<bool, String> {
     Ok(true)
 }
 
+/// Returns true if 2FA is enabled but the TOTP secret is stored as legacy plaintext
+/// (no enc:v1: prefix). Used by the frontend to nudge users to re-enable TOTP.
+#[tauri::command]
+pub fn totp_needs_reencryption(db: State<Database>) -> Result<bool, String> {
+    let row = get_2fa_row(&db)?;
+    match row {
+        Some(r) if r.enabled && r.method.as_deref().map_or(false, |m| m == "totp" || m == "both") => {
+            let needs = r
+                .totp_secret
+                .map(|s| !s.starts_with(TOTP_ENC_PREFIX))
+                .unwrap_or(false);
+            Ok(needs)
+        }
+        _ => Ok(false),
+    }
+}
+
 /// Verify TOTP code for login (returns true if valid).
 /// `password` is required to decrypt the stored secret blob.
 #[tauri::command]
@@ -540,4 +557,71 @@ pub fn verify_2fa_totp(
     }
 
     Ok(false)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use base64::Engine as _;
+
+    #[test]
+    fn encrypt_decrypt_round_trip() {
+        let secret = "JBSWY3DPEHPK3PXP";
+        let password = "correct-horse-battery-staple";
+        let blob = encrypt_totp_secret(secret, password).expect("encrypt failed");
+        let recovered = decrypt_totp_secret(&blob, password).expect("decrypt failed");
+        assert_eq!(recovered, secret);
+    }
+
+    #[test]
+    fn wrong_password_fails_decryption() {
+        let secret = "JBSWY3DPEHPK3PXP";
+        let blob = encrypt_totp_secret(secret, "password-a").expect("encrypt failed");
+        let result = decrypt_totp_secret(&blob, "password-b");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn legacy_plaintext_returned_as_is() {
+        let legacy = "JBSWY3DPEHPK3PXP";
+        let result = decrypt_totp_secret(legacy, "anypassword").expect("should succeed");
+        assert_eq!(result, legacy);
+    }
+
+    #[test]
+    fn malformed_blob_missing_parts() {
+        let result = decrypt_totp_secret("enc:v1:onlytwoparts.here", "pw");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn wrong_nonce_length_returns_err_not_panic() {
+        // Build a blob with an 11-byte nonce (one byte short of the required 12).
+        let b64 = base64::engine::general_purpose::STANDARD;
+        let salt = b64.encode([0u8; 16]);
+        let short_nonce = b64.encode([0u8; 11]);
+        let ct = b64.encode([0u8; 32]);
+        let blob = format!("enc:v1:{}.{}.{}", salt, short_nonce, ct);
+        let result = decrypt_totp_secret(&blob, "pw");
+        assert!(result.is_err());
+        let msg = result.unwrap_err();
+        assert!(
+            msg.contains("nonce"),
+            "error message should mention nonce, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn encrypt_produces_enc_v1_prefix() {
+        let blob = encrypt_totp_secret("SOMESECRET", "password").expect("encrypt failed");
+        assert!(blob.starts_with("enc:v1:"));
+    }
+
+    #[test]
+    fn encrypt_with_empty_password_succeeds() {
+        // PBKDF2 accepts an empty password — the empty-password guard is upstream
+        // in generate_totp_secret (the Tauri command layer).
+        let result = encrypt_totp_secret("SOMESECRET", "");
+        assert!(result.is_ok());
+    }
 }

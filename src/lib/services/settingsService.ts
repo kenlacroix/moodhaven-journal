@@ -96,7 +96,18 @@ export async function loadSettings(password?: string): Promise<AppSettings> {
     if (value) {
       const blob = JSON.parse(value) as Record<string, unknown>;
       if (password) {
+        // Detect plaintext sensitive fields (written before encryption was introduced)
+        // before decryptSensitiveFields overwrites them with their decrypted values.
+        const hadPlaintext = SENSITIVE_PATHS.some((path) => {
+          const raw = getByPath(JSON.parse(value) as Record<string, unknown>, path);
+          return typeof raw === 'string' && raw.length > 0 && !raw.startsWith(MARKER);
+        });
         await decryptSensitiveFields(blob, password);
+        if (hadPlaintext) {
+          // Re-save to encrypt the plaintext fields (fire-and-forget, non-blocking).
+          const settings = { ...createDefaultSettings(), ...(blob as Partial<AppSettings>) };
+          saveSettings(settings, password).catch(() => {});
+        }
       } else {
         // Clear encrypted blobs so they don't leak as garbled strings to the UI
         for (const path of SENSITIVE_PATHS) {

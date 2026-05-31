@@ -418,6 +418,7 @@ pub fn run() {
             commands::get_2fa_status,
             commands::disable_2fa,
             commands::verify_2fa_totp,
+            commands::totp_needs_reencryption,
             // Hardware key (native FIDO2, not WebAuthn)
             commands::hardware_key_feature_available,
             commands::hardware_key_detect,
@@ -523,4 +524,83 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn check_allows_when_no_failures() {
+        let limiter = PasswordRateLimiter::new();
+        assert!(limiter.check().is_ok());
+    }
+
+    #[test]
+    fn check_returns_ok_after_fewer_than_5_failures() {
+        let limiter = PasswordRateLimiter::new();
+        for _ in 0..4 {
+            limiter.record_failure();
+        }
+        assert!(limiter.check().is_ok());
+    }
+
+    #[test]
+    fn lockout_triggered_after_5_failures() {
+        let limiter = PasswordRateLimiter::new();
+        for _ in 0..5 {
+            limiter.record_failure();
+        }
+        match limiter.check() {
+            Err(remaining_secs) => assert!(remaining_secs >= 29),
+            Ok(()) => panic!("expected lockout after 5 failures"),
+        }
+    }
+
+    #[test]
+    fn record_success_clears_failure_count() {
+        let limiter = PasswordRateLimiter::new();
+        for _ in 0..3 {
+            limiter.record_failure();
+        }
+        limiter.record_success();
+        // 4 more failures after reset — should not hit the 5-failure threshold
+        for _ in 0..4 {
+            limiter.record_failure();
+        }
+        assert!(limiter.check().is_ok());
+    }
+
+    #[test]
+    fn expired_lockout_allows_again() {
+        let limiter = PasswordRateLimiter::new();
+        for _ in 0..5 {
+            limiter.record_failure();
+        }
+        // Manually expire the lockout
+        {
+            let mut state = limiter.state.lock().unwrap();
+            state.locked_until = Some(Instant::now() - Duration::from_secs(1));
+        }
+        assert!(limiter.check().is_ok());
+    }
+
+    #[test]
+    fn record_failure_after_expired_lockout_resets_counter() {
+        let limiter = PasswordRateLimiter::new();
+        for _ in 0..5 {
+            limiter.record_failure();
+        }
+        // Manually expire the lockout
+        {
+            let mut state = limiter.state.lock().unwrap();
+            state.locked_until = Some(Instant::now() - Duration::from_secs(1));
+        }
+        // 4 failures after expiry — counter was reset, should not lock again
+        for _ in 0..4 {
+            limiter.record_failure();
+        }
+        assert!(limiter.check().is_ok());
+    }
 }

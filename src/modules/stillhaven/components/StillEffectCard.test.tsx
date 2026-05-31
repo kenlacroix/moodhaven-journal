@@ -18,6 +18,15 @@ const oneSession: StillEffectStats = {
   avg_mood_after: 4.0,
 };
 
+const twoSessions: StillEffectStats = {
+  per_protocol: [
+    { protocol: 'general_activation', session_count: 2, avg_activation_delta: 2.5, avg_mood_after: 4.0 },
+  ],
+  best_protocol: null,
+  sessions_with_data: 2,
+  avg_mood_after: 4.0,
+};
+
 const fullStats: StillEffectStats = {
   per_protocol: [
     { protocol: 'general_activation', session_count: 4, avg_activation_delta: 3.2, avg_mood_after: 4.1 },
@@ -44,9 +53,14 @@ describe('StillEffectCard', () => {
     expect(screen.getByText(/3 more sessions/)).toBeInTheDocument();
   });
 
-  it('shows singular "session" when 1 remaining', () => {
+  it('shows 2 remaining (plural) when sessions_with_data is 1', () => {
     render(<StillEffectCard stats={oneSession} />);
     expect(screen.getByText(/2 more sessions/)).toBeInTheDocument();
+  });
+
+  it('shows 1 remaining (singular "session") when sessions_with_data is 2', () => {
+    render(<StillEffectCard stats={twoSessions} />);
+    expect(screen.getByText(/1 more session[^s]/)).toBeInTheDocument();
   });
 
   it('renders full card when sessions_with_data >= 3', () => {
@@ -90,5 +104,18 @@ describe('StillEffectCard', () => {
   it('shows session count', () => {
     render(<StillEffectCard stats={fullStats} />);
     expect(screen.getByText('6 sessions')).toBeInTheDocument();
+  });
+
+  it('shows + prefix when activation worsened (negative delta)', () => {
+    const worsenedStats: StillEffectStats = {
+      per_protocol: [
+        { protocol: 'general_activation', session_count: 3, avg_activation_delta: -1.5, avg_mood_after: 3.0 },
+      ],
+      best_protocol: null,
+      sessions_with_data: 3,
+      avg_mood_after: 3.0,
+    };
+    render(<StillEffectCard stats={worsenedStats} />);
+    expect(screen.getByText('+1.5')).toBeInTheDocument();
   });
 });

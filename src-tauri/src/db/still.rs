@@ -476,20 +476,37 @@ pub struct StillEffectStats {
 pub fn get_effect_stats(db: &Database) -> Result<StillEffectStats, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
+    // CTEs isolate the first pre/post sample per session so multiple samples
+    // or multiple linked journal entries don't fan out the join row count.
     let mut stmt = conn
         .prepare(
-            "SELECT
-                s.protocol,
-                COUNT(*)                                          AS session_count,
-                AVG(CAST(pre.activation - post.activation AS REAL)) AS avg_delta,
-                AVG(CAST(je.mood AS REAL))                        AS avg_mood
+            "WITH pre AS (
+               SELECT session_id, activation
+               FROM still_activation_samples
+               WHERE phase = 'pre'
+               GROUP BY session_id HAVING rowid = MIN(rowid)
+             ),
+             post AS (
+               SELECT session_id, activation
+               FROM still_activation_samples
+               WHERE phase = 'post'
+               GROUP BY session_id HAVING rowid = MIN(rowid)
+             ),
+             first_entry AS (
+               SELECT session_id, mood
+               FROM journal_entries
+               WHERE session_id IS NOT NULL
+               GROUP BY session_id HAVING rowid = MIN(rowid)
+             )
+             SELECT
+                 s.protocol,
+                 COUNT(DISTINCT s.id)                                  AS session_count,
+                 AVG(CAST(pre.activation - post.activation AS REAL))   AS avg_delta,
+                 AVG(CAST(fe.mood AS REAL))                            AS avg_mood
              FROM still_sessions s
-             INNER JOIN still_activation_samples pre
-                     ON pre.session_id = s.id AND pre.phase = 'pre'
-             INNER JOIN still_activation_samples post
-                     ON post.session_id = s.id AND post.phase = 'post'
-             INNER JOIN journal_entries je
-                     ON je.session_id = s.id
+             INNER JOIN pre  ON pre.session_id  = s.id
+             INNER JOIN post ON post.session_id = s.id
+             INNER JOIN first_entry fe ON fe.session_id = s.id
              WHERE s.completed_at IS NOT NULL
              GROUP BY s.protocol
              ORDER BY avg_delta DESC",

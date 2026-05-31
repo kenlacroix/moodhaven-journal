@@ -75,7 +75,9 @@ export function StillEffectCard({ stats }: Props) {
               }`}
             >
               {p.avg_activation_delta !== null
-                ? `−${p.avg_activation_delta.toFixed(1)}`
+                ? p.avg_activation_delta >= 0
+                  ? `−${p.avg_activation_delta.toFixed(1)}`
+                  : `+${Math.abs(p.avg_activation_delta).toFixed(1)}`
                 : '—'}
             </span>
             <span

@@ -1,9 +1,14 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Underwater2D } from './environments/underwater/Underwater2D';
 import { SubmergeOverlay } from './environments/underwater/SubmergeOverlay';
+import { Forest2D } from './environments/forest/Forest2D';
+import { ForestOverlay } from './environments/forest/ForestOverlay';
+import { Sky2D } from './environments/sky/Sky2D';
+import { SkyOverlay } from './environments/sky/SkyOverlay';
 import { useBilateralEngine } from './hooks/useBilateralEngine';
 import { ActivationDial } from './components/ActivationDial';
 import { ProtocolPicker } from './components/ProtocolPicker';
+import { EnvironmentPicker, type EnvironmentId } from './components/EnvironmentPicker';
 import { HrvInput } from './components/HrvInput';
 import { AbandonedSessionPrompt } from './components/AbandonedSessionPrompt';
 import { WelcomeCard } from './components/WelcomeCard';
@@ -48,6 +53,7 @@ type SceneState =
 interface CheckInData {
   protocol: string | null;
   preActivation: number | null;
+  environment: EnvironmentId;
 }
 
 interface CheckOutData {
@@ -73,7 +79,7 @@ interface StillViewProps {
 export function StillView({ onHandoff }: StillViewProps): React.JSX.Element {
   const [scene, setScene] = useState<SceneState>('loading');
   const [abandonedSession, setAbandonedSession] = useState<StillSession | null>(null);
-  const [checkIn, setCheckIn] = useState<CheckInData>({ protocol: null, preActivation: null });
+  const [checkIn, setCheckIn] = useState<CheckInData>({ protocol: null, preActivation: null, environment: 'underwater' });
   const [checkOut, setCheckOut] = useState<CheckOutData>({ postActivation: null, hrv: null, note: '' });
   const [summary, setSummary] = useState<SummaryData | null>(null);
 
@@ -199,7 +205,7 @@ export function StillView({ onHandoff }: StillViewProps): React.JSX.Element {
     stillCreateSession({
       id,
       protocol,
-      environment: 'underwater',
+      environment: checkIn.environment,
       bilateralMode: 'audio',
       durationSeconds: 0,
       startedAt: now,
@@ -291,7 +297,7 @@ export function StillView({ onHandoff }: StillViewProps): React.JSX.Element {
   const handleRestart = useCallback(() => {
     sessionIdRef.current = null;
     adaptationsAtEndRef.current = 0;
-    setCheckIn({ protocol: null, preActivation: null });
+    setCheckIn({ protocol: null, preActivation: null, environment: 'underwater' });
     setCheckOut({ postActivation: null, hrv: null, note: '' });
     setSummary(null);
     setScene('check-in');
@@ -338,6 +344,10 @@ export function StillView({ onHandoff }: StillViewProps): React.JSX.Element {
           value={checkIn.preActivation}
           onChange={(preActivation) => setCheckIn((c) => ({ ...c, preActivation }))}
           label="How wound up do you feel right now?"
+        />
+        <EnvironmentPicker
+          value={checkIn.environment}
+          onChange={(environment) => setCheckIn((c) => ({ ...c, environment }))}
         />
         <button
           type="button"
@@ -468,18 +478,24 @@ export function StillView({ onHandoff }: StillViewProps): React.JSX.Element {
   }
 
   // ── Submerging + live ─────────────────────────────────────────────────────
+  const envProps = {
+    onEnd: handleEnd,
+    onPause: () => {/* isPaused managed inside stillStore */},
+    onResume: () => {/* resumeEngine called inside renderer */},
+    isAdapting,
+  };
+
   return (
     <div className="relative w-full h-full">
       {(scene === 'submerging' || scene === 'live') && (
-        <Underwater2D
-          onEnd={handleEnd}
-          onPause={() => {/* isPaused managed inside stillStore */}}
-          onResume={() => {/* resumeEngine called inside Underwater2D */}}
-          isAdapting={isAdapting}
-        />
+        checkIn.environment === 'forest' ? <Forest2D {...envProps} /> :
+        checkIn.environment === 'sky'   ? <Sky2D    {...envProps} /> :
+                                          <Underwater2D {...envProps} />
       )}
       {scene === 'submerging' && (
-        <SubmergeOverlay onComplete={handleSubmergeComplete} />
+        checkIn.environment === 'forest' ? <ForestOverlay onComplete={handleSubmergeComplete} /> :
+        checkIn.environment === 'sky'    ? <SkyOverlay   onComplete={handleSubmergeComplete} /> :
+                                           <SubmergeOverlay onComplete={handleSubmergeComplete} />
       )}
     </div>
   );

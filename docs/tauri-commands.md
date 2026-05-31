@@ -1,6 +1,6 @@
 # Tauri Command Reference
 
-> **Version:** v1.2.0 | **Total commands:** ~139
+> **Version:** v1.2.1 | **Total commands:** ~146
 >
 > This document lists all `#[tauri::command]` functions exposed by MoodHaven Journal's Rust backend.
 > Commands are registered in `src-tauri/src/lib.rs` and permitted in `src-tauri/capabilities/default.json`.
@@ -677,6 +677,16 @@ Generate a new set of backup codes (invalidates old ones).
 
 ```typescript
 invoke('regenerate_backup_codes') → Promise<{ codes: string[] }>
+```
+
+---
+
+### `totp_needs_reencryption`
+
+Check whether the stored TOTP secret predates v1.2.1 encryption (i.e., stored as a legacy plaintext blob). If true, the user should disable and re-enable Authenticator App to re-encrypt the seed. Used by `PrivacyTwoFactor` to display the amber migration banner.
+
+```typescript
+invoke('totp_needs_reencryption') → Promise<boolean>
 ```
 
 ---

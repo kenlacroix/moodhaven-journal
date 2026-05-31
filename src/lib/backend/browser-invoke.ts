@@ -102,6 +102,7 @@ async function dispatch(command: string, p: Params): Promise<any> {
         location_weather: (p.locationWeather as string) ?? null,
         book_id: (p.bookId as string) ?? 'default',
         pinned: 0,
+        word_count: (p.wordCount as number) ?? null,
         created_at: now,
         updated_at: now,
         tags: [],
@@ -130,6 +131,7 @@ async function dispatch(command: string, p: Params): Promise<any> {
         encrypted_content: p.encryptedContent as BrowserEntryRow['encrypted_content'],
         mood: p.mood as number,
         privacy_mode: (p.privacyMode as number) ?? 0,
+        word_count: (p.wordCount as number) ?? null,
       });
     }
     case 'delete_journal_entry': {
@@ -512,6 +514,18 @@ async function dispatch(command: string, p: Params): Promise<any> {
     case 'still_get_session_with_samples': {
       return dbStillGetSessionWithSamples(p.id as string);
     }
+    // v1.3.0 narrative layer — stub returns in browser mode
+    case 'still_get_session_brief':
+    case 'still_get_journal_brief_for_session':
+      return null;
+    case 'still_get_wellbeing_context':
+      return {
+        oura_readiness_today: null,
+        last_still_session_days_ago: null,
+        yesterday_mood_avg: null,
+        yesterday_entry_count: 0,
+        streak_days: 0,
+      };
     case 'link_journal_entry_to_session': {
       return dbLinkJournalEntryToSession(p.entryId as string, p.sessionId as string);
     }

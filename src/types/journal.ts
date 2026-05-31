@@ -130,6 +130,8 @@ export interface JournalEntry {
   capsuleType?: 'letter' | 'vault' | 'anniversary' | null;
   linkedOriginalId?: string | null;
   unsealedAt?: string | null;
+  // StillHaven session this entry was written after (null = not from a session)
+  sessionId?: string | null;
 }
 
 // Encrypted journal entry (stored in database)

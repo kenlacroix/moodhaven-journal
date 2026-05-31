@@ -137,6 +137,18 @@ impl Database {
             [],
         );
 
+        // Runtime migration: word count stored at write time (v1.3.0)
+        let _ = conn.execute(
+            "ALTER TABLE journal_entries ADD COLUMN word_count INTEGER",
+            [],
+        );
+
+        // Index for session_id lookups (v1.3.0)
+        let _ = conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_entries_session_id ON journal_entries(session_id)",
+            [],
+        );
+
         // Runtime migration: media attachments table
         conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS entry_media (

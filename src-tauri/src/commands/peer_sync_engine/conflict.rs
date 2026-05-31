@@ -190,6 +190,7 @@ pub fn db_get_entries_full(
                 tags,
                 status: None,
                 session_id: None,
+                word_count: None,
             })
         })
         .map_err(|e| format!("query entries full: {e}"))?

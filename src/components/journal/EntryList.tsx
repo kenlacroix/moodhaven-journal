@@ -8,8 +8,9 @@
  * - Empty state encouragement
  */
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { MOOD_OPTIONS, type JournalEntry, type MoodLevel } from '../../types/journal';
+import { stillGetSessionBrief, type StillSessionBrief } from '../../lib/stillService';
 
 interface EntryListProps {
   entries: JournalEntry[];
@@ -67,6 +68,15 @@ function EntryCard({
   onDelete?: () => void;
 }) {
   const mood = entry.mood ? getMoodOption(entry.mood) : null;
+  const [sessionBrief, setSessionBrief] = useState<StillSessionBrief | null | 'loading'>(null);
+
+  function handleBadgeHover() {
+    if (sessionBrief !== null || !entry.sessionId) return;
+    setSessionBrief('loading');
+    stillGetSessionBrief(entry.sessionId)
+      .then((brief) => setSessionBrief(brief))
+      .catch(() => setSessionBrief(null));
+  }
   const preview =
     entry.content.length > 150
       ? entry.content.substring(0, 150) + '...'
@@ -153,6 +163,34 @@ function EntryCard({
                 +{entry.tags.length - 3} more
               </span>
             )}
+          </div>
+        )}
+        {/* StillHaven session badge — lazy-loads activation delta on hover */}
+        {entry.sessionId && (
+          <div className="mt-2 flex">
+            <span
+              className="
+                inline-flex items-center gap-1
+                px-2 py-0.5 rounded-full
+                text-xs font-medium
+                bg-violet-50 dark:bg-violet-900/30
+                text-violet-600 dark:text-violet-400
+                border border-violet-200 dark:border-violet-700
+                cursor-default select-none
+              "
+              onMouseEnter={handleBadgeHover}
+              title="Written after a StillHaven grounding session"
+            >
+              <span aria-hidden="true">~</span>
+              {sessionBrief === 'loading' && (
+                <span className="opacity-60">…</span>
+              )}
+              {sessionBrief !== null && sessionBrief !== 'loading' && sessionBrief.pre_activation !== null && sessionBrief.post_activation !== null ? (
+                <span>{sessionBrief.pre_activation}→{sessionBrief.post_activation}</span>
+              ) : (
+                sessionBrief === null && <span>grounding</span>
+              )}
+            </span>
           </div>
         )}
       </div>

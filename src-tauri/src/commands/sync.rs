@@ -116,6 +116,8 @@ pub fn upsert_entry_from_sync(db: State<Database>, entry_json: String) -> Result
         return Err(format!("book_id exceeds max length ({})", MAX_BOOK_ID_LEN));
     }
 
+    let word_count: Option<i64> = v["word_count"].as_i64();
+
     if let Some(ct) = v["capsule_type"].as_str() {
         if !ct.is_empty() && !ALLOWED_CAPSULE_TYPES.contains(&ct) {
             return Err(format!("Invalid capsule_type: {:?}", ct));
@@ -164,8 +166,8 @@ pub fn upsert_entry_from_sync(db: State<Database>, entry_json: String) -> Result
             conn.execute(
                 "INSERT INTO journal_entries \
                  (id, encrypted_content, mood, privacy_mode, location_weather, \
-                  book_id, pinned, created_at, updated_at) \
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                  book_id, pinned, word_count, created_at, updated_at) \
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
                 rusqlite::params![
                     id,
                     ec_json,
@@ -174,6 +176,7 @@ pub fn upsert_entry_from_sync(db: State<Database>, entry_json: String) -> Result
                     location_weather,
                     book_id,
                     pinned,
+                    word_count,
                     created_at,
                     updated_at
                 ],
@@ -185,7 +188,8 @@ pub fn upsert_entry_from_sync(db: State<Database>, entry_json: String) -> Result
             conn.execute(
                 "UPDATE journal_entries \
                  SET encrypted_content = ?2, mood = ?3, privacy_mode = ?4, \
-                     location_weather = ?5, book_id = ?6, pinned = ?7, updated_at = ?8 \
+                     location_weather = ?5, book_id = ?6, pinned = ?7, \
+                     word_count = ?9, updated_at = ?8 \
                  WHERE id = ?1",
                 rusqlite::params![
                     id,
@@ -195,7 +199,8 @@ pub fn upsert_entry_from_sync(db: State<Database>, entry_json: String) -> Result
                     location_weather,
                     book_id,
                     pinned,
-                    updated_at
+                    updated_at,
+                    word_count
                 ],
             )
             .map_err(|e| e.to_string())?;

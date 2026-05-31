@@ -133,6 +133,7 @@ export interface BrowserEntryRow {
   unsealed_at: string | null;
   status: string | null;
   session_id?: string | null;
+  word_count?: number | null;
 }
 
 // --------------------------------------------------------------------------

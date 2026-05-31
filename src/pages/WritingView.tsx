@@ -51,6 +51,8 @@ import { logger } from '../lib/services/logger';
 import { useWearVoiceMemos } from '../hooks/useWearVoiceMemos';
 import type { VoiceMemo } from '../lib/services/voiceMemoService';
 import { deleteVoiceMemo } from '../lib/services/voiceMemoService';
+import { useWellbeingContext } from '../hooks/useWellbeingContext';
+import { WellbeingCard } from '../components/wellbeing/WellbeingCard';
 
 interface WritingViewProps {
   entryId?: string | null;
@@ -252,6 +254,8 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
   const setDistractionFree = useSettingsStore((s) => s.setDistractionFree);
   const sttModel = useSettingsStore((s) => s.settings.speechToText.model);
   const sttEnabled = useSettingsStore((s) => s.settings.speechToText.enabled);
+
+  const wellbeing = useWellbeingContext();
 
   // D-003: voice memos from watch companion (desktop only)
   const { memos: watchMemos, transcribing: memoTranscribing } = useWearVoiceMemos({
@@ -663,6 +667,11 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
     const t = setTimeout(() => setStreakAnimated(true), 400);
     return () => clearTimeout(t);
   }, [isAndroid, currentStreak]);
+
+  // Collapse wellbeing card when user starts writing (5-word threshold)
+  useEffect(() => {
+    wellbeing.onWordsWritten(wordCount);
+  }, [wordCount]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Word count milestone — flash (Android) / violet glow (desktop) ──────────
   useEffect(() => {
@@ -1181,6 +1190,11 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
                 </div>
               )}
             </div>
+          )}
+
+          {/* ── Wellbeing context card — shown once per day, collapses on first write ── */}
+          {wellbeing.isVisible && wellbeing.context && (
+            <WellbeingCard context={wellbeing.context} />
           )}
 
           {/* ── Editor card — violet glow on focus ── */}

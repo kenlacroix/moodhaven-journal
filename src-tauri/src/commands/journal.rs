@@ -97,9 +97,9 @@ pub fn create_journal_entry(
     privacy_mode: Option<i32>,
     location_weather: Option<String>,
     book_id: Option<String>,
+    word_count: Option<i32>,
 ) -> Result<JournalEntryRow, String> {
     require_unlocked(&lock)?;
-    // Validate mood range
     if !(1..=5).contains(&mood) {
         return Err("Mood must be between 1 and 5".to_string());
     }
@@ -117,6 +117,7 @@ pub fn create_journal_entry(
         pm,
         location_weather.as_deref(),
         book_id.as_deref(),
+        word_count,
     )
 }
 
@@ -174,6 +175,7 @@ pub fn update_journal_entry(
     encrypted_content: EncryptedContent,
     mood: i32,
     privacy_mode: Option<i32>,
+    word_count: Option<i32>,
 ) -> Result<JournalEntryRow, String> {
     require_unlocked(&lock)?;
     if !(1..=5).contains(&mood) {
@@ -185,7 +187,7 @@ pub fn update_journal_entry(
         return Err("Privacy mode must be 0, 1, or 2".to_string());
     }
 
-    db::update_entry(&db, &id, &encrypted_content, mood, pm)
+    db::update_entry(&db, &id, &encrypted_content, mood, pm, word_count)
 }
 
 /// Delete a journal entry

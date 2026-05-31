@@ -145,6 +145,7 @@ pub fn get_due_capsules(
             tags: parse_tags(tags_str),
             status: None,
             session_id: None,
+            word_count: None,
         })
     });
 

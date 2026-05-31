@@ -350,6 +350,9 @@ pub fn run() {
             commands::still_abandon_session,
             commands::still_list_sessions,
             commands::still_get_session_with_samples,
+            commands::still_get_session_brief,
+            commands::still_get_journal_brief_for_session,
+            commands::still_get_wellbeing_context,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

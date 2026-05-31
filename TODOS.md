@@ -9,12 +9,12 @@
 
 **Priority:** P2 — no existing tests were broken; these are new code with no coverage.
 
-### TEST-001: Voice memo service + hooks
+### ~~TEST-001: Voice memo service + hooks~~ ✅ RESOLVED (2026-05-31)
 - `src/lib/services/voiceMemoService.test.ts` — missing entirely. Cover: 5 new IPC wrappers (correct command + payload), `suggestHashtags` (stopwords, dedup, length bounds 3–12, slice to 3, empty string)
 - `src/hooks/useVoiceMemoDrafts.test.ts` — missing entirely. Cover: initial load, refresh swallows errors, publishDraft encrypts then removes from state, discardDraft removes from state
 - Mood inference branch in `useWearVoiceMemos`: word count < 5 skips; `scoreContentMood` null skips; `patchVoiceMemoMood` rejection swallowed; happy path sets `inferred_mood`
 
-### TEST-002: Voice memo UI components
+### ~~TEST-002: Voice memo UI components~~ ✅ RESOLVED (2026-05-31)
 - `VoiceMemoDraftCard.test.tsx` — missing entirely. Cover: duration formatting, `Transcribing…` when null, ellipsis on long transcript, Review button disabled when null, mood dots, context chip
 - `VoiceDraftEditor.test.tsx` — missing entirely. Cover: close/backdrop close, Publish triggers onPublish + onClose, error state on rejection, hashtag pill inserts content, null transcript renders safely
 
@@ -259,6 +259,15 @@ Watch side (blocks this feature — requires Kotlin + Health Services work):
 **Why deferred:** The watch companion app does not yet have a real-time HR reading loop. All desktop plumbing can be implemented speculatively; the feature activates automatically once the watch sends `health_snapshot` signals.
 **Effort (desktop):** CC+gstack ~1h | **Effort (watch):** human ~1d native Kotlin
 **Depends on:** Watch companion Phase 5 (AI enrichment / smart signals iteration)
+
+---
+
+## v1.3.0 — WellbeingCard known issues
+
+### WELL-001: WellbeingCard shows null Oura readiness on first open
+**What:** When the app starts, `oura_sync_today` fetches today's data and writes it to the `settings` table. `still_get_wellbeing_context` runs at WritingView mount simultaneously. If the Oura write hasn't landed yet, the card renders without the readiness row — even though data is available 200ms later.
+**Fix:** After `oura_sync_today` completes, re-invoke `still_get_wellbeing_context` and refresh the card state. Or subscribe to an Oura sync-complete event.
+**Effort:** CC+gstack ~30min | **Depends on:** WELL-001 only visible if Oura is connected and the app was just launched.
 
 ---
 

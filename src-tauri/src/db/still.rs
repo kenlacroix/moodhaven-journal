@@ -124,11 +124,15 @@ pub fn still_complete_session(
 ) -> Result<(), String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
-    conn.execute(
-        "UPDATE still_sessions SET completed_at = ?1, duration_seconds = ?2 WHERE id = ?3",
-        params![completed_at, duration_seconds, id],
-    )
-    .map_err(|e| format!("Failed to complete session: {}", e))?;
+    let n = conn
+        .execute(
+            "UPDATE still_sessions SET completed_at = ?1, duration_seconds = ?2 WHERE id = ?3",
+            params![completed_at, duration_seconds, id],
+        )
+        .map_err(|e| format!("Failed to complete session: {}", e))?;
+    if n == 0 {
+        return Err(format!("Session not found: {id}"));
+    }
 
     Ok(())
 }
@@ -136,11 +140,15 @@ pub fn still_complete_session(
 pub fn still_abandon_session(db: &Database, id: &str, abandoned_at: &str) -> Result<(), String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
-    conn.execute(
-        "UPDATE still_sessions SET abandoned_at = ?1 WHERE id = ?2",
-        params![abandoned_at, id],
-    )
-    .map_err(|e| format!("Failed to abandon session: {}", e))?;
+    let n = conn
+        .execute(
+            "UPDATE still_sessions SET abandoned_at = ?1 WHERE id = ?2",
+            params![abandoned_at, id],
+        )
+        .map_err(|e| format!("Failed to abandon session: {}", e))?;
+    if n == 0 {
+        return Err(format!("Session not found: {id}"));
+    }
 
     Ok(())
 }
@@ -256,15 +264,14 @@ pub fn get_session_brief(
 
     let row = conn.query_row(
         "SELECT s.protocol, s.duration_seconds,
-                pre.activation  AS pre_activation,
-                post.activation AS post_activation
+                (SELECT activation FROM still_activation_samples
+                 WHERE session_id = s.id AND phase = 'pre'
+                 ORDER BY sampled_at DESC LIMIT 1) AS pre_activation,
+                (SELECT activation FROM still_activation_samples
+                 WHERE session_id = s.id AND phase = 'post'
+                 ORDER BY sampled_at DESC LIMIT 1) AS post_activation
          FROM still_sessions s
-         LEFT JOIN still_activation_samples pre
-               ON pre.session_id = s.id AND pre.phase = 'pre'
-         LEFT JOIN still_activation_samples post
-               ON post.session_id = s.id AND post.phase = 'post'
-         WHERE s.id = ?1
-         LIMIT 1",
+         WHERE s.id = ?1",
         params![session_id],
         |r| {
             Ok(StillSessionBrief {
@@ -393,7 +400,8 @@ pub fn get_wellbeing_context(db: &Database) -> Result<WellbeingContext, String> 
             .prepare(
                 "SELECT DISTINCT date(created_at) as d
                  FROM journal_entries
-                 ORDER BY d DESC",
+                 ORDER BY d DESC
+                 LIMIT 400",
             )
             .map_err(|e| format!("streak prepare: {e}"))?;
 
@@ -534,16 +542,7 @@ mod tests {
     #[test]
     fn create_session_duplicate_id_errors() {
         let db = test_db();
-        still_create_session(
-            &db,
-            "s1",
-            "general_activation",
-            "underwater",
-            "audio",
-            0,
-            "2026-01-01T10:00:00",
-        )
-        .unwrap();
+        insert_session(&db, "s1", "2026-01-01T10:00:00");
         let result = still_create_session(
             &db,
             "s1",
@@ -707,6 +706,44 @@ mod tests {
         assert_eq!(brief.post_activation, Some(3));
     }
 
+    // ── still_complete_session / still_abandon_session — nonexistent id ────────
+
+    #[test]
+    fn complete_session_nonexistent_id_errors() {
+        let db = test_db();
+        let result = still_complete_session(&db, "nope", "2026-01-01T11:00:00", 600);
+        assert!(result.is_err(), "expected Err for nonexistent session id");
+    }
+
+    #[test]
+    fn abandon_session_nonexistent_id_errors() {
+        let db = test_db();
+        let result = still_abandon_session(&db, "nope", "2026-01-01T10:05:00");
+        assert!(result.is_err(), "expected Err for nonexistent session id");
+    }
+
+    // ── get_session_brief — partial activation ───────────────────────────────
+
+    #[test]
+    fn get_session_brief_only_pre_activation() {
+        let db = test_db();
+        insert_session(&db, "s1", "2026-01-01T10:00:00");
+        still_record_activation(&db, "s1", "pre", 8, None, None, None).unwrap();
+        let brief = get_session_brief(&db, "s1").unwrap().unwrap();
+        assert_eq!(brief.pre_activation, Some(8));
+        assert!(brief.post_activation.is_none());
+    }
+
+    #[test]
+    fn get_session_brief_only_post_activation() {
+        let db = test_db();
+        insert_session(&db, "s1", "2026-01-01T10:00:00");
+        still_record_activation(&db, "s1", "post", 2, None, None, None).unwrap();
+        let brief = get_session_brief(&db, "s1").unwrap().unwrap();
+        assert!(brief.pre_activation.is_none());
+        assert_eq!(brief.post_activation, Some(2));
+    }
+
     // ── get_journal_brief_for_session ────────────────────────────────────────
 
     #[test]
@@ -757,5 +794,28 @@ mod tests {
         assert_eq!(ctx.yesterday_entry_count, 2);
         let avg = ctx.yesterday_mood_avg.expect("should have avg");
         assert!((avg - 4.0).abs() < 0.001, "expected avg 4.0, got {avg}");
+    }
+
+    #[test]
+    fn get_wellbeing_context_streak_from_today_and_yesterday() {
+        let db = test_db();
+        // Entry today
+        {
+            let conn = db.conn.lock().unwrap();
+            conn.execute(
+                "INSERT INTO journal_entries (id, mood, created_at, updated_at)
+                 VALUES ('today', 3, datetime('now'), datetime('now'))",
+                [],
+            )
+            .unwrap();
+        }
+        // Entry yesterday
+        insert_entry_yesterday(&db, "yesterday", 4);
+        let ctx = get_wellbeing_context(&db).unwrap();
+        assert!(
+            ctx.streak_days >= 2,
+            "streak should be ≥2 with today + yesterday entries, got {}",
+            ctx.streak_days
+        );
     }
 }

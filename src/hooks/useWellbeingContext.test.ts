@@ -83,6 +83,16 @@ describe('initial load', () => {
     expect(result.current.context).toBeNull();
     expect(result.current.isVisible).toBe(false);
   });
+
+  it('does not crash when get_setting throws', async () => {
+    mockInvoke.mockRejectedValue(new Error('DB locked'));
+    const ctx = makeCtx({ oura_readiness_today: 82, streak_days: 5, yesterday_mood_avg: 3.5, yesterday_entry_count: 2 });
+    mockGetWellbeing.mockResolvedValue(ctx);
+
+    const { result } = renderHook(() => useWellbeingContext());
+    await waitFor(() => expect(result.current.isVisible).toBe(true));
+    expect(result.current.context).toEqual(ctx);
+  });
 });
 
 describe('dismiss', () => {

@@ -231,10 +231,18 @@ mod tests {
             );",
         )
         .expect("create tables");
-        Database { conn: Mutex::new(conn) }
+        Database {
+            conn: Mutex::new(conn),
+        }
     }
 
-    fn insert_raw(db: &Database, id: &str, transcription: Option<&str>, entry_id: Option<&str>, reviewed: i64) {
+    fn insert_raw(
+        db: &Database,
+        id: &str,
+        transcription: Option<&str>,
+        entry_id: Option<&str>,
+        reviewed: i64,
+    ) {
         let conn = db.conn.lock().unwrap();
         conn.execute(
             "INSERT INTO voice_memos (id, timestamp, duration_ms, file_path, source, transcription, entry_id, reviewed)
@@ -249,9 +257,9 @@ mod tests {
     fn pending_drafts_only_returns_matching_rows() {
         let db = test_db();
         insert_raw(&db, "m1", Some("hello"), None, 0);
-        insert_raw(&db, "m2", None, None, 0);                // no transcription
+        insert_raw(&db, "m2", None, None, 0); // no transcription
         insert_raw(&db, "m3", Some("world"), Some("e1"), 0); // has entry_id
-        insert_raw(&db, "m4", Some("foo"), None, 1);         // reviewed
+        insert_raw(&db, "m4", Some("foo"), None, 1); // reviewed
 
         let drafts = list_pending_drafts(&db, None).unwrap();
         assert_eq!(drafts.len(), 1);
@@ -282,7 +290,16 @@ mod tests {
     #[test]
     fn create_returns_correct_row() {
         let db = test_db();
-        let row = create_voice_memo(&db, "vm1", "2026-01-01T10:00:00", 5000, None, "voice_memos/vm1.m4a", "watch").unwrap();
+        let row = create_voice_memo(
+            &db,
+            "vm1",
+            "2026-01-01T10:00:00",
+            5000,
+            None,
+            "voice_memos/vm1.m4a",
+            "watch",
+        )
+        .unwrap();
         assert_eq!(row.id, "vm1");
         assert_eq!(row.duration_ms, 5000);
         assert_eq!(row.reviewed, 0);
@@ -301,7 +318,16 @@ mod tests {
     #[test]
     fn delete_removes_row() {
         let db = test_db();
-        create_voice_memo(&db, "vm1", "2026-01-01T10:00:00", 1000, None, "voice_memos/vm1.m4a", "watch").unwrap();
+        create_voice_memo(
+            &db,
+            "vm1",
+            "2026-01-01T10:00:00",
+            1000,
+            None,
+            "voice_memos/vm1.m4a",
+            "watch",
+        )
+        .unwrap();
         delete_voice_memo(&db, "vm1").unwrap();
         assert!(get_voice_memo(&db, "vm1").unwrap().is_none());
     }
@@ -311,7 +337,16 @@ mod tests {
     #[test]
     fn patch_transcription_preserves_raw_on_first_write() {
         let db = test_db();
-        create_voice_memo(&db, "vm1", "2026-01-01T10:00:00", 1000, None, "voice_memos/vm1.m4a", "watch").unwrap();
+        create_voice_memo(
+            &db,
+            "vm1",
+            "2026-01-01T10:00:00",
+            1000,
+            None,
+            "voice_memos/vm1.m4a",
+            "watch",
+        )
+        .unwrap();
         patch_voice_memo_transcription(&db, "vm1", "original").unwrap();
         patch_voice_memo_transcription(&db, "vm1", "edited").unwrap();
 
@@ -346,10 +381,18 @@ mod tests {
         ).unwrap();
 
         let reviewed: i64 = conn
-            .query_row("SELECT reviewed FROM voice_memos WHERE id = 'vm1'", [], |r| r.get(0))
+            .query_row(
+                "SELECT reviewed FROM voice_memos WHERE id = 'vm1'",
+                [],
+                |r| r.get(0),
+            )
             .unwrap();
         let entry_id: String = conn
-            .query_row("SELECT entry_id FROM voice_memos WHERE id = 'vm1'", [], |r| r.get(0))
+            .query_row(
+                "SELECT entry_id FROM voice_memos WHERE id = 'vm1'",
+                [],
+                |r| r.get(0),
+            )
             .unwrap();
         assert_eq!(reviewed, 1);
         assert_eq!(entry_id, "e1");
@@ -373,7 +416,8 @@ mod tests {
         insert_raw(&db, "vm1", Some("text"), None, 0);
         {
             let conn = db.conn.lock().unwrap();
-            conn.execute("DELETE FROM voice_memos WHERE id = 'vm1'", []).unwrap();
+            conn.execute("DELETE FROM voice_memos WHERE id = 'vm1'", [])
+                .unwrap();
         }
         assert!(get_voice_memo(&db, "vm1").unwrap().is_none());
     }

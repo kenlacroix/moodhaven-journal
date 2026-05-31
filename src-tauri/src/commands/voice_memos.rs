@@ -255,7 +255,9 @@ pub fn patch_voice_memo_context(
     context: String,
     location_weather_json: Option<String>,
 ) -> Result<(), String> {
-    if lock.is_locked() { return Err("Session is locked".to_string()); }
+    if lock.is_locked() {
+        return Err("Session is locked".to_string());
+    }
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
     if let Some(ref lw) = location_weather_json {
@@ -283,8 +285,12 @@ pub fn patch_voice_memo_mood(
     id: String,
     inferred_mood: i64,
 ) -> Result<(), String> {
-    if lock.is_locked() { return Err("Session is locked".to_string()); }
-    if !(1..=5).contains(&inferred_mood) { return Err("inferred_mood must be 1–5".to_string()); }
+    if lock.is_locked() {
+        return Err("Session is locked".to_string());
+    }
+    if !(1..=5).contains(&inferred_mood) {
+        return Err("inferred_mood must be 1–5".to_string());
+    }
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
     conn.execute(
@@ -313,9 +319,15 @@ pub fn publish_voice_memo_draft(
     book_id: String,
     privacy_mode: i64,
 ) -> Result<serde_json::Value, String> {
-    if lock.is_locked() { return Err("Session is locked".to_string()); }
-    if !(1..=5).contains(&mood) { return Err("mood must be 1–5".to_string()); }
-    if !(0..=2).contains(&privacy_mode) { return Err("privacy_mode must be 0–2".to_string()); }
+    if lock.is_locked() {
+        return Err("Session is locked".to_string());
+    }
+    if !(1..=5).contains(&mood) {
+        return Err("mood must be 1–5".to_string());
+    }
+    if !(0..=2).contains(&privacy_mode) {
+        return Err("privacy_mode must be 0–2".to_string());
+    }
 
     let entry_id = Uuid::new_v4().to_string();
     let content_json = serde_json::to_string(&encrypted_content)
@@ -324,7 +336,8 @@ pub fn publish_voice_memo_draft(
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
     // Atomic: insert + link in one transaction so peer sync never sees an orphan entry
-    conn.execute("BEGIN IMMEDIATE", []).map_err(|e| e.to_string())?;
+    conn.execute("BEGIN IMMEDIATE", [])
+        .map_err(|e| e.to_string())?;
     let result = (|| {
         conn.execute(
             "INSERT INTO journal_entries
@@ -345,8 +358,13 @@ pub fn publish_voice_memo_draft(
         Ok::<(), String>(())
     })();
     match result {
-        Ok(()) => { conn.execute("COMMIT", []).map_err(|e| e.to_string())?; }
-        Err(e) => { let _ = conn.execute("ROLLBACK", []); return Err(e); }
+        Ok(()) => {
+            conn.execute("COMMIT", []).map_err(|e| e.to_string())?;
+        }
+        Err(e) => {
+            let _ = conn.execute("ROLLBACK", []);
+            return Err(e);
+        }
     }
 
     // Fetch the created entry as JSON
@@ -388,7 +406,9 @@ pub fn discard_voice_memo_draft(
     lock: State<'_, AppLockState>,
     id: String,
 ) -> Result<(), String> {
-    if lock.is_locked() { return Err("Session is locked".to_string()); }
+    if lock.is_locked() {
+        return Err("Session is locked".to_string());
+    }
     // Fetch file path before acquiring the lock for deletion, to avoid
     // holding the lock across filesystem calls.
     let file_path = {
@@ -421,6 +441,8 @@ pub fn list_pending_drafts(
     lock: State<'_, AppLockState>,
     limit: Option<i64>,
 ) -> Result<Vec<VoiceMemoRow>, String> {
-    if lock.is_locked() { return Err("Session is locked".to_string()); }
+    if lock.is_locked() {
+        return Err("Session is locked".to_string());
+    }
     db::list_pending_drafts(&db, limit)
 }

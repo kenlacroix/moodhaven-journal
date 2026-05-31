@@ -156,3 +156,29 @@ Key routing rules:
 - Architecture review → invoke plan-eng-review
 - Save progress, checkpoint, resume → invoke checkpoint
 - Code quality, health check → invoke health
+
+## GBrain Configuration (configured by /setup-gbrain)
+- Mode: local-stdio
+- Engine: pglite
+- Config file: ~/.gbrain/config.json (mode 0600)
+- Setup date: 2026-05-31
+- MCP registered: yes (user scope)
+- Artifacts sync: full (GitHub repo — run `~/.claude/skills/gstack/bin/gstack-artifacts-init` to finish wiring)
+- Current repo policy: read-write (kenlacroix/moodhaven-journal)
+- Note: OpenAI embedding key needs updating — OPENAI_API_KEY in env returns 401. Vector search degraded until fixed; text search works.
+
+## GBrain Search Guidance (configured by /sync-gbrain)
+<!-- gstack-gbrain-search-guidance:start -->
+
+GBrain is set up on this machine. Prefer gbrain over Grep for semantic questions.
+
+Prefer gbrain when:
+- "Where is X handled?" — `gbrain search "<terms>"` or `gbrain query "<question>"`
+- Symbol lookup — `gbrain code-def <symbol>` or `gbrain code-refs <symbol>`
+- "What calls Y?" — `gbrain code-callers <symbol>`
+- Past decisions/retros — `gbrain search "<terms>" --source gstack-brain-ken`
+
+Grep is still right for exact strings, regex, and file globs.
+Run `/sync-gbrain` to force-refresh.
+
+<!-- gstack-gbrain-search-guidance:end -->

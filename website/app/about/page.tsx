@@ -42,7 +42,7 @@ const MILESTONES: Milestone[] = [
   { date: "Aug 2025", title: "Alpha Launch", description: "First alpha builds — a quiet build-in-public project rather than a launch." },
   { date: "Oct 2025", title: "Feature Refinement", description: "Implemented privacy-first encryption, custom prompts, and mood tracking." },
   { date: "Apr 2026", title: "v0.8.0 — Web App", description: "Launched web app at journal.moodhaven.app, Wear OS Phase 4, Time Capsule, and LAN peer sync." },
-  { date: "Apr 2026", title: "v0.9.0 — Security Hardening", description: "Lock guards on sensitive commands, settings refactor, and full security audit pass." },
+  { date: "Apr 2026", title: "v0.9.0 — Security Hardening", description: "Lock guards on sensitive commands, settings refactor, and internal security hardening review." },
   { date: "Apr 2026", title: "v0.9.1 — Unlock & Reset", description: "Factory reset, improved unlock flow, and pre-unlock session error handling." },
   { date: "Apr 2026", title: "v0.9.3 — Website & Polish", description: "Redesigned landing site, improved download page, and across-the-board UI refinements." },
   { date: "May 2026", title: "v1.0 — Public Release", description: "Stable release with full documentation, GitHub Wiki, broad platform support, and 702 automated tests." },

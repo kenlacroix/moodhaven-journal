@@ -351,6 +351,19 @@ fn do_full_restore_client(app: &AppHandle, peer_device_id: &str, host: &str) -> 
         .map_err(|e| format!("flush restore file: {e}"))?;
     drop(file);
 
+    // Compute SHA-256 of the received file and write a companion checksum so
+    // peer_apply_and_restart can verify it hasn't been tampered with on disk.
+    {
+        use sha2::{Digest, Sha256};
+        let data =
+            std::fs::read(&tmp_path).map_err(|e| format!("read restore tmp for hash: {e}"))?;
+        let digest = hex::encode(Sha256::digest(&data));
+        let checksum_path = app_data.join("moodhaven_restore.pending.sha256");
+        std::fs::write(&checksum_path, &digest)
+            .map_err(|e| format!("write restore checksum: {e}"))?;
+        log::info!("[restore] SHA-256 of pending DB: {digest}");
+    }
+
     // Atomically move tmp → pending.
     std::fs::rename(&tmp_path, &pending_path).map_err(|e| format!("rename restore file: {e}"))?;
 
@@ -1621,13 +1634,36 @@ pub fn peer_full_restore(app: AppHandle, device_id: String, host: String) -> Res
 #[tauri::command]
 pub fn peer_apply_and_restart(app: AppHandle) -> Result<(), String> {
     let db_path = crate::db::get_db_path(&app)?;
-    let pending = db_path
-        .parent()
-        .ok_or("no parent dir")?
-        .join("moodhaven_restore.pending");
+    let parent = db_path.parent().ok_or("no parent dir")?;
+    let pending = parent.join("moodhaven_restore.pending");
+    let checksum_path = parent.join("moodhaven_restore.pending.sha256");
 
     if !pending.exists() {
         return Err("No pending restore file found".to_string());
+    }
+
+    // Verify SHA-256 integrity before applying.
+    if checksum_path.exists() {
+        use sha2::{Digest, Sha256};
+        let expected = std::fs::read_to_string(&checksum_path)
+            .map_err(|e| format!("read restore checksum: {e}"))?;
+        let expected = expected.trim();
+        let data =
+            std::fs::read(&pending).map_err(|e| format!("read pending restore for verify: {e}"))?;
+        let actual = hex::encode(Sha256::digest(&data));
+        if actual != expected {
+            // Remove both files to avoid leaving a corrupt pending restore.
+            let _ = std::fs::remove_file(&pending);
+            let _ = std::fs::remove_file(&checksum_path);
+            return Err(format!(
+                "Restore file integrity check failed (expected {expected}, got {actual}) — aborted"
+            ));
+        }
+        log::info!("[restore] Integrity check passed ({actual})");
+    } else {
+        // Checksum file absent — this can happen on older builds that didn't
+        // write one.  Log a warning but proceed rather than blocking the restore.
+        log::warn!("[restore] No checksum file found for pending restore — proceeding unverified");
     }
 
     log::info!("[restore] Triggering restart to apply pending DB restore");

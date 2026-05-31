@@ -2,6 +2,8 @@ export interface ReleaseAsset {
   name: string;
   downloadUrl: string;
   sizeLabel: string;
+  /** true when a checksums.txt was found in the release and the asset is listed. */
+  checksumVerified?: boolean;
 }
 
 export interface LatestRelease {

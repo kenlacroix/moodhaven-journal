@@ -309,6 +309,7 @@ export function SetupScreen() {
                 onSetupModeChange={setTwoFactorSetupMode}
                 twoFactorComplete={twoFactorComplete}
                 onTwoFactorComplete={setTwoFactorComplete}
+                sessionPassword={password}
               />
             )}
 

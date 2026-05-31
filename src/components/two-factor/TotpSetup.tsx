@@ -7,20 +7,21 @@
  * 3. Show backup codes
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { generateTotpSecret, enableTotp } from '../../lib/services/twoFactorService';
 import { BackupCodesDisplay } from './BackupCodesDisplay';
 import type { TotpSetupData, BackupCodes } from '../../types/twoFactor';
 
 interface TotpSetupProps {
+  password: string;
   onComplete: () => void;
   onCancel: () => void;
 }
 
 type SetupStep = 'loading' | 'scan' | 'verify' | 'backup';
 
-export function TotpSetup({ onComplete, onCancel }: TotpSetupProps) {
+export function TotpSetup({ password, onComplete, onCancel }: TotpSetupProps) {
   const [step, setStep] = useState<SetupStep>('loading');
   const [setupData, setSetupData] = useState<TotpSetupData | null>(null);
   const [verificationCode, setVerificationCode] = useState('');
@@ -33,18 +34,22 @@ export function TotpSetup({ onComplete, onCancel }: TotpSetupProps) {
   const initSetup = useCallback(async () => {
     try {
       setError(null);
-      const data = await generateTotpSecret();
+      const data = await generateTotpSecret(password);
+      if (!data) {
+        setError('TOTP setup is not available in this build.');
+        return;
+      }
       setSetupData(data);
       setStep('scan');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to generate secret');
     }
-  }, []);
+  }, [password]);
 
   // Start setup on mount
-  useState(() => {
+  useEffect(() => {
     initSetup();
-  });
+  }, [initSetup]);
 
   // Handle verification
   const handleVerify = async () => {
@@ -57,7 +62,7 @@ export function TotpSetup({ onComplete, onCancel }: TotpSetupProps) {
     setError(null);
 
     try {
-      const codes = await enableTotp(verificationCode);
+      const codes = await enableTotp(verificationCode, password);
       setBackupCodes(codes);
       setStep('backup');
     } catch (err) {

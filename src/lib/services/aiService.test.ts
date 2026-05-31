@@ -7,6 +7,12 @@ import {
 import { createDefaultSettings } from '../../types/settings';
 import type { AggregatedMetadata, TimeOfDay } from '../../types/ai';
 
+// aiService now routes Ollama calls through httpFetch (tauri-plugin-http in
+// Tauri, window.fetch in tests). Mock the http module so Ollama tests work.
+vi.mock('./http', () => ({
+  httpFetch: vi.fn((...args: Parameters<typeof fetch>) => fetch(...args)),
+}));
+
 function createTestMetadata(
   overrides: Partial<AggregatedMetadata> = {}
 ): AggregatedMetadata {

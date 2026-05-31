@@ -19,6 +19,7 @@ interface PrivacyTabProps {
   exportProgress: { done: number; total: number } | null;
   handleExport: () => void;
   setAutoLockTimeout: (v: number) => void;
+  sessionPassword?: string;
 }
 
 export function PrivacyTab({
@@ -31,6 +32,7 @@ export function PrivacyTab({
   exportProgress,
   handleExport,
   setAutoLockTimeout,
+  sessionPassword = '',
 }: PrivacyTabProps) {
   const { isAndroid, isBrowser } = usePlatform();
 
@@ -83,6 +85,7 @@ export function PrivacyTab({
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-6 max-w-md mx-4 w-full">
             <TotpSetup
+              password={sessionPassword}
               onComplete={handle2FASetupComplete}
               onCancel={() => setShow2FASetup(null)}
             />

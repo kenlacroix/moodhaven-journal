@@ -13,6 +13,138 @@ use std::sync::Mutex;
 /// Sensitive Tauri commands check this state before executing.
 pub struct AppLockState(pub Mutex<bool>);
 
+/// Backend rate limiter for `verify_password`.
+///
+/// Tracks consecutive failures and enforces a 30-second lockout after 5 failures.
+/// The in-memory state is authoritative at runtime.  Lockout is also persisted to
+/// `{app_data}/pw_lockout.json` so a process restart does not reset it.
+///
+/// Persistence format: `{"locked_until_epoch_secs": <u64>}` — uses wall-clock
+/// seconds (SystemTime / UNIX epoch) rather than `Instant` so it survives restarts.
+pub struct PasswordRateLimiter {
+    pub state: Mutex<PasswordRateState>,
+    pub lockout_file: Mutex<Option<std::path::PathBuf>>,
+}
+
+#[derive(Default)]
+pub struct PasswordRateState {
+    pub failures: u32,
+    pub locked_until: Option<std::time::Instant>,
+}
+
+impl PasswordRateLimiter {
+    pub fn new() -> Self {
+        Self {
+            state: Mutex::new(PasswordRateState::default()),
+            lockout_file: Mutex::new(None),
+        }
+    }
+
+    /// Called from `setup()` after the app data dir is known.
+    /// Loads any existing lockout from disk so a restart does not reset it.
+    pub fn initialize(&self, app_data: &std::path::Path) {
+        let path = app_data.join("pw_lockout.json");
+        // Attempt to load a persisted lockout epoch.
+        if let Ok(contents) = std::fs::read_to_string(&path) {
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&contents) {
+                if let Some(epoch) = json["locked_until_epoch_secs"].as_u64() {
+                    let now_epoch = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_secs();
+                    if epoch > now_epoch {
+                        let remaining_secs = epoch - now_epoch;
+                        let until = std::time::Instant::now()
+                            + std::time::Duration::from_secs(remaining_secs);
+                        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+                        state.locked_until = Some(until);
+                        log::info!(
+                            "[auth] Loaded persisted password lockout — {remaining_secs}s remaining"
+                        );
+                    }
+                }
+            }
+        }
+        let mut file = self.lockout_file.lock().unwrap_or_else(|e| e.into_inner());
+        *file = Some(path);
+    }
+
+    /// Write current lockout expiry to disk so a process restart cannot bypass it.
+    fn persist_lockout(&self, expires_at_epoch_secs: u64) {
+        let file = self.lockout_file.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(ref path) = *file {
+            let json = serde_json::json!({ "locked_until_epoch_secs": expires_at_epoch_secs });
+            let _ = std::fs::write(path, json.to_string());
+        }
+    }
+
+    /// Remove the lockout persistence file.
+    fn clear_persisted_lockout(&self) {
+        let file = self.lockout_file.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(ref path) = *file {
+            let _ = std::fs::remove_file(path);
+        }
+    }
+
+    /// Returns Ok(()) if a verification attempt is allowed, Err with seconds remaining if locked.
+    pub fn check(&self) -> Result<(), u64> {
+        let state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(until) = state.locked_until {
+            let now = std::time::Instant::now();
+            if now < until {
+                let remaining = (until - now).as_secs().saturating_add(1);
+                return Err(remaining);
+            }
+        }
+        Ok(())
+    }
+
+    /// Record a failed attempt. Returns the lockout duration in seconds if lockout is now active.
+    pub fn record_failure(&self) -> Option<u64> {
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        // If a previous lockout expired, reset the counter.
+        if let Some(until) = state.locked_until {
+            if std::time::Instant::now() >= until {
+                state.failures = 0;
+                state.locked_until = None;
+            }
+        }
+        state.failures += 1;
+        if state.failures >= 5 {
+            let lockout_secs = 30u64;
+            let until = std::time::Instant::now() + std::time::Duration::from_secs(lockout_secs);
+            state.locked_until = Some(until);
+            state.failures = 0;
+            // Persist so app restart does not reset the lockout.
+            let epoch = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs()
+                + lockout_secs;
+            drop(state); // release state lock before taking lockout_file lock
+            self.persist_lockout(epoch);
+            Some(lockout_secs)
+        } else {
+            None
+        }
+    }
+
+    /// Record a successful verification — reset the failure counter.
+    pub fn record_success(&self) {
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        state.failures = 0;
+        state.locked_until = None;
+        drop(state);
+        self.clear_persisted_lockout();
+    }
+}
+
+impl Default for PasswordRateLimiter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AppLockState {
     pub fn new() -> Self {
         AppLockState(Mutex::new(true))
@@ -63,19 +195,49 @@ pub fn run() {
         // `invoke('plugin:wear|*')` calls to the Kotlin WearPlugin via pluginManager.
         .plugin(tauri::plugin::Builder::<_, ()>::new("wear").build())
         .setup(|app| {
-            // If a full-restore pending file exists, swap it in before opening the DB.
-            // This is written by `peer_full_restore` during setup and applied on next startup.
+            // If a full-restore pending file exists, verify its SHA-256 checksum then
+            // swap it in before opening the DB.  This prevents a tampered pending
+            // file (written by another process with access to app_data_dir) from
+            // silently replacing the live database.
             let db_path = get_db_path(app.handle())?;
             if let Some(parent) = db_path.parent() {
                 let pending = parent.join("moodhaven_restore.pending");
+                let checksum_path = parent.join("moodhaven_restore.pending.sha256");
                 if pending.exists() {
-                    log::info!(
-                        "[restore] Applying pending DB restore: {:?} → {:?}",
-                        pending,
-                        db_path
-                    );
-                    if let Err(e) = std::fs::rename(&pending, &db_path) {
-                        log::error!("[restore] WARNING: failed to apply pending DB: {e}");
+                    let integrity_ok = if checksum_path.exists() {
+                        use sha2::{Digest, Sha256};
+                        let expected = std::fs::read_to_string(&checksum_path)
+                            .unwrap_or_default();
+                        let expected = expected.trim().to_string();
+                        let data = std::fs::read(&pending).unwrap_or_default();
+                        let actual = hex::encode(Sha256::digest(&data));
+                        if actual == expected {
+                            log::info!("[restore] Integrity check passed ({actual})");
+                            true
+                        } else {
+                            log::error!(
+                                "[restore] Integrity check FAILED (expected {expected}, got {actual}) — discarding"
+                            );
+                            let _ = std::fs::remove_file(&pending);
+                            let _ = std::fs::remove_file(&checksum_path);
+                            false
+                        }
+                    } else {
+                        // No checksum — legacy or in-flight; allow but warn.
+                        log::warn!("[restore] No checksum file for pending restore — proceeding unverified");
+                        true
+                    };
+
+                    if integrity_ok {
+                        log::info!(
+                            "[restore] Applying pending DB restore: {:?} → {:?}",
+                            pending,
+                            db_path
+                        );
+                        if let Err(e) = std::fs::rename(&pending, &db_path) {
+                            log::error!("[restore] WARNING: failed to apply pending DB: {e}");
+                        }
+                        let _ = std::fs::remove_file(&checksum_path);
                     }
                 }
             }
@@ -124,6 +286,14 @@ pub fn run() {
 
             // Session lock state — starts locked, set to unlocked after auth
             app.manage(AppLockState::new());
+
+            // Backend rate limiter for verify_password — persisted to disk so
+            // a process restart does not reset an active lockout.
+            let pw_rate_limiter = PasswordRateLimiter::new();
+            if let Ok(app_data) = app.path().app_data_dir() {
+                pw_rate_limiter.initialize(&app_data);
+            }
+            app.manage(pw_rate_limiter);
 
             // One-shot session bridge for breakout writer password hand-off
             app.manage(SessionBridge::new());
@@ -248,6 +418,7 @@ pub fn run() {
             commands::get_2fa_status,
             commands::disable_2fa,
             commands::verify_2fa_totp,
+            commands::totp_needs_reencryption,
             // Hardware key (native FIDO2, not WebAuthn)
             commands::hardware_key_feature_available,
             commands::hardware_key_detect,
@@ -362,4 +533,83 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn check_allows_when_no_failures() {
+        let limiter = PasswordRateLimiter::new();
+        assert!(limiter.check().is_ok());
+    }
+
+    #[test]
+    fn check_returns_ok_after_fewer_than_5_failures() {
+        let limiter = PasswordRateLimiter::new();
+        for _ in 0..4 {
+            limiter.record_failure();
+        }
+        assert!(limiter.check().is_ok());
+    }
+
+    #[test]
+    fn lockout_triggered_after_5_failures() {
+        let limiter = PasswordRateLimiter::new();
+        for _ in 0..5 {
+            limiter.record_failure();
+        }
+        match limiter.check() {
+            Err(remaining_secs) => assert!(remaining_secs >= 29),
+            Ok(()) => panic!("expected lockout after 5 failures"),
+        }
+    }
+
+    #[test]
+    fn record_success_clears_failure_count() {
+        let limiter = PasswordRateLimiter::new();
+        for _ in 0..3 {
+            limiter.record_failure();
+        }
+        limiter.record_success();
+        // 4 more failures after reset — should not hit the 5-failure threshold
+        for _ in 0..4 {
+            limiter.record_failure();
+        }
+        assert!(limiter.check().is_ok());
+    }
+
+    #[test]
+    fn expired_lockout_allows_again() {
+        let limiter = PasswordRateLimiter::new();
+        for _ in 0..5 {
+            limiter.record_failure();
+        }
+        // Manually expire the lockout
+        {
+            let mut state = limiter.state.lock().unwrap();
+            state.locked_until = Some(Instant::now() - Duration::from_secs(1));
+        }
+        assert!(limiter.check().is_ok());
+    }
+
+    #[test]
+    fn record_failure_after_expired_lockout_resets_counter() {
+        let limiter = PasswordRateLimiter::new();
+        for _ in 0..5 {
+            limiter.record_failure();
+        }
+        // Manually expire the lockout
+        {
+            let mut state = limiter.state.lock().unwrap();
+            state.locked_until = Some(Instant::now() - Duration::from_secs(1));
+        }
+        // 4 failures after expiry — counter was reset, should not lock again
+        for _ in 0..4 {
+            limiter.record_failure();
+        }
+        assert!(limiter.check().is_ok());
+    }
 }

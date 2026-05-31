@@ -21,11 +21,12 @@ import type { TwoFactorMethod, TwoFactorVerifyMode } from '../../types/twoFactor
 
 interface TwoFactorVerifyProps {
   method: TwoFactorMethod;
+  password: string;
   onSuccess: () => void;
   onCancel: () => void;
 }
 
-export function TwoFactorVerify({ method, onSuccess, onCancel }: TwoFactorVerifyProps) {
+export function TwoFactorVerify({ method, password, onSuccess, onCancel }: TwoFactorVerifyProps) {
   const [mode, setMode] = useState<TwoFactorVerifyMode>(
     method === 'webauthn' ? 'webauthn' : 'totp'
   );
@@ -60,7 +61,7 @@ export function TwoFactorVerify({ method, onSuccess, onCancel }: TwoFactorVerify
     setError(null);
 
     try {
-      const valid = await verify2FATotp(code);
+      const valid = await verify2FATotp(code, password);
       if (valid) {
         onSuccess();
       } else {

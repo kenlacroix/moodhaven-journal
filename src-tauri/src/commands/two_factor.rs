@@ -2,13 +2,30 @@
 //!
 //! Supports TOTP (Time-based One-Time Password) and backup codes.
 //! WebAuthn registration/verification happens on the frontend.
+//!
+//! ## TOTP secret storage
+//! The TOTP seed is encrypted with AES-256-GCM (key derived from the user's
+//! password via PBKDF2-HMAC-SHA-256, 600 000 iterations) before being written
+//! to `two_factor_auth.totp_secret`.  The stored blob format is:
+//!   `enc:v1:<base64(16-byte salt)>:<base64(12-byte nonce)>:<base64(ciphertext)>`
+//! Any value that does NOT start with `enc:v1:` is treated as a legacy
+//! plaintext secret and accepted as-is so that existing installs can still
+//! verify TOTP while the user re-enables 2FA to trigger re-encryption.
 
 use crate::db::Database;
+use aes_gcm::{aead::Aead, Aes256Gcm, KeyInit, Nonce};
+use base64::Engine as _;
+use hmac::Hmac;
+use pbkdf2::pbkdf2;
 use rand::Rng;
+use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tauri::State;
 use totp_rs::{Algorithm, Secret, TOTP};
+
+const TOTP_PBKDF2_ITERATIONS: u32 = 600_000;
+const TOTP_ENC_PREFIX: &str = "enc:v1:";
 
 /// TOTP setup data returned to frontend
 #[derive(Debug, Serialize, Deserialize)]
@@ -41,6 +58,83 @@ pub struct WebAuthnCredential {
     pub id: String,         // Base64 credential ID
     pub public_key: String, // Base64 public key
     pub created_at: String,
+}
+
+// ============================================================================
+// TOTP Secret Encryption Helpers
+// ============================================================================
+
+/// Encrypt a TOTP seed with the user's password.
+/// Output: `enc:v1:<base64(salt)>:<base64(nonce)>:<base64(ciphertext)>`
+fn encrypt_totp_secret(secret: &str, password: &str) -> Result<String, String> {
+    let mut salt = [0u8; 16];
+    let mut nonce_bytes = [0u8; 12];
+    rand::rngs::OsRng.fill_bytes(&mut salt);
+    rand::rngs::OsRng.fill_bytes(&mut nonce_bytes);
+
+    let mut key = [0u8; 32];
+    pbkdf2::<Hmac<Sha256>>(password.as_bytes(), &salt, TOTP_PBKDF2_ITERATIONS, &mut key)
+        .map_err(|e| format!("pbkdf2: {e}"))?;
+
+    let cipher = Aes256Gcm::new_from_slice(&key).map_err(|e| format!("aes init: {e}"))?;
+    let nonce = Nonce::from_slice(&nonce_bytes);
+    let ct = cipher
+        .encrypt(nonce, secret.as_bytes())
+        .map_err(|_| "totp encrypt failed".to_string())?;
+
+    let b64 = base64::engine::general_purpose::STANDARD;
+    Ok(format!(
+        "{}{}.{}.{}",
+        TOTP_ENC_PREFIX,
+        b64.encode(salt),
+        b64.encode(nonce_bytes),
+        b64.encode(ct),
+    ))
+}
+
+/// Decrypt a TOTP seed blob.
+/// Accepts legacy plaintext secrets (no prefix) and returns them unchanged so
+/// existing installs keep working until the user re-enables 2FA.
+fn decrypt_totp_secret(stored: &str, password: &str) -> Result<String, String> {
+    if !stored.starts_with(TOTP_ENC_PREFIX) {
+        // Legacy plaintext — return as-is.
+        return Ok(stored.to_string());
+    }
+
+    let payload = &stored[TOTP_ENC_PREFIX.len()..];
+    let parts: Vec<&str> = payload.splitn(3, '.').collect();
+    if parts.len() != 3 {
+        return Err("malformed totp secret blob".to_string());
+    }
+
+    let b64 = base64::engine::general_purpose::STANDARD;
+    let salt = b64
+        .decode(parts[0])
+        .map_err(|_| "bad salt b64".to_string())?;
+    let nonce_bytes = b64
+        .decode(parts[1])
+        .map_err(|_| "bad nonce b64".to_string())?;
+    let ct = b64.decode(parts[2]).map_err(|_| "bad ct b64".to_string())?;
+
+    // Validate decoded lengths before use — Nonce::from_slice panics on wrong size.
+    if nonce_bytes.len() != 12 {
+        return Err(format!(
+            "malformed totp blob: expected 12-byte nonce, got {}",
+            nonce_bytes.len()
+        ));
+    }
+
+    let mut key = [0u8; 32];
+    pbkdf2::<Hmac<Sha256>>(password.as_bytes(), &salt, TOTP_PBKDF2_ITERATIONS, &mut key)
+        .map_err(|e| format!("pbkdf2: {e}"))?;
+
+    let cipher = Aes256Gcm::new_from_slice(&key).map_err(|e| format!("aes init: {e}"))?;
+    let nonce = Nonce::from_slice(&nonce_bytes);
+    let plaintext = cipher
+        .decrypt(nonce, ct.as_ref())
+        .map_err(|_| "totp decrypt failed — wrong password or corrupted secret".to_string())?;
+
+    String::from_utf8(plaintext).map_err(|_| "totp secret not valid utf-8".to_string())
 }
 
 // ============================================================================
@@ -155,8 +249,9 @@ struct TwoFactorRow {
     created_at: String,
 }
 
-/// Store pending TOTP secret (before verification)
-fn store_pending_totp(db: &Database, secret: &str) -> Result<(), String> {
+/// Store pending TOTP secret encrypted with the user's password.
+fn store_pending_totp(db: &Database, secret: &str, password: &str) -> Result<(), String> {
+    let encrypted = encrypt_totp_secret(secret, password)?;
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
     conn.execute(
@@ -165,7 +260,7 @@ fn store_pending_totp(db: &Database, secret: &str) -> Result<(), String> {
          ON CONFLICT(id) DO UPDATE SET
              totp_secret = ?1,
              updated_at = datetime('now')",
-        rusqlite::params![secret],
+        rusqlite::params![encrypted],
     )
     .map_err(|e| format!("Failed to store TOTP secret: {}", e))?;
 
@@ -220,14 +315,20 @@ fn disable_2fa_in_db(db: &Database) -> Result<(), String> {
 // Tauri Commands
 // ============================================================================
 
-/// Generate a new TOTP secret and return setup data
+/// Generate a new TOTP secret and return setup data.
+/// `password` is used to encrypt the secret before storage.
 #[tauri::command]
-pub fn generate_totp_secret(db: State<Database>) -> Result<TotpSetupData, String> {
+pub fn generate_totp_secret(
+    db: State<Database>,
+    password: String,
+) -> Result<TotpSetupData, String> {
+    if password.is_empty() {
+        return Err("password required to store TOTP secret".to_string());
+    }
     let secret = generate_totp_secret_internal()?;
     let totp = create_totp(&secret)?;
 
-    // Store the pending secret
-    store_pending_totp(&db, &secret)?;
+    store_pending_totp(&db, &secret, &password)?;
 
     Ok(TotpSetupData {
         secret: secret.clone(),
@@ -237,14 +338,20 @@ pub fn generate_totp_secret(db: State<Database>) -> Result<TotpSetupData, String
     })
 }
 
-/// Verify a TOTP code against the pending secret
+/// Verify a TOTP code against the pending secret.
+/// `password` is required to decrypt the stored secret blob.
 #[tauri::command]
-pub fn verify_totp_code(db: State<Database>, code: String) -> Result<bool, String> {
+pub fn verify_totp_code(
+    db: State<Database>,
+    code: String,
+    password: String,
+) -> Result<bool, String> {
     let row = get_2fa_row(&db)?.ok_or_else(|| "No 2FA setup in progress".to_string())?;
 
-    let secret = row
+    let stored = row
         .totp_secret
         .ok_or_else(|| "No TOTP secret found".to_string())?;
+    let secret = decrypt_totp_secret(&stored, &password)?;
 
     let totp = create_totp(&secret)?;
 
@@ -266,11 +373,15 @@ pub fn verify_totp_code(db: State<Database>, code: String) -> Result<bool, Strin
     Ok(false)
 }
 
-/// Enable TOTP after successful verification
+/// Enable TOTP after successful verification.
+/// `password` is required to decrypt the stored pending secret.
 #[tauri::command]
-pub fn enable_totp(db: State<Database>, code: String) -> Result<BackupCodes, String> {
-    // First verify the code
-    if !verify_totp_code(db.clone(), code)? {
+pub fn enable_totp(
+    db: State<Database>,
+    code: String,
+    password: String,
+) -> Result<BackupCodes, String> {
+    if !verify_totp_code(db.clone(), code, password)? {
         return Err("Invalid verification code".to_string());
     }
 
@@ -392,9 +503,36 @@ pub fn disable_2fa(db: State<Database>) -> Result<bool, String> {
     Ok(true)
 }
 
-/// Verify TOTP code for login (returns true if valid)
+/// Returns true if 2FA is enabled but the TOTP secret is stored as legacy plaintext
+/// (no enc:v1: prefix). Used by the frontend to nudge users to re-enable TOTP.
 #[tauri::command]
-pub fn verify_2fa_totp(db: State<Database>, code: String) -> Result<bool, String> {
+pub fn totp_needs_reencryption(db: State<Database>) -> Result<bool, String> {
+    let row = get_2fa_row(&db)?;
+    match row {
+        Some(r)
+            if r.enabled
+                && r.method
+                    .as_deref()
+                    .is_some_and(|m| m == "totp" || m == "both") =>
+        {
+            let needs = r
+                .totp_secret
+                .map(|s| !s.starts_with(TOTP_ENC_PREFIX))
+                .unwrap_or(false);
+            Ok(needs)
+        }
+        _ => Ok(false),
+    }
+}
+
+/// Verify TOTP code for login (returns true if valid).
+/// `password` is required to decrypt the stored secret blob.
+#[tauri::command]
+pub fn verify_2fa_totp(
+    db: State<Database>,
+    code: String,
+    password: String,
+) -> Result<bool, String> {
     let row = get_2fa_row(&db)?.ok_or_else(|| "2FA not enabled".to_string())?;
 
     if !row.enabled {
@@ -406,9 +544,10 @@ pub fn verify_2fa_totp(db: State<Database>, code: String) -> Result<bool, String
         return Err("TOTP not configured".to_string());
     }
 
-    let secret = row
+    let stored = row
         .totp_secret
         .ok_or_else(|| "No TOTP secret found".to_string())?;
+    let secret = decrypt_totp_secret(&stored, &password)?;
 
     let totp = create_totp(&secret)?;
 
@@ -427,4 +566,70 @@ pub fn verify_2fa_totp(db: State<Database>, code: String) -> Result<bool, String
     }
 
     Ok(false)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn encrypt_decrypt_round_trip() {
+        let secret = "JBSWY3DPEHPK3PXP";
+        let password = "correct-horse-battery-staple";
+        let blob = encrypt_totp_secret(secret, password).expect("encrypt failed");
+        let recovered = decrypt_totp_secret(&blob, password).expect("decrypt failed");
+        assert_eq!(recovered, secret);
+    }
+
+    #[test]
+    fn wrong_password_fails_decryption() {
+        let secret = "JBSWY3DPEHPK3PXP";
+        let blob = encrypt_totp_secret(secret, "password-a").expect("encrypt failed");
+        let result = decrypt_totp_secret(&blob, "password-b");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn legacy_plaintext_returned_as_is() {
+        let legacy = "JBSWY3DPEHPK3PXP";
+        let result = decrypt_totp_secret(legacy, "anypassword").expect("should succeed");
+        assert_eq!(result, legacy);
+    }
+
+    #[test]
+    fn malformed_blob_missing_parts() {
+        let result = decrypt_totp_secret("enc:v1:onlytwoparts.here", "pw");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn wrong_nonce_length_returns_err_not_panic() {
+        // Build a blob with an 11-byte nonce (one byte short of the required 12).
+        let b64 = base64::engine::general_purpose::STANDARD;
+        let salt = b64.encode([0u8; 16]);
+        let short_nonce = b64.encode([0u8; 11]);
+        let ct = b64.encode([0u8; 32]);
+        let blob = format!("enc:v1:{}.{}.{}", salt, short_nonce, ct);
+        let result = decrypt_totp_secret(&blob, "pw");
+        assert!(result.is_err());
+        let msg = result.unwrap_err();
+        assert!(
+            msg.contains("nonce"),
+            "error message should mention nonce, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn encrypt_produces_enc_v1_prefix() {
+        let blob = encrypt_totp_secret("SOMESECRET", "password").expect("encrypt failed");
+        assert!(blob.starts_with("enc:v1:"));
+    }
+
+    #[test]
+    fn encrypt_with_empty_password_succeeds() {
+        // PBKDF2 accepts an empty password — the empty-password guard is upstream
+        // in generate_totp_secret (the Tauri command layer).
+        let result = encrypt_totp_secret("SOMESECRET", "");
+        assert!(result.is_ok());
+    }
 }

@@ -321,6 +321,12 @@ pub fn merge_settings_json(local_json: &str, remote_json: &str) -> Result<String
     serde_json::to_string(&local).map_err(|e| format!("serialize merged settings: {e}"))
 }
 
+/// Keys that may be synced from a remote peer.  Any setting key sent by a peer
+/// that is NOT in this list is silently dropped.  This prevents a compromised
+/// trusted device from injecting arbitrary rows (e.g. `password_hash`,
+/// `totp_secret`, or service credentials) into the local settings table.
+const SYNC_ALLOWED_SETTINGS: &[&str] = &["app_settings"];
+
 /// Upsert a setting received from a peer, applying whitelist merge for app_settings.
 /// Returns true if the local DB was changed.
 pub fn db_upsert_setting(
@@ -329,6 +335,13 @@ pub fn db_upsert_setting(
     remote_value: &str,
     remote_updated_at: &str,
 ) -> Result<bool, String> {
+    if !SYNC_ALLOWED_SETTINGS.contains(&key) {
+        log::warn!(
+            "[sync] Peer attempted to sync disallowed setting key {:?} — dropped",
+            key
+        );
+        return Ok(false);
+    }
     let local = db_get_setting_for_sync(conn, key)?;
     let new_value = match &local {
         None => remote_value.to_string(),
@@ -488,4 +501,67 @@ pub fn db_set_peer_sync_at(conn: &Connection, peer_id: &str, at: &str) -> Result
     )
     .map_err(|e| format!("set peer sync at: {e}"))?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::db_upsert_setting;
+
+    fn make_test_conn() -> rusqlite::Connection {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT DEFAULT CURRENT_TIMESTAMP);"
+        ).unwrap();
+        conn
+    }
+
+    #[test]
+    fn allowed_key_is_accepted() {
+        let conn = make_test_conn();
+        let result = db_upsert_setting(&conn, "app_settings", "{}", "2026-01-01T00:00:00Z");
+        assert!(result.is_ok());
+        assert!(result.unwrap());
+    }
+
+    #[test]
+    fn disallowed_key_is_dropped() {
+        let conn = make_test_conn();
+        let result = db_upsert_setting(&conn, "password_hash", "evil", "2099-01-01T00:00:00Z");
+        assert!(result.is_ok());
+        assert!(!result.unwrap());
+    }
+
+    #[test]
+    fn totp_secret_key_is_dropped() {
+        let conn = make_test_conn();
+        let result = db_upsert_setting(
+            &conn,
+            "totp_secret",
+            "JBSWY3DPEHPK3PXP",
+            "2099-01-01T00:00:00Z",
+        );
+        assert!(result.is_ok());
+        assert!(!result.unwrap());
+    }
+
+    #[test]
+    fn oura_pat_key_is_dropped() {
+        let conn = make_test_conn();
+        let result = db_upsert_setting(&conn, "oura_pat", "secret_token", "2099-01-01T00:00:00Z");
+        assert!(result.is_ok());
+        assert!(!result.unwrap());
+    }
+
+    #[test]
+    fn lww_older_value_not_applied() {
+        let conn = make_test_conn();
+        // Insert a newer local value first
+        let r1 = db_upsert_setting(&conn, "app_settings", "{\"v\":1}", "2026-01-02T00:00:00Z");
+        assert!(r1.is_ok());
+        assert!(r1.unwrap());
+        // Attempt to upsert an older remote value — should be dropped
+        let r2 = db_upsert_setting(&conn, "app_settings", "{\"v\":0}", "2026-01-01T00:00:00Z");
+        assert!(r2.is_ok());
+        assert!(!r2.unwrap());
+    }
 }

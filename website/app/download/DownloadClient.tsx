@@ -186,7 +186,9 @@ export default function DownloadClient({ release }: { release: LatestRelease | n
                 {release.version} — latest
               </span>
             )}
-            <span className="inline-flex items-center gap-1 text-xs text-neutral-500 bg-neutral-100 px-2.5 py-1 rounded-full">✓ SHA-256 verified</span>
+            {primaryAsset?.checksumVerified !== false && (
+              <span className="inline-flex items-center gap-1 text-xs text-neutral-500 bg-neutral-100 px-2.5 py-1 rounded-full">✓ SHA-256 verified</span>
+            )}
             <span className="inline-flex items-center gap-1 text-xs text-neutral-500 bg-neutral-100 px-2.5 py-1 rounded-full">✓ No account required</span>
             <span className="inline-flex items-center gap-1 text-xs text-neutral-500 bg-neutral-100 px-2.5 py-1 rounded-full">✓ MIT licensed</span>
           </div>
@@ -222,7 +224,7 @@ export default function DownloadClient({ release }: { release: LatestRelease | n
               </a>
               {primaryAsset.sizeLabel && (
                 <p className="mt-2 text-xs text-neutral-500">
-                  {primaryAsset.name} · {primaryAsset.sizeLabel} · SHA-256 verified
+                  {primaryAsset.name} · {primaryAsset.sizeLabel}{primaryAsset.checksumVerified !== false ? ' · SHA-256 verified' : ''}
                 </p>
               )}
               {os === "macos" && macSecondaryAsset && (

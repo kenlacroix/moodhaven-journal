@@ -25,6 +25,27 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.2.0] — 2026-05-31
+
+### Added
+- **Voice memo draft pipeline (Phase 5)** — watch recordings now surface as reviewable draft cards in the Timeline before being published to the journal. Each draft shows transcription preview, inferred mood, biometric context chip, and hashtag suggestions. Full TipTap editor with `MoodSelector` for editing before publish.
+  - `VoiceMemoDraftCard` — compact Timeline card with duration, context, 2-line preview, mood dots, Review/Discard CTAs
+  - `VoiceDraftEditor` — full-screen editor with hashtag suggestion pills; encrypts on publish
+  - `useVoiceMemoDrafts` hook — draft list state, `publishDraft`, `discardDraft`
+  - `useWearVoiceMemos` — post-transcription mood inference via local `scoreContentMood`
+  - 5 new Tauri commands: `patch_voice_memo_context/mood`, `publish_voice_memo_draft`, `discard_voice_memo_draft`, `list_pending_drafts`
+  - DB: `context`, `inferred_mood`, `book_id`, `reviewed` columns on `voice_memos`
+- **Wear OS Phase 2e polish** — Record page labeled shortcut row `[😊 Mood] [🧘 Breathe]`; ambient mood wash from last logged mood; double-tap haptic on mood confirm; fade+scale `ViewPager2` `PageTransformer`
+- **Wear OS Phase 5a** — `HealthSnapshot` expanded to capture step count delta and coarse activity classification (`still` / `walking` / `running`); health JSON now includes `steps` and `activity` fields
+- **Wear OS Phase B brand sweep** — all hardcoded hex color literals replaced with `@color/` references across 13 layout XMLs; 13 new named entries in `colors.xml` (alpha white variants, surface cards, amber, `mood_low_accent`)
+- **Wear OS Phase C splash screen** — `Theme.MoodHaven.Splash` theme using `androidx.core:core-splashscreen`; adaptive icon reused as splash icon; OLED-black background
+- **Writing appearance drawer** — inline Day One-style customization surface for `WritingView`: font family (Inter, Source Serif, JetBrains Mono, OpenDyslexic, System), size, line height, paragraph spacing, background tint (5 presets), writing width, focus mode, text scale, high contrast, reduced motion, dyslexia profile. Persisted via `useSettingsStore`; CSS variables on `[data-writing-prefs]` ancestor; zero impact on typing path
+
+### Changed
+- `HealthSnapshot.capture()` return schema extended: `{"hr":N,"steps":N,"activity":"still|walking|running"}`
+
+---
+
 ## [1.1.0] — 2026-05-26
 
 ### Added

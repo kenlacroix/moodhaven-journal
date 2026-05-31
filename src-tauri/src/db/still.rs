@@ -248,7 +248,10 @@ pub struct StillSessionBrief {
 
 /// Returns the minimal session metadata needed for the timeline badge.
 /// Called lazily on hover — never on timeline load.
-pub fn get_session_brief(db: &Database, session_id: &str) -> Result<Option<StillSessionBrief>, String> {
+pub fn get_session_brief(
+    db: &Database,
+    session_id: &str,
+) -> Result<Option<StillSessionBrief>, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
     let row = conn.query_row(
@@ -263,12 +266,14 @@ pub fn get_session_brief(db: &Database, session_id: &str) -> Result<Option<Still
          WHERE s.id = ?1
          LIMIT 1",
         params![session_id],
-        |r| Ok(StillSessionBrief {
-            protocol: r.get(0)?,
-            duration_seconds: r.get(1)?,
-            pre_activation: r.get(2)?,
-            post_activation: r.get(3)?,
-        }),
+        |r| {
+            Ok(StillSessionBrief {
+                protocol: r.get(0)?,
+                duration_seconds: r.get(1)?,
+                pre_activation: r.get(2)?,
+                post_activation: r.get(3)?,
+            })
+        },
     );
 
     match row {
@@ -288,7 +293,10 @@ pub struct JournalBrief {
 }
 
 /// Returns the journal entry written after a given StillHaven session, if any.
-pub fn get_journal_brief_for_session(db: &Database, session_id: &str) -> Result<Option<JournalBrief>, String> {
+pub fn get_journal_brief_for_session(
+    db: &Database,
+    session_id: &str,
+) -> Result<Option<JournalBrief>, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
     let row = conn.query_row(
@@ -297,12 +305,14 @@ pub fn get_journal_brief_for_session(db: &Database, session_id: &str) -> Result<
          WHERE session_id = ?1
          LIMIT 1",
         params![session_id],
-        |r| Ok(JournalBrief {
-            entry_id: r.get(0)?,
-            mood: r.get(1)?,
-            word_count: r.get(2)?,
-            created_at: r.get(3)?,
-        }),
+        |r| {
+            Ok(JournalBrief {
+                entry_id: r.get(0)?,
+                mood: r.get(1)?,
+                word_count: r.get(2)?,
+                created_at: r.get(3)?,
+            })
+        },
     );
 
     match row {

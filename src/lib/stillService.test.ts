@@ -7,6 +7,7 @@ import {
   stillGetSessionBrief,
   stillGetSessionWithSamples,
   stillGetWellbeingContext,
+  stillLinkSignalToSession,
   stillListSessions,
   stillRecordActivation,
   type JournalBrief,
@@ -192,5 +193,21 @@ describe('stillGetWellbeingContext', () => {
     const result = await stillGetWellbeingContext();
     expect(result.oura_readiness_today).toBeNull();
     expect(result.last_still_session_days_ago).toBeNull();
+  });
+});
+
+describe('stillLinkSignalToSession', () => {
+  it('invokes still_link_signal_to_session with correct params', async () => {
+    mockInvoke.mockResolvedValue(undefined);
+    await stillLinkSignalToSession('session-1', 'signal-abc');
+    expect(mockInvoke).toHaveBeenCalledWith('still_link_signal_to_session', {
+      sessionId: 'session-1',
+      signalId: 'signal-abc',
+    });
+  });
+
+  it('propagates IPC rejection as a thrown error', async () => {
+    mockInvoke.mockRejectedValue(new Error('Session is locked'));
+    await expect(stillLinkSignalToSession('s1', 'sig1')).rejects.toThrow('Session is locked');
   });
 });

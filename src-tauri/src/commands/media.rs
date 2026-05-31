@@ -182,7 +182,8 @@ fn get_media_dir(app: &AppHandle, entry_id: &str) -> Result<std::path::PathBuf, 
         || entry_id.contains('/')
         || entry_id.contains('\\')
         || entry_id.contains('\0')
-        || entry_id.split('/').any(|p| p == "..")
+        || entry_id.contains(':')  // Windows alternate data streams / reserved names (NUL, COM1 …)
+        || entry_id == ".."
         || entry_id.starts_with('.')
     {
         return Err(format!(
@@ -237,11 +238,27 @@ fn abs_enc_path(app: &AppHandle, rel_path: &str) -> Result<std::path::PathBuf, S
         .app_data_dir()
         .map_err(|e| format!("app_data_dir: {}", e))?;
     let joined = base.join(rel_path);
-    // Canonicalize the joined path to resolve any `..` components, then verify
-    // it still starts with the app data dir. This prevents path traversal via
-    // crafted rel_path values (e.g. "../../.ssh/authorized_keys").
-    let canonical = joined.canonicalize().unwrap_or_else(|_| joined.clone());
+
+    // Reject paths containing `..` at the component level.  This must be done
+    // before the canonicalize fallback, because when the target file does not
+    // yet exist, `canonicalize()` fails and we fall back to the raw `joined`
+    // path.  `starts_with()` on raw paths is a string-prefix check, not a
+    // semantic containment check — "app_data/../evil" would pass it.  Checking
+    // components explicitly closes this gap without requiring the path to exist.
+    use std::path::Component;
+    if joined
+        .components()
+        .any(|c| c == Component::ParentDir)
+    {
+        return Err(
+            "Refusing to access path containing '..' components outside app data directory"
+                .to_string(),
+        );
+    }
+
+    // Canonicalize to resolve symlinks if the file already exists.
     let base_canonical = base.canonicalize().unwrap_or(base.clone());
+    let canonical = joined.canonicalize().unwrap_or_else(|_| joined.clone());
     if !canonical.starts_with(&base_canonical) {
         return Err("Refusing to access path outside app data directory".to_string());
     }

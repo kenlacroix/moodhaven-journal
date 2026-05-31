@@ -7,6 +7,34 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [Unreleased] — Security hardening (2026-05-31)
+
+### Security
+
+- **[HIGH] Path traversal in media storage**: `get_media_dir` now validates `entry_id` before using it as a filesystem path component. A malicious trusted peer could previously create directories outside the app sandbox via a crafted entry ID in peer sync. Entry IDs are now checked for traversal characters (`/`, `\`, `..`, NUL bytes) and the final path is canonicalized against `app_data_dir`.
+
+- **[HIGH] TOTP secret encrypted at rest**: The TOTP seed is now stored as an AES-256-GCM encrypted blob (`enc:v1:<salt>.<nonce>.<ct>`) derived from your password using PBKDF2 (600k iterations). Previously the seed was stored as plaintext in the `two_factor_auth` table. Existing TOTP setups will continue to work via the plaintext fallback path; re-enabling 2FA will re-encrypt the seed.
+
+- **[HIGH] Writer window capability scoped**: The breakout writer window now uses a separate `writer.json` capability granting only the ~30 commands it needs. Previously it had `allow-all-app-commands`, giving it access to `factory_reset`, `export_data`, peer sync commands, and 2FA management — none of which the writer window requires.
+
+- **[MEDIUM] Backend rate limiting on `verify_password`**: A `PasswordRateLimiter` (5 failures → 30-second lockout) is now enforced server-side in the Rust backend. The frontend lockout (`rateLimitService.ts`) remains but is no longer the only line of defence; clearing `localStorage` or calling `invoke('verify_password')` directly no longer bypasses it.
+
+- **[MEDIUM] Settings sync allowlist**: `db_upsert_setting` now rejects any settings key not in `SYNC_ALLOWED_SETTINGS = ["app_settings"]`. A compromised trusted peer could previously inject arbitrary rows into the `settings` table during a sync session.
+
+- **[MEDIUM] Session key cache collision fixed**: The TOTP session key cache replaced the djb2 32-bit hash cache key with `HMAC-SHA-256(sessionNonce, password)` truncated to 128 bits, eliminating the theoretical (but constructible) djb2 collision path.
+
+- **[MEDIUM] Full-restore integrity check**: `peer_apply_and_restart` and the startup restore path now verify a SHA-256 checksum stored alongside `moodhaven_restore.pending` before applying the file.
+
+- **[LOW] CSP `connect-src` narrowed**: Removed `http://localhost:*` from the Content-Security-Policy. Ollama requests now route through `tauri-plugin-http` (Rust-side, bypasses WebView CSP) via `httpFetch()` rather than `window.fetch()`.
+
+### Documentation
+
+- `SECURITY.md`: added TOTP encryption note, AI-development disclosure, "no independent third-party audit" caveat, and upgrade note for TOTP users upgrading from v1.1.x.
+- About page timeline: clarified "v0.9.0 security hardening" wording (was "full security audit pass").
+- Download page: `SHA-256 verified` badge is now conditional on `checksumVerified` from the release manifest.
+
+---
+
 ## [1.1.0] — 2026-05-26
 
 ### Added

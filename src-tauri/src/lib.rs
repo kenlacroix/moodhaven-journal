@@ -14,10 +14,16 @@ use std::sync::Mutex;
 pub struct AppLockState(pub Mutex<bool>);
 
 /// Backend rate limiter for `verify_password`.
+///
 /// Tracks consecutive failures and enforces a 30-second lockout after 5 failures.
-/// Persisted to a file across restarts so clearing the WebView state cannot reset it.
+/// The in-memory state is authoritative at runtime.  Lockout is also persisted to
+/// `{app_data}/pw_lockout.json` so a process restart does not reset it.
+///
+/// Persistence format: `{"locked_until_epoch_secs": <u64>}` — uses wall-clock
+/// seconds (SystemTime / UNIX epoch) rather than `Instant` so it survives restarts.
 pub struct PasswordRateLimiter {
     pub state: Mutex<PasswordRateState>,
+    pub lockout_file: Mutex<Option<std::path::PathBuf>>,
 }
 
 #[derive(Default)]
@@ -30,6 +36,53 @@ impl PasswordRateLimiter {
     pub fn new() -> Self {
         Self {
             state: Mutex::new(PasswordRateState::default()),
+            lockout_file: Mutex::new(None),
+        }
+    }
+
+    /// Called from `setup()` after the app data dir is known.
+    /// Loads any existing lockout from disk so a restart does not reset it.
+    pub fn initialize(&self, app_data: &std::path::Path) {
+        let path = app_data.join("pw_lockout.json");
+        // Attempt to load a persisted lockout epoch.
+        if let Ok(contents) = std::fs::read_to_string(&path) {
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&contents) {
+                if let Some(epoch) = json["locked_until_epoch_secs"].as_u64() {
+                    let now_epoch = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_secs();
+                    if epoch > now_epoch {
+                        let remaining_secs = epoch - now_epoch;
+                        let until = std::time::Instant::now()
+                            + std::time::Duration::from_secs(remaining_secs);
+                        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+                        state.locked_until = Some(until);
+                        log::info!(
+                            "[auth] Loaded persisted password lockout — {remaining_secs}s remaining"
+                        );
+                    }
+                }
+            }
+        }
+        let mut file = self.lockout_file.lock().unwrap_or_else(|e| e.into_inner());
+        *file = Some(path);
+    }
+
+    /// Write current lockout expiry to disk so a process restart cannot bypass it.
+    fn persist_lockout(&self, expires_at_epoch_secs: u64) {
+        let file = self.lockout_file.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(ref path) = *file {
+            let json = serde_json::json!({ "locked_until_epoch_secs": expires_at_epoch_secs });
+            let _ = std::fs::write(path, json.to_string());
+        }
+    }
+
+    /// Remove the lockout persistence file.
+    fn clear_persisted_lockout(&self) {
+        let file = self.lockout_file.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(ref path) = *file {
+            let _ = std::fs::remove_file(path);
         }
     }
 
@@ -58,10 +111,19 @@ impl PasswordRateLimiter {
         }
         state.failures += 1;
         if state.failures >= 5 {
-            let lockout = std::time::Duration::from_secs(30);
-            state.locked_until = Some(std::time::Instant::now() + lockout);
+            let lockout_secs = 30u64;
+            let until = std::time::Instant::now() + std::time::Duration::from_secs(lockout_secs);
+            state.locked_until = Some(until);
             state.failures = 0;
-            Some(lockout.as_secs())
+            // Persist so app restart does not reset the lockout.
+            let epoch = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs()
+                + lockout_secs;
+            drop(state); // release state lock before taking lockout_file lock
+            self.persist_lockout(epoch);
+            Some(lockout_secs)
         } else {
             None
         }
@@ -72,6 +134,8 @@ impl PasswordRateLimiter {
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         state.failures = 0;
         state.locked_until = None;
+        drop(state);
+        self.clear_persisted_lockout();
     }
 }
 
@@ -223,8 +287,13 @@ pub fn run() {
             // Session lock state — starts locked, set to unlocked after auth
             app.manage(AppLockState::new());
 
-            // Backend rate limiter for verify_password
-            app.manage(PasswordRateLimiter::new());
+            // Backend rate limiter for verify_password — persisted to disk so
+            // a process restart does not reset an active lockout.
+            let pw_rate_limiter = PasswordRateLimiter::new();
+            if let Ok(app_data) = app.path().app_data_dir() {
+                pw_rate_limiter.initialize(&app_data);
+            }
+            app.manage(pw_rate_limiter);
 
             // One-shot session bridge for breakout writer password hand-off
             app.manage(SessionBridge::new());

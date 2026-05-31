@@ -21,7 +21,10 @@ import type {
   WellnessSettings,
 } from '../types/settings';
 import { createDefaultSettings } from '../types/settings';
-import { setLevel } from '../lib/services/logger';
+import type { WritingAppearance } from '../types/writingAppearance';
+import { clampTextScale } from '../types/writingAppearance';
+import { setLevel, setModuleLevel } from '../lib/services/logger';
+import type { LogModule, LogLevel } from '../lib/services/logger';
 import {
   loadSettings,
   saveSettings,
@@ -61,6 +64,7 @@ interface SettingsState {
   setTheme: (theme: 'light' | 'dark' | 'system') => void;
   setCompactMode: (enabled: boolean) => void;
   setAnimationsEnabled: (enabled: boolean) => void;
+  setWritingAppearance: (patch: Partial<WritingAppearance>) => void;
 
   // Privacy
   setAutoLockTimeout: (minutes: number) => void;
@@ -86,6 +90,7 @@ interface SettingsState {
 
   // Tutorial
   setHasSeenTutorial: (seen: boolean) => void;
+  setHasSeenWritingDrawerHint: (seen: boolean) => void;
 
   // Speech-to-Text
   setSTTEnabled: (enabled: boolean) => void;
@@ -118,6 +123,9 @@ interface SettingsState {
 
   // Wellness
   setWellnessSettings: (updates: Partial<WellnessSettings>) => void;
+
+  // Per-module log levels
+  setModuleLogLevel: (module: LogModule, level: LogLevel | null) => void;
 
   // Navigation
   setScrollToSection: (section: SettingsScrollTarget) => void;
@@ -157,6 +165,10 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       // Apply theme and log level immediately
       applyTheme(settings.appearance.theme);
       setLevel(settings.logLevel ?? 'warn');
+      const moduleLevels = settings.moduleLogLevels ?? {};
+      for (const [mod, lvl] of Object.entries(moduleLevels) as [LogModule, LogLevel][]) {
+        setModuleLevel(mod, lvl);
+      }
     } catch (error) {
       set({
         error: error instanceof Error ? error.message : 'Failed to load settings',
@@ -338,6 +350,26 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     }));
   },
 
+  setWritingAppearance: (patch) => {
+    set((state) => {
+      // Clamp textScale at write time so callers don't have to worry about it.
+      const safePatch =
+        patch.textScale !== undefined
+          ? { ...patch, textScale: clampTextScale(patch.textScale) }
+          : patch;
+      return {
+        settings: {
+          ...state.settings,
+          appearance: {
+            ...state.settings.appearance,
+            writing: { ...state.settings.appearance.writing, ...safePatch },
+          },
+        },
+        hasUnsavedChanges: true,
+      };
+    });
+  },
+
   // Privacy
   setAutoLockTimeout: (autoLockTimeout) => {
     set((state) => ({
@@ -495,6 +527,16 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       settings: {
         ...state.settings,
         tutorial: { ...state.settings.tutorial, hasSeenTutorial },
+      },
+      hasUnsavedChanges: true,
+    }));
+  },
+
+  setHasSeenWritingDrawerHint: (hasSeenWritingDrawerHint) => {
+    set((state) => ({
+      settings: {
+        ...state.settings,
+        tutorial: { ...state.settings.tutorial, hasSeenWritingDrawerHint },
       },
       hasUnsavedChanges: true,
     }));
@@ -701,6 +743,23 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       },
       hasUnsavedChanges: true,
     }));
+  },
+
+  setModuleLogLevel: (module, level) => {
+    setModuleLevel(module, level);
+    set((state) => {
+      const existing = state.settings.moduleLogLevels ?? {};
+      const next = { ...existing };
+      if (level === null) {
+        delete next[module];
+      } else {
+        next[module] = level;
+      }
+      return {
+        settings: { ...state.settings, moduleLogLevels: next },
+        hasUnsavedChanges: true,
+      };
+    });
   },
 
   // Navigation

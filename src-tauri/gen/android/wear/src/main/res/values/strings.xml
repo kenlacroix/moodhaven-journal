@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">MoodBloom</string>
-    <string name="tile_label">MoodBloom Mood</string>
-    <string name="complication_label">MoodBloom</string>
+    <string name="app_name">MoodHaven</string>
+    <string name="tile_label">MoodHaven Mood</string>
+    <string name="complication_label">MoodHaven</string>
     <string name="complication_log_mood">Log mood</string>
     <string name="sync_now">Sync now</string>
     <string name="sync_syncing">Syncing…</string>

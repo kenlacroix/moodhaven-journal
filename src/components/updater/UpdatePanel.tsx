@@ -22,6 +22,18 @@ import { useSettingsStore } from '../../stores/settingsStore';
 import type { UseUpdateCheckReturn } from '../../hooks/useUpdateCheck';
 import { usePlatform } from '../../hooks/usePlatform';
 
+function semverGt(a: string, b: string): boolean {
+  const pa = a.replace(/^v/, '').split('.').map(Number);
+  const pb = b.replace(/^v/, '').split('.').map(Number);
+  for (let i = 0; i < 3; i++) {
+    const na = pa[i] ?? 0;
+    const nb = pb[i] ?? 0;
+    if (na > nb) return true;
+    if (na < nb) return false;
+  }
+  return false;
+}
+
 // ── Minimal inline markdown → HTML renderer ───────────────────────────────────
 // Handles: ## headings, **bold**, `code`, - bullet lists, blank line → <p>
 // This avoids adding a markdown library dependency.
@@ -229,7 +241,7 @@ export function UpdatePanel({ hook, currentVersion }: UpdatePanelProps) {
             <p className="text-sm font-medium">MoodHaven Journal is up to date</p>
             <p className="text-xs mt-0.5 opacity-70">
               v{currentVersion}
-              {updateInfo.version !== currentVersion && updateInfo.version
+              {updateInfo.version && semverGt(updateInfo.version, currentVersion)
                 ? ` — latest is ${updateInfo.version}`
                 : ' is the latest release'}
             </p>

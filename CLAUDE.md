@@ -48,7 +48,7 @@ Platforms: Windows, Linux, macOS.
 | `src-tauri/tauri.conf.json` | App config, sidecar binaries |
 | `src-tauri/Cargo.toml` | Rust dependencies |
 | `src-tauri/capabilities/default.json` | Tauri ACL — permitted commands + plugins |
-| `src-tauri/src/lib.rs` | All ~127 Tauri command registrations |
+| `src-tauri/src/lib.rs` | All ~132 Tauri command registrations |
 | `src-tauri/src/db/mod.rs` | SQLite schema, migrations, Database struct |
 | `src/App.tsx` | React root |
 | `src/stores/` | 4 Zustand stores (app, settings, books, …) |
@@ -65,6 +65,37 @@ Platforms: Windows, Linux, macOS.
 | `src/hooks/useTimeCapsule.ts` | Time capsule state + logic |
 | `src/components/timecapsule/SealEntryModal.tsx` | Seal entry UI |
 | `src/components/timecapsule/TimeCapsuleRevealModal.tsx` | Capsule reveal UI |
+| `src/components/editor/RichTextEditor.tsx` | TipTap editor orchestrator (~320 lines) |
+| `src/components/editor/EditorToolbar.tsx` | CollapsibleToolbar, MicButton, ToolbarBtn, QuickCaptureToggle |
+| `src/components/editor/EditorRecording.tsx` | WaveformBars, RecordingStrip (STT recording UI) |
+| `src/components/editor/EditorLinkDialog.tsx` | Link insert/edit modal |
+| `src/components/editor/EditorIcons.tsx` | 13 TB*Icon SVG components |
+| `src/components/editor/EditorStyles.css` | ProseMirror + slash command styles |
+| `src/components/layout/Sidebar.tsx` | Sidebar shell — collapsed state + composition (~100 lines) |
+| `src/components/layout/SidebarHeader.tsx` | Settings icon + sync indicator |
+| `src/components/layout/SidebarNavigation.tsx` | Main nav items (All Entries, Insights, Calendar…) |
+| `src/components/layout/SidebarBooks.tsx` | My Books section + new book modal |
+| `src/components/layout/SidebarPrompts.tsx` | Support/download prompts, update banner, sparkline, footer |
+| `src/components/peer-sync/DevicesTab.tsx` | Sync settings tab orchestrator |
+| `src/components/peer-sync/DevicesThisDevice.tsx` | ThisDeviceCard + RenameForm |
+| `src/components/peer-sync/DevicesNearby.tsx` | NearbyPeerRow, EmptyNearby, SyncStatusInline |
+| `src/components/peer-sync/DevicesSyncOptions.tsx` | LAN-only toggle + sync interval select |
+| `src/components/peer-sync/DeviceIconSet.tsx` | DeviceIcon, SignalBars, ScanningDots atoms |
+| `src/components/peer-sync/PairingModal.tsx` | Pairing modal shell (~120 lines) |
+| `src/components/peer-sync/PairingShowCodeTab.tsx` | Server-side PIN/QR tab |
+| `src/components/peer-sync/PairingEnterCodeTab.tsx` | Client-side PIN entry tab |
+| `src/components/peer-sync/PairingUIComponents.tsx` | PINDisplay, PINInput, SuccessScreen, LockedBanner |
+| `src/components/peer-sync/PairingHooks.ts` | useQRCode, useCountdown, formatCountdown |
+| `src/components/settings/tabs/PrivacyTab.tsx` | Privacy tab orchestrator + 2FA modals (~130 lines) |
+| `src/components/settings/tabs/PrivacyTwoFactor.tsx` | Full 2FA section (enabled/disabled states) |
+| `src/components/settings/tabs/PrivacyDataManagement.tsx` | Data stats, export, reset + confirm modal |
+| `src/components/settings/tabs/PrivacyBiometric.tsx` | Biometric unlock (Android only) |
+| `src/components/settings/tabs/PrivacyAutoLock.tsx` | Auto-lock timeout + clipboard clear |
+| `src/components/settings/tabs/PrivacyTransparency.tsx` | TransparencySection + PrivacyStatRow |
+| `src/components/voice-memo/VoiceMemoDraftCard.tsx` | Compact Timeline draft card — duration, context chip, mood dots, Review/Discard CTAs |
+| `src/components/voice-memo/VoiceDraftEditor.tsx` | Full-screen draft editor with hashtag pills; encrypts on publish |
+| `src/hooks/useVoiceMemoDrafts.ts` | Draft list state + publishDraft + discardDraft |
+| `src/components/writing/AppearanceDrawer.tsx` | WritingView appearance panel — font, size, line height, tint, a11y options |
 | `vitest.config.ts` | Test runner config |
 | `src/test/setup.ts` | Global test setup + Tauri IPC mock |
 

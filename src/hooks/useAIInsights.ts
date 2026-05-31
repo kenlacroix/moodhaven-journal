@@ -189,7 +189,7 @@ export function useAIInsights(): UseAIInsightsReturn {
     if (metadata && settings.journal.showPrompts) {
       refreshPrompts();
     }
-  }, [metadata?.totalEntries, settings.journal.showPrompts]); // Only re-run when entry count changes
+  }, [metadata?.totalEntries, settings.journal.showPrompts]); // eslint-disable-line react-hooks/exhaustive-deps -- intentional: only re-trigger on entry count change
 
   // Filter out dismissed items
   const visiblePrompts = useMemo(

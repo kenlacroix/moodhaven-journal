@@ -144,7 +144,7 @@ export function TwoFactorVerify({ method, password, onSuccess, onCancel }: TwoFa
     if (mode === 'webauthn' && method === 'webauthn') {
       handleHardwareKeyVerify();
     }
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- intentional mount-only: re-triggering on dep changes would re-initiate HW key verification incorrectly
 
   // Disabled state
   const isDisabled = cooldown > 0 || isVerifying;

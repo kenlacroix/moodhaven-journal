@@ -39,8 +39,7 @@ interface Milestone {
 
 const MILESTONES: Milestone[] = [
   { date: "Mar 2025", title: "Idea Born", description: "Ken conceives MoodHaven after searching for a safe journaling space." },
-  { date: "Aug 2025", title: "Alpha Launch", description: "Released first alpha to a small community for feedback." },
-  { date: "Sep 2025", title: "Community Growth", description: "Grew to 100+ alpha users sharing insights and suggestions." },
+  { date: "Aug 2025", title: "Alpha Launch", description: "First alpha builds — a quiet build-in-public project rather than a launch." },
   { date: "Oct 2025", title: "Feature Refinement", description: "Implemented privacy-first encryption, custom prompts, and mood tracking." },
   { date: "Apr 2026", title: "v0.8.0 — Web App", description: "Launched web app at journal.moodhaven.app, Wear OS Phase 4, Time Capsule, and LAN peer sync." },
   { date: "Apr 2026", title: "v0.9.0 — Security Hardening", description: "Lock guards on sensitive commands, settings refactor, and internal security hardening review." },

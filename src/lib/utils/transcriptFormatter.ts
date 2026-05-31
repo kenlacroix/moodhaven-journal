@@ -58,7 +58,7 @@ function removeFillersFromText(text: string): string {
 function collapseFalseStarts(text: string): string {
   // Match repeated phrase of 1–3 words at word boundaries
   return text.replace(
-    /\b((\w+)(?:\s+\w+){0,2})\s+\1\b/gi,
+    /\b((\w+)(?:\s+\w+){0,2})\s+\1\b/gi, // eslint-disable-line security/detect-unsafe-regex -- bounded transcript text
     '$1'
   );
 }
@@ -72,6 +72,7 @@ function collapseFalseStarts(text: string): string {
  * "I I I went" → "I went"
  */
 function collapseConsecutiveRepetitions(text: string): string {
+  // eslint-disable-next-line security/detect-unsafe-regex -- input is bounded transcript text, not arbitrary user content
   return text.replace(/\b(\w+)(\s+\1)+\b/gi, '$1');
 }
 

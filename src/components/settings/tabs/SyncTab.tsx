@@ -1,5 +1,7 @@
 import type { AppSettings, StorageBackend } from '../../../types/settings';
-import { SettingSection, SettingSelect, SettingInput } from '../index';
+import { SettingSection } from '../SettingSection';
+import { SettingSelect } from '../SettingSelect';
+import { SettingInput } from '../SettingInput';
 import { testConnection as testWebDAVConnection } from '../../../lib/services/webdavService';
 
 interface SyncTabProps {

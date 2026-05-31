@@ -2,6 +2,9 @@
  * Settings type definitions for MoodHaven Journal
  */
 
+import type { WritingAppearance } from './writingAppearance';
+import { createDefaultWritingAppearance } from './writingAppearance';
+
 // AI Provider options
 export type AIProvider = 'openai' | 'local' | 'none';
 
@@ -69,6 +72,12 @@ export interface AppearanceSettings {
   theme: 'light' | 'dark' | 'system';
   compactMode: boolean;
   animationsEnabled: boolean;
+  /**
+   * Device-global defaults for the WritingView customization drawer.
+   * Future: per-book overrides via `BookSettings.writingOverrides:
+   * Partial<WritingAppearance>` (slot reserved, not implemented in v1).
+   */
+  writing: WritingAppearance;
 }
 
 // Days of week for reminder scheduling (0 = Sunday, 6 = Saturday)
@@ -108,6 +117,8 @@ export interface StorageSettings {
 // Tutorial settings
 export interface TutorialSettings {
   hasSeenTutorial: boolean;
+  /** True after the writing-view drawer toggle has been pulsed once for discoverability. */
+  hasSeenWritingDrawerHint: boolean;
 }
 
 // Speech-to-Text model options (whisper.cpp models)
@@ -227,6 +238,7 @@ export interface AppSettings {
   timeCapsule: TimeCapsuleSettings;
   wellness: WellnessSettings;
   logLevel: 'error' | 'warn' | 'info' | 'debug';
+  moduleLogLevels?: Partial<Record<import('../lib/services/logger').LogModule, import('../lib/services/logger').LogLevel>>;
 }
 
 // Default settings factory
@@ -275,6 +287,7 @@ export function createDefaultSettings(): AppSettings {
       theme: 'system',
       compactMode: false,
       animationsEnabled: true,
+      writing: createDefaultWritingAppearance(),
     },
     reminders: {
       enabled: false,
@@ -294,6 +307,7 @@ export function createDefaultSettings(): AppSettings {
     },
     tutorial: {
       hasSeenTutorial: false,
+      hasSeenWritingDrawerHint: false,
     },
     speechToText: {
       enabled: false,

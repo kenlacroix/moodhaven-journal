@@ -21,6 +21,11 @@ import { MOOD_OPTIONS } from '../types/journal';
 import { useBooksStore } from '../stores/booksStore';
 import { usePlatform } from '../hooks/usePlatform';
 import { logger } from '../lib/services/logger';
+import { useVoiceMemoDrafts } from '../hooks/useVoiceMemoDrafts';
+import { VoiceMemoDraftCard } from '../components/voice-memo/VoiceMemoDraftCard';
+import { VoiceDraftEditor } from '../components/voice-memo/VoiceDraftEditor';
+import type { VoiceMemo } from '../lib/services/voiceMemoService';
+import { useAppStore } from '../stores/appStore';
 
 // Get current date string for change detection
 const getCurrentDateStr = () => formatDate(new Date());
@@ -87,6 +92,11 @@ export function TimelineView({ onSelectEntry, onNewEntry, onSealEntry, refreshTr
   const [moodFilter, setMoodFilter] = useState<number | null>(null);
   // mediaByEntry: entryId → { count, hasImages }
   const [mediaByEntry, setMediaByEntry] = useState<Map<string, { count: number; hasImages: boolean }>>(new Map());
+
+  // Voice memo drafts (Phase 5)
+  const { drafts, publishDraft, discardDraft } = useVoiceMemoDrafts();
+  const [reviewingDraft, setReviewingDraft] = useState<VoiceMemo | null>(null);
+  const sessionPassword = useAppStore((s) => s.sessionPassword);
 
   const { isAndroid } = usePlatform();
   const activeBookId = useBooksStore((s) => s.activeBookId);
@@ -547,6 +557,20 @@ export function TimelineView({ onSelectEntry, onNewEntry, onSealEntry, refreshTr
         </div>
       )}
 
+      {/* Voice memo draft cards (Phase 5) */}
+      {drafts.length > 0 && (
+        <div className={`mb-4 space-y-2 ${isAndroid ? 'px-4' : ''}`}>
+          {drafts.map((draft) => (
+            <VoiceMemoDraftCard
+              key={draft.id}
+              memo={draft}
+              onReview={setReviewingDraft}
+              onDiscard={discardDraft}
+            />
+          ))}
+        </div>
+      )}
+
       {/* Pinned Entries section */}
       {pinnedEntries.length > 0 && (
         <div className={isAndroid ? 'mb-4' : 'mb-8'}>
@@ -672,6 +696,19 @@ export function TimelineView({ onSelectEntry, onNewEntry, onSealEntry, refreshTr
         }}
         filterKey={`${activeBookId ?? ''}-${moodFilter ?? ''}-${dateRange}-${tagFilter ?? ''}-${debouncedQuery}`}
       />
+
+      {/* Voice draft editor overlay (Phase 5) */}
+      {reviewingDraft && (
+        <VoiceDraftEditor
+          memo={reviewingDraft}
+          activeBookId={activeBookId ?? undefined}
+          onClose={() => setReviewingDraft(null)}
+          onPublish={async (id, content, mood, bookId, privacyMode) => {
+            if (!sessionPassword) throw new Error('Journal is locked');
+            await publishDraft(id, content, mood, bookId, privacyMode, sessionPassword);
+          }}
+        />
+      )}
     </div>
   );
 }

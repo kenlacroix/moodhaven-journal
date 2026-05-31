@@ -16,7 +16,9 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import type { STTModel } from '../../types/settings';
 import type { WhisperOutput } from '../utils/transcriptFormatter';
-import { logger } from './logger';
+import { forModule } from './logger';
+
+const log = forModule('stt');
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -73,7 +75,7 @@ export async function checkModelStatus(model: STTModel): Promise<ModelStatus> {
       modelName: MODEL_FILENAMES[model],
     });
   } catch (error) {
-    logger.error('Failed to check model status:', { error: String(error) });
+    log.error('Failed to check model status:', { error: String(error) });
     return { downloaded: false, path: null, size: null };
   }
 }
@@ -112,7 +114,7 @@ export async function downloadModel(
   try {
     await invoke('stt_download_model', { filename });
   } catch (error) {
-    logger.error('Failed to download model:', { error: String(error) });
+    log.error('Failed to download model:', { error: String(error) });
     throw new Error(`Failed to download model: ${error}`);
   } finally {
     unlisten?.();
@@ -128,7 +130,7 @@ export async function cancelDownload(model: STTModel): Promise<void> {
     await invoke('stt_cancel_download', { filename });
   } catch (error) {
     // Ignore "no active download" — caller may have already completed
-    logger.warn('cancelDownload: no active download or already finished', { error: String(error) });
+    log.warn('cancelDownload: no active download or already finished', { error: String(error) });
   }
 }
 
@@ -141,7 +143,7 @@ export async function deleteModel(model: STTModel): Promise<void> {
   try {
     await invoke('stt_delete_model', { filename });
   } catch (error) {
-    logger.error('Failed to delete model:', { error: String(error) });
+    log.error('Failed to delete model:', { error: String(error) });
     throw new Error(`Failed to delete model: ${error}`);
   }
 }
@@ -177,7 +179,7 @@ export async function transcribeAudio(
       duration,
     };
   } catch (error) {
-    logger.error('Transcription failed:', { error: String(error) });
+    log.error('Transcription failed:', { error: String(error) });
     throw new Error(`Transcription failed: ${error}`);
   }
 }
@@ -231,7 +233,7 @@ export async function transcribeAudioTimestamped(
       })),
     };
   } catch (error) {
-    logger.error('Timestamped transcription failed:', { error: String(error) });
+    log.error('Timestamped transcription failed:', { error: String(error) });
     throw new Error(`Timestamped transcription failed: ${error}`);
   }
 }

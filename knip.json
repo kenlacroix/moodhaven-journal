@@ -4,25 +4,16 @@
     "src/main.tsx",
     "src/App.tsx",
     "src/test/setup.ts",
-    "src/**/*.test.{ts,tsx}",
-    "website/app/**/*.{ts,tsx}",
-    "website/components/**/*.{ts,tsx}",
-    "website/lib/**/*.{ts,tsx}"
+    "src/**/*.test.{ts,tsx}"
   ],
   "project": [
-    "src/**/*.{ts,tsx}",
-    "website/**/*.{ts,tsx}"
+    "src/**/*.{ts,tsx}"
   ],
   "ignore": [
-    "website/.next/**",
-    "website/.vercel/**",
-    "website/next-env.d.ts",
-    "website/next.config.ts",
-    "website/vitest.config.ts",
+    "src/lib/backend/browser-stubs.ts",
     "staging/**",
     "scripts/**",
     "node_modules/**",
-    "website/node_modules/**",
     "src-tauri/**"
   ],
   "ignoreDependencies": [
@@ -33,6 +24,13 @@
     "autoprefixer",
     "postcss",
     "@tauri-apps/*",
-    "typescript"
+    "typescript",
+    "@types/dompurify",
+    "@testing-library/dom",
+    "esbuild",
+    "eslint",
+    "playwright",
+    "@tiptap/core",
+    "@vitest/coverage-v8"
   ]
 }

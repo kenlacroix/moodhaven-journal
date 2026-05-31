@@ -46,7 +46,7 @@ describe('SealEntryModal', () => {
     await waitFor(() => {
       expect(mockSealEntry).toHaveBeenCalledWith(
         'entry-1',
-        expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/),
+        expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/), // eslint-disable-line security/detect-unsafe-regex -- ISO date pattern in test assertion
         'letter',
       );
     });

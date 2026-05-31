@@ -30,7 +30,7 @@ export interface EngineConfig {
   envelopeMs: number; // attack/release ramp; default 30
 }
 
-export const ENGINE_DEFAULTS: EngineConfig = {
+const ENGINE_DEFAULTS: EngineConfig = {
   speedHz: 1.0,
   toneHz: 200,
   volumeDb: -18,

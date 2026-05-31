@@ -7,7 +7,7 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [Unreleased] — Security hardening (2026-05-31)
+## [1.2.1] — 2026-05-31
 
 ### Security
 
@@ -21,8 +21,6 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 - **[MEDIUM] Settings sync allowlist**: `db_upsert_setting` now rejects any settings key not in `SYNC_ALLOWED_SETTINGS = ["app_settings"]`. A compromised trusted peer could previously inject arbitrary rows into the `settings` table during a sync session.
 
-- **[MEDIUM] Session key cache collision fixed**: The TOTP session key cache replaced the djb2 32-bit hash cache key with `HMAC-SHA-256(sessionNonce, password)` truncated to 128 bits, eliminating the theoretical (but constructible) djb2 collision path.
-
 - **[MEDIUM] Full-restore integrity check**: `peer_apply_and_restart` and the startup restore path now verify a SHA-256 checksum stored alongside `moodhaven_restore.pending` before applying the file.
 
 - **[LOW] CSP `connect-src` narrowed**: Removed `http://localhost:*` from the Content-Security-Policy. Ollama requests now route through `tauri-plugin-http` (Rust-side, bypasses WebView CSP) via `httpFetch()` rather than `window.fetch()`.
@@ -30,8 +28,45 @@ Versions follow [Semantic Versioning](https://semver.org/).
 ### Documentation
 
 - `SECURITY.md`: added TOTP encryption note, AI-development disclosure, "no independent third-party audit" caveat, and upgrade note for TOTP users upgrading from v1.1.x.
-- About page timeline: clarified "v0.9.0 security hardening" wording (was "full security audit pass").
-- Download page: `SHA-256 verified` badge is now conditional on `checksumVerified` from the release manifest.
+
+---
+
+## [1.1.0.1] — 2026-05-31
+
+### Removed
+- Deleted dead components with zero imports: `CloudSyncChip`, `JournalPage`, `stillhaven/types.ts`
+- Removed unused npm packages: `react-router-dom`, `@tiptap/extension-bubble-menu`, `playwright`
+- Deleted dead barrel files (`types/index.ts`, `lib/index.ts`, `settings/index.ts`) and inlined their imports
+
+### Changed
+- Split `RichTextEditor.tsx` (1 424 lines) into `EditorToolbar`, `EditorRecording`, `EditorLinkDialog`, `EditorIcons`, and `EditorStyles.css` — orchestrator now ~320 lines
+- Split `Sidebar.tsx` (514 lines) into `SidebarHeader`, `SidebarNavigation`, `SidebarBooks`, `SidebarPrompts`
+- Split `DevicesTab.tsx` (578 lines) into `DeviceIconSet`, `DevicesThisDevice`, `DevicesNearby`, `DevicesSyncOptions`
+- Split `PairingModal.tsx` (629 lines) into `PairingHooks`, `PairingUIComponents`, `PairingShowCodeTab`, `PairingEnterCodeTab`
+- Split `PrivacyTab.tsx` (660 lines) into `PrivacyAutoLock`, `PrivacyBiometric`, `PrivacyTwoFactor`, `PrivacyDataManagement`, `PrivacyTransparency`
+- Archived completed StillHaven plan from `active-plans/` to `docs/internal/plans/`
+- Removed `export` from four unused constants (`slashCommandItems`, `TRANSCRIPT_FORMAT_PROMPTS`, `MILESTONES`, `ENGINE_DEFAULTS`)
+
+---
+
+## [1.2.0] — 2026-05-31
+
+### Added
+- **Voice memo draft pipeline (Phase 5)** — watch recordings now surface as reviewable draft cards in the Timeline before being published to the journal. Each draft shows transcription preview, inferred mood, biometric context chip, and hashtag suggestions. Full TipTap editor with `MoodSelector` for editing before publish.
+  - `VoiceMemoDraftCard` — compact Timeline card with duration, context, 2-line preview, mood dots, Review/Discard CTAs
+  - `VoiceDraftEditor` — full-screen editor with hashtag suggestion pills; encrypts on publish
+  - `useVoiceMemoDrafts` hook — draft list state, `publishDraft`, `discardDraft`
+  - `useWearVoiceMemos` — post-transcription mood inference via local `scoreContentMood`
+  - 5 new Tauri commands: `patch_voice_memo_context/mood`, `publish_voice_memo_draft`, `discard_voice_memo_draft`, `list_pending_drafts`
+  - DB: `context`, `inferred_mood`, `book_id`, `reviewed` columns on `voice_memos`
+- **Wear OS Phase 2e polish** — Record page labeled shortcut row `[😊 Mood] [🧘 Breathe]`; ambient mood wash from last logged mood; double-tap haptic on mood confirm; fade+scale `ViewPager2` `PageTransformer`
+- **Wear OS Phase 5a** — `HealthSnapshot` expanded to capture step count delta and coarse activity classification (`still` / `walking` / `running`); health JSON now includes `steps` and `activity` fields
+- **Wear OS Phase B brand sweep** — all hardcoded hex color literals replaced with `@color/` references across 13 layout XMLs; 13 new named entries in `colors.xml` (alpha white variants, surface cards, amber, `mood_low_accent`)
+- **Wear OS Phase C splash screen** — `Theme.MoodHaven.Splash` theme using `androidx.core:core-splashscreen`; adaptive icon reused as splash icon; OLED-black background
+- **Writing appearance drawer** — inline Day One-style customization surface for `WritingView`: font family (Inter, Source Serif, JetBrains Mono, OpenDyslexic, System), size, line height, paragraph spacing, background tint (5 presets), writing width, focus mode, text scale, high contrast, reduced motion, dyslexia profile. Persisted via `useSettingsStore`; CSS variables on `[data-writing-prefs]` ancestor; zero impact on typing path
+
+### Changed
+- `HealthSnapshot.capture()` return schema extended: `{"hr":N,"steps":N,"activity":"still|walking|running"}`
 
 ---
 

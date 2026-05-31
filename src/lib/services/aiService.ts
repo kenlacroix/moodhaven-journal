@@ -623,7 +623,7 @@ export function buildHealthContextPrompts(
 /**
  * System prompts used when formatting transcripts via LLM.
  */
-export const TRANSCRIPT_FORMAT_PROMPTS = {
+const TRANSCRIPT_FORMAT_PROMPTS = {
   standard: `You are a journal editor. Clean up this voice transcription into well-formatted journal prose:
 - Fix grammar and punctuation
 - Remove any remaining filler words
@@ -635,7 +635,7 @@ Return only the formatted text, no explanations.`,
   watch: `Clean up this short voice note into a concise journal entry. Fix grammar, remove fillers, preserve meaning. Return only the text.`,
 } as const;
 
-export type TranscriptFormatMode = keyof typeof TRANSCRIPT_FORMAT_PROMPTS;
+type TranscriptFormatMode = keyof typeof TRANSCRIPT_FORMAT_PROMPTS;
 
 export interface FormatTranscriptSettings {
   layer: 'local' | 'ollama' | 'openai';

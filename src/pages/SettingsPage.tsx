@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
+import { usePlatform } from '../hooks/usePlatform';
 import { useSettingsStore } from '../stores/settingsStore';
 import {
   getDataStats,
@@ -164,13 +165,16 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
     setSyncMode,
     setSyncIntervalMinutes,
     setTimeCapsuleSettings,
+    setModuleLogLevel,
     updateSettings,
   } = useSettingsStore();
 
   const scrollToSection = useSettingsStore((s) => s.scrollToSection);
   const setScrollToSection = useSettingsStore((s) => s.setScrollToSection);
 
+  const { isAndroid } = usePlatform();
   const [activeTab, setActiveTab] = useState<SettingsTab>('general');
+  const [mobileScreen, setMobileScreen] = useState<'list' | 'detail'>('list');
   const [searchQuery, setSearchQuery] = useState('');
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
 
@@ -455,6 +459,179 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
     }
   };
 
+  const renderTabContent = () => (
+    <>
+      {activeTab === 'general' && (
+        <GeneralTab
+          settings={settings}
+          saveSettings={saveSettings}
+          sttSectionRef={sttSectionRef}
+          setShowPrompts={setShowPrompts}
+          setAutoLocationWeather={setAutoLocationWeather}
+          setTemperatureUnit={setTemperatureUnit}
+          setAutoTitle={setAutoTitle}
+          setReminderEnabled={setReminderEnabled}
+          setReminderTime={setReminderTime}
+          setReminderFrequency={setReminderFrequency}
+          setReminderCustomDays={setReminderCustomDays}
+          setReminderMessage={setReminderMessage}
+          setReminderSound={setReminderSound}
+          setSTTEnabled={setSTTEnabled}
+          setSTTModel={setSTTModel}
+          setSTTModelDownloaded={setSTTModelDownloaded}
+          setSTTDownloadProgress={setSTTDownloadProgress}
+          setSttFormattingLayer={setSttFormattingLayer}
+          setSttCloudConsent={setSttCloudConsent}
+          setHasSeenTutorial={setHasSeenTutorial}
+          setTimeCapsuleSettings={setTimeCapsuleSettings}
+        />
+      )}
+      {activeTab === 'appearance' && (
+        <AppearanceTab
+          settings={settings}
+          setTheme={setTheme}
+          setCompactMode={setCompactMode}
+          setAnimationsEnabled={setAnimationsEnabled}
+        />
+      )}
+      {activeTab === 'privacy' && (
+        <PrivacyTab
+          settings={settings}
+          dataStats={dataStats}
+          twoFactorStatus={twoFactorStatus}
+          backupCodesCount={backupCodesCount}
+          refresh2FAStatus={refresh2FAStatus}
+          isExporting={isExporting}
+          exportProgress={exportProgress}
+          handleExport={handleExport}
+          setAutoLockTimeout={setAutoLockTimeout}
+          sessionPassword={getSessionPassword() ?? ''}
+        />
+      )}
+      {activeTab === 'sync' && (
+        <SyncTab
+          settings={settings}
+          saveSettings={saveSettings}
+          setStorageType={setStorageType}
+          setWebDAVConfig={setWebDAVConfig}
+          setSyncMode={setSyncMode}
+          setSyncIntervalMinutes={setSyncIntervalMinutes}
+        />
+      )}
+      {activeTab === 'ai' && (
+        <AITab
+          settings={settings}
+          saveSettings={saveSettings}
+          aiSectionRef={aiSectionRef}
+          setAIEnabled={setAIEnabled}
+          setAIProvider={setAIProvider}
+          setOpenAIKey={setOpenAIKey}
+          setOpenAIModel={setOpenAIModel}
+          setLocalAIEndpoint={setLocalAIEndpoint}
+          setLocalAIModel={setLocalAIModel}
+          setAIFeatures={setAIFeatures}
+          setAIConsent={setAIConsent}
+        />
+      )}
+      {activeTab === 'health' && (
+        <HealthTab
+          settings={settings}
+          saveSettings={saveSettings}
+          setOuraEnabled={setOuraEnabled}
+          setOuraSettings={setOuraSettings}
+          setWellnessSettings={setWellnessSettings}
+        />
+      )}
+      {activeTab === 'devices' && <DevicesTab />}
+      {activeTab === 'export' && (
+        <ExportTab
+          exportMatchCount={exportMatchCount}
+          exportTags={exportTags}
+          handleSelectiveExport={handleSelectiveExport}
+          isExporting={isExporting}
+        />
+      )}
+      {activeTab === 'speech' && (
+        <SpeechToTextTab
+          settings={settings}
+          updateSettings={updateSettings}
+          saveSettings={saveSettings}
+        />
+      )}
+      {activeTab === 'about' && (
+        <AboutTab
+          settings={settings}
+          updateHook={updateHook}
+          appVersion={appVersion}
+          logPath={logPath}
+          handleLogLevelChange={handleLogLevelChange}
+          setModuleLogLevel={setModuleLogLevel}
+        />
+      )}
+    </>
+  );
+
+  const renderPasswordModal = () => showPasswordModal && (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-6 max-w-md mx-4">
+        <h3 className="text-lg font-semibold text-slate-800 dark:text-white mb-2">
+          Export Backup
+        </h3>
+        <p className="text-sm text-slate-600 dark:text-slate-300 mb-4">
+          Enter your master password to encrypt the backup file.
+        </p>
+        <input
+          type="password"
+          value={syncPassword}
+          onChange={(e) => { setSyncPassword(e.target.value); setSyncPasswordError(null); }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && syncPassword && !isSyncing && !syncLockedOut) {
+              handlePasswordSubmit();
+            }
+          }}
+          placeholder="Master password"
+          disabled={syncLockedOut}
+          className={`w-full px-3 py-2 rounded-lg border bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 transition-colors ${
+            syncPasswordError
+              ? 'border-rose-400 dark:border-rose-500'
+              : 'border-slate-200 dark:border-slate-700'
+          } disabled:opacity-50`}
+          autoFocus
+        />
+        {syncPasswordError && (
+          <p className="mt-2 text-sm text-rose-600 dark:text-rose-400">
+            {syncPasswordError}
+          </p>
+        )}
+        {syncLockedOut && (
+          <div className="mt-2 flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400">
+            <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+            </svg>
+            <span>Locked for {formatCountdown(syncLockoutRemaining)}</span>
+          </div>
+        )}
+        <div className="flex gap-3 mt-4">
+          <button
+            type="button"
+            className="flex-1 px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+            onClick={() => { setShowPasswordModal(null); setSyncPassword(''); setSyncPasswordError(null); }}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={!syncPassword || isSyncing || syncLockedOut}
+            className="flex-1 px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            onClick={handlePasswordSubmit}
+          >
+            {isSyncing ? 'Verifying...' : 'Continue'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
   if (isLoading) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
@@ -462,6 +639,140 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
           <div className="animate-pulse text-slate-500 dark:text-slate-400">Loading settings...</div>
         </div>
       </div>
+    );
+  }
+
+  if (isAndroid) {
+    const activeTabConfig = TABS.find(t => t.id === activeTab);
+    return (
+      <>
+        <div className="fixed inset-0 z-50 bg-white dark:bg-slate-900 flex flex-col">
+          {mobileScreen === 'list' ? (
+            <>
+              {/* Mobile list header */}
+              <div className="flex items-center px-4 py-3 border-b border-slate-200 dark:border-slate-800 flex-shrink-0">
+                <h1 className="flex-1 text-lg font-semibold text-slate-800 dark:text-slate-100">Settings</h1>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="p-2 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                  aria-label="Close settings"
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Category list */}
+              <div className="flex-1 overflow-y-auto">
+                {TABS.map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => {
+                      setActiveTab(tab.id);
+                      setMobileScreen('detail');
+                    }}
+                    className="w-full flex items-center gap-4 px-4 py-4 border-b border-slate-100 dark:border-slate-800 text-left active:bg-slate-50 dark:active:bg-slate-800/50"
+                  >
+                    <div className="w-9 h-9 rounded-xl bg-violet-50 dark:bg-violet-900/30 flex items-center justify-center flex-shrink-0">
+                      <svg className="w-5 h-5 text-violet-600 dark:text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d={tab.icon} />
+                      </svg>
+                    </div>
+                    <span className="flex-1 text-sm font-medium text-slate-800 dark:text-slate-100">{tab.label}</span>
+                    <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
+                ))}
+              </div>
+
+              {/* Save banner (only when there are unsaved changes) */}
+              {hasUnsavedChanges && (
+                <div className="px-4 py-3 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex gap-3">
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="flex-1 px-4 py-2.5 text-sm font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 rounded-xl"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSave}
+                    disabled={saveStatus === 'saving'}
+                    className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-violet-500 rounded-xl disabled:opacity-50"
+                  >
+                    {saveStatus === 'saving' ? 'Saving...' : saveStatus === 'saved' ? 'Saved!' : 'Save Changes'}
+                  </button>
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              {/* Mobile detail header */}
+              <div className="flex items-center gap-2 px-2 py-3 border-b border-slate-200 dark:border-slate-800 flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setMobileScreen('list')}
+                  className="p-2 rounded-lg text-slate-500 dark:text-slate-400"
+                  aria-label="Back to settings list"
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+                <h2 className="flex-1 text-base font-semibold text-slate-800 dark:text-slate-100">
+                  {activeTabConfig?.label}
+                </h2>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="p-2 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                  aria-label="Close settings"
+                >
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Detail content */}
+              <div className="flex-1 overflow-y-auto">
+                <div className="p-4 pb-8">
+                  {renderTabContent()}
+                </div>
+              </div>
+
+              {/* Detail footer */}
+              <div className="px-4 py-3 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setMobileScreen('list')}
+                  className="flex-1 px-4 py-2.5 text-sm font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 rounded-xl"
+                >
+                  Back
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  disabled={!hasUnsavedChanges || saveStatus === 'saving'}
+                  className={`flex-1 px-4 py-2.5 rounded-xl font-medium text-sm transition-all duration-200 ${
+                    hasUnsavedChanges
+                      ? 'bg-violet-500 text-white'
+                      : 'bg-slate-100 dark:bg-slate-700 text-slate-400 cursor-not-allowed'
+                  }`}
+                >
+                  {saveStatus === 'saving' ? 'Saving...' : saveStatus === 'saved' ? 'Saved!' : 'Save'}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+        {renderPasswordModal()}
+      </>
     );
   }
 
@@ -558,125 +869,7 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
             {/* Right: Tab content area */}
             <div className="flex-1 overflow-y-auto">
               <div className="p-6 pb-8">
-
-                {activeTab === 'general' && (
-                  <GeneralTab
-                    settings={settings}
-                    saveSettings={saveSettings}
-                    sttSectionRef={sttSectionRef}
-                    setShowPrompts={setShowPrompts}
-                    setAutoLocationWeather={setAutoLocationWeather}
-                    setTemperatureUnit={setTemperatureUnit}
-                    setAutoTitle={setAutoTitle}
-                    setReminderEnabled={setReminderEnabled}
-                    setReminderTime={setReminderTime}
-                    setReminderFrequency={setReminderFrequency}
-                    setReminderCustomDays={setReminderCustomDays}
-                    setReminderMessage={setReminderMessage}
-                    setReminderSound={setReminderSound}
-                    setSTTEnabled={setSTTEnabled}
-                    setSTTModel={setSTTModel}
-                    setSTTModelDownloaded={setSTTModelDownloaded}
-                    setSTTDownloadProgress={setSTTDownloadProgress}
-                    setSttFormattingLayer={setSttFormattingLayer}
-                    setSttCloudConsent={setSttCloudConsent}
-                    setHasSeenTutorial={setHasSeenTutorial}
-                    setTimeCapsuleSettings={setTimeCapsuleSettings}
-                  />
-                )}
-
-                {activeTab === 'appearance' && (
-                  <AppearanceTab
-                    settings={settings}
-                    setTheme={setTheme}
-                    setCompactMode={setCompactMode}
-                    setAnimationsEnabled={setAnimationsEnabled}
-                  />
-                )}
-
-                {activeTab === 'privacy' && (
-                  <PrivacyTab
-                    settings={settings}
-                    dataStats={dataStats}
-                    twoFactorStatus={twoFactorStatus}
-                    backupCodesCount={backupCodesCount}
-                    refresh2FAStatus={refresh2FAStatus}
-                    isExporting={isExporting}
-                    exportProgress={exportProgress}
-                    handleExport={handleExport}
-                    setAutoLockTimeout={setAutoLockTimeout}
-                    sessionPassword={getSessionPassword() ?? ''}
-                  />
-                )}
-
-                {activeTab === 'sync' && (
-                  <SyncTab
-                    settings={settings}
-                    saveSettings={saveSettings}
-                    setStorageType={setStorageType}
-                    setWebDAVConfig={setWebDAVConfig}
-                    setSyncMode={setSyncMode}
-                    setSyncIntervalMinutes={setSyncIntervalMinutes}
-                  />
-                )}
-
-                {activeTab === 'ai' && (
-                  <AITab
-                    settings={settings}
-                    saveSettings={saveSettings}
-                    aiSectionRef={aiSectionRef}
-                    setAIEnabled={setAIEnabled}
-                    setAIProvider={setAIProvider}
-                    setOpenAIKey={setOpenAIKey}
-                    setOpenAIModel={setOpenAIModel}
-                    setLocalAIEndpoint={setLocalAIEndpoint}
-                    setLocalAIModel={setLocalAIModel}
-                    setAIFeatures={setAIFeatures}
-                    setAIConsent={setAIConsent}
-                  />
-                )}
-
-                {activeTab === 'health' && (
-                  <HealthTab
-                    settings={settings}
-                    saveSettings={saveSettings}
-                    setOuraEnabled={setOuraEnabled}
-                    setOuraSettings={setOuraSettings}
-                    setWellnessSettings={setWellnessSettings}
-                  />
-                )}
-
-                {activeTab === 'devices' && (
-                  <DevicesTab />
-                )}
-
-                {activeTab === 'export' && (
-                  <ExportTab
-                    exportMatchCount={exportMatchCount}
-                    exportTags={exportTags}
-                    handleSelectiveExport={handleSelectiveExport}
-                    isExporting={isExporting}
-                  />
-                )}
-
-                {activeTab === 'speech' && (
-                  <SpeechToTextTab
-                    settings={settings}
-                    updateSettings={updateSettings}
-                    saveSettings={saveSettings}
-                  />
-                )}
-
-                {activeTab === 'about' && (
-                  <AboutTab
-                    settings={settings}
-                    updateHook={updateHook}
-                    appVersion={appVersion}
-                    logPath={logPath}
-                    handleLogLevelChange={handleLogLevelChange}
-                  />
-                )}
-
+                {renderTabContent()}
               </div>
             </div>
           </div>
@@ -708,69 +901,7 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
         </div>
       </div>
 
-      {/* Password prompt modal for export */}
-      {showPasswordModal && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-6 max-w-md mx-4">
-            <h3 className="text-lg font-semibold text-slate-800 dark:text-white mb-2">
-              Export Backup
-            </h3>
-            <p className="text-sm text-slate-600 dark:text-slate-300 mb-4">
-              Enter your master password to encrypt the backup file.
-            </p>
-            <input
-              type="password"
-              value={syncPassword}
-              onChange={(e) => { setSyncPassword(e.target.value); setSyncPasswordError(null); }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && syncPassword && !isSyncing && !syncLockedOut) {
-                  handlePasswordSubmit();
-                }
-              }}
-              placeholder="Master password"
-              disabled={syncLockedOut}
-              className={`w-full px-3 py-2 rounded-lg border bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 transition-colors ${
-                syncPasswordError
-                  ? 'border-rose-400 dark:border-rose-500'
-                  : 'border-slate-200 dark:border-slate-700'
-              } disabled:opacity-50`}
-              autoFocus
-            />
-
-            {syncPasswordError && (
-              <p className="mt-2 text-sm text-rose-600 dark:text-rose-400">
-                {syncPasswordError}
-              </p>
-            )}
-            {syncLockedOut && (
-              <div className="mt-2 flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400">
-                <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
-                </svg>
-                <span>Locked for {formatCountdown(syncLockoutRemaining)}</span>
-              </div>
-            )}
-
-            <div className="flex gap-3 mt-4">
-              <button
-                type="button"
-                className="flex-1 px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
-                onClick={() => { setShowPasswordModal(null); setSyncPassword(''); setSyncPasswordError(null); }}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={!syncPassword || isSyncing || syncLockedOut}
-                className="flex-1 px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                onClick={handlePasswordSubmit}
-              >
-                {isSyncing ? 'Verifying...' : 'Continue'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {renderPasswordModal()}
     </>
   );
 }

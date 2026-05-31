@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { AppSettings, WellnessSettings } from '../../../types/settings';
-import { SettingSection, SettingToggle } from '../index';
+import { SettingSection } from '../SettingSection';
+import { SettingToggle } from '../SettingToggle';
 import { OuraConnectionCard } from '../../oura/OuraConnectionCard';
 import { StillhavenConsentModal } from '../../../modules/stillhaven/StillhavenConsentModal';
 import { usePlatform } from '../../../hooks/usePlatform';

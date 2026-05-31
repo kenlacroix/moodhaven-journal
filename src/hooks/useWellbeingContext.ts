@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { stillGetWellbeingContext, type WellbeingContext } from '../lib/stillService';
 import { useSettingsStore } from '../stores/settingsStore';
 
@@ -62,16 +62,16 @@ export function useWellbeingContext(): WellbeingState {
     };
   }, []);
 
-  function dismiss() {
+  const dismiss = useCallback(() => {
     setIsVisible(false);
-  }
+  }, []);
 
   // Called by WritingView when word count crosses the 5-word threshold
-  function onWordsWritten(wordCount: number) {
-    if (wordCount >= 5 && isVisible) {
+  const onWordsWritten = useCallback((wordCount: number) => {
+    if (wordCount >= 5) {
       setIsVisible(false);
     }
-  }
+  }, []);
 
   return { context, isVisible, dismiss, onWordsWritten };
 }

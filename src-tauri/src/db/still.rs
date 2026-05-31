@@ -401,7 +401,7 @@ pub fn get_wellbeing_context(db: &Database) -> Result<WellbeingContext, String> 
                 "SELECT DISTINCT date(created_at) as d
                  FROM journal_entries
                  ORDER BY d DESC
-                 LIMIT 400",
+                 LIMIT 1000",
             )
             .map_err(|e| format!("streak prepare: {e}"))?;
 
@@ -419,12 +419,12 @@ pub fn get_wellbeing_context(db: &Database) -> Result<WellbeingContext, String> 
                 streak += 1;
                 check -= chrono::Duration::days(1);
             } else if streak == 0 {
-                // Allow missing today — check if yesterday started the streak
-                let yesterday_str = check.format("%Y-%m-%d").to_string();
-                if date_str == &yesterday_str {
-                    check -= chrono::Duration::days(1);
+                // Allow missing today — check if yesterday started the streak.
+                // check is still today here; compute actual yesterday before comparing.
+                let yesterday = check - chrono::Duration::days(1);
+                if date_str == &yesterday.format("%Y-%m-%d").to_string() {
                     streak += 1;
-                    check -= chrono::Duration::days(1);
+                    check = yesterday - chrono::Duration::days(1);
                 } else {
                     break;
                 }
@@ -794,6 +794,19 @@ mod tests {
         assert_eq!(ctx.yesterday_entry_count, 2);
         let avg = ctx.yesterday_mood_avg.expect("should have avg");
         assert!((avg - 4.0).abs() < 0.001, "expected avg 4.0, got {avg}");
+    }
+
+    #[test]
+    fn get_wellbeing_context_streak_from_only_yesterday() {
+        let db = test_db();
+        insert_entry_yesterday(&db, "e1", 3);
+        let ctx = get_wellbeing_context(&db).unwrap();
+        // Streak of 1: no entry today, but yesterday counts (allow-missing-today path)
+        assert_eq!(
+            ctx.streak_days, 1,
+            "yesterday-only should give streak 1, got {}",
+            ctx.streak_days
+        );
     }
 
     #[test]

@@ -2,7 +2,7 @@
  * Writing-specific utility functions — extracted from WritingView for testability.
  */
 
-export const MILESTONES = [50, 100, 200, 500] as const;
+const MILESTONES = [50, 100, 200, 500] as const;
 
 /**
  * Returns a "X min read" label when wordCount >= 200, null otherwise.

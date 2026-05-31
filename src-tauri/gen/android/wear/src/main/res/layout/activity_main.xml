@@ -2,7 +2,7 @@
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#000000">
+    android:background="@color/wear_surface">
 
     <androidx.viewpager2.widget.ViewPager2
         android:id="@+id/viewPager"
@@ -38,7 +38,7 @@
         android:visibility="gone"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="#FF10B981">
+        android:background="@color/mood_great">
 
         <LinearLayout
             android:layout_width="wrap_content"
@@ -59,7 +59,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:textSize="18sp"
-                android:textColor="#FFFFFF"
+                android:textColor="@color/wear_text_primary"
                 android:textStyle="bold"
                 android:gravity="center"
                 android:layout_marginTop="4dp" />
@@ -69,7 +69,7 @@
                 android:layout_height="wrap_content"
                 android:text="Mood logged ✓"
                 android:textSize="11sp"
-                android:textColor="#CCFFFFFF"
+                android:textColor="@color/wear_text_primary_alpha80"
                 android:gravity="center"
                 android:layout_marginTop="4dp" />
 
@@ -79,7 +79,7 @@
                 android:layout_height="wrap_content"
                 android:text="🎙 Add a note"
                 android:textSize="12sp"
-                android:textColor="#FFFFFF"
+                android:textColor="@color/wear_text_primary"
                 android:gravity="center"
                 android:layout_marginTop="14dp"
                 android:paddingStart="14dp"
@@ -99,7 +99,7 @@
         android:visibility="gone"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="#FF1E293B">
+        android:background="@color/wear_mood_queued_bg">
 
         <LinearLayout
             android:layout_width="wrap_content"
@@ -120,7 +120,7 @@
                 android:layout_height="wrap_content"
                 android:text="Saved for later"
                 android:textSize="14sp"
-                android:textColor="#FFFFFF"
+                android:textColor="@color/wear_text_primary"
                 android:textStyle="bold"
                 android:gravity="center"
                 android:layout_marginTop="8dp" />
@@ -130,7 +130,7 @@
                 android:layout_height="wrap_content"
                 android:text="Syncs when phone is near"
                 android:textSize="11sp"
-                android:textColor="#88FFFFFF"
+                android:textColor="@color/wear_text_primary_alpha53"
                 android:gravity="center"
                 android:layout_marginTop="4dp" />
 

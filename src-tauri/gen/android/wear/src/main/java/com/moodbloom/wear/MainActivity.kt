@@ -9,6 +9,7 @@ import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.lifecycleScope
 import androidx.viewpager2.adapter.FragmentStateAdapter
 import androidx.viewpager2.widget.ViewPager2
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -49,6 +50,7 @@ class MainActivity : FragmentActivity(),
     private lateinit var queuedEmoji:         TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        installSplashScreen()
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
@@ -69,6 +71,12 @@ class MainActivity : FragmentActivity(),
         )
 
         viewPager.adapter = MainPagerAdapter(this)
+        viewPager.setPageTransformer { page, position ->
+            val absPos = Math.abs(position)
+            page.alpha = 1f - absPos * 0.5f
+            page.scaleX = 1f - absPos * 0.08f
+            page.scaleY = page.scaleX
+        }
 
         // BreatheSummaryActivity can request a specific start page
         val startPage = intent.getIntExtra(EXTRA_START_PAGE, PAGE_RECORD)
@@ -89,6 +97,7 @@ class MainActivity : FragmentActivity(),
 
     override fun onMoodSelected(mood: MoodItem) {
         hapticTap(this)
+        window.decorView.postDelayed({ hapticTap(this) }, 80)
         MoodHistory.record(this, mood.level)
 
         lifecycleScope.launch {

@@ -22,10 +22,20 @@
 
 ---
 
-## Phase 2 — Watch Polish Sprint ← NEXT
+## Phase 2 — Watch Polish Sprint ✅ COMPLETE
 
 **Goal:** High-polish watch UX before any phone integration work. Fixes rough edges
 on all 4 existing pages, adds the Breathe page, and reshapes navigation.
+
+### Delivered
+- `RecordFragment`: labeled [😊 Mood] [🧘 Breathe] shortcut row; ambient mood wash from last logged mood (12% opacity)
+- `ArcProgressView`: fills clockwise over 10 minutes, amber at 80%, red at 95%
+- `MainActivity`: double-tap haptic on mood confirm (80ms apart); fade+scale `PageTransformer` on ViewPager2
+- `MoodPickerFragment`: ambient background colour shift; "How are you?" label fades on first scroll; ✓ badge on last-sent mood
+- `SyncFragment`: recordings today count, last sync relative time, separate voice/mood queue counts
+- `BreatheFragment`: HR-based suggestion chip; ambient tint driven by centered mode; `WheelLayoutCallback` drum-roll
+- Navigation: 5 pages (History | Record | Mood | Breathe | Sync); `BreatheModeDetailActivity`, `BreatheSessionActivity`, `BreatheSummaryActivity` all wired and registered
+- `HealthSnapshot`: expanded to capture steps delta + coarse activity classification (still/walking/running)
 
 ---
 
@@ -389,12 +399,23 @@ useWearSignals({ password, onVoiceMemo: addMemo });
 
 ---
 
-## Phase 5 — Metadata, Drafts & AI Enrichment
+## Phase 5 — Metadata, Drafts & AI Enrichment ✅ COMPLETE
 
 **Goal:** Turn raw transcriptions into rich, reviewable draft journal entries:
 richer watch-side health context → phone assembles a readable context string →
 mood is inferred locally → user opens a pre-filled editor → one tap publishes
 to the journal.
+
+### Delivered
+- DB: 4 new columns on `voice_memos` (`context`, `inferred_mood`, `book_id`, `reviewed`)
+- `VoiceMemoRow` struct extended; `SELECT_COLS`/`map_memo_row` helpers for consistency
+- 5 new Tauri commands: `patch_voice_memo_context`, `patch_voice_memo_mood`, `publish_voice_memo_draft`, `discard_voice_memo_draft`, `list_pending_drafts`
+- `voiceMemoService.ts`: 5 IPC wrappers + `suggestHashtags()` utility
+- `useWearVoiceMemos`: post-transcription mood inference via `scoreContentMood` + `patchVoiceMemoMood`
+- `useVoiceMemoDrafts` hook: `publishDraft` (encrypts + promotes to journal_entries), `discardDraft`, `refresh`
+- `VoiceMemoDraftCard`: duration, context chip, 2-line transcript preview, mood dots, Review/Discard CTAs
+- `VoiceDraftEditor`: TipTap editor pre-filled from transcript, `MoodSelector`, hashtag suggestion pills, Publish button
+- `TimelineView`: draft cards above date groups; editor overlay wired to `sessionPassword`
 
 ---
 

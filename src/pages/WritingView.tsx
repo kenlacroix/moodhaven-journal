@@ -31,6 +31,7 @@ import { getReadingTime, didHitMilestone } from '../lib/utils/writingUtils';
 import { extractHashtags } from '../lib/utils/markdownUtils';
 import { pickAndAttachMedia, listEntryMedia, openMedia, deleteMedia, getMediaThumbnail } from '../lib/services/mediaService';
 import { RichTextEditor } from '../components/editor';
+import { AppearanceDrawer } from '../components/writing/AppearanceDrawer';
 import type { Editor } from '@tiptap/react';
 import { PromptDrawer } from '../components/ai/PromptDrawer';
 import { EntryOptionsMenu } from '../components/journal/EntryOptionsMenu';
@@ -245,13 +246,19 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
 
   const [savedEntry, setSavedEntry] = useState<JournalEntry | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [appearanceDrawerOpen, setAppearanceDrawerOpen] = useState(false);
+  const appearanceToggleRef = useRef<HTMLButtonElement | null>(null);
+  const [pulseAppearanceHint, setPulseAppearanceHint] = useState(false);
   const [tagManagerOpen, setTagManagerOpen] = useState(false);
   const [usedTemplateIds, setUsedTemplateIds] = useState<string[]>(() => getUsedTemplates());
   const setShowPrompts = useSettingsStore((s) => s.setShowPrompts);
   const showPrompts = useSettingsStore((s) => s.settings.journal.showPrompts);
   const distractionFree = useSettingsStore((s) => s.distractionFree);
+  const writingAppearance = useSettingsStore((s) => s.settings.appearance.writing);
   const { isAndroid, isBrowser } = usePlatform();
   const setDistractionFree = useSettingsStore((s) => s.setDistractionFree);
+  const hasSeenWritingDrawerHint = useSettingsStore((s) => s.settings.tutorial.hasSeenWritingDrawerHint);
+  const setHasSeenWritingDrawerHint = useSettingsStore((s) => s.setHasSeenWritingDrawerHint);
   const sttModel = useSettingsStore((s) => s.settings.speechToText.model);
   const sttEnabled = useSettingsStore((s) => s.settings.speechToText.enabled);
 
@@ -358,13 +365,18 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
 
   // Keyboard shortcuts (F5):
   //   Ctrl/Cmd+Shift+F — toggle distraction-free mode
-  //   1–5             — set mood (only when editor is not focused)
-  //   ?               — open shortcut cheatsheet (only when editor is not focused)
+  //   Ctrl/Cmd+,       — open writing appearance drawer
+  //   1–5              — set mood (only when editor is not focused)
+  //   ?                — open shortcut cheatsheet (only when editor is not focused)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'f') {
         e.preventDefault();
         setDistractionFree(!distractionFree);
+      }
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key === ',') {
+        e.preventDefault();
+        setAppearanceDrawerOpen((v) => !v);
       }
       if (e.key === 'Escape' && distractionFree) {
         e.preventDefault();
@@ -391,6 +403,18 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [distractionFree, setDistractionFree]);
+
+  // First-visit discoverability pulse for the appearance toggle.
+  // Writes the flag immediately (optimistic) so the pulse never re-fires
+  // if the user closes the app mid-animation. Reset via Factory Reset.
+  useEffect(() => {
+    if (hasSeenWritingDrawerHint) return;
+    setPulseAppearanceHint(true);
+    setHasSeenWritingDrawerHint(true);
+    const t = setTimeout(() => setPulseAppearanceHint(false), 3000);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // mount only — intentional
 
   // Load existing entry if editing
   useEffect(() => {
@@ -1133,7 +1157,44 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
 
   // ── Desktop layout ────────────────────────────────────────────────────────────
   return (
-    <div className={`h-full flex flex-col transition-all duration-500 ${distractionFree ? 'focus-bg' : 'writing-bg'}`}>
+    <div
+      data-writing-prefs
+      data-writing-font={writingAppearance.fontFamily}
+      data-writing-size={writingAppearance.fontSize}
+      data-writing-line-height={writingAppearance.lineHeight}
+      data-writing-paragraph-spacing={writingAppearance.paragraphSpacing}
+      data-writing-tint={writingAppearance.backgroundTint}
+      data-writing-width={writingAppearance.writingWidth}
+      data-writing-focus-mode={writingAppearance.focusMode ? 'true' : 'false'}
+      data-writing-high-contrast={writingAppearance.highContrast ? 'true' : 'false'}
+      data-writing-dyslexia={writingAppearance.dyslexiaProfile ? 'true' : 'false'}
+      style={{ ['--mh-writing-text-scale' as string]: String(writingAppearance.textScale) }}
+      className={`h-full flex flex-col transition-all duration-500 ${distractionFree ? 'focus-bg' : 'writing-bg'}`}
+    >
+      {/* Writing appearance drawer (Cmd/Ctrl+,) */}
+      <button
+        ref={appearanceToggleRef}
+        type="button"
+        onClick={() => setAppearanceDrawerOpen((v) => !v)}
+        aria-label="Writing appearance"
+        aria-expanded={appearanceDrawerOpen}
+        aria-keyshortcuts="Meta+, Control+,"
+        title="Writing appearance (⌘,)"
+        className={`fixed top-3 right-3 z-30 p-2 rounded-lg bg-white/70 dark:bg-slate-900/70 backdrop-blur text-neutral-500 hover:text-neutral-900 dark:text-slate-400 dark:hover:text-slate-100 hover:bg-white dark:hover:bg-slate-900 shadow-sm ring-1 ring-neutral-200 dark:ring-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center ${pulseAppearanceHint ? 'drawer-hint-pulse' : ''} ${distractionFree ? 'opacity-30 hover:opacity-100' : ''}`}
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <line x1="4" y1="21" x2="4" y2="14" /><line x1="4" y1="10" x2="4" y2="3" />
+          <line x1="12" y1="21" x2="12" y2="12" /><line x1="12" y1="8" x2="12" y2="3" />
+          <line x1="20" y1="21" x2="20" y2="16" /><line x1="20" y1="12" x2="20" y2="3" />
+          <line x1="1" y1="14" x2="7" y2="14" /><line x1="9" y1="8" x2="15" y2="8" /><line x1="17" y1="16" x2="23" y2="16" />
+        </svg>
+      </button>
+      <AppearanceDrawer
+        open={appearanceDrawerOpen}
+        onClose={() => setAppearanceDrawerOpen(false)}
+        returnFocusTo={appearanceToggleRef.current}
+      />
+
       <div className="flex-1 flex flex-col min-h-0 px-4 sm:px-8 lg:px-12 py-4 sm:py-7 lg:py-10">
         <div className="flex-1 flex flex-col w-full min-h-0 relative">
 
@@ -1201,7 +1262,7 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
           <div
             onFocus={() => setIsEditorFocused(true)}
             onBlur={() => setIsEditorFocused(false)}
-            className={`flex-1 flex flex-col min-h-0 bg-white dark:bg-slate-900 rounded-2xl px-4 sm:px-6 lg:px-8 pt-4 sm:pt-5 pb-4 sm:pb-7 transition-all duration-300 relative ${
+            className={`editor-surface flex-1 flex flex-col min-h-0 bg-white dark:bg-slate-900 rounded-2xl px-4 sm:px-6 lg:px-8 pt-4 sm:pt-5 pb-4 sm:pb-7 transition-all duration-300 relative ${
               isEditorFocused
                 ? 'shadow-lg shadow-violet-500/10 ring-1 ring-violet-500/10'
                 : 'shadow-sm'

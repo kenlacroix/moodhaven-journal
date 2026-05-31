@@ -25,7 +25,10 @@ import {
   type SyncErrorEvent,
   type PeerRevokedUsEvent,
 } from '../lib/services/peerSyncEngineService';
-import { logger } from '../lib/services/logger';
+import { forModule } from '../lib/services/logger';
+
+const peerLog = forModule('peer');
+const syncLog = forModule('sync');
 
 /** Returns true if host is an RFC-1918 private address (LAN-local). */
 function isLanAddress(host: string): boolean {
@@ -96,7 +99,7 @@ export function usePeerSync({ enabled = true }: { enabled?: boolean } = {}) {
           myDeviceIdRef.current = identity.deviceId;
         }
       } catch (e) {
-        logger.warn('[peerSync] Failed to load identity:', { error: String(e) });
+        peerLog.warn('Failed to load identity:', { error: String(e) });
       } finally {
         if (!cancelled) setIdentityLoading(false);
       }
@@ -106,7 +109,7 @@ export function usePeerSync({ enabled = true }: { enabled?: boolean } = {}) {
         const trusted = await getTrustedDevices();
         if (!cancelled) setTrustedDevices(trusted);
       } catch (e) {
-        logger.warn('[peerSync] Failed to load trusted devices:', { error: String(e) });
+        peerLog.warn('Failed to load trusted devices:', { error: String(e) });
       }
 
       // Wire up event listeners before starting discovery
@@ -117,12 +120,12 @@ export function usePeerSync({ enabled = true }: { enabled?: boolean } = {}) {
           if (peer.isTrusted && peer.isOnline) {
             // LAN-only mode: skip if peer host is not a private (RFC-1918) address
             if (lanOnlyRef.current && !isLanAddress(peer.host)) {
-              logger.info('[sync] Skipping auto-sync — LAN-only mode and peer is not on LAN:');
+              syncLog.info('Skipping auto-sync — LAN-only mode and peer is not on LAN:');
             } else if (peer.deviceId < myDeviceIdRef.current) {
               // Initiator convention: the device with the lower device_id always connects.
               // This prevents both devices from opening sessions to each other simultaneously,
               // which wastes a round-trip and causes DB mutex contention on the same machine.
-              logger.info('[sync] Skipping auto-sync — peer has lower device_id, they will initiate');
+              syncLog.info('Skipping auto-sync — peer has lower device_id, they will initiate');
             } else {
               const now = Date.now();
               const last = syncCooldownsRef.current.get(peer.deviceId) ?? 0;
@@ -130,7 +133,7 @@ export function usePeerSync({ enabled = true }: { enabled?: boolean } = {}) {
               if (now - last > cooldownMs) {
                 syncCooldownsRef.current.set(peer.deviceId, now);
                 peerSyncNow(peer.deviceId, peer.host).catch((e) =>
-                  logger.warn('[sync] Auto-sync failed:', { error: String(e) })
+                  syncLog.warn('Auto-sync failed:', { error: String(e) })
                 );
               }
             }
@@ -154,7 +157,7 @@ export function usePeerSync({ enabled = true }: { enabled?: boolean } = {}) {
           const peer = nearbyPeers.find((p) => p.deviceId === device.deviceId);
           if (peer?.host) {
             peerSyncNow(device.deviceId, peer.host).catch((e) =>
-              logger.warn('[sync] Post-pairing auto-sync failed:', { error: String(e) })
+              syncLog.warn('Post-pairing auto-sync failed:', { error: String(e) })
             );
           }
         }
@@ -219,7 +222,7 @@ export function usePeerSync({ enabled = true }: { enabled?: boolean } = {}) {
         const peers = await getNearbyPeers();
         if (!cancelled) setNearbyPeers(peers);
       } catch (e) {
-        logger.warn('[peerSync] Failed to start discovery:', { error: String(e) });
+        peerLog.warn('Failed to start discovery:', { error: String(e) });
       }
     }
 

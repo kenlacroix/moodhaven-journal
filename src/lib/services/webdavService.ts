@@ -7,7 +7,9 @@
 
 import { httpFetch as fetch } from './http';
 import type { WebDAVConfig } from '../../types/settings';
-import { logger } from './logger';
+import { forModule } from './logger';
+
+const log = forModule('sync');
 
 export interface WebDAVResponse {
   success: boolean;
@@ -272,7 +274,7 @@ async function ensureSubdirectory(config: WebDAVConfig, subpath: string): Promis
   // 201 = created, 405 = already exists, 301/302 redirects — all acceptable
   if (response.status !== 201 && response.status !== 405 && !response.ok) {
     // Non-fatal: log but don't throw; some WebDAV servers return 200 for MKCOL
-    logger.warn('ensureSubdirectory: unexpected status', { subpath, status: response.status });
+    log.warn('ensureSubdirectory: unexpected status', { subpath, status: response.status });
   }
 }
 

@@ -6,7 +6,7 @@
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#000000">
+    android:background="@color/wear_surface">
 
     <!-- Ambient tint (colour driven by focused mode) -->
     <View
@@ -28,7 +28,7 @@
         android:layout_marginTop="26dp"
         android:text="Breathe"
         android:textSize="11sp"
-        android:textColor="#66FFFFFF" />
+        android:textColor="@color/wear_text_primary_alpha40" />
 
     <!-- HR suggestion chip — shown only when a recent reading suggests a mode -->
     <TextView
@@ -41,9 +41,9 @@
         android:paddingEnd="8dp"
         android:paddingTop="3dp"
         android:paddingBottom="3dp"
-        android:background="#1A1A2E"
+        android:background="@color/wear_surface_deep"
         android:textSize="10sp"
-        android:textColor="#FCD34D"
+        android:textColor="@color/brand_accent_amber"
         android:visibility="gone"
         android:text="💛 HR 94 · Try 😌 Relax" />
 

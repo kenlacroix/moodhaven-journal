@@ -72,15 +72,22 @@ For heavy crypto files, use Node environment: `// @vitest-environment node` at t
 - E2E, visual regression (future work)
 - React hooks in isolation — test through components
 
-## Current Coverage (as of v1.0.0)
+## Current Coverage (as of v1.2.0)
 | Test File | Tests |
 |-----------|-------|
-| `backend/browser.test.ts` | 43 |
+| `lib/backend/browser.test.ts` | 43 |
+| `lib/backend/browser-invoke.test.ts` | 5 |
+| `components/ai/AICardWrapper.test.tsx` | 8 |
+| `components/ai/WeeklyStreakCard.test.tsx` | 5 |
 | `components/analytics/MoodDistributionChart.test.tsx` | 3 |
 | `components/calendar/CalendarDay.test.tsx` | 3 |
+| `components/ErrorBoundary.test.tsx` | 3 |
+| `components/journal/EntryStateBadge.test.tsx` | 5 |
 | `components/journal/MoodSelector.test.tsx` | 9 |
+| `components/journal/TagCloud.test.tsx` | 6 |
 | `components/journal/TemplateSelector.test.tsx` | 9 |
 | `components/layout/Sidebar.test.tsx` | 9 |
+| `components/settings/SelectiveExportPanel.test.tsx` | 4 |
 | `components/stt/MicrophoneBlockedModal.test.tsx` | 9 |
 | `components/stt/MicrophonePermissionModal.test.tsx` | 8 |
 | `components/timecapsule/SealEntryModal.test.tsx` | 6 |
@@ -88,30 +95,54 @@ For heavy crypto files, use Node environment: `// @vitest-environment node` at t
 | `components/transcript/CloudConsentModal.test.tsx` | 7 |
 | `components/transcript/TranscriptPreviewOverlay.test.tsx` | 11 |
 | `components/updater/UpdatePanel.test.tsx` | 4 |
+| `components/voice-memo/VoiceDraftEditor.test.tsx` | 8 |
+| `components/voice-memo/VoiceMemoDraftCard.test.tsx` | 9 |
+| `components/writing/AppearanceDrawer.test.tsx` | 6 |
+| `hooks/use2FASetup.test.ts` | 7 |
+| `hooks/useAnalytics.test.ts` | 17 |
+| `hooks/useAppBanners.test.ts` | 5 |
+| `hooks/useCalendar.test.ts` | 27 |
 | `hooks/useInsights.test.ts` | 7 |
+| `hooks/useJournalPrompts.test.ts` | 26 |
+| `hooks/useOuraContext.test.ts` | 62 |
 | `hooks/useSpeechToText.test.ts` | 7 |
-| `lib/aiService.test.ts` | 28 |
-| `lib/analyticsService.test.ts` | 12 |
-| `lib/chartUtils.test.ts` | 27 |
-| `lib/cloudSyncService.test.ts` | 13 |
-| `lib/crypto.test.ts` | 24 |
-| `lib/dataManagementService.test.ts` | 8 |
-| `lib/dateUtils.test.ts` | 61 |
-| `lib/journalService.test.ts` | 3 |
-| `lib/journalTemplates.test.ts` | 10 |
-| `lib/logger.test.ts` | 15 |
-| `lib/metadataExtractor.test.ts` | 84 |
-| `lib/rateLimitService.test.ts` | 43 |
-| `lib/recoveryKeyService.test.ts` | 8 |
-| `lib/reminderService.test.ts` | 25 |
-| `lib/secureStorage.test.ts` | 10 |
-| `lib/timeCapsuleService.test.ts` | 6 |
-| `lib/transcriptFormatter.test.ts` | 18 |
-| `lib/webdavService.test.ts` | 34 |
-| `lib/writingUtils.test.ts` | 10 |
+| `hooks/useVoiceMemoDrafts.test.ts` | 12 |
+| `hooks/useWearVoiceMemos.test.ts` | 9 |
+| `lib/services/aiService.test.ts` | 28 |
+| `lib/services/analyticsService.test.ts` | 12 |
+| `lib/services/cloudSyncService.test.ts` | 13 |
+| `lib/services/crypto.test.ts` | 24 |
+| `lib/services/dataManagementService.test.ts` | 8 |
+| `lib/services/http.test.ts` | 5 |
+| `lib/services/journalService.test.ts` | 3 |
+| `lib/services/logger.test.ts` | 15 |
+| `lib/services/rateLimitService.test.ts` | 43 |
+| `lib/services/recoveryKeyService.test.ts` | 8 |
+| `lib/services/reminderService.test.ts` | 25 |
+| `lib/services/secureStorage.test.ts` | 10 |
+| `lib/services/settingsService.test.ts` | 10 |
+| `lib/services/timeCapsuleService.test.ts` | 6 |
+| `lib/services/voiceMemoService.test.ts` | 14 |
+| `lib/services/webdavService.test.ts` | 34 |
+| `lib/utils/chartUtils.test.ts` | 27 |
+| `lib/utils/dateUtils.test.ts` | 61 |
+| `lib/utils/journalTemplates.test.ts` | 10 |
+| `lib/utils/metadataExtractor.test.ts` | 84 |
+| `lib/utils/transcriptFormatter.test.ts` | 18 |
+| `lib/utils/writingUtils.test.ts` | 10 |
+| `modules/stillhaven/engine/bioMapping.test.ts` | 20 |
+| `modules/stillhaven/handoff.test.ts` | 16 |
+| `modules/stillhaven/StillhavenConsentModal.test.tsx` | 12 |
+| `modules/stillhaven/components/AbandonedSessionPrompt.test.tsx` | 4 |
+| `modules/stillhaven/components/ActivationDial.test.tsx` | 6 |
+| `modules/stillhaven/components/HrvInput.test.tsx` | 5 |
+| `modules/stillhaven/components/ProtocolPicker.test.tsx` | 7 |
+| `modules/stillhaven/components/WelcomeCard.test.tsx` | 5 |
 | `pages/TimelineView.test.tsx` | 9 |
 | `stores/appStore.test.ts` | 18 |
+| `stores/booksStore.test.ts` | 25 |
+| `stores/peerSyncStore.test.ts` | 43 |
 | `stores/settingsStore.test.ts` | 18 |
-| `backend/browser-invoke.test.ts` | 5 |
-| `lib/services/settingsService.test.ts` | 10 |
-| **Total** | **702** |
+| `stores/stillStore.test.ts` | 31 |
+| `types/writingAppearance.test.ts` | 4 |
+| **Total** | **1142 (70 files)** |

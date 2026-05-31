@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  MoodHaven theme for the Wear OS companion.
+
+  Inherits from Theme.DeviceDefault so all Wear OS system behavior
+  (rotary input, swipe-back, ambient mode) is preserved. Only overrides
+  brand-relevant color attributes.
+
+  When system-level theming hooks (colorPrimary, etc.) are honored by
+  Material widgets, they will use the brand violet. Custom views still
+  reference @color/brand_* directly.
+-->
+<resources>
+
+  <style name="Theme.MoodHaven" parent="@android:style/Theme.DeviceDefault">
+    <item name="android:colorPrimary">@color/brand_primary_500</item>
+    <item name="android:colorAccent">@color/brand_primary_400</item>
+    <item name="android:windowBackground">@color/wear_surface</item>
+    <item name="android:colorBackground">@color/wear_surface</item>
+    <item name="android:textColorPrimary">@color/wear_text_primary</item>
+    <item name="android:textColorSecondary">@color/wear_text_secondary</item>
+  </style>
+
+  <!-- Translucent variant for the tile-action trampoline activity -->
+  <style name="Theme.MoodHaven.Translucent" parent="@android:style/Theme.Translucent.NoTitleBar">
+    <item name="android:colorPrimary">@color/brand_primary_500</item>
+    <item name="android:colorAccent">@color/brand_primary_400</item>
+  </style>
+
+  <!-- Splash screen theme — applied to MainActivity on launch only.
+       The SplashScreen API removes the splash and transitions to Theme.MoodHaven
+       automatically once the first frame is drawn. -->
+  <style name="Theme.MoodHaven.Splash" parent="Theme.SplashScreen">
+    <item name="windowSplashScreenBackground">@color/wear_surface</item>
+    <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_foreground</item>
+    <item name="postSplashScreenTheme">@style/Theme.MoodHaven</item>
+  </style>
+
+</resources>

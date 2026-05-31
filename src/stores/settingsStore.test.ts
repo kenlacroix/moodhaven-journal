@@ -167,6 +167,58 @@ describe('settingsStore', () => {
         true
       );
     });
+
+    describe('setWritingAppearance', () => {
+      it('merges a partial patch into appearance.writing', () => {
+        useSettingsStore.getState().setWritingAppearance({ fontFamily: 'iowan' });
+        const writing = useSettingsStore.getState().settings.appearance.writing;
+        expect(writing.fontFamily).toBe('iowan');
+        // Other defaults preserved
+        expect(writing.backgroundTint).toBe('cream');
+        expect(writing.fontSize).toBe('md');
+        expect(useSettingsStore.getState().hasUnsavedChanges).toBe(true);
+      });
+
+      it('clamps textScale above 2.0 down to 2.0', () => {
+        useSettingsStore.getState().setWritingAppearance({ textScale: 5 });
+        expect(
+          useSettingsStore.getState().settings.appearance.writing.textScale
+        ).toBe(2.0);
+      });
+
+      it('clamps textScale below 0.8 up to 0.8', () => {
+        useSettingsStore.getState().setWritingAppearance({ textScale: 0.1 });
+        expect(
+          useSettingsStore.getState().settings.appearance.writing.textScale
+        ).toBe(0.8);
+      });
+
+      it('falls back to 1.0 when textScale is NaN', () => {
+        useSettingsStore.getState().setWritingAppearance({ textScale: NaN });
+        expect(
+          useSettingsStore.getState().settings.appearance.writing.textScale
+        ).toBe(1.0);
+      });
+
+      it('preserves writing when patch is empty', () => {
+        const before =
+          useSettingsStore.getState().settings.appearance.writing;
+        useSettingsStore.getState().setWritingAppearance({});
+        const after =
+          useSettingsStore.getState().settings.appearance.writing;
+        expect(after).toEqual(before);
+      });
+    });
+
+    it('setHasSeenWritingDrawerHint flips the tutorial flag', () => {
+      expect(
+        useSettingsStore.getState().settings.tutorial.hasSeenWritingDrawerHint
+      ).toBe(false);
+      useSettingsStore.getState().setHasSeenWritingDrawerHint(true);
+      expect(
+        useSettingsStore.getState().settings.tutorial.hasSeenWritingDrawerHint
+      ).toBe(true);
+    });
   });
 
   describe('privacy setters', () => {

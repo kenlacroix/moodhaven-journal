@@ -1,6 +1,6 @@
 # Tauri Command Reference
 
-> **Version:** v1.1.0 | **Total commands:** ~134
+> **Version:** v1.2.0 | **Total commands:** ~139
 >
 > This document lists all `#[tauri::command]` functions exposed by MoodHaven Journal's Rust backend.
 > Commands are registered in `src-tauri/src/lib.rs` and permitted in `src-tauri/capabilities/default.json`.
@@ -1289,6 +1289,67 @@ Transcribe a stored voice memo using the whisper.cpp sidecar. Returns the transc
 
 ```typescript
 invoke('transcribe_voice_memo', { id: string }) → Promise<string>
+```
+
+---
+
+### `patch_voice_memo_context`
+
+Attach biometric context (hr, steps, activity) to a voice memo after transcription. Used by `useWearVoiceMemos` to store the expanded `HealthSnapshot` payload.
+
+```typescript
+invoke('patch_voice_memo_context', {
+  id: string,
+  context: string,   // JSON: { hr?: number, steps?: number, activity?: 'still'|'walking'|'running' }
+}) → Promise<void>
+```
+
+---
+
+### `patch_voice_memo_mood`
+
+Set the inferred mood on a voice memo. Called after `scoreContentMood` runs on the transcription.
+
+```typescript
+invoke('patch_voice_memo_mood', {
+  id: string,
+  mood: number,   // 1–5
+}) → Promise<void>
+```
+
+---
+
+### `list_pending_drafts`
+
+Return voice memos that have a transcription, have not been linked to a journal entry, and have not been reviewed (reviewed = 0). Used by `useVoiceMemoDrafts` to populate the draft card list in Timeline.
+
+```typescript
+invoke('list_pending_drafts', { limit?: number }) → Promise<VoiceMemoRow[]>
+```
+
+---
+
+### `publish_voice_memo_draft`
+
+Create a journal entry from a voice memo draft, mark the memo as reviewed, and link the two records. Accepts the encrypted content produced by `crypto.ts` in the frontend.
+
+```typescript
+invoke('publish_voice_memo_draft', {
+  memoId: string,
+  encryptedContent: { iv: string; data: string; salt: string },
+  mood: number,
+  bookId?: string,
+}) → Promise<JournalEntryRow>
+```
+
+---
+
+### `discard_voice_memo_draft`
+
+Mark a voice memo as reviewed without creating a journal entry. Removes the memo record and its audio file.
+
+```typescript
+invoke('discard_voice_memo_draft', { id: string }) → Promise<void>
 ```
 
 ---

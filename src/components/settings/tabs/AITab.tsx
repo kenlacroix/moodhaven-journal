@@ -1,6 +1,9 @@
 import type { RefObject } from 'react';
 import type { AppSettings } from '../../../types/settings';
-import { SettingSection, SettingToggle, SettingSelect, SettingInput } from '../index';
+import { SettingSection } from '../SettingSection';
+import { SettingToggle } from '../SettingToggle';
+import { SettingSelect } from '../SettingSelect';
+import { SettingInput } from '../SettingInput';
 import { testOpenAIKey, testLocalAIConnection } from '../../../lib/services/settingsService';
 
 interface AITabProps {

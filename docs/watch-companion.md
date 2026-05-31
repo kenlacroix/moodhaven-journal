@@ -137,6 +137,11 @@ Voice memos appear in a dedicated section of the Writing view (or a future Memos
 | `get_voice_memo` | Get a single memo by ID |
 | `delete_voice_memo` | Delete memo and audio file |
 | `patch_voice_memo_transcription` | Update transcription text after STT |
+| `patch_voice_memo_context` | Attach biometric context (hr, steps, activity) after transcription |
+| `patch_voice_memo_mood` | Set inferred mood after `scoreContentMood` runs |
+| `list_pending_drafts` | List memos ready to review in the draft pipeline |
+| `publish_voice_memo_draft` | Create a journal entry from a draft; mark memo reviewed |
+| `discard_voice_memo_draft` | Discard a draft without creating an entry |
 | `link_voice_memo_to_entry` | Associate memo with a created journal entry |
 | `transcribe_voice_memo` | Run whisper.cpp sidecar on the audio file |
 | `create_signal` | Store a mood tap or health snapshot from the watch |
@@ -146,7 +151,7 @@ Voice memos appear in a dedicated section of the Writing view (or a future Memos
 
 ## Health Context
 
-At the time of recording, the watch can capture a health snapshot — heart rate, step count, activity level — and attach it to the voice memo as `health_json`. This context is:
+At the time of recording, the watch captures a health snapshot — heart rate, step count delta, and coarse activity classification (`still` / `walking` / `running`) — and attaches it to the voice memo as `health_json`. The `HealthSnapshot` schema (v1.2.0+) is: `{ hr?: number, steps?: number, activity?: 'still' | 'walking' | 'running' }`. This context is:
 
 - Stored unencrypted alongside the memo metadata (not in journal content).
 - Optionally surfaced in the Writing view as a badge (same as Oura Ring context).
@@ -159,21 +164,24 @@ At the time of recording, the watch can capture a health snapshot — heart rate
 | Phase | Status | Summary |
 |:---|:---|:---|
 | 1 — Core Recording | ✅ Complete | Recording UI, AudioQueue, ChannelAPI transfer, desktop receipt |
-| 2 — UX Polish | In Progress | Record arc, breathe screen, nav improvements, idle state |
+| 2 — UX Polish | ✅ Complete (2e) | Record arc, shortcut row (Mood/Breathe), ambient mood wash, double-tap haptic, fade+scale PageTransformer |
+| B — Brand Sweep | ✅ Complete | 60+ hardcoded hex literals replaced with `@color/` references; 13 named color entries added |
+| C — Splash Screen | ✅ Complete | `Theme.MoodHaven.Splash` using `androidx.core:core-splashscreen`; OLED-black background |
+| 5a — HealthSnapshot | ✅ Complete | Steps delta + coarse activity classification added to `HealthSnapshot.capture()` |
+| 5 — Draft Pipeline | ✅ Complete | Desktop voice memo draft cards in Timeline; `VoiceMemoDraftCard`, `VoiceDraftEditor`, `useVoiceMemoDrafts`, 5 new Tauri commands |
 | 3 — Phone Integration | Upcoming | Journal creation from watch, sync status display on watch |
 | 4 — Deep Integration | Upcoming | Watch-side entry preview, mood correlation, activity badges |
-| 5 — Watch Gateway | Planned | Watch as LAN sync relay for the full peer sync network |
 
 ---
 
 ## Setup
 
-> The watch companion requires a paired Android phone with the MoodHaven Journal bridge app installed. Full setup instructions will be published when the Phase 2 release is available.
+> The watch companion requires a paired Android phone with the MoodHaven Journal bridge app installed. Phase 2 (UX Polish) and the voice memo draft pipeline (Phase 5) are available in v1.2.0.
 
 **Requirements:**
 - Wear OS 3.0+ watch
 - Android 11+ phone with Bluetooth pairing to the watch
-- MoodHaven Journal desktop app v0.7.0+
+- MoodHaven Journal desktop app v1.2.0+
 
 **To set up:**
 1. Install the MoodHaven Journal companion APK on your phone.

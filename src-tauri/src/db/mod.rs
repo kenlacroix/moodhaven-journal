@@ -132,10 +132,7 @@ impl Database {
         );
 
         // Runtime migration: StillHaven session link (J3)
-        let _ = conn.execute(
-            "ALTER TABLE journal_entries ADD COLUMN session_id TEXT",
-            [],
-        );
+        let _ = conn.execute("ALTER TABLE journal_entries ADD COLUMN session_id TEXT", []);
 
         // Runtime migration: word count stored at write time (v1.3.0)
         let _ = conn.execute(
@@ -356,6 +353,21 @@ impl Database {
         // Runtime migration: add raw_transcription column to voice_memos (idempotent)
         let _ = conn.execute(
             "ALTER TABLE voice_memos ADD COLUMN raw_transcription TEXT",
+            [],
+        );
+
+        // Runtime migrations: voice memo draft columns (Phase 5)
+        let _ = conn.execute("ALTER TABLE voice_memos ADD COLUMN context TEXT", []);
+        let _ = conn.execute(
+            "ALTER TABLE voice_memos ADD COLUMN inferred_mood INTEGER",
+            [],
+        );
+        let _ = conn.execute(
+            "ALTER TABLE voice_memos ADD COLUMN book_id TEXT NOT NULL DEFAULT 'default'",
+            [],
+        );
+        let _ = conn.execute(
+            "ALTER TABLE voice_memos ADD COLUMN reviewed INTEGER NOT NULL DEFAULT 0",
             [],
         );
 

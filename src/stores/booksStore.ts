@@ -78,7 +78,7 @@ export const useBooksStore = create<BooksState>((set, get) => ({
       const key = 'mb_pending_book_tombstones';
       const existing: string[] = JSON.parse(localStorage.getItem(key) ?? '[]');
       if (!existing.includes(id)) {
-        localStorage.setItem(key, JSON.stringify([...existing, id])); // nosemgrep: localstorage-sensitive (book tombstone UUIDs, not secrets)
+        localStorage.setItem(key, JSON.stringify([...existing, id])); // nosemgrep: no-localstorage-secrets (book tombstone UUIDs, not secrets)
       }
     } catch { /* non-critical */ }
 

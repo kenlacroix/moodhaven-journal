@@ -66,15 +66,7 @@ pub fn store_voice_memo(
     if id.is_empty() {
         return Err("store_voice_memo: id must not be empty".to_string());
     }
-    if incoming_file.is_empty() {
-        return Err("store_voice_memo: incoming_file must not be empty".to_string());
-    }
-    // Reject path traversal: incoming_file must be a plain filename with no directory
-    // components. Path::join silently resolves ".." and "/" allowing escape from the
-    // incoming staging directory — validate before joining.
-    if incoming_file.contains('/') || incoming_file.contains('\\') || incoming_file.contains("..") {
-        return Err("store_voice_memo: incoming_file must be a plain filename".to_string());
-    }
+    validate_incoming_filename(&incoming_file).map_err(|e| format!("store_voice_memo: {e}"))?;
 
     let src = incoming_dir(&app)?.join(&incoming_file);
     let dest_dir = voice_memos_dir(&app)?;

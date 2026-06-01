@@ -184,7 +184,10 @@ mod tests {
     #[test]
     fn known_protocol_values_accepted() {
         for p in VALID_PROTOCOLS {
-            assert!(VALID_PROTOCOLS.contains(p), "protocol {p} should be in allowlist");
+            assert!(
+                VALID_PROTOCOLS.contains(p),
+                "protocol {p} should be in allowlist"
+            );
         }
     }
 
@@ -198,7 +201,10 @@ mod tests {
     #[test]
     fn known_environment_values_accepted() {
         for e in VALID_ENVIRONMENTS {
-            assert!(VALID_ENVIRONMENTS.contains(e), "environment {e} should be in allowlist");
+            assert!(
+                VALID_ENVIRONMENTS.contains(e),
+                "environment {e} should be in allowlist"
+            );
         }
     }
 
@@ -211,7 +217,10 @@ mod tests {
     #[test]
     fn known_bilateral_mode_values_accepted() {
         for m in VALID_BILATERAL_MODES {
-            assert!(VALID_BILATERAL_MODES.contains(m), "bilateral_mode {m} should be in allowlist");
+            assert!(
+                VALID_BILATERAL_MODES.contains(m),
+                "bilateral_mode {m} should be in allowlist"
+            );
         }
     }
 

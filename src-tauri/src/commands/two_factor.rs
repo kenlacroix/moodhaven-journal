@@ -205,8 +205,13 @@ fn hash_backup_code_v2(code: &str) -> String {
     rand::thread_rng().fill_bytes(&mut salt);
 
     let mut derived = [0u8; 32];
-    pbkdf2::<Hmac<Sha256>>(normalized.as_bytes(), &salt, BACKUP_CODE_PBKDF2_ITERATIONS, &mut derived)
-        .expect("PBKDF2 is infallible for valid inputs");
+    pbkdf2::<Hmac<Sha256>>(
+        normalized.as_bytes(),
+        &salt,
+        BACKUP_CODE_PBKDF2_ITERATIONS,
+        &mut derived,
+    )
+    .expect("PBKDF2 is infallible for valid inputs");
 
     let b64 = base64::engine::general_purpose::STANDARD;
     format!(
@@ -241,11 +246,22 @@ fn verify_backup_code_hash(code: &str, stored: &str) -> bool {
             return false;
         }
         let mut derived = [0u8; 32];
-        if pbkdf2::<Hmac<Sha256>>(normalized.as_bytes(), &salt, BACKUP_CODE_PBKDF2_ITERATIONS, &mut derived).is_err() {
+        if pbkdf2::<Hmac<Sha256>>(
+            normalized.as_bytes(),
+            &salt,
+            BACKUP_CODE_PBKDF2_ITERATIONS,
+            &mut derived,
+        )
+        .is_err()
+        {
             return false;
         }
         // Constant-time comparison
-        derived.iter().zip(stored_hash.iter()).fold(0u8, |acc, (a, b)| acc | (a ^ b)) == 0
+        derived
+            .iter()
+            .zip(stored_hash.iter())
+            .fold(0u8, |acc, (a, b)| acc | (a ^ b))
+            == 0
     } else {
         // v1 legacy: bare SHA-256 hex (no salt). Accept but log for migration tracking.
         let mut hasher = Sha256::new();
@@ -257,7 +273,10 @@ fn verify_backup_code_hash(code: &str, stored: &str) -> bool {
         if a.len() != b.len() {
             return false;
         }
-        a.iter().zip(b.iter()).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
+        a.iter()
+            .zip(b.iter())
+            .fold(0u8, |acc, (x, y)| acc | (x ^ y))
+            == 0
     }
 }
 
@@ -585,7 +604,9 @@ pub fn disable_2fa(
         return Err("Session is locked".to_string());
     }
     if !twofa_state.is_fully_authenticated() {
-        return Err("Authentication incomplete: cannot disable 2FA without completing auth".to_string());
+        return Err(
+            "Authentication incomplete: cannot disable 2FA without completing auth".to_string(),
+        );
     }
     disable_2fa_in_db(&db)?;
     Ok(true)
@@ -738,7 +759,10 @@ mod tests {
         // Each call generates a fresh random salt — two hashes of the same code differ.
         let h1 = hash_backup_code_v2("ABCD-EFGH");
         let h2 = hash_backup_code_v2("ABCD-EFGH");
-        assert_ne!(h1, h2, "different salts should yield different stored hashes");
+        assert_ne!(
+            h1, h2,
+            "different salts should yield different stored hashes"
+        );
     }
 
     #[test]
@@ -759,8 +783,14 @@ mod tests {
         // User might type "abcdefgh" or "ABCD-EFGH" — both must match.
         let code = "ABCD-EFGH";
         let stored = hash_backup_code_v2(code);
-        assert!(verify_backup_code_hash("abcdefgh", &stored), "lowercase no-dash should match");
-        assert!(verify_backup_code_hash("abcd-efgh", &stored), "lowercase with-dash should match");
+        assert!(
+            verify_backup_code_hash("abcdefgh", &stored),
+            "lowercase no-dash should match"
+        );
+        assert!(
+            verify_backup_code_hash("abcd-efgh", &stored),
+            "lowercase with-dash should match"
+        );
     }
 
     #[test]
@@ -773,7 +803,10 @@ mod tests {
         hasher.update(normalized.as_bytes());
         let legacy_hash = hex_encode(hasher.finalize().as_slice());
         // v1 hash must still verify against the code.
-        assert!(verify_backup_code_hash(code, &legacy_hash), "legacy v1 hash must still work");
+        assert!(
+            verify_backup_code_hash(code, &legacy_hash),
+            "legacy v1 hash must still work"
+        );
     }
 
     #[test]

@@ -682,7 +682,10 @@ mod tests {
     #[test]
     fn twofa_initial_state_not_authenticated() {
         let state = TwoFactorPendingState::new();
-        assert!(!state.is_fully_authenticated(), "new state must not be authenticated");
+        assert!(
+            !state.is_fully_authenticated(),
+            "new state must not be authenticated"
+        );
     }
 
     #[test]
@@ -696,7 +699,10 @@ mod tests {
     fn twofa_password_only_with_2fa_required_is_not_authenticated() {
         let state = TwoFactorPendingState::new();
         state.on_password_verified(true); // 2FA is required
-        assert!(!state.is_fully_authenticated(), "2FA required but not completed");
+        assert!(
+            !state.is_fully_authenticated(),
+            "2FA required but not completed"
+        );
     }
 
     #[test]
@@ -713,7 +719,10 @@ mod tests {
         state.on_password_verified(true);
         state.on_twofa_completed();
         state.reset();
-        assert!(!state.is_fully_authenticated(), "reset must clear auth state");
+        assert!(
+            !state.is_fully_authenticated(),
+            "reset must clear auth state"
+        );
     }
 
     #[test]
@@ -721,7 +730,7 @@ mod tests {
         // Simulates: attacker calls on_twofa_completed() without verify_password first.
         let state = TwoFactorPendingState::new();
         state.on_twofa_completed(); // called out of order
-        // password_verified is still false → not fully authenticated
+                                    // password_verified is still false → not fully authenticated
         assert!(!state.is_fully_authenticated());
     }
 }

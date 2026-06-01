@@ -165,12 +165,12 @@ pub async fn factory_reset(app: AppHandle) -> Result<bool, String> {
         "logs",
         "peer_key.bin",
         "trusted_devices.json",
-        "device.json",                   // Ed25519 public key metadata (low-sensitivity but stale)
-        "pw_lockout.json",               // Password rate-limiter state — reset with the app
-        "voice_memos",                   // Encrypted audio files from watch companion
-        "voice_memos_incoming",          // Staging directory for incoming watch audio
-        "media",                         // Encrypted media attachments
-        "moodhaven_restore.pending",     // Staged full-restore DB file — must not re-apply after reset
+        "device.json",     // Ed25519 public key metadata (low-sensitivity but stale)
+        "pw_lockout.json", // Password rate-limiter state — reset with the app
+        "voice_memos",     // Encrypted audio files from watch companion
+        "voice_memos_incoming", // Staging directory for incoming watch audio
+        "media",           // Encrypted media attachments
+        "moodhaven_restore.pending", // Staged full-restore DB file — must not re-apply after reset
         "moodhaven_restore.pending.sha256", // Integrity check file for the above
     ];
     for file in files_to_delete {

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { healthSnapshotToSpeed } from '../modules/stillhaven/engine/bioMapping';
 import { useStillStore } from '../stores/stillStore';
 import type { HealthSnapshotPayload } from '../types/signals';
@@ -31,8 +31,10 @@ export function useStillBioFeedback({ enabled, baseSpeed }: Options): Result {
       return;
     }
 
-    // Reset count at the start of each session
+    // Reset count and speed tracking at the start of each session
     adaptationsRef.current = 0;
+    smoothedRef.current = baseSpeed;
+    appliedHzRef.current = baseSpeed;
 
     // No-op in browser / web build — Tauri events are unavailable.
     if (typeof window === 'undefined' || !('__TAURI_INTERNALS__' in window)) {
@@ -95,5 +97,7 @@ export function useStillBioFeedback({ enabled, baseSpeed }: Options): Result {
     };
   }, [enabled, baseSpeed]);
 
-  return { isAdapting, getAdaptations: () => adaptationsRef.current };
+  const getAdaptations = useCallback(() => adaptationsRef.current, []);
+
+  return { isAdapting, getAdaptations };
 }

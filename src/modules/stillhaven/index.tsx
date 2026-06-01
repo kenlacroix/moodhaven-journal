@@ -290,6 +290,7 @@ export function StillView({ onHandoff }: StillViewProps): React.JSX.Element {
 
   const handleRestart = useCallback(() => {
     sessionIdRef.current = null;
+    adaptationsAtEndRef.current = 0;
     setCheckIn({ protocol: null, preActivation: null });
     setCheckOut({ postActivation: null, hrv: null, note: '' });
     setSummary(null);

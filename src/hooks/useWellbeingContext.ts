@@ -10,6 +10,8 @@ export interface WellbeingState {
   onWordsWritten: (wordCount: number) => void;
 }
 
+const OURA_RETRY_DELAY_MS = 4000;
+
 const TODAY_KEY = () => {
   const d = new Date();
   return `wellbeing_card_last_shown_${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -38,7 +40,7 @@ export function useWellbeingContext(): WellbeingState {
       invoke('set_setting', { key: 'wellbeing_card_last_shown', value: key }).catch(() => null);
 
       // oura_sync_today may still be in-flight at mount time. If readiness is null
-      // but Oura is connected, do a single retry after 4s to pick up the synced data.
+      // but Oura is connected, do a single retry to pick up the synced data.
       if (ctx.oura_readiness_today === null) {
         const { settings } = useSettingsStore.getState();
         if (settings.oura.connectedAt !== null) {
@@ -48,7 +50,7 @@ export function useWellbeingContext(): WellbeingState {
             if (!cancelled && fresh && fresh.oura_readiness_today !== null) {
               setContext(fresh);
             }
-          }, 4000);
+          }, OURA_RETRY_DELAY_MS);
         }
       }
     }

@@ -11,6 +11,7 @@ import {
   hasPassword,
   setupPassword,
   unlockJournal,
+  finalizeUnlock as finalizeUnlockService,
   lockJournal,
   devBypassUnlock,
 } from '../lib/services/journalService';
@@ -30,6 +31,7 @@ interface AppState {
   checkInitialization: () => Promise<void>;
   initialize: (password: string) => Promise<boolean>;
   unlock: (password: string) => Promise<boolean>;
+  finalizeUnlock: (password: string) => Promise<boolean>;
   lock: () => void;
   setTheme: (theme: 'light' | 'dark' | 'system') => void;
 }
@@ -84,6 +86,22 @@ export const useAppStore = create<AppState>((set) => ({
       return success;
     } catch (error) {
       logger.error('Failed to unlock:', { error: String(error) });
+      return false;
+    }
+  },
+
+  // Finalize an already-authenticated session (after 2FA or session bridge).
+  // Does NOT call verify_password — use this when the Rust TwoFactorPendingState
+  // is already fully authenticated and calling verify_password again would reset it.
+  finalizeUnlock: async (password: string) => {
+    try {
+      const success = await finalizeUnlockService(password);
+      if (success) {
+        set({ isUnlocked: true, sessionPassword: password });
+      }
+      return success;
+    } catch (error) {
+      logger.error('Failed to finalize unlock:', { error: String(error) });
       return false;
     }
   },

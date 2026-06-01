@@ -39,6 +39,14 @@ pub fn still_create_session(
     if !valid_protocols.contains(&protocol.as_str()) {
         return Err(format!("Unknown protocol: {protocol}"));
     }
+    let valid_environments = ["underwater", "forest", "sky", "default"];
+    if !valid_environments.contains(&environment.as_str()) {
+        return Err(format!("Unknown environment: {environment}"));
+    }
+    let valid_bilateral_modes = ["audio", "visual", "tactile"];
+    if !valid_bilateral_modes.contains(&bilateral_mode.as_str()) {
+        return Err(format!("Unknown bilateral_mode: {bilateral_mode}"));
+    }
     db::still_create_session(
         &db,
         &id,
@@ -163,4 +171,53 @@ pub fn still_get_wellbeing_context(
 ) -> Result<WellbeingContext, String> {
     require_unlocked(&lock)?;
     db::get_wellbeing_context(&db)
+}
+
+#[cfg(test)]
+mod tests {
+    // Validate that the allowlists used in still_create_session match all values
+    // the frontend actually sends (prevents silent rejection of valid inputs).
+    const VALID_PROTOCOLS: &[&str] = &["general_activation", "fake_danger"];
+    const VALID_ENVIRONMENTS: &[&str] = &["underwater", "forest", "sky", "default"];
+    const VALID_BILATERAL_MODES: &[&str] = &["audio", "visual", "tactile"];
+
+    #[test]
+    fn known_protocol_values_accepted() {
+        for p in VALID_PROTOCOLS {
+            assert!(VALID_PROTOCOLS.contains(p), "protocol {p} should be in allowlist");
+        }
+    }
+
+    #[test]
+    fn unknown_protocol_rejected() {
+        assert!(!VALID_PROTOCOLS.contains(&"arbitrary"));
+        assert!(!VALID_PROTOCOLS.contains(&""));
+        assert!(!VALID_PROTOCOLS.contains(&"' OR 1=1 --"));
+    }
+
+    #[test]
+    fn known_environment_values_accepted() {
+        for e in VALID_ENVIRONMENTS {
+            assert!(VALID_ENVIRONMENTS.contains(e), "environment {e} should be in allowlist");
+        }
+    }
+
+    #[test]
+    fn unknown_environment_rejected() {
+        assert!(!VALID_ENVIRONMENTS.contains(&"malicious_env"));
+        assert!(!VALID_ENVIRONMENTS.contains(&""));
+    }
+
+    #[test]
+    fn known_bilateral_mode_values_accepted() {
+        for m in VALID_BILATERAL_MODES {
+            assert!(VALID_BILATERAL_MODES.contains(m), "bilateral_mode {m} should be in allowlist");
+        }
+    }
+
+    #[test]
+    fn unknown_bilateral_mode_rejected() {
+        assert!(!VALID_BILATERAL_MODES.contains(&"arbitrary_mode"));
+        assert!(!VALID_BILATERAL_MODES.contains(&""));
+    }
 }

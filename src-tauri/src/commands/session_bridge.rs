@@ -7,9 +7,12 @@
 //!   `retrieve_session_password`.
 //! - `retrieve_session_password` atomically takes the value (returns it and
 //!   clears the slot), so the password can only be consumed once.
+//! - `store_session_password` requires an unlocked session — prevents bridge
+//!   poisoning from the locked lock screen.
 //! - The Rust process already holds the SQLite DB and processes all IPC — this
 //!   is the same trust boundary the app already relies on.
 
+use crate::AppLockState;
 use std::sync::Mutex;
 
 pub struct SessionBridge {
@@ -32,11 +35,16 @@ impl SessionBridge {
 
 /// Called by the main window just before opening the breakout writer.
 /// Stores the session password for single retrieval.
+/// Requires an unlocked session — prevents bridge poisoning from the lock screen.
 #[tauri::command]
 pub fn store_session_password(
     state: tauri::State<SessionBridge>,
+    lock: tauri::State<'_, AppLockState>,
     password: String,
 ) -> Result<(), String> {
+    if lock.is_locked() {
+        return Err("Session is locked".to_string());
+    }
     let mut slot = state.password.lock().map_err(|e| e.to_string())?;
     *slot = Some(password);
     Ok(())

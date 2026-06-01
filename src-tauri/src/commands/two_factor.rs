@@ -525,11 +525,16 @@ pub fn verify_backup_code(
         let mut hashed_codes: Vec<String> = serde_json::from_str(&backup_codes_json)
             .map_err(|e| format!("Invalid backup codes data: {}", e))?;
 
-        // Find the first code that matches (supports mixed v1/v2 hashes in the list)
-        if let Some(pos) = hashed_codes
-            .iter()
-            .position(|h| verify_backup_code_hash(&code, h))
-        {
+        // Scan all codes without short-circuiting to avoid leaking timing info
+        // about which position matched (each verify_backup_code_hash call is
+        // constant-time internally, but .position() would stop early).
+        let mut match_pos: Option<usize> = None;
+        for (i, h) in hashed_codes.iter().enumerate() {
+            if verify_backup_code_hash(&code, h) && match_pos.is_none() {
+                match_pos = Some(i);
+            }
+        }
+        if let Some(pos) = match_pos {
             hashed_codes.remove(pos);
 
             // Update the database with remaining codes

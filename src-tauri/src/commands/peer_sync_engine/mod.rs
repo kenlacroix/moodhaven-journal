@@ -683,7 +683,7 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
         match msg {
             Msg::Entry { row } => {
                 if recv_entries.len() >= need_entries_by_me.len() + 1000 {
-                    return Err("Received more entries than expected".into());
+                    return Err("Sync protocol error: unexpected entry count".into());
                 }
                 recv_entries.push(row);
             }
@@ -726,7 +726,7 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
         match read_msg_enc(&mut stream, &key)? {
             Msg::Book { row } => {
                 if recv_books.len() >= need_books_by_me.len() + 500 {
-                    return Err("Received more books than expected".into());
+                    return Err("Sync protocol error: unexpected book count".into());
                 }
                 recv_books.push(row);
             }
@@ -768,7 +768,7 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
         match read_msg_enc(&mut stream, &key)? {
             Msg::Signal { row } => {
                 if recv_signals.len() >= need_signals_by_me.len() + 10_000 {
-                    return Err("Received more signals than expected".into());
+                    return Err("Sync protocol error: unexpected signal count".into());
                 }
                 recv_signals.push(row);
             }
@@ -834,7 +834,7 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
                 updated_at: ua,
             } => {
                 if recv_settings.len() >= need_settings_by_me.len() + 100 {
-                    return Err("Received more settings than expected".into());
+                    return Err("Sync protocol error: unexpected setting count".into());
                 }
                 recv_settings.push((k, v, ua));
             }
@@ -1245,7 +1245,7 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
         match msg {
             Msg::Entry { row } => {
                 if recv_entries.len() >= need_entries_by_me.len() + 1000 {
-                    return Err("Received more entries than expected".into());
+                    return Err("Sync protocol error: unexpected entry count".into());
                 }
                 recv_entries.push(row);
             }
@@ -1290,7 +1290,7 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
         match read_msg_enc(&mut stream, &key)? {
             Msg::Book { row } => {
                 if recv_books.len() >= need_books_by_me.len() + 500 {
-                    return Err("Received more books than expected".into());
+                    return Err("Sync protocol error: unexpected book count".into());
                 }
                 recv_books.push(row);
             }
@@ -1334,7 +1334,7 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
         match read_msg_enc(&mut stream, &key)? {
             Msg::Signal { row } => {
                 if recv_signals.len() >= need_signals_by_me.len() + 10_000 {
-                    return Err("Received more signals than expected".into());
+                    return Err("Sync protocol error: unexpected signal count".into());
                 }
                 recv_signals.push(row);
             }
@@ -1382,7 +1382,7 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
                 updated_at: ua,
             } => {
                 if recv_settings.len() >= need_settings_by_me.len() + 100 {
-                    return Err("Received more settings than expected".into());
+                    return Err("Sync protocol error: unexpected setting count".into());
                 }
                 recv_settings.push((k, v, ua));
             }

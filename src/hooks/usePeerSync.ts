@@ -30,14 +30,25 @@ import { forModule } from '../lib/services/logger';
 const peerLog = forModule('peer');
 const syncLog = forModule('sync');
 
-/** Returns true if host is an RFC-1918 private address (LAN-local). */
+/** Returns true if host is a private/loopback address (LAN-local). Covers IPv4 and IPv6. */
 function isLanAddress(host: string): boolean {
-  return (
+  // IPv4: RFC-1918 + loopback
+  if (
     /^10\./.test(host) ||
     /^172\.(1[6-9]|2\d|3[01])\./.test(host) ||
     /^192\.168\./.test(host) ||
     host === '127.0.0.1' ||
     host === 'localhost'
+  ) {
+    return true;
+  }
+  // IPv6: loopback (::1), link-local (fe80::/10), unique-local (fc00::/7)
+  const lower = host.toLowerCase().replace(/^\[|\]$/g, ''); // strip [] brackets if present
+  return (
+    lower === '::1' ||
+    lower.startsWith('fe80:') ||
+    lower.startsWith('fc') ||
+    lower.startsWith('fd')
   );
 }
 

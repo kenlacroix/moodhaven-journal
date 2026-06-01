@@ -474,7 +474,10 @@ mod implementation {
 
 #[cfg(feature = "hardware-key")]
 #[tauri::command]
-pub fn hardware_key_detect() -> Result<Vec<HardwareKeyDevice>, String> {
+pub fn hardware_key_detect(
+    lock: State<'_, AppLockState>,
+) -> Result<Vec<HardwareKeyDevice>, String> {
+    require_unlocked(&lock)?;
     implementation::detect_devices()
 }
 

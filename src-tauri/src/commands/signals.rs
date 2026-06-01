@@ -16,7 +16,7 @@ use super::require_unlocked;
 
 const VALID_SIGNAL_TYPES: &[&str] = &["mood_tap", "health_snapshot", "still_trigger", "manual"];
 const VALID_SOURCES: &[&str] = &["wear_os", "oura", "manual", "stillhaven"];
-const MAX_PAYLOAD_BYTES: usize = 1_048_576; // 1 MB — encrypted signal payloads are small
+const MAX_PAYLOAD_BYTES: usize = 10_240; // 10 KB — mood_tap payloads are tiny; cap tightened for safety
 
 /// Create a new encrypted signal
 #[tauri::command]

@@ -12,6 +12,14 @@
  * - Recovery key can be used to unlock the app by decrypting the stored password
  *
  * This is a form of key escrow - the user controls the recovery key
+ *
+ * Brute-force risk: The recovery key encrypts the user's password via
+ * PBKDF2+AES-256-GCM (600k iterations). An offline attacker who obtains the
+ * encrypted blob could attempt ~30 guesses/s on dedicated GPU hardware.
+ * With 24 chars from a 32-symbol alphabet (128-bit entropy) this is
+ * computationally infeasible in practice. The UI reminds users to treat the
+ * key like a password: store it in a password manager or offline safe, never
+ * as plain text on the same device.
  */
 
 import { invoke } from '@tauri-apps/api/core';

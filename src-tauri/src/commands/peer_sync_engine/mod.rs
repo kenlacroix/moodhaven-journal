@@ -636,6 +636,9 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
         let msg = read_msg_enc(&mut stream, &key)?;
         match msg {
             Msg::Entry { row } => {
+                if recv_entries.len() >= need_entries_by_me.len() + 1000 {
+                    return Err("Received more entries than expected".into());
+                }
                 recv_entries.push(row);
             }
             Msg::Done { sent } => {
@@ -646,9 +649,6 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
                 break;
             }
             other => return Err(format!("Unexpected msg in entry recv: {other:?}")),
-        }
-        if recv_entries.len() > need_entries_by_me.len() + 1000 {
-            return Err("Received more entries than expected".into());
         }
     }
     // Send DONE_ACK for entries (connection stays open — more phases follow)
@@ -679,6 +679,9 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
     loop {
         match read_msg_enc(&mut stream, &key)? {
             Msg::Book { row } => {
+                if recv_books.len() >= need_books_by_me.len() + 500 {
+                    return Err("Received more books than expected".into());
+                }
                 recv_books.push(row);
             }
             Msg::BooksDone { sent } => {
@@ -689,9 +692,6 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
                 break;
             }
             other => return Err(format!("Unexpected msg in books recv: {other:?}")),
-        }
-        if recv_books.len() > need_books_by_me.len() + 500 {
-            return Err("Received more books than expected".into());
         }
     }
     write_msg_enc(
@@ -721,6 +721,9 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
     loop {
         match read_msg_enc(&mut stream, &key)? {
             Msg::Signal { row } => {
+                if recv_signals.len() >= need_signals_by_me.len() + 10_000 {
+                    return Err("Received more signals than expected".into());
+                }
                 recv_signals.push(row);
             }
             Msg::SignalsDone { sent } => {
@@ -731,9 +734,6 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
                 break;
             }
             other => return Err(format!("Unexpected msg in signals recv: {other:?}")),
-        }
-        if recv_signals.len() > need_signals_by_me.len() + 10_000 {
-            return Err("Received more signals than expected".into());
         }
     }
     write_msg_enc(
@@ -787,6 +787,9 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
                 value: v,
                 updated_at: ua,
             } => {
+                if recv_settings.len() >= need_settings_by_me.len() + 100 {
+                    return Err("Received more settings than expected".into());
+                }
                 recv_settings.push((k, v, ua));
             }
             Msg::SettingsDone { sent } => {
@@ -797,9 +800,6 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
                 break;
             }
             other => return Err(format!("Unexpected msg in settings recv: {other:?}")),
-        }
-        if recv_settings.len() > need_settings_by_me.len() + 100 {
-            return Err("Received more settings than expected".into());
         }
     }
     write_msg_enc(
@@ -1185,6 +1185,9 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
         let msg = read_msg_enc(&mut stream, &key)?;
         match msg {
             Msg::Entry { row } => {
+                if recv_entries.len() >= need_entries_by_me.len() + 1000 {
+                    return Err("Received more entries than expected".into());
+                }
                 recv_entries.push(row);
             }
             Msg::Done { sent } => {
@@ -1195,9 +1198,6 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
                 break;
             }
             other => return Err(format!("Unexpected msg in entry recv: {other:?}")),
-        }
-        if recv_entries.len() > need_entries_by_me.len() + 1000 {
-            return Err("Received more entries than expected".into());
         }
     }
 
@@ -1230,6 +1230,9 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
     loop {
         match read_msg_enc(&mut stream, &key)? {
             Msg::Book { row } => {
+                if recv_books.len() >= need_books_by_me.len() + 500 {
+                    return Err("Received more books than expected".into());
+                }
                 recv_books.push(row);
             }
             Msg::BooksDone { sent } => {
@@ -1240,9 +1243,6 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
                 break;
             }
             other => return Err(format!("Unexpected msg in books recv: {other:?}")),
-        }
-        if recv_books.len() > need_books_by_me.len() + 500 {
-            return Err("Received more books than expected".into());
         }
     }
 
@@ -1274,6 +1274,9 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
     loop {
         match read_msg_enc(&mut stream, &key)? {
             Msg::Signal { row } => {
+                if recv_signals.len() >= need_signals_by_me.len() + 10_000 {
+                    return Err("Received more signals than expected".into());
+                }
                 recv_signals.push(row);
             }
             Msg::SignalsDone { sent } => {
@@ -1284,9 +1287,6 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
                 break;
             }
             other => return Err(format!("Unexpected msg in signals recv: {other:?}")),
-        }
-        if recv_signals.len() > need_signals_by_me.len() + 10_000 {
-            return Err("Received more signals than expected".into());
         }
     }
 
@@ -1322,6 +1322,9 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
                 value: v,
                 updated_at: ua,
             } => {
+                if recv_settings.len() >= need_settings_by_me.len() + 100 {
+                    return Err("Received more settings than expected".into());
+                }
                 recv_settings.push((k, v, ua));
             }
             Msg::SettingsDone { sent } => {
@@ -1332,9 +1335,6 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
                 break;
             }
             other => return Err(format!("Unexpected msg in settings recv: {other:?}")),
-        }
-        if recv_settings.len() > need_settings_by_me.len() + 100 {
-            return Err("Received more settings than expected".into());
         }
     }
 

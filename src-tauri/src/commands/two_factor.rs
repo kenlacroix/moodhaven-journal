@@ -13,7 +13,7 @@
 //! verify TOTP while the user re-enables 2FA to trigger re-encryption.
 
 use crate::db::Database;
-use crate::{PasswordRateLimiter, TwoFactorPendingState};
+use crate::{PasswordRateLimiter, TotpUsedCodes, TwoFactorPendingState};
 use aes_gcm::{aead::Aead, Aes256Gcm, KeyInit, Nonce};
 use base64::Engine as _;
 use hmac::Hmac;
@@ -658,6 +658,7 @@ pub fn verify_2fa_totp(
     db: State<Database>,
     twofa_state: State<'_, TwoFactorPendingState>,
     rate_limiter: State<'_, PasswordRateLimiter>,
+    used_codes: State<'_, TotpUsedCodes>,
     code: String,
     password: String,
 ) -> Result<bool, String> {
@@ -693,6 +694,11 @@ pub fn verify_2fa_totp(
         let time = (now as i64 + offset) as u64;
         let expected = totp.generate(time);
         if expected == code {
+            // Reject if this code was already used within the 90-second window.
+            if used_codes.check_and_record(&code, now) {
+                rate_limiter.record_failure();
+                return Ok(false);
+            }
             rate_limiter.record_success();
             twofa_state.on_twofa_completed();
             return Ok(true);

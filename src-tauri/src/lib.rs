@@ -220,6 +220,49 @@ impl Default for TwoFactorPendingState {
     }
 }
 
+/// In-memory cache of recently used TOTP codes.
+/// Key: `"{time_step}:{code}"` — time_step is unix_secs / 30.
+/// Entries are pruned when the owning time step is more than 3 steps old,
+/// so the set stays small (at most a few dozen entries in normal usage).
+pub struct TotpUsedCodes(pub Mutex<std::collections::HashSet<String>>);
+
+impl TotpUsedCodes {
+    pub fn new() -> Self {
+        TotpUsedCodes(Mutex::new(std::collections::HashSet::new()))
+    }
+
+    /// Returns true if the code has already been used for this time step.
+    /// Also evicts stale entries (steps older than current - 3).
+    pub fn check_and_record(&self, code: &str, now_secs: u64) -> bool {
+        let current_step = now_secs / 30;
+        let mut set = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        // Evict entries from steps older than current - 3 (they can never be valid again).
+        set.retain(|k| {
+            k.split_once(':')
+                .and_then(|(step_str, _)| step_str.parse::<u64>().ok())
+                .map(|step| step + 4 > current_step)
+                .unwrap_or(false)
+        });
+        // Check all three valid steps (current ± 1).
+        for offset in [-1i64, 0, 1] {
+            let step = (current_step as i64 + offset) as u64;
+            let key = format!("{step}:{code}");
+            if set.contains(&key) {
+                return true; // already used
+            }
+        }
+        // Record use for the current step.
+        set.insert(format!("{current_step}:{code}"));
+        false
+    }
+}
+
+impl Default for TotpUsedCodes {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 use commands::peer_discovery::PeerDiscoveryState;
 use commands::peer_pairing::PairingServerState;
 use commands::peer_sync_engine::SyncEngineState;
@@ -358,6 +401,9 @@ pub fn run() {
             // 2FA pending state — enforces that both auth factors are complete
             // before unlock_app succeeds, even if the frontend skips the 2FA step.
             app.manage(TwoFactorPendingState::new());
+
+            // TOTP replay prevention — tracks used codes for the current 90s window.
+            app.manage(TotpUsedCodes::new());
 
             // One-shot session bridge for breakout writer password hand-off
             app.manage(SessionBridge::new());

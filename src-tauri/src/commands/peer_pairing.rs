@@ -137,9 +137,10 @@ fn check_pairing_lockout(app: &AppHandle) -> Result<(), String> {
         return Ok(());
     }
     let json = std::fs::read_to_string(&path).unwrap_or_default();
-    let locked_until: i64 = serde_json::from_str::<serde_json::Value>(&json)
-        .ok()
-        .and_then(|v| v.get("locked_until").and_then(|t| t.as_i64()))
+    let v = serde_json::from_str::<serde_json::Value>(&json).unwrap_or_default();
+    let locked_until: i64 = v
+        .get("locked_until")
+        .and_then(|t| t.as_i64())
         .unwrap_or(0);
     let now = chrono::Utc::now().timestamp();
     if now < locked_until {
@@ -149,16 +150,76 @@ fn check_pairing_lockout(app: &AppHandle) -> Result<(), String> {
              Try again in {remaining} seconds."
         ));
     }
-    // Lockout expired — remove stale file
-    let _ = std::fs::remove_file(&path);
+    // Lockout expired — but preserve failure count if still recent (< 30 min)
+    let last_failure: i64 = v
+        .get("last_failure_at")
+        .and_then(|t| t.as_i64())
+        .unwrap_or(0);
+    if locked_until > 0 && now - last_failure > 1800 {
+        let _ = std::fs::remove_file(&path);
+    }
     Ok(())
 }
 
+/// Read the persistent cumulative failure count for this pairing instance.
+/// Returns 0 if the file is missing or the last failure was more than 30 minutes ago.
+fn load_cumulative_failures(app: &AppHandle) -> u32 {
+    let path = match lockout_path(app) {
+        Ok(p) => p,
+        Err(_) => return 0,
+    };
+    if !path.exists() {
+        return 0;
+    }
+    let json = std::fs::read_to_string(&path).unwrap_or_default();
+    let v = serde_json::from_str::<serde_json::Value>(&json).unwrap_or_default();
+    let last_failure: i64 = v
+        .get("last_failure_at")
+        .and_then(|t| t.as_i64())
+        .unwrap_or(0);
+    let now = chrono::Utc::now().timestamp();
+    if now - last_failure > 1800 {
+        return 0; // failures expire after 30 minutes of no activity
+    }
+    v.get("cumulative_failures")
+        .and_then(|n| n.as_u64())
+        .map(|n| n.min(u32::MAX as u64) as u32)
+        .unwrap_or(0)
+}
+
+/// Persist a partial failure count without triggering a full lockout.
+/// Keeps an existing `locked_until` value if one is set.
+fn save_partial_failures(app: &AppHandle, count: u32) {
+    let path = match lockout_path(app) {
+        Ok(p) => p,
+        Err(_) => return,
+    };
+    let now = chrono::Utc::now().timestamp();
+    let existing_locked_until: i64 = std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
+        .and_then(|v| v.get("locked_until").and_then(|t| t.as_i64()))
+        .unwrap_or(0);
+    let json = serde_json::json!({
+        "locked_until": existing_locked_until,
+        "cumulative_failures": count,
+        "last_failure_at": now,
+    })
+    .to_string();
+    let _ = std::fs::write(&path, json);
+}
+
 /// Write a lockout file that expires LOCKOUT_DURATION_SECS from now.
-fn set_pairing_lockout(app: &AppHandle) {
+fn set_pairing_lockout(app: &AppHandle, failures: u32) {
     if let Ok(path) = lockout_path(app) {
-        let locked_until = chrono::Utc::now().timestamp() + LOCKOUT_DURATION_SECS;
-        let json = serde_json::json!({ "locked_until": locked_until }).to_string();
+        let now = chrono::Utc::now().timestamp();
+        let locked_until = now + LOCKOUT_DURATION_SECS;
+        let json = serde_json::json!({
+            "locked_until": locked_until,
+            "cumulative_failures": failures,
+            "last_failure_at": now,
+        })
+        .to_string();
         let _ = std::fs::write(&path, json);
     }
 }
@@ -307,7 +368,9 @@ fn run_pairing_server(
     let deadline = std::time::Instant::now() + Duration::from_secs(TOKEN_TTL_SECS as u64 + 10);
     log::info!("[pairing] Server started");
 
-    let mut failed_attempts: u32 = 0;
+    // Resume cumulative failure count from persistent storage so that
+    // cancelling and restarting the pairing server cannot reset the counter.
+    let mut failed_attempts: u32 = load_cumulative_failures(&app);
 
     loop {
         // Check stop signal or 5-min expiry
@@ -381,6 +444,8 @@ fn run_pairing_server(
                         == 0;
                 if !pin_match {
                     failed_attempts += 1;
+                    // Persist count immediately so it survives a session cancel/restart.
+                    save_partial_failures(&app, failed_attempts);
                     let remaining = MAX_PIN_ATTEMPTS.saturating_sub(failed_attempts);
                     log::warn!(
                         "[pairing] Invalid PIN from {addr} ({failed_attempts}/{MAX_PIN_ATTEMPTS} attempts, {remaining} remaining)"
@@ -395,7 +460,7 @@ fn run_pairing_server(
                             429,
                             "Too many failed attempts — pairing session locked",
                         );
-                        set_pairing_lockout(&app);
+                        set_pairing_lockout(&app, failed_attempts);
                         let _ = app.emit(
                             "peer:pairing_locked",
                             serde_json::json!({ "reason": "too_many_attempts" }),

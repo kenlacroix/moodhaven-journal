@@ -21,16 +21,20 @@ pub fn write_frame(stream: &mut TcpStream, payload: &[u8]) -> Result<(), String>
 }
 
 /// Read exactly the next length-prefixed frame bytes.
-/// The limit is generous (256 MB) to accommodate large binary restore chunks
-/// while still guarding against malformed frames.
+/// Capped at 16 MB for all regular protocol messages (HELLO, MANIFEST, entries, etc.).
+/// Use `read_binary_frame` for the DB restore path which needs up to 256 MB.
 pub fn read_frame_bytes(stream: &mut TcpStream) -> Result<Vec<u8>, String> {
+    read_frame_bytes_with_limit(stream, 16 * 1024 * 1024)
+}
+
+fn read_frame_bytes_with_limit(stream: &mut TcpStream, max: usize) -> Result<Vec<u8>, String> {
     let mut len_buf = [0u8; 4];
     stream
         .read_exact(&mut len_buf)
         .map_err(|e| format!("read frame length: {e}"))?;
     let len = u32::from_be_bytes(len_buf) as usize;
-    if len > 256 * 1024 * 1024 {
-        return Err(format!("Frame too large: {len} bytes"));
+    if len > max {
+        return Err(format!("Frame too large: {len} bytes (limit {max})"));
     }
     let mut buf = vec![0u8; len];
     stream
@@ -53,8 +57,9 @@ pub fn write_binary_frame(stream: &mut TcpStream, data: &[u8]) -> Result<(), Str
 }
 
 /// Read a raw binary frame (no decryption — pair with write_binary_frame).
+/// Uses a larger 256 MB limit for DB restore chunks.
 pub fn read_binary_frame(stream: &mut TcpStream) -> Result<Vec<u8>, String> {
-    read_frame_bytes(stream)
+    read_frame_bytes_with_limit(stream, 256 * 1024 * 1024)
 }
 
 // ── Message I/O ───────────────────────────────────────────────────────────────

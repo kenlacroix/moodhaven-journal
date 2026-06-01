@@ -266,10 +266,10 @@ pub fn get_session_brief(
         "SELECT s.protocol, s.duration_seconds,
                 (SELECT activation FROM still_activation_samples
                  WHERE session_id = s.id AND phase = 'pre'
-                 ORDER BY sampled_at DESC LIMIT 1) AS pre_activation,
+                 ORDER BY sampled_at DESC, ROWID DESC LIMIT 1) AS pre_activation,
                 (SELECT activation FROM still_activation_samples
                  WHERE session_id = s.id AND phase = 'post'
-                 ORDER BY sampled_at DESC LIMIT 1) AS post_activation
+                 ORDER BY sampled_at DESC, ROWID DESC LIMIT 1) AS post_activation
          FROM still_sessions s
          WHERE s.id = ?1",
         params![session_id],

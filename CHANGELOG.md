@@ -5,6 +5,13 @@ All notable changes to MoodHaven Journal are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.4.0] — 2026-05-31
+
+### Added
+- **StillHaven Effect card** — Session History now shows a per-protocol table of average activation drop and post-session mood, and a recommendation chip ("X tends to work best for you") once you have 3 or more sessions with a linked journal entry. `still_get_effect_stats` Rust command added.
+
+---
+
 ## [1.3.2.0] — 2026-06-02
 
 ### Fixed
@@ -58,7 +65,6 @@ Versions follow [Semantic Versioning](https://semver.org/).
 - **Session badge in Timeline** — lazy hover on a session-linked entry loads activation delta via `still_get_session_brief`.
 - **`WellbeingCard`** — morning context card shown once per day in the Timeline; collapses after 5 words of journaling. Driven by `useWellbeingContext` hook.
 - **Three new Rust commands**: `still_get_wellbeing_context`, `still_get_session_brief`, `still_get_journal_brief_for_session`.
-- **StillHaven Effect card** — Session History now shows a per-protocol table of average activation drop and post-session mood, and a recommendation chip ("X tends to work best for you") once you have 3 or more sessions with a linked journal entry. `still_get_effect_stats` Rust command added.
 
 ### Fixed
 - `map_entry_row` column-index bug: `status`, `session_id`, and `word_count` were reading wrong SQLite column indices since `status` was added after the original comment.

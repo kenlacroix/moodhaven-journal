@@ -346,6 +346,11 @@ pub async fn download_and_install_update(
     asset_name: String,
     expected_checksum: String,
 ) -> Result<(), String> {
+    // Validate asset_name — must be a plain filename (no path components)
+    // to prevent path traversal when joining with the temp directory.
+    crate::commands::voice_memos::validate_incoming_filename(&asset_name)
+        .map_err(|e| format!("Invalid asset_name: {e}"))?;
+
     // Safety: reject any URL that isn't github.com or objects.githubusercontent.com
     let allowed_hosts = [
         "github.com",
@@ -426,24 +431,28 @@ pub async fn download_and_install_update(
     }
     drop(file);
 
-    // Verify SHA-256 (returns false — not an error — when checksums.txt was absent)
-    let checksum_verified = verify_sha256(&tmp_path, &checksum)?;
+    // Require SHA-256 verification — abort if checksums.txt was absent.
+    if checksum.is_empty() {
+        let _ = std::fs::remove_file(&tmp_path);
+        return Err(
+            "Cannot install update: no checksums.txt found for this release. \
+             Download aborted for safety."
+                .to_string(),
+        );
+    }
+    verify_sha256(&tmp_path, &checksum)?;
 
     // Hand off to platform installer
     let install_result = install_update(&tmp_path, &asset_name);
     match &install_result {
         Ok(_) => {
-            let message = if checksum_verified {
-                "Update downloaded and verified. Installer launched.".into()
-            } else {
-                "Update downloaded (no checksum available — integrity unverified). Installer launched.".into()
-            };
+            let message = "Update downloaded and verified. Installer launched.".into();
             let _ = app.emit(
                 "update-finished",
                 DownloadFinished {
                     success: true,
                     message,
-                    checksum_verified,
+                    checksum_verified: true,
                 },
             );
         }

@@ -4,7 +4,10 @@ import { decrypt } from '../../lib/services/crypto';
 import { getMoodDelta, type CapsuleEntryRow } from '../../lib/services/timeCapsuleService';
 
 function sanitizeHtml(html: string): string {
-  return DOMPurify.sanitize(html, { USE_PROFILES: { html: true } });
+  return DOMPurify.sanitize(html, {
+    USE_PROFILES: { html: true },
+    ALLOWED_URI_REGEXP: /^(?:https?|ftp|mailto|tel):/i,
+  });
 }
 
 interface MoodDelta {

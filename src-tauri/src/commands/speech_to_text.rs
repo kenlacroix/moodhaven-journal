@@ -475,6 +475,14 @@ pub async fn stt_transcribe(
     audio_base64: String,
     model_name: String,
 ) -> Result<String, String> {
+    // Cap base64 input at ~67 MB (= 50 MB decoded) to prevent memory exhaustion
+    const MAX_AUDIO_BASE64_BYTES: usize = 67 * 1024 * 1024;
+    if audio_base64.len() > MAX_AUDIO_BASE64_BYTES {
+        return Err(format!(
+            "Audio too large ({} MB encoded, max 50 MB)",
+            audio_base64.len() / (1024 * 1024)
+        ));
+    }
     // Decode base64 audio
     let audio_bytes = STANDARD
         .decode(&audio_base64)
@@ -563,6 +571,13 @@ pub async fn stt_transcribe_timestamped(
     audio_base64: String,
     model_name: String,
 ) -> Result<TranscriptionResult, String> {
+    const MAX_AUDIO_BASE64_BYTES: usize = 67 * 1024 * 1024;
+    if audio_base64.len() > MAX_AUDIO_BASE64_BYTES {
+        return Err(format!(
+            "Audio too large ({} MB encoded, max 50 MB)",
+            audio_base64.len() / (1024 * 1024)
+        ));
+    }
     // Decode base64 audio
     let audio_bytes = STANDARD
         .decode(&audio_base64)

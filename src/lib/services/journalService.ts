@@ -201,10 +201,8 @@ export async function createEntry(
     wordCount,
   });
 
-  // Persist tags to the entry_tags table
-  if (data.tags.length > 0) {
-    await invoke('sync_entry_tags', { id, tags: data.tags });
-  }
+  // Persist tags — call unconditionally so removing all tags deletes them from DB
+  await invoke('sync_entry_tags', { id, tags: data.tags });
 
   // Link to StillHaven session if marker was present
   if (sessionId) {

@@ -25,9 +25,20 @@ pub fn check_password_exists(db: State<Database>) -> Result<bool, String> {
     db::has_password(&db)
 }
 
-/// Store password verification hash (not the password itself)
+/// Store password verification hash (not the password itself).
+/// First-run exception: allowed while locked if no password exists yet (setup flow).
+/// If a password already exists, session must be unlocked (password change flow).
 #[tauri::command]
-pub fn store_password_hash(db: State<Database>, hash: String, salt: String) -> Result<(), String> {
+pub fn store_password_hash(
+    db: State<Database>,
+    lock: State<'_, AppLockState>,
+    hash: String,
+    salt: String,
+) -> Result<(), String> {
+    let password_already_set = db::has_password(&db)?;
+    if password_already_set {
+        require_unlocked(&lock)?;
+    }
     db::set_password_hash(&db, &hash, &salt)
 }
 

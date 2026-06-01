@@ -265,7 +265,14 @@ fn cache_context(conn: &rusqlite::Connection, ctx: &OuraHealthContext) -> Result
 /// Validate a Personal Access Token by calling the Oura API.
 /// Does NOT store the token — storage is handled by the frontend (encrypted via secureStorage).
 #[tauri::command]
-pub async fn oura_validate_pat(_app: AppHandle, pat: String) -> Result<(), String> {
+pub async fn oura_validate_pat(
+    _app: AppHandle,
+    lock: tauri::State<'_, AppLockState>,
+    pat: String,
+) -> Result<(), String> {
+    if lock.is_locked() {
+        return Err("Session is locked".to_string());
+    }
     if pat.trim().is_empty() {
         return Err("Token cannot be empty".to_string());
     }

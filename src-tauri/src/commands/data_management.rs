@@ -415,10 +415,11 @@ pub async fn import_data(app: AppHandle, data: String) -> Result<i32, String> {
         let ec: db::EncryptedContent = serde_json::from_value(encrypted_content.clone())
             .map_err(|e| format!("Invalid encrypted content: {}", e))?;
 
-        let mood = entry
+        let mood = (entry
             .get("mood")
             .and_then(|v| v.as_i64())
-            .ok_or("Invalid entry: missing mood")? as i32;
+            .ok_or("Invalid entry: missing mood")? as i32)
+            .clamp(1, 5);
 
         let privacy_mode = entry
             .get("privacy_mode")
@@ -461,6 +462,18 @@ pub async fn import_data(app: AppHandle, data: String) -> Result<i32, String> {
             .get("updated_at")
             .and_then(|v| v.as_str())
             .unwrap_or("");
+        // Reject malformed or missing timestamps — both fields are required.
+        let valid_ts = |s: &str| {
+            !s.is_empty()
+                && (chrono::DateTime::parse_from_rfc3339(s).is_ok()
+                    || chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S").is_ok()
+                    || chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S%.f").is_ok())
+        };
+        if !valid_ts(created_at) || !valid_ts(updated_at) {
+            return Err(format!(
+                "Invalid timestamps in entry {id}: created_at={created_at:?}, updated_at={updated_at:?}"
+            ));
+        }
         let pinned: i32 = if entry
             .get("pinned")
             .and_then(|v| v.as_bool())
@@ -471,7 +484,17 @@ pub async fn import_data(app: AppHandle, data: String) -> Result<i32, String> {
             0
         };
         let sealed_until = entry.get("sealed_until").and_then(|v| v.as_str());
-        let capsule_type = entry.get("capsule_type").and_then(|v| v.as_str());
+        let capsule_type = entry
+            .get("capsule_type")
+            .and_then(|v| v.as_str())
+            .and_then(|ct| {
+                const VALID: &[&str] = &["letter", "vault", "anniversary"];
+                if VALID.contains(&ct) {
+                    Some(ct)
+                } else {
+                    None
+                }
+            });
         let linked_original_id = entry.get("linked_original_id").and_then(|v| v.as_str());
         let unsealed_at = entry.get("unsealed_at").and_then(|v| v.as_str());
 
@@ -517,10 +540,10 @@ pub async fn import_data(app: AppHandle, data: String) -> Result<i32, String> {
                 setting.get("key").and_then(|v| v.as_str()),
                 setting.get("value").and_then(|v| v.as_str()),
             ) {
-                // Skip keys that must not be restored from backup
-                // rate_limit_state: don't import lockout state from another device
-                // log_level: don't silently restore a debug-level setting on import
-                if key == "rate_limit_state" || key == "log_level" {
+                // Allowlist: only restore keys that are safe to import across devices.
+                // All device-specific, auth, and runtime keys are excluded.
+                const IMPORT_ALLOWED_KEYS: &[&str] = &["app_settings"];
+                if !IMPORT_ALLOWED_KEYS.contains(&key) {
                     continue;
                 }
                 conn.execute(
@@ -563,20 +586,32 @@ pub async fn import_data(app: AppHandle, data: String) -> Result<i32, String> {
     }
 
     // Import 2FA configuration (v1.1.0+)
+    // Only restore 2FA config if this device has no 2FA enabled — overwriting
+    // an active 2FA setup from a backup would silently disable the user's protection.
     if let Some(tfa) = export_data.get("twoFactor") {
         if !tfa.is_null() {
             let conn = db.conn.lock().map_err(|e| e.to_string())?;
-            let enabled = tfa.get("enabled").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-            let method = tfa.get("method").and_then(|v| v.as_str());
-            let totp_secret = tfa.get("totp_secret").and_then(|v| v.as_str());
-            let webauthn_creds = tfa.get("webauthn_credentials").and_then(|v| v.as_str());
-            let backup_codes = tfa.get("backup_codes").and_then(|v| v.as_str());
+            let existing_2fa_enabled: bool = conn
+                .query_row(
+                    "SELECT enabled FROM two_factor_auth WHERE id = 1",
+                    [],
+                    |row| row.get::<_, i32>(0),
+                )
+                .map(|v| v != 0)
+                .unwrap_or(false);
+            if !existing_2fa_enabled {
+                let enabled = tfa.get("enabled").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+                let method = tfa.get("method").and_then(|v| v.as_str());
+                let totp_secret = tfa.get("totp_secret").and_then(|v| v.as_str());
+                let webauthn_creds = tfa.get("webauthn_credentials").and_then(|v| v.as_str());
+                let backup_codes = tfa.get("backup_codes").and_then(|v| v.as_str());
 
-            conn.execute(
-                "INSERT OR REPLACE INTO two_factor_auth (id, enabled, method, totp_secret, webauthn_credentials, backup_codes, updated_at)
-                 VALUES (1, ?1, ?2, ?3, ?4, ?5, datetime('now'))",
-                rusqlite::params![enabled, method, totp_secret, webauthn_creds, backup_codes],
-            ).ok();
+                conn.execute(
+                    "INSERT OR REPLACE INTO two_factor_auth (id, enabled, method, totp_secret, webauthn_credentials, backup_codes, updated_at)
+                     VALUES (1, ?1, ?2, ?3, ?4, ?5, datetime('now'))",
+                    rusqlite::params![enabled, method, totp_secret, webauthn_creds, backup_codes],
+                ).ok();
+            }
         }
     }
 

@@ -14,6 +14,8 @@ interface Options {
 
 interface Result {
   isAdapting: boolean;
+  /** Returns the count of speed adjustments made during the current session. */
+  getAdaptations: () => number;
 }
 
 export function useStillBioFeedback({ enabled, baseSpeed }: Options): Result {
@@ -21,12 +23,16 @@ export function useStillBioFeedback({ enabled, baseSpeed }: Options): Result {
   const smoothedRef = useRef<number>(baseSpeed);
   const appliedHzRef = useRef<number>(baseSpeed);
   const staleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const adaptationsRef = useRef<number>(0);
 
   useEffect(() => {
     if (!enabled) {
       setIsAdapting(false);
       return;
     }
+
+    // Reset count at the start of each session
+    adaptationsRef.current = 0;
 
     // No-op in browser / web build — Tauri events are unavailable.
     if (typeof window === 'undefined' || !('__TAURI_INTERNALS__' in window)) {
@@ -62,6 +68,7 @@ export function useStillBioFeedback({ enabled, baseSpeed }: Options): Result {
         if (Math.abs(smoothedRef.current - appliedHzRef.current) >= MIN_DELTA) {
           appliedHzRef.current = smoothedRef.current;
           useStillStore.getState().setSpeed(smoothedRef.current);
+          adaptationsRef.current += 1;
         }
 
         setIsAdapting(true);
@@ -88,5 +95,5 @@ export function useStillBioFeedback({ enabled, baseSpeed }: Options): Result {
     };
   }, [enabled, baseSpeed]);
 
-  return { isAdapting };
+  return { isAdapting, getAdaptations: () => adaptationsRef.current };
 }

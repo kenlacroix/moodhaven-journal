@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { useEffect, useState } from 'react';
 import { stillGetWellbeingContext, type WellbeingContext } from '../lib/stillService';
+import { useSettingsStore } from '../stores/settingsStore';
 
 export interface WellbeingState {
   context: WellbeingContext | null;
@@ -20,6 +21,7 @@ export function useWellbeingContext(): WellbeingState {
 
   useEffect(() => {
     let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
     async function load() {
       const key = TODAY_KEY();
@@ -34,10 +36,28 @@ export function useWellbeingContext(): WellbeingState {
       setIsVisible(true);
       // Mark shown for today (single key, overwrites previous date — no row accumulation)
       invoke('set_setting', { key: 'wellbeing_card_last_shown', value: key }).catch(() => null);
+
+      // oura_sync_today may still be in-flight at mount time. If readiness is null
+      // but Oura is connected, do a single retry after 4s to pick up the synced data.
+      if (ctx.oura_readiness_today === null) {
+        const { settings } = useSettingsStore.getState();
+        if (settings.oura.connectedAt !== null) {
+          retryTimer = setTimeout(async () => {
+            if (cancelled) return;
+            const fresh = await stillGetWellbeingContext().catch(() => null);
+            if (!cancelled && fresh && fresh.oura_readiness_today !== null) {
+              setContext(fresh);
+            }
+          }, 4000);
+        }
+      }
     }
 
     load();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
+    };
   }, []);
 
   function dismiss() {

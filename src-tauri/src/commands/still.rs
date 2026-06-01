@@ -10,13 +10,7 @@ use crate::db::{
 use crate::AppLockState;
 use tauri::State;
 
-fn require_unlocked(lock: &State<'_, AppLockState>) -> Result<(), String> {
-    if lock.is_locked() {
-        Err("Session is locked".to_string())
-    } else {
-        Ok(())
-    }
-}
+use super::require_unlocked;
 
 /// Create a new somatic session (call before starting the bilateral engine).
 #[allow(clippy::too_many_arguments)]

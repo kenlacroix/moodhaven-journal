@@ -12,13 +12,7 @@ use crate::db::{self, Database, SignalRow, SyncLogRow};
 use crate::AppLockState;
 use tauri::State;
 
-fn require_unlocked(lock: &State<'_, AppLockState>) -> Result<(), String> {
-    if lock.is_locked() {
-        Err("Session is locked".to_string())
-    } else {
-        Ok(())
-    }
-}
+use super::require_unlocked;
 
 const VALID_SIGNAL_TYPES: &[&str] = &["mood_tap", "health_snapshot", "still_trigger", "manual"];
 const VALID_SOURCES: &[&str] = &["wear_os", "oura", "manual", "stillhaven"];

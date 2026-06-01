@@ -452,6 +452,9 @@ pub(crate) fn validate_incoming_filename(filename: &str) -> Result<(), &'static 
     if filename.is_empty() {
         return Err("filename must not be empty");
     }
+    if filename == "." {
+        return Err("filename must not be `.`");
+    }
     if filename.contains('/') || filename.contains('\\') || filename.contains("..") {
         return Err("filename must be a plain filename with no path components");
     }
@@ -494,5 +497,10 @@ mod tests {
     #[test]
     fn empty_filename_rejected() {
         assert!(validate_incoming_filename("").is_err());
+    }
+
+    #[test]
+    fn dot_filename_rejected() {
+        assert!(validate_incoming_filename(".").is_err());
     }
 }

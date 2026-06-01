@@ -37,6 +37,9 @@ const GITHUB_RAW_BASE: &str = "https://raw.githubusercontent.com";
 // User-Agent required by GitHub API (arbitrary string identifying the app)
 const USER_AGENT_STRING: &str = concat!("MoodHaven/", env!("CARGO_PKG_VERSION"));
 
+// Maximum size of a downloaded update binary (200 MB)
+const MAX_UPDATE_BYTES: u64 = 200 * 1024 * 1024;
+
 // ── Platform detection ─────────────────────────────────────────────────────────
 
 #[cfg(target_os = "linux")]
@@ -416,6 +419,14 @@ pub async fn download_and_install_update(
         file.write_all(&chunk)
             .map_err(|e| format!("Write error: {e}"))?;
         downloaded += chunk.len() as u64;
+        if downloaded > MAX_UPDATE_BYTES {
+            drop(file);
+            let _ = std::fs::remove_file(&tmp_path);
+            return Err(format!(
+                "Update too large (>{} MB)",
+                MAX_UPDATE_BYTES / (1024 * 1024)
+            ));
+        }
         let percent = (downloaded * 100)
             .checked_div(total)
             .map(|p| p.min(100) as u8)

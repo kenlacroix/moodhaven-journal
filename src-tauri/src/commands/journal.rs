@@ -11,13 +11,7 @@ use pbkdf2::pbkdf2;
 use sha2::Sha256;
 use tauri::State;
 
-fn require_unlocked(lock: &State<'_, AppLockState>) -> Result<(), String> {
-    if lock.is_locked() {
-        Err("Session is locked".to_string())
-    } else {
-        Ok(())
-    }
-}
+use super::require_unlocked;
 
 /// Check if user has set up their password
 #[tauri::command]

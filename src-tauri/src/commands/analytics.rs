@@ -9,13 +9,7 @@ use crate::db::{
 use crate::AppLockState;
 use tauri::State;
 
-fn require_unlocked(lock: &State<'_, AppLockState>) -> Result<(), String> {
-    if lock.is_locked() {
-        Err("Session is locked".to_string())
-    } else {
-        Ok(())
-    }
-}
+use super::require_unlocked;
 
 /// Get mood distribution (count per mood level 1-5)
 #[tauri::command]

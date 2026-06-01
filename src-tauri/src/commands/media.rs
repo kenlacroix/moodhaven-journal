@@ -36,13 +36,7 @@ use crate::AppLockState;
 
 const MAX_MEDIA_BYTES: u64 = 500 * 1024 * 1024; // 500 MB hard cap
 
-fn require_unlocked(lock: &State<'_, AppLockState>) -> Result<(), String> {
-    if lock.is_locked() {
-        Err("Session is locked".to_string())
-    } else {
-        Ok(())
-    }
-}
+use super::require_unlocked;
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 

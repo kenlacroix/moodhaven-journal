@@ -515,33 +515,48 @@ pub fn verify_backup_code(
         .check()
         .map_err(|secs| format!("Too many failed attempts. Try again in {secs}s."))?;
 
-    let row = get_2fa_row(&db)?.ok_or_else(|| "2FA not enabled".to_string())?;
+    let result = (|| -> Result<bool, String> {
+        let row = get_2fa_row(&db)?.ok_or_else(|| "2FA not enabled".to_string())?;
 
-    let backup_codes_json = row
-        .backup_codes
-        .ok_or_else(|| "No backup codes found".to_string())?;
+        let backup_codes_json = row
+            .backup_codes
+            .ok_or_else(|| "No backup codes found".to_string())?;
 
-    let mut hashed_codes: Vec<String> = serde_json::from_str(&backup_codes_json)
-        .map_err(|e| format!("Invalid backup codes data: {}", e))?;
+        let mut hashed_codes: Vec<String> = serde_json::from_str(&backup_codes_json)
+            .map_err(|e| format!("Invalid backup codes data: {}", e))?;
 
-    // Find the first code that matches (supports mixed v1/v2 hashes in the list)
-    if let Some(pos) = hashed_codes
-        .iter()
-        .position(|h| verify_backup_code_hash(&code, h))
-    {
-        hashed_codes.remove(pos);
+        // Find the first code that matches (supports mixed v1/v2 hashes in the list)
+        if let Some(pos) = hashed_codes
+            .iter()
+            .position(|h| verify_backup_code_hash(&code, h))
+        {
+            hashed_codes.remove(pos);
 
-        // Update the database with remaining codes
-        let updated_json = serde_json::to_string(&hashed_codes)
-            .map_err(|e| format!("JSON serialization failed: {}", e))?;
-        update_backup_codes(&db, &updated_json)?;
+            // Update the database with remaining codes
+            let updated_json = serde_json::to_string(&hashed_codes)
+                .map_err(|e| format!("JSON serialization failed: {}", e))?;
+            update_backup_codes(&db, &updated_json)?;
 
-        rate_limiter.record_success();
-        twofa_state.on_twofa_completed();
-        Ok(true)
-    } else {
-        rate_limiter.record_failure();
-        Ok(false)
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    })();
+
+    match result {
+        Ok(true) => {
+            rate_limiter.record_success();
+            twofa_state.on_twofa_completed();
+            Ok(true)
+        }
+        Ok(false) => {
+            rate_limiter.record_failure();
+            Ok(false)
+        }
+        Err(e) => {
+            rate_limiter.record_failure();
+            Err(e)
+        }
     }
 }
 
@@ -642,9 +657,14 @@ pub fn totp_needs_reencryption(db: State<Database>) -> Result<bool, String> {
 pub fn verify_2fa_totp(
     db: State<Database>,
     twofa_state: State<'_, TwoFactorPendingState>,
+    rate_limiter: State<'_, PasswordRateLimiter>,
     code: String,
     password: String,
 ) -> Result<bool, String> {
+    rate_limiter
+        .check()
+        .map_err(|secs| format!("Too many failed attempts. Try again in {secs}s."))?;
+
     let row = get_2fa_row(&db)?.ok_or_else(|| "2FA not enabled".to_string())?;
 
     if !row.enabled {
@@ -673,11 +693,13 @@ pub fn verify_2fa_totp(
         let time = (now as i64 + offset) as u64;
         let expected = totp.generate(time);
         if expected == code {
+            rate_limiter.record_success();
             twofa_state.on_twofa_completed();
             return Ok(true);
         }
     }
 
+    rate_limiter.record_failure();
     Ok(false)
 }
 

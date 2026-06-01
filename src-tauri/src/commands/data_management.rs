@@ -35,13 +35,7 @@ pub fn lock_app(
 }
 
 /// Helper used by guarded commands — returns Err if the session is locked.
-fn require_unlocked(lock: &State<'_, AppLockState>) -> Result<(), String> {
-    if lock.is_locked() {
-        Err("Session is locked".to_string())
-    } else {
-        Ok(())
-    }
-}
+use super::require_unlocked;
 
 /// Optional filters for selective export.
 /// All fields are optional; absent means "no filter" (export all).
@@ -402,122 +396,145 @@ pub async fn import_data(app: AppHandle, data: String) -> Result<i32, String> {
 
     let mut imported_count = 0;
 
-    for entry in entries {
-        let id = entry
-            .get("id")
-            .and_then(|v| v.as_str())
-            .ok_or("Invalid entry: missing id")?;
+    // Begin an explicit transaction so the entire entry import is atomic.
+    // We lock once for BEGIN, then release so the per-entry helpers can acquire
+    // the lock independently (rusqlite is non-reentrant).
+    {
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        conn.execute_batch("BEGIN IMMEDIATE")
+            .map_err(|e| format!("Failed to begin import transaction: {}", e))?;
+    }
 
-        let encrypted_content = entry
-            .get("encrypted_content")
-            .ok_or("Invalid entry: missing encrypted_content")?;
+    let import_result: Result<(), String> = (|| {
+        for entry in entries {
+            let id = entry
+                .get("id")
+                .and_then(|v| v.as_str())
+                .ok_or("Invalid entry: missing id")?;
 
-        let ec: db::EncryptedContent = serde_json::from_value(encrypted_content.clone())
-            .map_err(|e| format!("Invalid encrypted content: {}", e))?;
+            let encrypted_content = entry
+                .get("encrypted_content")
+                .ok_or("Invalid entry: missing encrypted_content")?;
 
-        let mood = (entry
-            .get("mood")
-            .and_then(|v| v.as_i64())
-            .ok_or("Invalid entry: missing mood")? as i32)
-            .clamp(1, 5);
+            let ec: db::EncryptedContent = serde_json::from_value(encrypted_content.clone())
+                .map_err(|e| format!("Invalid encrypted content: {}", e))?;
 
-        let privacy_mode = entry
-            .get("privacy_mode")
-            .and_then(|v| v.as_i64())
-            .map(|v| v as i32)
-            .unwrap_or(0)
-            .clamp(0, 2);
+            let mood = (entry
+                .get("mood")
+                .and_then(|v| v.as_i64())
+                .ok_or("Invalid entry: missing mood")? as i32)
+                .clamp(1, 5);
 
-        let location_weather = entry.get("location_weather").and_then(|v| v.as_str());
+            let privacy_mode = entry
+                .get("privacy_mode")
+                .and_then(|v| v.as_i64())
+                .map(|v| v as i32)
+                .unwrap_or(0)
+                .clamp(0, 2);
 
-        let book_id = entry.get("book_id").and_then(|v| v.as_str());
+            let location_weather = entry.get("location_weather").and_then(|v| v.as_str());
 
-        let word_count = entry
-            .get("word_count")
-            .and_then(|v| v.as_i64())
-            .map(|v| v as i32);
+            let book_id = entry.get("book_id").and_then(|v| v.as_str());
 
-        // Try to create entry (skip if already exists)
-        match db::create_entry(
-            &db,
-            id,
-            &ec,
-            mood,
-            privacy_mode,
-            location_weather,
-            book_id,
-            word_count,
-        ) {
-            Ok(_) => imported_count += 1,
-            Err(e) if e.contains("UNIQUE constraint") => continue,
-            Err(e) => return Err(e),
+            let word_count = entry
+                .get("word_count")
+                .and_then(|v| v.as_i64())
+                .map(|v| v as i32);
+
+            // Try to create entry (skip if already exists)
+            match db::create_entry(
+                &db,
+                id,
+                &ec,
+                mood,
+                privacy_mode,
+                location_weather,
+                book_id,
+                word_count,
+            ) {
+                Ok(_) => imported_count += 1,
+                Err(e) if e.contains("UNIQUE constraint") => continue,
+                Err(e) => return Err(e),
+            }
+
+            // Restore fields that create_entry does not write: timestamps, pinned, capsule columns.
+            let created_at = entry
+                .get("created_at")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let updated_at = entry
+                .get("updated_at")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            // Reject malformed or missing timestamps — both fields are required.
+            let valid_ts = |s: &str| {
+                !s.is_empty() && chrono::DateTime::parse_from_rfc3339(s).is_ok()
+            };
+            if !valid_ts(created_at) || !valid_ts(updated_at) {
+                return Err(format!(
+                    "Invalid timestamps in entry {id}: created_at={created_at:?}, updated_at={updated_at:?}"
+                ));
+            }
+            let pinned: i32 = if entry
+                .get("pinned")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false)
+            {
+                1
+            } else {
+                0
+            };
+            let sealed_until = entry.get("sealed_until").and_then(|v| v.as_str());
+            let capsule_type = entry
+                .get("capsule_type")
+                .and_then(|v| v.as_str())
+                .and_then(|ct| {
+                    const VALID: &[&str] = &["letter", "vault", "anniversary"];
+                    if VALID.contains(&ct) {
+                        Some(ct)
+                    } else {
+                        None
+                    }
+                });
+            let linked_original_id = entry.get("linked_original_id").and_then(|v| v.as_str());
+            let unsealed_at = entry.get("unsealed_at").and_then(|v| v.as_str());
+
+            {
+                let conn = db.conn.lock().map_err(|e| e.to_string())?;
+                conn.execute(
+                    "UPDATE journal_entries
+                     SET created_at = ?2, updated_at = ?3, pinned = ?4,
+                         sealed_until = ?5, capsule_type = ?6,
+                         linked_original_id = ?7, unsealed_at = ?8
+                     WHERE id = ?1",
+                    rusqlite::params![
+                        id,
+                        created_at,
+                        updated_at,
+                        pinned,
+                        sealed_until,
+                        capsule_type,
+                        linked_original_id,
+                        unsealed_at
+                    ],
+                )
+                .map_err(|e| format!("Failed to restore entry metadata: {}", e))?;
+            }
         }
+        Ok(())
+    })();
 
-        // Restore fields that create_entry does not write: timestamps, pinned, capsule columns.
-        let created_at = entry
-            .get("created_at")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
-        let updated_at = entry
-            .get("updated_at")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
-        // Reject malformed or missing timestamps — both fields are required.
-        let valid_ts = |s: &str| {
-            !s.is_empty()
-                && (chrono::DateTime::parse_from_rfc3339(s).is_ok()
-                    || chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S").is_ok()
-                    || chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S%.f").is_ok())
-        };
-        if !valid_ts(created_at) || !valid_ts(updated_at) {
-            return Err(format!(
-                "Invalid timestamps in entry {id}: created_at={created_at:?}, updated_at={updated_at:?}"
-            ));
-        }
-        let pinned: i32 = if entry
-            .get("pinned")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false)
-        {
-            1
-        } else {
-            0
-        };
-        let sealed_until = entry.get("sealed_until").and_then(|v| v.as_str());
-        let capsule_type = entry
-            .get("capsule_type")
-            .and_then(|v| v.as_str())
-            .and_then(|ct| {
-                const VALID: &[&str] = &["letter", "vault", "anniversary"];
-                if VALID.contains(&ct) {
-                    Some(ct)
-                } else {
-                    None
-                }
-            });
-        let linked_original_id = entry.get("linked_original_id").and_then(|v| v.as_str());
-        let unsealed_at = entry.get("unsealed_at").and_then(|v| v.as_str());
-
-        {
+    match import_result {
+        Ok(()) => {
             let conn = db.conn.lock().map_err(|e| e.to_string())?;
-            conn.execute(
-                "UPDATE journal_entries
-                 SET created_at = ?2, updated_at = ?3, pinned = ?4,
-                     sealed_until = ?5, capsule_type = ?6,
-                     linked_original_id = ?7, unsealed_at = ?8
-                 WHERE id = ?1",
-                rusqlite::params![
-                    id,
-                    created_at,
-                    updated_at,
-                    pinned,
-                    sealed_until,
-                    capsule_type,
-                    linked_original_id,
-                    unsealed_at
-                ],
-            )
-            .map_err(|e| format!("Failed to restore entry metadata: {}", e))?;
+            conn.execute_batch("COMMIT")
+                .map_err(|e| format!("Failed to commit import transaction: {}", e))?;
+        }
+        Err(e) => {
+            if let Ok(conn) = db.conn.lock() {
+                let _ = conn.execute_batch("ROLLBACK");
+            }
+            return Err(e);
         }
     }
 

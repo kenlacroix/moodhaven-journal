@@ -5,13 +5,7 @@ use crate::AppLockState;
 use tauri::State;
 use uuid::Uuid;
 
-fn require_unlocked(lock: &State<'_, AppLockState>) -> Result<(), String> {
-    if lock.is_locked() {
-        Err("Session is locked".to_string())
-    } else {
-        Ok(())
-    }
-}
+use super::require_unlocked;
 
 /// Maximum number of books. Prevents sync_log DoS via unbounded book creation.
 const MAX_BOOKS: i64 = 100;

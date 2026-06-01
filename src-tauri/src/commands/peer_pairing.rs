@@ -423,6 +423,28 @@ fn run_pairing_server(
                     }
                 };
 
+                // Validate field lengths to prevent memory exhaustion and log injection.
+                if req.device_id.len() > 64 {
+                    write_http_error(&mut stream, 400, "device_id too long");
+                    continue;
+                }
+                if req.device_name.len() > 256 {
+                    write_http_error(&mut stream, 400, "device_name too long");
+                    continue;
+                }
+                if req.device_type.len() > 50 {
+                    write_http_error(&mut stream, 400, "device_type too long");
+                    continue;
+                }
+                if req.public_key.len() > 200 {
+                    write_http_error(&mut stream, 400, "public_key too long");
+                    continue;
+                }
+                if req.pin.len() != 6 || !req.pin.chars().all(|c| c.is_ascii_digit()) {
+                    write_http_error(&mut stream, 400, "pin must be exactly 6 digits");
+                    continue;
+                }
+
                 // Notify the frontend that a device is attempting to pair.
                 // Fired before PIN check so the UI reacts immediately.
                 let _ = app.emit(

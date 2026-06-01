@@ -21,7 +21,12 @@ interface AppState {
   // Authentication
   isInitialized: boolean;
   isUnlocked: boolean;
-  /** Session password cached in-memory after unlock for auto-sync. Never persisted. */
+  /**
+   * Session password cached in-memory after unlock for auto-sync. Never persisted.
+   * SECURITY: prefer journalService.getSessionPassword() for new code — the module-level
+   * closure in journalService.ts is narrower in scope than this Zustand field which is
+   * readable by any component. Full migration tracked in SEC-017.
+   */
   sessionPassword: string | null;
 
   // Theme
@@ -46,6 +51,9 @@ export const useAppStore = create<AppState>((set) => ({
   // Check if user has set up password
   checkInitialization: async () => {
     if (import.meta.env.DEV && (import.meta.env.VITE_DEV_MODE === 'bypass' || import.meta.env.VITE_DEV_MODE === 'seeded')) {
+      if (import.meta.env.PROD) {
+        throw new Error('devBypassUnlock is not available in production builds');
+      }
       devBypassUnlock('dev-bypass');
       set({ isInitialized: true, isUnlocked: true, sessionPassword: 'dev-bypass' });
       if (import.meta.env.VITE_DEV_MODE === 'seeded') {

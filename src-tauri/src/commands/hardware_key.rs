@@ -26,6 +26,10 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "hardware-key")]
 use crate::db::Database;
 #[cfg(feature = "hardware-key")]
+use crate::AppLockState;
+#[cfg(feature = "hardware-key")]
+use super::require_unlocked;
+#[cfg(feature = "hardware-key")]
 use tauri::State;
 
 /// Hardware key status returned to frontend
@@ -482,7 +486,11 @@ pub fn hardware_key_status(db: State<Database>) -> Result<HardwareKeyStatus, Str
 
 #[cfg(feature = "hardware-key")]
 #[tauri::command]
-pub fn hardware_key_register(db: State<Database>) -> Result<HardwareKeyRegistration, String> {
+pub fn hardware_key_register(
+    db: State<Database>,
+    lock: State<'_, AppLockState>,
+) -> Result<HardwareKeyRegistration, String> {
+    require_unlocked(&lock)?;
     implementation::register_key(&db)
 }
 

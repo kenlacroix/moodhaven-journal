@@ -2908,6 +2908,7 @@ dependencies = [
  "uuid",
  "webkit2gtk",
  "x25519-dalek",
+ "zeroize",
 ]
 
 [[package]]

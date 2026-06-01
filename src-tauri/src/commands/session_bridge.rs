@@ -14,9 +14,10 @@
 
 use crate::AppLockState;
 use std::sync::Mutex;
+use zeroize::Zeroizing;
 
 pub struct SessionBridge {
-    pub password: Mutex<Option<String>>,
+    pub password: Mutex<Option<Zeroizing<String>>>,
 }
 
 impl Default for SessionBridge {
@@ -46,7 +47,7 @@ pub fn store_session_password(
         return Err("Session is locked".to_string());
     }
     let mut slot = state.password.lock().map_err(|e| e.to_string())?;
-    *slot = Some(password);
+    *slot = Some(Zeroizing::new(password));
     Ok(())
 }
 
@@ -57,5 +58,5 @@ pub fn retrieve_session_password(
     state: tauri::State<SessionBridge>,
 ) -> Result<Option<String>, String> {
     let mut slot = state.password.lock().map_err(|e| e.to_string())?;
-    Ok(slot.take())
+    Ok(slot.take().map(|z| z.to_string()))
 }

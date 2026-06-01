@@ -384,7 +384,8 @@ pub async fn import_data(app: AppHandle, data: String) -> Result<i32, String> {
         .and_then(|v| v.as_str())
         .unwrap_or("unknown");
 
-    if !version.starts_with("1.") {
+    const ALLOWED_IMPORT_VERSIONS: &[&str] = &["1.0", "1.1", "1.2", "1.3"];
+    if !ALLOWED_IMPORT_VERSIONS.contains(&version) {
         return Err(format!("Unsupported backup version: {}", version));
     }
 
@@ -649,22 +650,6 @@ pub async fn import_data(app: AppHandle, data: String) -> Result<i32, String> {
     Ok(imported_count)
 }
 
-/// Blocked path prefixes — never allow writing to these locations even if the
-/// parent directory exists. This defends against XSS → IPC write-primitive abuse.
-const BLOCKED_PREFIXES: &[&str] = &[
-    ".ssh",
-    ".bashrc",
-    ".bash_profile",
-    ".zshrc",
-    ".profile",
-    ".config/autostart",
-    ".config/systemd",
-    "/etc/",
-    "/usr/",
-    "/bin/",
-    "/sbin/",
-    "/lib",
-];
 
 /// Write text to a file and verify it was written correctly.
 /// Used instead of the FS plugin which has scope restrictions on user-selected paths.
@@ -693,16 +678,39 @@ pub async fn write_text_file(
         return Err("Invalid path".to_string());
     };
 
+    // Block writes to sensitive system and shell-config paths using component-based
+    // matching so that ".ssh" in a directory name elsewhere does not false-match.
+    let blocked_by_component = canonical.components().any(|c| {
+        matches!(
+            c.as_os_str().to_str().unwrap_or(""),
+            ".ssh" | ".gnupg" | ".aws" | ".config"
+        )
+    });
+    // Also block absolute system path prefixes that must match from the root.
     let canonical_str = canonical.to_string_lossy().to_lowercase();
+    let blocked_by_prefix = ["/etc/", "/usr/", "/bin/", "/sbin/", "/lib"]
+        .iter()
+        .any(|p| canonical_str.starts_with(p));
+    // Block shell config dot-files by name (not directory components).
+    let blocked_by_filename = canonical
+        .file_name()
+        .and_then(|n| n.to_str())
+        .map(|n| {
+            matches!(
+                n,
+                ".bashrc"
+                    | ".bash_profile"
+                    | ".zshrc"
+                    | ".profile"
+            )
+        })
+        .unwrap_or(false);
 
-    // Block writes to sensitive system and shell-config paths.
-    for blocked in BLOCKED_PREFIXES {
-        if canonical_str.contains(blocked) {
-            return Err(format!(
-                "Writing to '{}' is not permitted",
-                canonical.display()
-            ));
-        }
+    if blocked_by_component || blocked_by_prefix || blocked_by_filename {
+        return Err(format!(
+            "Writing to '{}' is not permitted",
+            canonical.display()
+        ));
     }
 
     let file_path = canonical.as_path();

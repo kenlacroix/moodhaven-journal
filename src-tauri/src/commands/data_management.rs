@@ -2,6 +2,14 @@
 //!
 //! Provides factory reset, export, and import functionality.
 
+use aes_gcm::{
+    aead::{Aead, KeyInit},
+    Aes256Gcm, Nonce,
+};
+use base64::{engine::general_purpose, Engine as _};
+use pbkdf2::pbkdf2_hmac;
+use rand::RngCore;
+use sha2::Sha256;
 use std::fs;
 use tauri::{AppHandle, Manager, State};
 
@@ -189,11 +197,53 @@ pub async fn factory_reset(app: AppHandle) -> Result<bool, String> {
     Ok(true)
 }
 
+// Matches frontend crypto.ts constants exactly so WebCrypto decrypt() is interoperable.
+const EXPORT_PBKDF2_ROUNDS: u32 = 600_000;
+const EXPORT_SALT_LEN: usize = 16; // 128 bits — matches WebCrypto SALT_LENGTH
+const EXPORT_NONCE_LEN: usize = 12; // 96 bits — matches WebCrypto IV_LENGTH
+
+/// Encrypt `plaintext` (the base64-encoded export payload) using PBKDF2-HMAC-SHA256 +
+/// AES-256-GCM with parameters matching the frontend WebCrypto encrypt() in crypto.ts.
+/// Returns a JSON envelope that the frontend decrypt() can unwrap without modification.
+fn encrypt_export_payload(plaintext: &str, password: &str) -> Result<String, String> {
+    let mut salt = [0u8; EXPORT_SALT_LEN];
+    let mut nonce_bytes = [0u8; EXPORT_NONCE_LEN];
+    rand::thread_rng().fill_bytes(&mut salt);
+    rand::thread_rng().fill_bytes(&mut nonce_bytes);
+
+    let mut key = [0u8; 32];
+    pbkdf2_hmac::<Sha256>(password.as_bytes(), &salt, EXPORT_PBKDF2_ROUNDS, &mut key);
+
+    let cipher =
+        Aes256Gcm::new_from_slice(&key).map_err(|e| format!("cipher init: {e}"))?;
+    let nonce = Nonce::from_slice(&nonce_bytes);
+    let ciphertext = cipher
+        .encrypt(nonce, plaintext.as_bytes())
+        .map_err(|_| "export encryption failed".to_string())?;
+
+    let envelope = serde_json::json!({
+        "format": "moodhaven-encrypted-v1",
+        "payload": {
+            "ciphertext": general_purpose::STANDARD.encode(&ciphertext),
+            "iv": general_purpose::STANDARD.encode(&nonce_bytes),
+            "salt": general_purpose::STANDARD.encode(&salt),
+            "version": 1
+        }
+    });
+    serde_json::to_string(&envelope).map_err(|e| format!("serialize: {e}"))
+}
+
 /// Export journal entries, settings, 2FA config, and tags to encrypted backup.
 /// Accepts optional filters (tags, mood range, date range) for selective export.
-/// When no filters are provided, exports all entries — WebDAV compat path unchanged.
+/// When `password` is provided the payload is encrypted (AES-256-GCM) before
+/// returning; when omitted (full-backup callers) the raw base64 is returned for
+/// the caller to wrap with its own encryption envelope.
 #[tauri::command]
-pub async fn export_data(app: AppHandle, filter: Option<ExportFilter>) -> Result<String, String> {
+pub async fn export_data(
+    app: AppHandle,
+    password: Option<String>,
+    filter: Option<ExportFilter>,
+) -> Result<String, String> {
     let lock = app.state::<AppLockState>();
     require_unlocked(&lock)?;
     let db = app.state::<Database>();
@@ -354,10 +404,12 @@ pub async fn export_data(app: AppHandle, filter: Option<ExportFilter>) -> Result
     let json_str = serde_json::to_string_pretty(&export_data)
         .map_err(|e| format!("Failed to serialize export data: {}", e))?;
 
-    use base64::{engine::general_purpose, Engine as _};
     let encoded = general_purpose::STANDARD.encode(json_str.as_bytes());
 
-    Ok(encoded)
+    match password {
+        Some(pw) => encrypt_export_payload(&encoded, &pw),
+        None => Ok(encoded),
+    }
 }
 
 /// Import entries from backup file
@@ -367,7 +419,6 @@ pub async fn import_data(app: AppHandle, data: String) -> Result<i32, String> {
     require_unlocked(&lock)?;
     let db = app.state::<Database>();
 
-    use base64::{engine::general_purpose, Engine as _};
     let decoded = general_purpose::STANDARD
         .decode(&data)
         .map_err(|e| format!("Failed to decode backup data: {}", e))?;
@@ -753,4 +804,62 @@ pub async fn get_data_stats(app: AppHandle) -> Result<serde_json::Value, String>
         "totalEntries": total_entries,
         "averageMood": avg_mood,
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn decrypt_export_payload(envelope_json: &str, password: &str) -> Result<String, String> {
+        let envelope: serde_json::Value = serde_json::from_str(envelope_json)
+            .map_err(|e| format!("parse envelope: {e}"))?;
+        let payload = envelope.get("payload").ok_or("missing payload field")?;
+        let ciphertext = general_purpose::STANDARD
+            .decode(payload["ciphertext"].as_str().ok_or("missing ciphertext")?)
+            .map_err(|e| format!("decode ciphertext: {e}"))?;
+        let nonce_bytes = general_purpose::STANDARD
+            .decode(payload["iv"].as_str().ok_or("missing iv")?)
+            .map_err(|e| format!("decode iv: {e}"))?;
+        let salt = general_purpose::STANDARD
+            .decode(payload["salt"].as_str().ok_or("missing salt")?)
+            .map_err(|e| format!("decode salt: {e}"))?;
+        if nonce_bytes.len() != EXPORT_NONCE_LEN {
+            return Err(format!("invalid nonce len: {}", nonce_bytes.len()));
+        }
+        let mut key = [0u8; 32];
+        pbkdf2_hmac::<Sha256>(password.as_bytes(), &salt, EXPORT_PBKDF2_ROUNDS, &mut key);
+        let cipher =
+            Aes256Gcm::new_from_slice(&key).map_err(|e| format!("cipher: {e}"))?;
+        let nonce = Nonce::from_slice(&nonce_bytes);
+        let plaintext = cipher
+            .decrypt(nonce, ciphertext.as_ref())
+            .map_err(|_| "decryption failed — wrong password or corrupted data".to_string())?;
+        String::from_utf8(plaintext).map_err(|e| format!("utf8: {e}"))
+    }
+
+    #[test]
+    fn encrypt_decrypt_roundtrip() {
+        let plaintext = "SGVsbG8gV29ybGQ="; // base64 of "Hello World"
+        let password = "s3cr3t-p@ssw0rd!";
+        let encrypted = encrypt_export_payload(plaintext, password).unwrap();
+
+        let envelope: serde_json::Value = serde_json::from_str(&encrypted).unwrap();
+        assert_eq!(envelope["format"], "moodhaven-encrypted-v1");
+        let payload = &envelope["payload"];
+        assert!(payload["ciphertext"].is_string());
+        assert!(payload["iv"].is_string());
+        assert!(payload["salt"].is_string());
+        assert_eq!(payload["version"], 1);
+
+        let decrypted = decrypt_export_payload(&encrypted, password).unwrap();
+        assert_eq!(decrypted, plaintext);
+    }
+
+    #[test]
+    fn wrong_password_fails() {
+        let plaintext = "dGVzdA=="; // base64 of "test"
+        let encrypted = encrypt_export_payload(plaintext, "correct-password").unwrap();
+        let result = decrypt_export_payload(&encrypted, "wrong-password");
+        assert!(result.is_err(), "decryption with wrong password must fail");
+    }
 }

@@ -36,11 +36,18 @@ export interface ExportFilter {
 }
 
 /**
- * Export journal data to encrypted backup.
- * Pass `filter` for selective export; omit for full export (WebDAV-safe).
+ * Export journal data.
+ * When `password` is provided the Rust backend encrypts the payload
+ * (PBKDF2+AES-256-GCM) and returns a ready-to-use moodhaven-encrypted-v1
+ * envelope that the frontend decrypt() can unwrap directly.
+ * When omitted (full-backup path) the raw base64 is returned for the caller
+ * to wrap with its own encryption envelope.
  */
-export async function exportData(filter?: ExportFilter): Promise<string> {
-  return invoke<string>('export_data', { filter: filter ?? null });
+export async function exportData(password?: string, filter?: ExportFilter): Promise<string> {
+  return invoke<string>('export_data', {
+    password: password ?? null,
+    filter: filter ?? null,
+  });
 }
 
 /**
@@ -141,14 +148,12 @@ interface FullExportPayload {
 /**
  * Export data with AES-256-GCM encryption (entries only, no media).
  * Used by WebDAV cloud sync which has its own media sync path.
+ * Encryption is done in Rust (PBKDF2+AES-256-GCM, same parameters as WebCrypto)
+ * so the plaintext never crosses the IPC boundary. The returned envelope is
+ * directly compatible with encryptedImport / downloadBackup.
  */
 export async function encryptedExport(password: string): Promise<string> {
-  const base64Data = await exportData();
-  const result = await encrypt(base64Data, password);
-  if (!result.success || !result.data) {
-    throw new Error(result.error || 'Encryption failed');
-  }
-  return JSON.stringify({ format: ENCRYPTED_EXPORT_VERSION, payload: result.data });
+  return exportData(password);
 }
 
 /**

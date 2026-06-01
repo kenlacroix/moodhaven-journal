@@ -30,6 +30,8 @@ import { useReminderScheduler } from './hooks/useReminderScheduler';
 import { useUpdateCheck } from './hooks/useUpdateCheck';
 import { useWearSignals } from './hooks/useWearSignals';
 import { usePeerSync } from './hooks/usePeerSync';
+import { WristLoopBanner } from './components/stillhaven/WristLoopBanner';
+import type { WristLoopTrigger } from './hooks/useWristLoop';
 import { PeerSyncWireframes } from './pages/PeerSyncWireframes';
 import { useTimeCapsule } from './hooks/useTimeCapsule';
 import { TimeCapsuleRevealModal } from './components/timecapsule/TimeCapsuleRevealModal';
@@ -62,6 +64,7 @@ function MainApp() {
   const defaultSealDays = useSettingsStore((s) => s.settings.timeCapsule?.defaultSealDays ?? 30);
   const [isLoading, setIsLoading] = useState(true);
   const [currentView, setCurrentView] = useState<ViewType>('writing');
+  const [watchTrigger, setWatchTrigger] = useState<WristLoopTrigger | null>(null);
   const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
   const [journalOverviewBookId, setJournalOverviewBookId] = useState<string | null>(null);
   const [showTutorial, setShowTutorial] = useState(false);
@@ -95,7 +98,11 @@ function MainApp() {
     enabled: isUnlocked && !!sessionPassword,
     onStillhavenStart:
       import.meta.env.VITE_FEATURE_STILL && stillhavenEnabled
-        ? () => setCurrentView('still')
+        ? () => setWatchTrigger({
+            signalId: crypto.randomUUID(),
+            timestamp: new Date().toISOString(),
+            protocol: undefined,
+          })
         : undefined,
   });
 
@@ -372,6 +379,14 @@ function MainApp() {
           onDismiss={dismissCapsule}
         />
       )}
+      {watchTrigger && import.meta.env.VITE_FEATURE_STILL && stillhavenEnabled && (
+        <WristLoopBanner
+          trigger={watchTrigger}
+          onAccept={() => { setCurrentView('still'); setWatchTrigger(null); }}
+          onDismiss={() => setWatchTrigger(null)}
+        />
+      )}
+
       {sealingEntryId && (
         <SealEntryModal
           entryId={sealingEntryId}

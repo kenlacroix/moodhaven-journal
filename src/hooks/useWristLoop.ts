@@ -29,11 +29,11 @@ export function useWristLoop({ onAccept }: UseWristLoopOptions) {
 
   const handleSignal = useCallback((signal: Signal) => {
     if (signal.type !== 'still_trigger') return;
-    const payload = signal.payload as StillTriggerPayload;
-    setPendingTrigger({
-      signalId: signal.id,
-      timestamp: signal.timestamp,
-      protocol: payload.protocol,
+    // Ignore subsequent taps while one is already pending — avoids overwriting signal identity.
+    setPendingTrigger((current) => {
+      if (current !== null) return current;
+      const payload = signal.payload as StillTriggerPayload;
+      return { signalId: signal.id, timestamp: signal.timestamp, protocol: payload.protocol };
     });
   }, []);
 

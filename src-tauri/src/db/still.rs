@@ -973,7 +973,7 @@ pub fn still_link_signal_to_session(
 ) -> Result<(), String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     conn.execute(
-        "INSERT OR IGNORE INTO still_signal_links (session_id, signal_id) VALUES (?1, ?2)",
+        "INSERT INTO still_signal_links (session_id, signal_id) VALUES (?1, ?2)",
         params![session_id, signal_id],
     )
     .map_err(|e| format!("Failed to link signal to session: {}", e))?;

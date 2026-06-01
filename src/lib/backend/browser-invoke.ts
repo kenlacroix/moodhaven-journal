@@ -532,6 +532,8 @@ async function dispatch(command: string, p: Params): Promise<any> {
     case 'link_journal_entry_to_session': {
       return dbLinkJournalEntryToSession(p.entryId as string, p.sessionId as string);
     }
+    case 'still_link_signal_to_session':
+      return;
 
     // Session bridge — no-op in browser
     case 'store_session_password':

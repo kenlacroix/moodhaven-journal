@@ -103,12 +103,15 @@ export function useWearSignals({
     let unlisten: UnlistenFn | null = null;
     let unlistenMemo: UnlistenFn | null = null;
     let unlistenStillhaven: UnlistenFn | null = null;
+    let cancelled = false;
 
     (async () => {
       // StillHaven start listener
-      unlistenStillhaven = await listen('wear://stillhaven_start', () => {
+      const fn = await listen('wear://stillhaven_start', () => {
         onStillhavenStartRef.current?.();
       });
+      if (cancelled) { fn(); return; }
+      unlistenStillhaven = fn;
 
       // Signal listener
       unlisten = await listen<WearSignalEvent>('wear://signal', async (event) => {
@@ -175,6 +178,7 @@ export function useWearSignals({
     })();
 
     return () => {
+      cancelled = true;
       unlisten?.();
       unlistenMemo?.();
       unlistenStillhaven?.();

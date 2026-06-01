@@ -5,6 +5,18 @@ All notable changes to MoodHaven Journal are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.3.0.1] — 2026-05-31
+
+### Fixed
+- **WellbeingCard Oura readiness race** — if `oura_sync_today` is still in-flight when the WellbeingCard first loads at app open, the card now schedules a single 4-second retry to pick up the readiness score once sync completes. Previously the card showed no readiness data until the next app launch.
+- **StillHaven session speed refs not reset** — `smoothedRef` and `appliedHzRef` were not reset to `baseSpeed` when a new session started, causing the first biometric signal of a new session to compare against stale speed values from the previous session.
+- **`adaptationsAtEndRef` not cleared on restart** — the adaptations count is now reset to 0 when a new session starts via "New session", preventing a stale count from appearing in the next summary.
+
+### Added
+- **Live HR adaptation count in StillHaven summary** — when a session was adapted to biometric signals from the Wear OS watch, the summary screen now shows "Session adapted N times to your biometrics". The desktop side of STILL-B-001 is now fully wired.
+
+---
+
 ## [1.3.0] — 2026-05-31
 
 ### Added

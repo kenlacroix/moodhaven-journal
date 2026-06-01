@@ -106,6 +106,8 @@ For heavy crypto files, use Node environment: `// @vitest-environment node` at t
 | `hooks/useJournalPrompts.test.ts` | 26 |
 | `hooks/useOuraContext.test.ts` | 62 |
 | `hooks/useSpeechToText.test.ts` | 7 |
+| `hooks/useStillBioFeedback.test.ts` | 8 |
+| `hooks/useWellbeingContext.test.ts` | 11 |
 | `hooks/useVoiceMemoDrafts.test.ts` | 12 |
 | `hooks/useWearVoiceMemos.test.ts` | 9 |
 | `lib/services/aiService.test.ts` | 28 |
@@ -145,4 +147,4 @@ For heavy crypto files, use Node environment: `// @vitest-environment node` at t
 | `stores/settingsStore.test.ts` | 18 |
 | `stores/stillStore.test.ts` | 31 |
 | `types/writingAppearance.test.ts` | 4 |
-| **Total** | **1142 (70 files)** |
+| **Total** | **1166 (72 files)** |

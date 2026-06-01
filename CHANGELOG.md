@@ -13,7 +13,7 @@ Versions follow [Semantic Versioning](https://semver.org/).
 - **`adaptationsAtEndRef` not cleared on restart** — the adaptations count is now reset to 0 when a new session starts via "New session", preventing a stale count from appearing in the next summary.
 
 ### Added
-- **Live HR adaptation count in StillHaven summary** — when a session was adapted to biometric signals from the Wear OS watch, the summary screen now shows "Session adapted N times to your biometrics". The desktop side of STILL-B-001 is now fully wired.
+- **Live HR adaptation count in StillHaven summary** — when a session was adapted to biometric signals from the Wear OS watch, the summary screen now shows "Session adapted N times to your biometrics".
 
 ---
 

@@ -676,4 +676,52 @@ mod tests {
         }
         assert!(limiter.check().is_ok());
     }
+
+    // ── TwoFactorPendingState ─────────────────────────────────────────────────
+
+    #[test]
+    fn twofa_initial_state_not_authenticated() {
+        let state = TwoFactorPendingState::new();
+        assert!(!state.is_fully_authenticated(), "new state must not be authenticated");
+    }
+
+    #[test]
+    fn twofa_password_only_no_2fa_is_authenticated() {
+        let state = TwoFactorPendingState::new();
+        state.on_password_verified(false); // 2FA not required
+        assert!(state.is_fully_authenticated());
+    }
+
+    #[test]
+    fn twofa_password_only_with_2fa_required_is_not_authenticated() {
+        let state = TwoFactorPendingState::new();
+        state.on_password_verified(true); // 2FA is required
+        assert!(!state.is_fully_authenticated(), "2FA required but not completed");
+    }
+
+    #[test]
+    fn twofa_password_plus_twofa_completed_is_authenticated() {
+        let state = TwoFactorPendingState::new();
+        state.on_password_verified(true);
+        state.on_twofa_completed();
+        assert!(state.is_fully_authenticated());
+    }
+
+    #[test]
+    fn twofa_reset_clears_all_state() {
+        let state = TwoFactorPendingState::new();
+        state.on_password_verified(true);
+        state.on_twofa_completed();
+        state.reset();
+        assert!(!state.is_fully_authenticated(), "reset must clear auth state");
+    }
+
+    #[test]
+    fn twofa_bypass_attempt_without_password_fails() {
+        // Simulates: attacker calls on_twofa_completed() without verify_password first.
+        let state = TwoFactorPendingState::new();
+        state.on_twofa_completed(); // called out of order
+        // password_verified is still false → not fully authenticated
+        assert!(!state.is_fully_authenticated());
+    }
 }

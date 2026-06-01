@@ -571,9 +571,22 @@ pub fn get_2fa_status(db: State<Database>) -> Result<TwoFactorStatus, String> {
     }
 }
 
-/// Disable 2FA (requires password verification done on frontend)
+/// Disable 2FA.
+/// Requires a fully authenticated session (password + 2FA if previously enabled).
+/// Without this guard, a locked-screen IPC call could disable 2FA and bypass
+/// the TwoFactorPendingState enforcement on the next unlock.
 #[tauri::command]
-pub fn disable_2fa(db: State<Database>) -> Result<bool, String> {
+pub fn disable_2fa(
+    db: State<Database>,
+    lock: State<'_, crate::AppLockState>,
+    twofa_state: State<'_, TwoFactorPendingState>,
+) -> Result<bool, String> {
+    if lock.is_locked() {
+        return Err("Session is locked".to_string());
+    }
+    if !twofa_state.is_fully_authenticated() {
+        return Err("Authentication incomplete: cannot disable 2FA without completing auth".to_string());
+    }
     disable_2fa_in_db(&db)?;
     Ok(true)
 }
@@ -710,5 +723,71 @@ mod tests {
         // in generate_totp_secret (the Tauri command layer).
         let result = encrypt_totp_secret("SOMESECRET", "");
         assert!(result.is_ok());
+    }
+
+    // ── backup code hash v2 ───────────────────────────────────────────────────
+
+    #[test]
+    fn hash_backup_code_v2_produces_expected_prefix() {
+        let h = hash_backup_code_v2("ABCD-EFGH");
+        assert!(h.starts_with("pbkdf2:v2:"), "got: {h}");
+    }
+
+    #[test]
+    fn hash_backup_code_v2_two_calls_produce_different_salts() {
+        // Each call generates a fresh random salt — two hashes of the same code differ.
+        let h1 = hash_backup_code_v2("ABCD-EFGH");
+        let h2 = hash_backup_code_v2("ABCD-EFGH");
+        assert_ne!(h1, h2, "different salts should yield different stored hashes");
+    }
+
+    #[test]
+    fn verify_backup_code_hash_v2_correct_code() {
+        let code = "ABCD-EFGH";
+        let stored = hash_backup_code_v2(code);
+        assert!(verify_backup_code_hash(code, &stored));
+    }
+
+    #[test]
+    fn verify_backup_code_hash_v2_wrong_code() {
+        let stored = hash_backup_code_v2("ABCD-EFGH");
+        assert!(!verify_backup_code_hash("WXYZ-1234", &stored));
+    }
+
+    #[test]
+    fn verify_backup_code_hash_v2_normalizes_dashes_and_case() {
+        // User might type "abcdefgh" or "ABCD-EFGH" — both must match.
+        let code = "ABCD-EFGH";
+        let stored = hash_backup_code_v2(code);
+        assert!(verify_backup_code_hash("abcdefgh", &stored), "lowercase no-dash should match");
+        assert!(verify_backup_code_hash("abcd-efgh", &stored), "lowercase with-dash should match");
+    }
+
+    #[test]
+    fn verify_backup_code_hash_v1_legacy_sha256() {
+        // v1: bare hex SHA-256 of normalized code (no prefix, no salt).
+        let code = "ABCD-EFGH";
+        let normalized = "ABCDEFGH";
+        let mut hasher = sha2::Sha256::new();
+        use sha2::Digest;
+        hasher.update(normalized.as_bytes());
+        let legacy_hash = hex_encode(hasher.finalize().as_slice());
+        // v1 hash must still verify against the code.
+        assert!(verify_backup_code_hash(code, &legacy_hash), "legacy v1 hash must still work");
+    }
+
+    #[test]
+    fn verify_backup_code_hash_v1_wrong_code_fails() {
+        let mut hasher = sha2::Sha256::new();
+        use sha2::Digest;
+        hasher.update(b"ABCDEFGH");
+        let legacy_hash = hex_encode(hasher.finalize().as_slice());
+        assert!(!verify_backup_code_hash("WXYZ-1234", &legacy_hash));
+    }
+
+    #[test]
+    fn verify_backup_code_hash_malformed_v2_returns_false() {
+        assert!(!verify_backup_code_hash("ABCD-EFGH", "pbkdf2:v2:onlyone"));
+        assert!(!verify_backup_code_hash("ABCD-EFGH", "pbkdf2:v2:!!!:!!!"));
     }
 }

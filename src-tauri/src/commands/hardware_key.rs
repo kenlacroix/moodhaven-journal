@@ -488,8 +488,16 @@ pub fn hardware_key_register(db: State<Database>) -> Result<HardwareKeyRegistrat
 
 #[cfg(feature = "hardware-key")]
 #[tauri::command]
-pub fn hardware_key_verify(db: State<Database>) -> Result<String, String> {
-    implementation::verify_key(&db)
+pub fn hardware_key_verify(
+    db: State<Database>,
+    twofa_state: tauri::State<'_, crate::TwoFactorPendingState>,
+) -> Result<String, String> {
+    let result = implementation::verify_key(&db)?;
+    // Mark 2FA complete so unlock_app will proceed for hardware key users.
+    // Without this, TwoFactorPendingState would leave twofa_completed=false and
+    // unlock_app would reject the session even after successful key verification.
+    twofa_state.on_twofa_completed();
+    Ok(result)
 }
 
 #[cfg(feature = "hardware-key")]

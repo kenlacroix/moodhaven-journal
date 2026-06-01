@@ -143,6 +143,12 @@ commands.allow = [
   "patch_voice_memo_transcription",
   "link_voice_memo_to_entry",
   "transcribe_voice_memo",
+  # Voice memo draft pipeline (Phase 5 — v1.2.0)
+  "patch_voice_memo_context",
+  "patch_voice_memo_mood",
+  "list_pending_drafts",
+  "publish_voice_memo_draft",
+  "discard_voice_memo_draft",
   # Peer-to-peer sync — Phase 1: identity + discovery
   "peer_get_identity",
   "peer_rename_device",
@@ -227,6 +233,12 @@ commands.allow = [
   "patch_voice_memo_transcription",
   "link_voice_memo_to_entry",
   "transcribe_voice_memo",
+  # Voice memo draft pipeline (Phase 5)
+  "patch_voice_memo_context",
+  "patch_voice_memo_mood",
+  "list_pending_drafts",
+  "publish_voice_memo_draft",
+  "discard_voice_memo_draft",
   # Speech-to-Text
   "stt_check_sidecar",
   "stt_check_model",

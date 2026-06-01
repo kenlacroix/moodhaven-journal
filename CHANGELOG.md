@@ -5,6 +5,23 @@ All notable changes to MoodHaven Journal are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.3.1.0] — 2026-06-01
+
+### Security
+
+- **2FA backend enforcement** — `unlock_app` now verifies that both authentication factors were completed in Rust before granting access. Previously, a compromised WebView could bypass 2FA by calling `unlock_app` directly after `verify_password`. A new `TwoFactorPendingState` managed struct tracks auth progress (`verify_password` → `verify_2fa_totp` or `verify_backup_code` → `unlock_app`) and rejects out-of-order calls.
+- **Backup code KDF upgrade** — Backup codes are now hashed with PBKDF2-HMAC-SHA-256 (600k iterations, per-code random salt) instead of bare SHA-256. The previous SHA-256 scheme was brute-forceable in ~5 minutes on GPU. Existing codes continue to work; regenerating codes produces the new v2 format.
+- **Backup code rate limiting** — `verify_backup_code` now applies the same 5-failure / 30-second lockout as `verify_password`.
+- **`disable_2fa` lock guard** — Disabling 2FA now requires a fully authenticated session. Previously, IPC callers on the lock screen could disable 2FA without authenticating, bypassing the enforcement above.
+- **Hardware key path wired to 2FA state** — `hardware_key_verify` now calls `on_twofa_completed()`, unblocking hardware key users who were permanently locked out by the new backend enforcement.
+- **Path traversal in voice memo intake** — `store_voice_memo` now rejects `incoming_file` values with path separators or `..` components. A crafted filename could previously escape the staging directory and rename or delete arbitrary app data.
+- **Session bridge lock guard** — `store_session_password` now requires an unlocked session, preventing bridge poisoning from the lock screen.
+- **ACL hardening** — `retrieve_session_password` removed from the main window ACL (writer window only); `get_password_hash` removed from the writer window ACL; `debug_signal_self_test` stale entry removed; five voice memo draft pipeline commands (`patch_voice_memo_context`, `patch_voice_memo_mood`, `list_pending_drafts`, `publish_voice_memo_draft`, `discard_voice_memo_draft`) added to both capability files (they were registered but blocked in production builds).
+- **Factory reset completeness** — Reset now deletes `voice_memos/`, `media/`, `pw_lockout.json`, `device.json`, `moodhaven_restore.pending`, and `moodhaven_restore.pending.sha256` in addition to the database and peer identity files.
+- **StillHaven input validation** — `still_create_session` now validates `environment` and `bilateral_mode` against allowlists, matching the existing `protocol` validation.
+
+---
+
 ## [1.3.0.1] — 2026-05-31
 
 ### Fixed

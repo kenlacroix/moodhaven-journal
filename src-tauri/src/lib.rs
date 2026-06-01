@@ -160,6 +160,66 @@ impl Default for AppLockState {
     }
 }
 
+/// Rust-side 2FA enforcement state.
+///
+/// Tracks whether the user completed both authentication factors before `unlock_app`
+/// is called. This is separate from `AppLockState` so that a compromised frontend
+/// cannot bypass 2FA by calling `unlock_app` directly after `verify_password`.
+///
+/// Lifecycle:
+///   verify_password (success) → password_verified=true, twofa_required=<from DB>
+///   verify_2fa_totp / verify_backup_code (success) → twofa_completed=true
+///   unlock_app → checks twofa_required; rejects if required && !twofa_completed
+///   lock_app → resets all three flags
+pub struct TwoFactorPendingState(pub Mutex<TwoFactorPending>);
+
+#[derive(Default)]
+pub struct TwoFactorPending {
+    pub password_verified: bool,
+    pub twofa_required: bool,
+    pub twofa_completed: bool,
+}
+
+impl TwoFactorPendingState {
+    pub fn new() -> Self {
+        TwoFactorPendingState(Mutex::new(TwoFactorPending::default()))
+    }
+
+    /// Called on successful password verification. Records whether 2FA is required
+    /// (passed in from the caller which has DB access).
+    pub fn on_password_verified(&self, twofa_required: bool) {
+        let mut s = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        s.password_verified = true;
+        s.twofa_required = twofa_required;
+        s.twofa_completed = false;
+    }
+
+    /// Called on successful 2FA factor verification (TOTP or backup code).
+    pub fn on_twofa_completed(&self) {
+        let mut s = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        s.twofa_completed = true;
+    }
+
+    /// Returns true if the session is fully authenticated (password done, and
+    /// either 2FA was not required or has been completed).
+    pub fn is_fully_authenticated(&self) -> bool {
+        let s = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        s.password_verified && (!s.twofa_required || s.twofa_completed)
+    }
+
+    /// Reset all auth flags (called on lock_app).
+    pub fn reset(&self) {
+        let mut s = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        *s = TwoFactorPending::default();
+    }
+}
+
+impl Default for TwoFactorPendingState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 use commands::peer_discovery::PeerDiscoveryState;
 use commands::peer_pairing::PairingServerState;
 use commands::peer_sync_engine::SyncEngineState;
@@ -294,6 +354,10 @@ pub fn run() {
                 pw_rate_limiter.initialize(&app_data);
             }
             app.manage(pw_rate_limiter);
+
+            // 2FA pending state — enforces that both auth factors are complete
+            // before unlock_app succeeds, even if the frontend skips the 2FA step.
+            app.manage(TwoFactorPendingState::new());
 
             // One-shot session bridge for breakout writer password hand-off
             app.manage(SessionBridge::new());

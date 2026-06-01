@@ -6,20 +6,31 @@ use std::fs;
 use tauri::{AppHandle, Manager, State};
 
 use crate::db::{self, Database};
-use crate::AppLockState;
+use crate::{AppLockState, TwoFactorPendingState};
 
-/// Mark the session as unlocked. Called by the frontend after successful
-/// password verification. Sensitive commands gate on this state.
+/// Mark the session as unlocked.
+/// Enforces that both authentication factors were completed in Rust — a compromised
+/// frontend cannot bypass 2FA by calling this directly after verify_password.
 #[tauri::command]
-pub fn unlock_app(lock: State<'_, AppLockState>) -> Result<(), String> {
+pub fn unlock_app(
+    lock: State<'_, AppLockState>,
+    twofa: State<'_, TwoFactorPendingState>,
+) -> Result<(), String> {
+    if !twofa.is_fully_authenticated() {
+        return Err("Authentication incomplete: password verification or 2FA not done".to_string());
+    }
     *lock.0.lock().map_err(|e| e.to_string())? = false;
     Ok(())
 }
 
-/// Mark the session as locked. Called by the frontend on manual lock or app exit.
+/// Mark the session as locked. Resets all pending auth state.
 #[tauri::command]
-pub fn lock_app(lock: State<'_, AppLockState>) -> Result<(), String> {
+pub fn lock_app(
+    lock: State<'_, AppLockState>,
+    twofa: State<'_, TwoFactorPendingState>,
+) -> Result<(), String> {
     *lock.0.lock().map_err(|e| e.to_string())? = true;
+    twofa.reset();
     Ok(())
 }
 
@@ -145,12 +156,20 @@ pub async fn factory_reset(app: AppHandle) -> Result<bool, String> {
     }
 
     // Delete any other app data files
+    // All app-data paths to remove. Directories are removed recursively;
+    // missing entries are silently skipped. Errors are non-fatal — a partial
+    // reset is still better than a failed one.
     let files_to_delete = [
         "keys.bin",
         "cache.db",
         "logs",
         "peer_key.bin",
         "trusted_devices.json",
+        "device.json",           // Ed25519 public key metadata (low-sensitivity but stale)
+        "pw_lockout.json",       // Password rate-limiter state — reset with the app
+        "voice_memos",           // Encrypted audio files from watch companion
+        "voice_memos_incoming",  // Staging directory for incoming watch audio
+        "media",                 // Encrypted media attachments
     ];
     for file in files_to_delete {
         let path = app_data.join(file);

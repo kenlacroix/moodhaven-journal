@@ -168,6 +168,55 @@ pub fn update_device_name(app: &AppHandle, new_name: String) -> Result<DeviceIde
     })
 }
 
+// ── HELLO challenge helpers ───────────────────────────────────────────────────
+
+/// Load the raw Ed25519 signing key from peer_key.bin.
+fn load_signing_key(app: &AppHandle) -> Result<ed25519_dalek::SigningKey, String> {
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("app_data_dir: {e}"))?;
+    let key_path = app_data_dir.join("peer_key.bin");
+    let bytes =
+        fs::read(&key_path).map_err(|e| format!("Failed to read peer_key.bin: {e}"))?;
+    let arr: [u8; 32] = bytes
+        .try_into()
+        .map_err(|_| "peer_key.bin must be exactly 32 bytes".to_string())?;
+    Ok(ed25519_dalek::SigningKey::from_bytes(&arr))
+}
+
+/// Sign a HELLO challenge nonce with this device's Ed25519 private key.
+/// Returns 64-byte raw signature over `b"moodhaven-hello-auth-v1:" || nonce`.
+pub fn sign_hello_challenge(app: &AppHandle, nonce: &[u8]) -> Result<[u8; 64], String> {
+    use ed25519_dalek::Signer;
+    let key = load_signing_key(app)?;
+    let mut payload = b"moodhaven-hello-auth-v1:".to_vec();
+    payload.extend_from_slice(nonce);
+    Ok(key.sign(&payload).to_bytes())
+}
+
+/// Verify a HELLO challenge signature against a base64url-encoded Ed25519 public key.
+pub fn verify_hello_challenge(
+    pubkey_b64url: &str,
+    nonce: &[u8],
+    sig_bytes: &[u8; 64],
+) -> Result<(), String> {
+    use ed25519_dalek::{Signature, Verifier};
+    let pk_bytes = URL_SAFE_NO_PAD
+        .decode(pubkey_b64url)
+        .map_err(|e| format!("base64 decode pubkey: {e}"))?;
+    let arr: [u8; 32] = pk_bytes
+        .try_into()
+        .map_err(|_| "public key must be 32 bytes".to_string())?;
+    let vk = ed25519_dalek::VerifyingKey::from_bytes(&arr)
+        .map_err(|e| format!("invalid Ed25519 public key: {e}"))?;
+    let sig = Signature::from_bytes(sig_bytes);
+    let mut payload = b"moodhaven-hello-auth-v1:".to_vec();
+    payload.extend_from_slice(nonce);
+    vk.verify(&payload, &sig)
+        .map_err(|_| "Ed25519 HELLO challenge verification failed".to_string())
+}
+
 // ── Tauri commands ────────────────────────────────────────────────────────────
 
 /// Get (or create on first call) this device's identity

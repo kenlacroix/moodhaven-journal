@@ -30,6 +30,15 @@ pub enum Msg {
         /// Ephemeral X25519 public key (hex), present when server supports v2.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         eph_pub: Option<String>,
+        /// 32-byte random challenge nonce (hex). Client must respond with Auth
+        /// containing Ed25519(b"moodhaven-hello-auth-v1:" || nonce_bytes).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        challenge: Option<String>,
+    },
+    /// Client response to the server's HELLO challenge.
+    /// signature = hex(Ed25519_sign(b"moodhaven-hello-auth-v1:" || challenge_bytes))
+    Auth {
+        signature: String,
     },
     /// Sent plaintext by the server when the connecting device is not in its
     /// trusted list. The client should auto-revoke the server in response.

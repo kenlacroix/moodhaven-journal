@@ -244,8 +244,12 @@ fn do_full_restore_client(app: &AppHandle, peer_device_id: &str, host: &str) -> 
         },
     )?;
 
-    let (server_name, server_eph_pub) = match read_msg(&mut stream)? {
-        Msg::Ok { name, eph_pub } => (name, eph_pub),
+    let (server_name, server_eph_pub, server_challenge) = match read_msg(&mut stream)? {
+        Msg::Ok {
+            name,
+            eph_pub,
+            challenge,
+        } => (name, eph_pub, challenge),
         Msg::NotTrusted { server_device_id } => {
             // Auto-revoke stale trust entry.
             let _ = remove_trusted_device(app, &server_device_id);
@@ -259,6 +263,15 @@ fn do_full_restore_client(app: &AppHandle, peer_device_id: &str, host: &str) -> 
         }
         other => return Err(format!("Expected OK, got: {other:?}")),
     };
+
+    // Prove our identity via Ed25519 signature if the server sent a challenge.
+    if let Some(ref challenge_hex) = server_challenge {
+        let nonce = hex::decode(challenge_hex)
+            .map_err(|e| format!("Bad server challenge hex: {e}"))?;
+        let sig = crate::commands::peer_identity::sign_hello_challenge(app, &nonce)?;
+        write_msg(&mut stream, &Msg::Auth { signature: hex::encode(sig) })?;
+        log::debug!("[restore] Sent Ed25519 AUTH response");
+    }
 
     let key = match server_eph_pub {
         Some(ref hex) => derive_sync_key_ecdh(
@@ -429,18 +442,51 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
     let client_pubkey = client_device.public_key.clone();
     let client_name = client_device.device_name.clone();
 
-    // Generate our ephemeral X25519 keypair for this session
+    // Generate our ephemeral X25519 keypair and HELLO challenge for this session.
+    use rand::RngCore as _;
     let my_eph_secret = EphemeralSecret::random_from_rng(rand::rngs::OsRng);
     let my_eph_pub_hex = hex::encode(X25519PublicKey::from(&my_eph_secret).as_bytes());
+    let mut challenge = [0u8; 32];
+    rand::rngs::OsRng.fill_bytes(&mut challenge);
+    let challenge_hex = hex::encode(challenge);
 
-    // Step 2: Send OK (plaintext) — include our ephemeral pub so client can do ECDH
+    // Step 2: Send OK (plaintext) — eph_pub for ECDH, challenge for identity proof.
     write_msg(
         &mut stream,
         &Msg::Ok {
             name: my_identity.device_name.clone(),
             eph_pub: Some(my_eph_pub_hex),
+            challenge: Some(challenge_hex),
         },
     )?;
+
+    // Step 2b: Read AUTH — client must sign the challenge with its Ed25519 private key.
+    let auth_sig_hex = match read_msg(&mut stream)? {
+        Msg::Auth { signature } => signature,
+        other => {
+            let _ = write_msg(&mut stream, &Msg::Err { msg: "Expected AUTH".to_string() });
+            let _ = stream.shutdown(std::net::Shutdown::Both);
+            return Err(format!(
+                "[sync] Server: expected AUTH from {client_device_id}, got: {other:?}"
+            ));
+        }
+    };
+    let auth_sig_bytes =
+        hex::decode(&auth_sig_hex).map_err(|e| format!("Bad AUTH signature hex: {e}"))?;
+    let auth_sig_arr: [u8; 64] = auth_sig_bytes
+        .try_into()
+        .map_err(|_| "AUTH signature must be 64 bytes".to_string())?;
+    if let Err(e) = crate::commands::peer_identity::verify_hello_challenge(
+        &client_pubkey,
+        &challenge,
+        &auth_sig_arr,
+    ) {
+        log::warn!("[sync] Server: HELLO auth failed for {client_device_id}: {e}");
+        let _ = write_msg(&mut stream, &Msg::Err { msg: "Authentication failed".to_string() });
+        let _ = stream.shutdown(std::net::Shutdown::Both);
+        return Err(format!("[sync] HELLO auth failed for {client_device_id}"));
+    }
+    log::info!("[sync] Server: {client_device_id} authenticated via Ed25519 HELLO challenge");
 
     // Derive session key: ECDH if client supports v2, else legacy static key
     let key = match client_eph_pub {
@@ -987,9 +1033,13 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
         },
     )?;
 
-    // Step 2: Read OK (plaintext) — server may include its own eph_pub
-    let (server_name, server_eph_pub) = match read_msg(&mut stream)? {
-        Msg::Ok { name, eph_pub } => (name, eph_pub),
+    // Step 2: Read OK (plaintext) — server includes eph_pub and HELLO challenge.
+    let (server_name, server_eph_pub, server_challenge) = match read_msg(&mut stream)? {
+        Msg::Ok {
+            name,
+            eph_pub,
+            challenge,
+        } => (name, eph_pub, challenge),
         Msg::NotTrusted { server_device_id } => {
             // The server no longer has us in its trusted list — auto-revoke it
             // from our side so both devices are in sync without manual intervention.
@@ -1010,6 +1060,15 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
         other => return Err(format!("Expected OK, got: {other:?}")),
     };
     log::info!("[sync] Client: connected to '{server_name}'");
+
+    // Step 2b: If the server sent a challenge, prove our identity with an Ed25519 signature.
+    if let Some(ref challenge_hex) = server_challenge {
+        let nonce = hex::decode(challenge_hex)
+            .map_err(|e| format!("Bad server challenge hex: {e}"))?;
+        let sig = crate::commands::peer_identity::sign_hello_challenge(app, &nonce)?;
+        write_msg(&mut stream, &Msg::Auth { signature: hex::encode(sig) })?;
+        log::debug!("[sync] Client: sent Ed25519 AUTH response");
+    }
 
     // Derive session key: ECDH if server supports v2, else legacy static key
     let key = match server_eph_pub {

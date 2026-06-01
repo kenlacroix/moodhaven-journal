@@ -31,7 +31,6 @@ beforeEach(() => {
     },
   );
 
-  useStillStore.setState({ speedHz: 1.0 });
 });
 
 afterEach(() => {
@@ -69,16 +68,18 @@ describe('adaptation counting', () => {
     // Wait for listener to register
     await act(async () => {});
 
-    // Send a snapshot that causes a meaningful speed change
-    // heartRate=120 → high arousal → healthSnapshotToSpeed should push speed up
+    // heartRate=120 → mult=1.2, targetHz=1.2 with baseSpeed=1.0.
+    // Smoothing: signal1 → 1.06 (delta 0.06 < 0.1, no update),
+    //            signal2 → 1.102 (delta 0.102 ≥ 0.1, ADAPT),
+    //            signal3 → 1.131 (delta < 0.1, no update).
+    // Exactly 1 adaptation after 3 signals.
     act(() => {
       sendSnapshot({ heartRate: 120 });
       sendSnapshot({ heartRate: 120 });
       sendSnapshot({ heartRate: 120 });
     });
 
-    // At least one adaptation should have been counted
-    expect(result.current.getAdaptations()).toBeGreaterThanOrEqual(1);
+    expect(result.current.getAdaptations()).toBe(1);
   });
 
   it('resets adaptations when a new session starts (enabled goes true)', async () => {
@@ -97,7 +98,8 @@ describe('adaptation counting', () => {
       sendSnapshot({ heartRate: 120 });
     });
 
-    const firstCount = result.current.getAdaptations();
+    // Same deterministic math: exactly 1 adaptation after 3 × heartRate=120 signals
+    expect(result.current.getAdaptations()).toBe(1);
 
     // End session
     rerender({ enabled: false });
@@ -106,11 +108,8 @@ describe('adaptation counting', () => {
 
     await act(async () => {});
 
+    // Count resets to 0 at the start of a new session
     expect(result.current.getAdaptations()).toBe(0);
-    // Ensure the first count was non-zero (otherwise the reset test is vacuous)
-    if (firstCount > 0) {
-      expect(result.current.getAdaptations()).toBeLessThan(firstCount);
-    }
   });
 
   it('does not count non-health_snapshot events', async () => {
@@ -126,6 +125,23 @@ describe('adaptation counting', () => {
       });
     });
 
+    expect(result.current.getAdaptations()).toBe(0);
+  });
+
+  it('ignores events with malformed JSON payload', async () => {
+    const { result } = renderHook(() =>
+      useStillBioFeedback({ enabled: true, baseSpeed: 1.0 }),
+    );
+
+    await act(async () => {});
+
+    act(() => {
+      capturedHandler?.({
+        payload: { type: 'health_snapshot', payload: '{not valid json' },
+      });
+    });
+
+    expect(result.current.isAdapting).toBe(false);
     expect(result.current.getAdaptations()).toBe(0);
   });
 });
@@ -147,6 +163,8 @@ describe('stale timer', () => {
   });
 
   it('reverts to baseSpeed and clears isAdapting after 3 min without a signal', async () => {
+    const setSpeedSpy = vi.spyOn(useStillStore.getState(), 'setSpeed');
+
     const { result } = renderHook(() =>
       useStillBioFeedback({ enabled: true, baseSpeed: 1.0 }),
     );
@@ -161,7 +179,8 @@ describe('stale timer', () => {
     });
 
     expect(result.current.isAdapting).toBe(false);
-    expect(useStillStore.getState().speedHz).toBe(1.0);
+    // Stale timer reverts engine to baseSpeed
+    expect(setSpeedSpy).toHaveBeenLastCalledWith(1.0);
   });
 });
 

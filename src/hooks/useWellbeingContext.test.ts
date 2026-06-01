@@ -10,7 +10,6 @@ vi.mock('../lib/stillService', () => ({
 
 import { stillGetWellbeingContext } from '../lib/stillService';
 
-const mockInvoke = vi.mocked(invoke);
 const mockGetWellbeing = vi.mocked(stillGetWellbeingContext);
 
 function makeCtx(overrides: Partial<WellbeingContext> = {}): WellbeingContext {
@@ -30,9 +29,11 @@ function setOuraConnected(connectedAt: string | null) {
   }));
 }
 
+const mockInvoke = vi.mocked(invoke);
+
 beforeEach(() => {
   vi.clearAllMocks();
-  // Default: not shown today
+  // Default: not shown today (get_setting returns null)
   mockInvoke.mockResolvedValue(null);
   // Default: Oura not connected
   setOuraConnected(null);
@@ -110,6 +111,20 @@ describe('onWordsWritten', () => {
     act(() => result.current.onWordsWritten(4));
     expect(result.current.isVisible).toBe(true);
   });
+
+  it('is a no-op when card is already hidden', async () => {
+    mockGetWellbeing.mockResolvedValue(makeCtx({ streak_days: 1 }));
+
+    const { result } = renderHook(() => useWellbeingContext());
+    await waitFor(() => expect(result.current.isVisible).toBe(true));
+
+    act(() => result.current.dismiss());
+    expect(result.current.isVisible).toBe(false);
+
+    // Calling onWordsWritten after dismiss should not throw or change state
+    act(() => result.current.onWordsWritten(10));
+    expect(result.current.isVisible).toBe(false);
+  });
 });
 
 describe('WELL-001: Oura readiness retry', () => {
@@ -170,5 +185,27 @@ describe('WELL-001: Oura readiness retry', () => {
     // Retry ran but readiness still null — context streak_days unchanged
     expect(result.current.context?.oura_readiness_today).toBeNull();
     expect(result.current.context?.streak_days).toBe(2);
+  });
+
+  it('clears in-flight retryTimer on unmount before 4s fires', async () => {
+    const initial = makeCtx({ streak_days: 1 });
+    const fresh = makeCtx({ streak_days: 1, oura_readiness_today: 90 });
+    mockGetWellbeing.mockResolvedValueOnce(initial).mockResolvedValueOnce(fresh);
+    setOuraConnected('2026-05-31T08:00:00Z');
+
+    const { result, unmount } = renderHook(() => useWellbeingContext());
+
+    await act(async () => {});
+    expect(result.current.context?.oura_readiness_today).toBeNull();
+
+    // Unmount before the 4s timer fires
+    unmount();
+
+    // Advance past timer — retry callback should NOT run (cancelled)
+    await act(async () => { vi.advanceTimersByTime(5000); });
+    await act(async () => {});
+
+    // Only one call (initial) — retry was cancelled by cleanup
+    expect(mockGetWellbeing).toHaveBeenCalledTimes(1);
   });
 });

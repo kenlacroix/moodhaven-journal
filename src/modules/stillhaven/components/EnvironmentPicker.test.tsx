@@ -32,7 +32,7 @@ describe('EnvironmentPicker', () => {
     expect(onChange).toHaveBeenCalledWith('sky');
   });
 
-  it('does not call onChange when the already-selected option is clicked', async () => {
+  it('calls onChange with the current value when the already-selected option is clicked', async () => {
     const onChange = vi.fn<(v: EnvironmentId) => void>();
     render(<EnvironmentPicker value="underwater" onChange={onChange} />);
     await userEvent.click(screen.getByRole('button', { name: /Underwater/ }));

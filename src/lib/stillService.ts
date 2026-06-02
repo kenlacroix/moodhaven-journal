@@ -114,3 +114,28 @@ export async function stillGetJournalBriefForSession(
 export async function stillGetWellbeingContext(): Promise<WellbeingContext> {
   return invoke('still_get_wellbeing_context');
 }
+
+// ── v1.4.0 StillHaven Effect ──────────────────────────────────────────────────
+
+export interface ProtocolEffect {
+  protocol: string;
+  session_count: number;
+  /** pre − post activation; positive = improvement. */
+  avg_activation_delta: number | null;
+  /** Average mood on the journal entry written after the session (1–5). */
+  avg_mood_after: number | null;
+}
+
+export interface StillEffectStats {
+  per_protocol: ProtocolEffect[];
+  /** Protocol with highest avg activation delta (requires ≥2 qualifying sessions). */
+  best_protocol: string | null;
+  /** Total sessions included in the analysis. */
+  sessions_with_data: number;
+  /** Overall average mood across all qualifying sessions. */
+  avg_mood_after: number | null;
+}
+
+export async function stillGetEffectStats(): Promise<StillEffectStats> {
+  return invoke('still_get_effect_stats');
+}

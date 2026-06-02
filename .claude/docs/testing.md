@@ -139,6 +139,7 @@ For heavy crypto files, use Node environment: `// @vitest-environment node` at t
 | `modules/stillhaven/components/ActivationDial.test.tsx` | 6 |
 | `modules/stillhaven/components/HrvInput.test.tsx` | 5 |
 | `modules/stillhaven/components/ProtocolPicker.test.tsx` | 7 |
+| `modules/stillhaven/components/StillEffectCard.test.tsx` | 12 |
 | `modules/stillhaven/components/WelcomeCard.test.tsx` | 5 |
 | `pages/TimelineView.test.tsx` | 9 |
 | `stores/appStore.test.ts` | 18 |
@@ -147,4 +148,4 @@ For heavy crypto files, use Node environment: `// @vitest-environment node` at t
 | `stores/settingsStore.test.ts` | 18 |
 | `stores/stillStore.test.ts` | 31 |
 | `types/writingAppearance.test.ts` | 4 |
-| **Total** | **1166 (72 files)** |
+| **Total** | **1177 (71 files)** |

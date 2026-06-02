@@ -444,6 +444,137 @@ pub fn get_wellbeing_context(db: &Database) -> Result<WellbeingContext, String> 
     })
 }
 
+// ── v1.4.0 StillHaven Effect ──────────────────────────────────────────────────
+
+/// Per-protocol aggregate: activation drop and mood after linked journal entry.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ProtocolEffect {
+    pub protocol: String,
+    pub session_count: i32,
+    /// Average pre−post activation delta; positive = improvement (activation dropped).
+    pub avg_activation_delta: Option<f64>,
+    /// Average mood on the journal entry written after the session (1–5).
+    pub avg_mood_after: Option<f64>,
+}
+
+/// Aggregated effect statistics across all completed sessions that have both
+/// pre/post activation samples and a linked journal entry.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct StillEffectStats {
+    pub per_protocol: Vec<ProtocolEffect>,
+    /// Protocol with highest avg activation delta (requires ≥2 qualifying sessions).
+    pub best_protocol: Option<String>,
+    /// Total sessions included in the analysis.
+    pub sessions_with_data: i32,
+    /// Overall average mood across all qualifying sessions.
+    pub avg_mood_after: Option<f64>,
+}
+
+/// Compute per-protocol effect statistics by joining sessions → activation samples
+/// → linked journal entries. Only completed sessions with both pre+post samples
+/// and a linked journal entry are included.
+pub fn get_effect_stats(db: &Database) -> Result<StillEffectStats, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+
+    // CTEs use correlated MIN(rowid) subqueries to select one row per session,
+    // avoiding fan-out when multiple samples or entries share a session_id.
+    let mut stmt = conn
+        .prepare(
+            "WITH pre AS (
+               SELECT session_id, activation
+               FROM still_activation_samples
+               WHERE phase = 'pre'
+                 AND rowid IN (
+                   SELECT MIN(rowid) FROM still_activation_samples
+                   WHERE phase = 'pre' GROUP BY session_id
+                 )
+             ),
+             post AS (
+               SELECT session_id, activation
+               FROM still_activation_samples
+               WHERE phase = 'post'
+                 AND rowid IN (
+                   SELECT MIN(rowid) FROM still_activation_samples
+                   WHERE phase = 'post' GROUP BY session_id
+                 )
+             ),
+             first_entry AS (
+               SELECT session_id, mood
+               FROM journal_entries
+               WHERE session_id IS NOT NULL
+                 AND rowid IN (
+                   SELECT MIN(rowid) FROM journal_entries
+                   WHERE session_id IS NOT NULL GROUP BY session_id
+                 )
+             )
+             SELECT
+                 s.protocol,
+                 COUNT(DISTINCT s.id)                                  AS session_count,
+                 AVG(CAST(pre.activation - post.activation AS REAL))   AS avg_delta,
+                 AVG(CAST(fe.mood AS REAL))                            AS avg_mood
+             FROM still_sessions s
+             INNER JOIN pre  ON pre.session_id  = s.id
+             INNER JOIN post ON post.session_id = s.id
+             INNER JOIN first_entry fe ON fe.session_id = s.id
+             WHERE s.completed_at IS NOT NULL
+             GROUP BY s.protocol
+             ORDER BY avg_delta DESC",
+        )
+        .map_err(|e| format!("effect_stats prepare: {e}"))?;
+
+    let per_protocol: Vec<ProtocolEffect> = stmt
+        .query_map([], |r| {
+            Ok(ProtocolEffect {
+                protocol: r.get(0)?,
+                session_count: r.get(1)?,
+                avg_activation_delta: r.get(2)?,
+                avg_mood_after: r.get(3)?,
+            })
+        })
+        .map_err(|e| format!("effect_stats query: {e}"))?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    let sessions_with_data: i32 = per_protocol.iter().map(|p| p.session_count).sum();
+
+    // Weight only protocols that have linked journal entries (mood data available).
+    let mood_sessions: i32 = per_protocol
+        .iter()
+        .filter(|p| p.avg_mood_after.is_some())
+        .map(|p| p.session_count)
+        .sum();
+
+    let avg_mood_after: Option<f64> = if mood_sessions > 0 {
+        let total_mood: f64 = per_protocol
+            .iter()
+            .filter_map(|p| p.avg_mood_after.map(|m| m * p.session_count as f64))
+            .sum();
+        Some(total_mood / mood_sessions as f64)
+    } else {
+        None
+    };
+
+    // Recommend the protocol with the highest avg activation delta that has ≥2 sessions.
+    let best_protocol = per_protocol
+        .iter()
+        .filter(|p| p.session_count >= 2)
+        .filter(|p| p.avg_activation_delta.unwrap_or(0.0) > 0.0)
+        .max_by(|a, b| {
+            a.avg_activation_delta
+                .unwrap_or(0.0)
+                .partial_cmp(&b.avg_activation_delta.unwrap_or(0.0))
+                .unwrap_or(std::cmp::Ordering::Equal)
+        })
+        .map(|p| p.protocol.clone());
+
+    Ok(StillEffectStats {
+        per_protocol,
+        best_protocol,
+        sessions_with_data,
+        avg_mood_after,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

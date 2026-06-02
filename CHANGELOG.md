@@ -5,6 +5,13 @@ All notable changes to MoodHaven Journal are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.4.0] — 2026-05-31
+
+### Added
+- **StillHaven Effect card** — Session History now shows a per-protocol table of average activation drop and post-session mood, and a recommendation chip ("X tends to work best for you") once you have 3 or more sessions with a linked journal entry. `still_get_effect_stats` Rust command added.
+
+---
+
 ## [1.3.2.0] — 2026-06-02
 
 ### Fixed

@@ -5,6 +5,14 @@ All notable changes to MoodHaven Journal are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.6.0] — 2026-06-02
+
+### Added
+- **Forest and Sky environments** — two new immersive StillHaven environments: forest (nature sounds, green palette) and sky (ambient tones, blue palette). Selectable from the environment picker before starting a session.
+- **Environment picker UI** — new `EnvironmentPicker` component shown on the StillHaven session setup screen.
+
+---
+
 ## [1.5.0] — 2026-06-02
 
 ### Added

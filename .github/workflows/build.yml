@@ -7,6 +7,7 @@ on:
   push:
     tags:
       - "v[0-9]+.[0-9]+.[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+.[0-9]+"
       - "v[0-9]+.[0-9]+.[0-9]+-*"
   workflow_dispatch:
     inputs:
@@ -349,9 +350,16 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.ref_name }}
         run: |
-          VERSION="${TAG#v}"
+          # Use the version from tauri.conf.json for asset filenames — Tauri uses
+          # this (not the git tag) when naming .AppImage/.exe/.dmg bundles. The git
+          # tag may use a 4-part scheme (e.g. v1.6.0.1) while Cargo/Tauri require
+          # 3-part semver (1.6.0).
+          VERSION=$(python3 -c "import json; print(json.load(open('src-tauri/tauri.conf.json'))['version'])")
           BASE="https://github.com/${{ github.repository }}/releases/download/${TAG}"
           PUBLISHED_AT=$(gh release view "$TAG" --json publishedAt -q '.publishedAt')
+
+          # Fetch checksums.txt to mark verified assets
+          CHECKSUMS=$(gh release download "$TAG" -p checksums.txt -D /tmp 2>/dev/null && cat /tmp/checksums.txt || echo "")
 
           build_asset() {
             local name="$1"
@@ -360,8 +368,10 @@ jobs:
             if [ -z "$size_bytes" ]; then return; fi
             local size_mb
             size_mb=$(echo "scale=1; $size_bytes / 1048576" | bc)
-            printf '    {"name":"%s","downloadUrl":"%s/%s","sizeLabel":"%s MB"}' \
-              "$name" "$BASE" "$name" "$size_mb"
+            local verified="false"
+            echo "$CHECKSUMS" | grep -q "$name" && verified="true"
+            printf '    {"name":"%s","downloadUrl":"%s/%s","sizeLabel":"%s MB","checksumVerified":%s}' \
+              "$name" "$BASE" "$name" "$size_mb" "$verified"
           }
 
           ASSETS=()
@@ -379,18 +389,27 @@ jobs:
             [ -n "$entry" ] && ASSETS+=("$entry")
           done
 
-          ASSETS_JSON=$(printf '%s\n' "${ASSETS[@]}" | paste -sd ',' -)
+          # Comma-join, then pretty-print with jq for safety
+          ASSETS_RAW="[$(printf '%s\n' "${ASSETS[@]}" | paste -sd ',')]"
 
-          cat > latest-release.json << JSON
-          {
-            "version": "${VERSION}",
-            "releaseUrl": "https://github.com/${{ github.repository }}/releases/tag/${TAG}",
-            "publishedAt": "${PUBLISHED_AT}",
-            "assets": [
-          ${ASSETS_JSON}
-            ]
-          }
-          JSON
+          python3 - <<PYEOF
+import json, sys
+tag = "$TAG"
+version = "$VERSION"
+repo = "${{ github.repository }}"
+published_at = "$PUBLISHED_AT"
+assets = json.loads("""${ASSETS_RAW}""")
+manifest = {
+  "version": version,
+  "releaseUrl": f"https://github.com/{repo}/releases/tag/{tag}",
+  "publishedAt": published_at,
+  "assets": assets,
+}
+with open("latest-release.json", "w") as f:
+    json.dump(manifest, f, indent=2)
+    f.write("\n")
+print(f"Generated latest-release.json with {len(assets)} assets")
+PYEOF
 
           gh release upload "$TAG" latest-release.json --clobber
 

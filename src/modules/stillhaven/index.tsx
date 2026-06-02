@@ -63,6 +63,7 @@ interface SummaryData {
   session: StillSession;
   preSample: StillActivationSample;
   postSample: StillActivationSample;
+  adaptations: number;
 }
 
 interface StillViewProps {
@@ -87,7 +88,7 @@ export function StillView({ onHandoff }: StillViewProps): React.JSX.Element {
 
   const { startEngine, stopEngine } = useBilateralEngine();
 
-  const { isAdapting } = useStillBioFeedback({
+  const { isAdapting, getAdaptations } = useStillBioFeedback({
     enabled: scene === 'live',
     baseSpeed: protocolSpeedRef.current,
   });
@@ -222,10 +223,13 @@ export function StillView({ onHandoff }: StillViewProps): React.JSX.Element {
 
   const handleSubmergeComplete = useCallback(() => setScene('live'), []);
 
+  const adaptationsAtEndRef = useRef<number>(0);
+
   const handleEnd = useCallback(() => {
+    adaptationsAtEndRef.current = getAdaptations();
     stopEngine();
     setScene('check-out');
-  }, [stopEngine]);
+  }, [getAdaptations, stopEngine]);
 
   const handleSaveCheckOut = useCallback(async () => {
     const { postActivation, hrv, note } = checkOut;
@@ -269,6 +273,7 @@ export function StillView({ onHandoff }: StillViewProps): React.JSX.Element {
       preActivation: effectivePre,
       postActivation,
       durationSeconds,
+      adaptations: adaptationsAtEndRef.current,
       session: sessionRowRef.current
         ? { ...sessionRowRef.current, duration_seconds: durationSeconds }
         : {
@@ -285,6 +290,7 @@ export function StillView({ onHandoff }: StillViewProps): React.JSX.Element {
 
   const handleRestart = useCallback(() => {
     sessionIdRef.current = null;
+    adaptationsAtEndRef.current = 0;
     setCheckIn({ protocol: null, preActivation: null });
     setCheckOut({ postActivation: null, hrv: null, note: '' });
     setSummary(null);
@@ -429,6 +435,11 @@ export function StillView({ onHandoff }: StillViewProps): React.JSX.Element {
         {delta !== 0 && (
           <p className="text-sm text-neutral-500">
             {delta > 0 ? `${delta} point${delta !== 1 ? 's' : ''} lower` : `${Math.abs(delta)} point${Math.abs(delta) !== 1 ? 's' : ''} higher`}
+          </p>
+        )}
+        {summary.adaptations > 0 && (
+          <p className="text-xs text-neutral-400">
+            Session adapted {summary.adaptations} {summary.adaptations === 1 ? 'time' : 'times'} to your biometrics
           </p>
         )}
         <div className="flex flex-col gap-2 w-full max-w-xs">

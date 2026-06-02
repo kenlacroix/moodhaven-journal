@@ -240,32 +240,22 @@ Added `buildFeatures { buildConfig = true }` to `wear/build.gradle.kts`. Replace
 
 ## StillHaven — Bio-Adaptive Engine
 
-### STILL-B-001: Live watch HR adaptation (Tier B) — deferred
-**What:** During an active StillHaven session, receive periodic heart-rate readings from the Wear OS watch via the existing `wear://signal` → `health_snapshot` event pipeline and adjust the bilateral engine speed in real time.
+### ~~STILL-B-001: Live watch HR adaptation (Tier B)~~ ✅ RESOLVED (desktop side, v1.3.0.1)
+**What:** Desktop plumbing shipped: `useStillBioFeedback` subscribes to `wear://signal` health_snapshot events, applies exponential smoothing, drives `setSpeed()`, reverts after 3min stale, tracks adaptation count, shows "Session adapted N times" in summary. Watch side (Kotlin `HealthServicesClient` real-time HR loop) still pending.
 
-Desktop side (ready to receive — no code changes needed once watch sends signals):
-- `useStillBioFeedback` hook: subscribe to `listen<WearSignalEvent>('wear://signal', …)`, filter `type === 'health_snapshot'`, apply exponential smoothing (`0.7 * smoothed + 0.3 * incoming`), call `stillStore.getState().setSpeed(hz)`. Revert to `baseSpeed` if no signal for 3+ minutes. Return `isAdapting: boolean`.
-- `Underwater2D` prop `isAdapting`: show a subtle pulse indicator on the elapsed timer when bio-feedback is active.
-- `SummaryData.adaptations?: number`: count of speed adjustments; show "Session adapted N times" in summary if > 0.
-- Add `heartRate?: number` to `HealthSnapshotPayload` in `src/types/signals.ts`.
-
-Watch side (blocks this feature — requires Kotlin + Health Services work):
+Watch side (still blocks live HR — requires Kotlin + Health Services work):
 - `HealthServicesClient.measureClient` to read HR once per 60s during an active session.
 - `MessageAPI`: send `{ type: 'health_snapshot', payload: { heartRate, source: 'health_connect' } }` to phone.
 - `WearListenerService` on phone routes it through `wearBridgeSignal()` unchanged — no phone-side changes needed.
 
-**Why deferred:** The watch companion app does not yet have a real-time HR reading loop. All desktop plumbing can be implemented speculatively; the feature activates automatically once the watch sends `health_snapshot` signals.
-**Effort (desktop):** CC+gstack ~1h | **Effort (watch):** human ~1d native Kotlin
 **Depends on:** Watch companion Phase 5 (AI enrichment / smart signals iteration)
 
 ---
 
 ## v1.3.0 — WellbeingCard known issues
 
-### WELL-001: WellbeingCard shows null Oura readiness on first open
-**What:** When the app starts, `oura_sync_today` fetches today's data and writes it to the `settings` table. `still_get_wellbeing_context` runs at WritingView mount simultaneously. If the Oura write hasn't landed yet, the card renders without the readiness row — even though data is available 200ms later.
-**Fix:** After `oura_sync_today` completes, re-invoke `still_get_wellbeing_context` and refresh the card state. Or subscribe to an Oura sync-complete event.
-**Effort:** CC+gstack ~30min | **Depends on:** WELL-001 only visible if Oura is connected and the app was just launched.
+### ~~WELL-001: WellbeingCard shows null Oura readiness on first open~~ ✅ RESOLVED (v1.3.0.1)
+`useWellbeingContext` now schedules a 4-second retry when the initial load returns null readiness and Oura is connected, picking up the data once `oura_sync_today` completes.
 
 ---
 

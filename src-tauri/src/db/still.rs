@@ -575,6 +575,22 @@ pub fn get_effect_stats(db: &Database) -> Result<StillEffectStats, String> {
     })
 }
 
+// ── v1.5.0 Wrist Loop signal link ─────────────────────────────────────────────
+
+pub fn still_link_signal_to_session(
+    db: &Database,
+    session_id: &str,
+    signal_id: &str,
+) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    conn.execute(
+        "INSERT INTO still_signal_links (session_id, signal_id) VALUES (?1, ?2)",
+        params![session_id, signal_id],
+    )
+    .map_err(|e| format!("Failed to link signal to session: {}", e))?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -962,20 +978,4 @@ mod tests {
             ctx.streak_days
         );
     }
-}
-
-// ── v1.5.0 Wrist Loop signal link ─────────────────────────────────────────────
-
-pub fn still_link_signal_to_session(
-    db: &Database,
-    session_id: &str,
-    signal_id: &str,
-) -> Result<(), String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
-    conn.execute(
-        "INSERT INTO still_signal_links (session_id, signal_id) VALUES (?1, ?2)",
-        params![session_id, signal_id],
-    )
-    .map_err(|e| format!("Failed to link signal to session: {}", e))?;
-    Ok(())
 }

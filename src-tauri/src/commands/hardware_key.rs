@@ -24,11 +24,11 @@
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "hardware-key")]
+use super::require_unlocked;
+#[cfg(feature = "hardware-key")]
 use crate::db::Database;
 #[cfg(feature = "hardware-key")]
 use crate::AppLockState;
-#[cfg(feature = "hardware-key")]
-use super::require_unlocked;
 #[cfg(feature = "hardware-key")]
 use tauri::State;
 

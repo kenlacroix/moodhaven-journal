@@ -266,10 +266,15 @@ fn do_full_restore_client(app: &AppHandle, peer_device_id: &str, host: &str) -> 
 
     // Prove our identity via Ed25519 signature if the server sent a challenge.
     if let Some(ref challenge_hex) = server_challenge {
-        let nonce = hex::decode(challenge_hex)
-            .map_err(|e| format!("Bad server challenge hex: {e}"))?;
+        let nonce =
+            hex::decode(challenge_hex).map_err(|e| format!("Bad server challenge hex: {e}"))?;
         let sig = crate::commands::peer_identity::sign_hello_challenge(app, &nonce)?;
-        write_msg(&mut stream, &Msg::Auth { signature: hex::encode(sig) })?;
+        write_msg(
+            &mut stream,
+            &Msg::Auth {
+                signature: hex::encode(sig),
+            },
+        )?;
         log::debug!("[restore] Sent Ed25519 AUTH response");
     }
 
@@ -464,7 +469,12 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
     let auth_sig_hex = match read_msg(&mut stream)? {
         Msg::Auth { signature } => signature,
         other => {
-            let _ = write_msg(&mut stream, &Msg::Err { msg: "Expected AUTH".to_string() });
+            let _ = write_msg(
+                &mut stream,
+                &Msg::Err {
+                    msg: "Expected AUTH".to_string(),
+                },
+            );
             let _ = stream.shutdown(std::net::Shutdown::Both);
             return Err(format!(
                 "[sync] Server: expected AUTH from {client_device_id}, got: {other:?}"
@@ -482,7 +492,12 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
         &auth_sig_arr,
     ) {
         log::warn!("[sync] Server: HELLO auth failed for {client_device_id}: {e}");
-        let _ = write_msg(&mut stream, &Msg::Err { msg: "Authentication failed".to_string() });
+        let _ = write_msg(
+            &mut stream,
+            &Msg::Err {
+                msg: "Authentication failed".to_string(),
+            },
+        );
         let _ = stream.shutdown(std::net::Shutdown::Both);
         return Err(format!("[sync] HELLO auth failed for {client_device_id}"));
     }
@@ -1063,10 +1078,15 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
 
     // Step 2b: If the server sent a challenge, prove our identity with an Ed25519 signature.
     if let Some(ref challenge_hex) = server_challenge {
-        let nonce = hex::decode(challenge_hex)
-            .map_err(|e| format!("Bad server challenge hex: {e}"))?;
+        let nonce =
+            hex::decode(challenge_hex).map_err(|e| format!("Bad server challenge hex: {e}"))?;
         let sig = crate::commands::peer_identity::sign_hello_challenge(app, &nonce)?;
-        write_msg(&mut stream, &Msg::Auth { signature: hex::encode(sig) })?;
+        write_msg(
+            &mut stream,
+            &Msg::Auth {
+                signature: hex::encode(sig),
+            },
+        )?;
         log::debug!("[sync] Client: sent Ed25519 AUTH response");
     }
 

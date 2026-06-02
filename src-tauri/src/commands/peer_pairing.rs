@@ -138,10 +138,7 @@ fn check_pairing_lockout(app: &AppHandle) -> Result<(), String> {
     }
     let json = std::fs::read_to_string(&path).unwrap_or_default();
     let v = serde_json::from_str::<serde_json::Value>(&json).unwrap_or_default();
-    let locked_until: i64 = v
-        .get("locked_until")
-        .and_then(|t| t.as_i64())
-        .unwrap_or(0);
+    let locked_until: i64 = v.get("locked_until").and_then(|t| t.as_i64()).unwrap_or(0);
     let now = chrono::Utc::now().timestamp();
     if now < locked_until {
         let remaining = locked_until - now;

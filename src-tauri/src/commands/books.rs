@@ -69,6 +69,7 @@ pub fn create_book(
 
 /// Update an existing book's name, emoji, color, description, and settings
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub fn update_book(
     db: State<Database>,
     lock: State<'_, AppLockState>,

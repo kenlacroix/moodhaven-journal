@@ -177,8 +177,7 @@ fn load_signing_key(app: &AppHandle) -> Result<ed25519_dalek::SigningKey, String
         .app_data_dir()
         .map_err(|e| format!("app_data_dir: {e}"))?;
     let key_path = app_data_dir.join("peer_key.bin");
-    let bytes =
-        fs::read(&key_path).map_err(|e| format!("Failed to read peer_key.bin: {e}"))?;
+    let bytes = fs::read(&key_path).map_err(|e| format!("Failed to read peer_key.bin: {e}"))?;
     let arr: [u8; 32] = bytes
         .try_into()
         .map_err(|_| "peer_key.bin must be exactly 32 bytes".to_string())?;

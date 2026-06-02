@@ -214,8 +214,7 @@ fn encrypt_export_payload(plaintext: &str, password: &str) -> Result<String, Str
     let mut key = [0u8; 32];
     pbkdf2_hmac::<Sha256>(password.as_bytes(), &salt, EXPORT_PBKDF2_ROUNDS, &mut key);
 
-    let cipher =
-        Aes256Gcm::new_from_slice(&key).map_err(|e| format!("cipher init: {e}"))?;
+    let cipher = Aes256Gcm::new_from_slice(&key).map_err(|e| format!("cipher init: {e}"))?;
     let nonce = Nonce::from_slice(&nonce_bytes);
     let ciphertext = cipher
         .encrypt(nonce, plaintext.as_bytes())
@@ -225,8 +224,8 @@ fn encrypt_export_payload(plaintext: &str, password: &str) -> Result<String, Str
         "format": "moodhaven-encrypted-v1",
         "payload": {
             "ciphertext": general_purpose::STANDARD.encode(&ciphertext),
-            "iv": general_purpose::STANDARD.encode(&nonce_bytes),
-            "salt": general_purpose::STANDARD.encode(&salt),
+            "iv": general_purpose::STANDARD.encode(nonce_bytes),
+            "salt": general_purpose::STANDARD.encode(salt),
             "version": 1
         }
     });
@@ -519,9 +518,8 @@ pub async fn import_data(app: AppHandle, data: String) -> Result<i32, String> {
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
             // Reject malformed or missing timestamps — both fields are required.
-            let valid_ts = |s: &str| {
-                !s.is_empty() && chrono::DateTime::parse_from_rfc3339(s).is_ok()
-            };
+            let valid_ts =
+                |s: &str| !s.is_empty() && chrono::DateTime::parse_from_rfc3339(s).is_ok();
             if !valid_ts(created_at) || !valid_ts(updated_at) {
                 return Err(format!(
                     "Invalid timestamps in entry {id}: created_at={created_at:?}, updated_at={updated_at:?}"
@@ -701,7 +699,6 @@ pub async fn import_data(app: AppHandle, data: String) -> Result<i32, String> {
     Ok(imported_count)
 }
 
-
 /// Write text to a file and verify it was written correctly.
 /// Used instead of the FS plugin which has scope restrictions on user-selected paths.
 /// Rejects paths that traverse into sensitive system or shell-config locations.
@@ -746,15 +743,7 @@ pub async fn write_text_file(
     let blocked_by_filename = canonical
         .file_name()
         .and_then(|n| n.to_str())
-        .map(|n| {
-            matches!(
-                n,
-                ".bashrc"
-                    | ".bash_profile"
-                    | ".zshrc"
-                    | ".profile"
-            )
-        })
+        .map(|n| matches!(n, ".bashrc" | ".bash_profile" | ".zshrc" | ".profile"))
         .unwrap_or(false);
 
     if blocked_by_component || blocked_by_prefix || blocked_by_filename {
@@ -811,8 +800,8 @@ mod tests {
     use super::*;
 
     fn decrypt_export_payload(envelope_json: &str, password: &str) -> Result<String, String> {
-        let envelope: serde_json::Value = serde_json::from_str(envelope_json)
-            .map_err(|e| format!("parse envelope: {e}"))?;
+        let envelope: serde_json::Value =
+            serde_json::from_str(envelope_json).map_err(|e| format!("parse envelope: {e}"))?;
         let payload = envelope.get("payload").ok_or("missing payload field")?;
         let ciphertext = general_purpose::STANDARD
             .decode(payload["ciphertext"].as_str().ok_or("missing ciphertext")?)
@@ -828,8 +817,7 @@ mod tests {
         }
         let mut key = [0u8; 32];
         pbkdf2_hmac::<Sha256>(password.as_bytes(), &salt, EXPORT_PBKDF2_ROUNDS, &mut key);
-        let cipher =
-            Aes256Gcm::new_from_slice(&key).map_err(|e| format!("cipher: {e}"))?;
+        let cipher = Aes256Gcm::new_from_slice(&key).map_err(|e| format!("cipher: {e}"))?;
         let nonce = Nonce::from_slice(&nonce_bytes);
         let plaintext = cipher
             .decrypt(nonce, ciphertext.as_ref())

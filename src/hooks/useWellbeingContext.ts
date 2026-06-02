@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { stillGetWellbeingContext, type WellbeingContext } from '../lib/stillService';
 import { useSettingsStore } from '../stores/settingsStore';
 
@@ -20,6 +20,9 @@ const TODAY_KEY = () => {
 export function useWellbeingContext(): WellbeingState {
   const [context, setContext] = useState<WellbeingContext | null>(null);
   const [isVisible, setIsVisible] = useState(false);
+  // Tracks whether the 5-word threshold was crossed before load() completed,
+  // so a fast typer doesn't get the card shown after they've already dismissed it.
+  const thresholdCrossedRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -32,7 +35,7 @@ export function useWellbeingContext(): WellbeingState {
       if (lastShown === key) return;
 
       const ctx = await stillGetWellbeingContext().catch(() => null);
-      if (cancelled || !ctx) return;
+      if (cancelled || !ctx || thresholdCrossedRef.current) return;
 
       setContext(ctx);
       setIsVisible(true);
@@ -62,16 +65,17 @@ export function useWellbeingContext(): WellbeingState {
     };
   }, []);
 
-  function dismiss() {
+  const dismiss = useCallback(() => {
     setIsVisible(false);
-  }
+  }, []);
 
   // Called by WritingView when word count crosses the 5-word threshold
-  function onWordsWritten(wordCount: number) {
-    if (wordCount >= 5 && isVisible) {
+  const onWordsWritten = useCallback((wordCount: number) => {
+    if (wordCount >= 5) {
+      thresholdCrossedRef.current = true;
       setIsVisible(false);
     }
-  }
+  }, []);
 
   return { context, isVisible, dismiss, onWordsWritten };
 }

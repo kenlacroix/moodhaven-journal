@@ -124,11 +124,15 @@ pub fn still_complete_session(
 ) -> Result<(), String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
-    conn.execute(
-        "UPDATE still_sessions SET completed_at = ?1, duration_seconds = ?2 WHERE id = ?3",
-        params![completed_at, duration_seconds, id],
-    )
-    .map_err(|e| format!("Failed to complete session: {}", e))?;
+    let n = conn
+        .execute(
+            "UPDATE still_sessions SET completed_at = ?1, duration_seconds = ?2 WHERE id = ?3",
+            params![completed_at, duration_seconds, id],
+        )
+        .map_err(|e| format!("Failed to complete session: {}", e))?;
+    if n == 0 {
+        return Err(format!("Session not found: {id}"));
+    }
 
     Ok(())
 }
@@ -136,11 +140,15 @@ pub fn still_complete_session(
 pub fn still_abandon_session(db: &Database, id: &str, abandoned_at: &str) -> Result<(), String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
-    conn.execute(
-        "UPDATE still_sessions SET abandoned_at = ?1 WHERE id = ?2",
-        params![abandoned_at, id],
-    )
-    .map_err(|e| format!("Failed to abandon session: {}", e))?;
+    let n = conn
+        .execute(
+            "UPDATE still_sessions SET abandoned_at = ?1 WHERE id = ?2",
+            params![abandoned_at, id],
+        )
+        .map_err(|e| format!("Failed to abandon session: {}", e))?;
+    if n == 0 {
+        return Err(format!("Session not found: {id}"));
+    }
 
     Ok(())
 }
@@ -256,15 +264,14 @@ pub fn get_session_brief(
 
     let row = conn.query_row(
         "SELECT s.protocol, s.duration_seconds,
-                pre.activation  AS pre_activation,
-                post.activation AS post_activation
+                (SELECT activation FROM still_activation_samples
+                 WHERE session_id = s.id AND phase = 'pre'
+                 ORDER BY sampled_at DESC, ROWID DESC LIMIT 1) AS pre_activation,
+                (SELECT activation FROM still_activation_samples
+                 WHERE session_id = s.id AND phase = 'post'
+                 ORDER BY sampled_at DESC, ROWID DESC LIMIT 1) AS post_activation
          FROM still_sessions s
-         LEFT JOIN still_activation_samples pre
-               ON pre.session_id = s.id AND pre.phase = 'pre'
-         LEFT JOIN still_activation_samples post
-               ON post.session_id = s.id AND post.phase = 'post'
-         WHERE s.id = ?1
-         LIMIT 1",
+         WHERE s.id = ?1",
         params![session_id],
         |r| {
             Ok(StillSessionBrief {
@@ -393,7 +400,8 @@ pub fn get_wellbeing_context(db: &Database) -> Result<WellbeingContext, String> 
             .prepare(
                 "SELECT DISTINCT date(created_at) as d
                  FROM journal_entries
-                 ORDER BY d DESC",
+                 ORDER BY d DESC
+                 LIMIT 1000",
             )
             .map_err(|e| format!("streak prepare: {e}"))?;
 
@@ -411,12 +419,12 @@ pub fn get_wellbeing_context(db: &Database) -> Result<WellbeingContext, String> 
                 streak += 1;
                 check -= chrono::Duration::days(1);
             } else if streak == 0 {
-                // Allow missing today — check if yesterday started the streak
-                let yesterday_str = check.format("%Y-%m-%d").to_string();
-                if date_str == &yesterday_str {
-                    check -= chrono::Duration::days(1);
+                // Allow missing today — check if yesterday started the streak.
+                // check is still today here; compute actual yesterday before comparing.
+                let yesterday = check - chrono::Duration::days(1);
+                if date_str == &yesterday.format("%Y-%m-%d").to_string() {
                     streak += 1;
-                    check -= chrono::Duration::days(1);
+                    check = yesterday - chrono::Duration::days(1);
                 } else {
                     break;
                 }
@@ -434,4 +442,393 @@ pub fn get_wellbeing_context(db: &Database) -> Result<WellbeingContext, String> 
         yesterday_entry_count,
         streak_days,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rusqlite::Connection;
+    use std::sync::Mutex;
+
+    fn test_db() -> Database {
+        let conn = Connection::open_in_memory().expect("in-memory DB");
+        conn.execute_batch(
+            "CREATE TABLE still_sessions (
+                id               TEXT PRIMARY KEY,
+                protocol         TEXT NOT NULL,
+                environment      TEXT NOT NULL DEFAULT 'underwater',
+                bilateral_mode   TEXT NOT NULL DEFAULT 'audio',
+                duration_seconds INTEGER NOT NULL DEFAULT 0,
+                started_at       TEXT NOT NULL,
+                completed_at     TEXT,
+                abandoned_at     TEXT,
+                created_at       TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%S','now'))
+            );
+            CREATE TABLE still_activation_samples (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id  TEXT NOT NULL,
+                phase       TEXT NOT NULL,
+                activation  INTEGER NOT NULL,
+                hrv_manual  INTEGER,
+                hrv_source  TEXT,
+                note        TEXT,
+                sampled_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%S','now'))
+            );
+            CREATE TABLE journal_entries (
+                id                TEXT PRIMARY KEY,
+                encrypted_content TEXT NOT NULL DEFAULT '{}',
+                mood              INTEGER NOT NULL DEFAULT 3,
+                privacy_mode      INTEGER NOT NULL DEFAULT 0,
+                location_weather  TEXT,
+                book_id           TEXT NOT NULL DEFAULT 'default',
+                pinned            INTEGER NOT NULL DEFAULT 0,
+                session_id        TEXT,
+                word_count        INTEGER,
+                created_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%S','now')),
+                updated_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%S','now'))
+            );
+            CREATE TABLE settings (
+                key   TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            );",
+        )
+        .expect("create tables");
+        Database {
+            conn: Mutex::new(conn),
+        }
+    }
+
+    fn insert_session(db: &Database, id: &str, started_at: &str) {
+        let conn = db.conn.lock().unwrap();
+        conn.execute(
+            "INSERT INTO still_sessions (id, protocol, started_at) VALUES (?1, 'general_activation', ?2)",
+            params![id, started_at],
+        )
+        .unwrap();
+    }
+
+    fn insert_entry_yesterday(db: &Database, id: &str, mood: i32) {
+        let conn = db.conn.lock().unwrap();
+        conn.execute(
+            "INSERT INTO journal_entries (id, mood, created_at, updated_at)
+             VALUES (?1, ?2, date('now','-1 day') || 'T12:00:00', date('now','-1 day') || 'T12:00:00')",
+            params![id, mood],
+        )
+        .unwrap();
+    }
+
+    // ── still_create_session ─────────────────────────────────────────────────
+
+    #[test]
+    fn create_session_returns_correct_row() {
+        let db = test_db();
+        let row = still_create_session(
+            &db,
+            "s1",
+            "general_activation",
+            "underwater",
+            "audio",
+            0,
+            "2026-01-01T10:00:00",
+        )
+        .unwrap();
+        assert_eq!(row.id, "s1");
+        assert_eq!(row.protocol, "general_activation");
+        assert_eq!(row.duration_seconds, 0);
+        assert!(row.completed_at.is_none());
+        assert!(row.abandoned_at.is_none());
+    }
+
+    #[test]
+    fn create_session_duplicate_id_errors() {
+        let db = test_db();
+        insert_session(&db, "s1", "2026-01-01T10:00:00");
+        let result = still_create_session(
+            &db,
+            "s1",
+            "fake_danger",
+            "underwater",
+            "audio",
+            0,
+            "2026-01-01T11:00:00",
+        );
+        assert!(result.is_err());
+    }
+
+    // ── still_record_activation ──────────────────────────────────────────────
+
+    #[test]
+    fn record_activation_pre_phase() {
+        let db = test_db();
+        insert_session(&db, "s1", "2026-01-01T10:00:00");
+        let row = still_record_activation(&db, "s1", "pre", 7, None, None, None).unwrap();
+        assert_eq!(row.session_id, "s1");
+        assert_eq!(row.phase, "pre");
+        assert_eq!(row.activation, 7);
+        assert!(row.hrv_manual.is_none());
+        assert!(row.hrv_source.is_none());
+        assert!(row.note.is_none());
+    }
+
+    #[test]
+    fn record_activation_with_hrv() {
+        let db = test_db();
+        insert_session(&db, "s1", "2026-01-01T10:00:00");
+        let row = still_record_activation(
+            &db,
+            "s1",
+            "post",
+            4,
+            Some(45),
+            Some("manual"),
+            Some("felt calmer"),
+        )
+        .unwrap();
+        assert_eq!(row.phase, "post");
+        assert_eq!(row.hrv_manual, Some(45));
+        assert_eq!(row.hrv_source.as_deref(), Some("manual"));
+        assert_eq!(row.note.as_deref(), Some("felt calmer"));
+    }
+
+    // ── still_complete_session ───────────────────────────────────────────────
+
+    #[test]
+    fn complete_session_updates_fields() {
+        let db = test_db();
+        insert_session(&db, "s1", "2026-01-01T10:00:00");
+        still_complete_session(&db, "s1", "2026-01-01T10:20:00", 1200).unwrap();
+        let result = still_get_session_with_samples(&db, "s1").unwrap().unwrap();
+        assert_eq!(
+            result.session.completed_at.as_deref(),
+            Some("2026-01-01T10:20:00")
+        );
+        assert_eq!(result.session.duration_seconds, 1200);
+        assert!(result.session.abandoned_at.is_none());
+    }
+
+    // ── still_abandon_session ────────────────────────────────────────────────
+
+    #[test]
+    fn abandon_session_sets_abandoned_at() {
+        let db = test_db();
+        insert_session(&db, "s1", "2026-01-01T10:00:00");
+        still_abandon_session(&db, "s1", "2026-01-01T10:05:00").unwrap();
+        let result = still_get_session_with_samples(&db, "s1").unwrap().unwrap();
+        assert_eq!(
+            result.session.abandoned_at.as_deref(),
+            Some("2026-01-01T10:05:00")
+        );
+        assert!(result.session.completed_at.is_none());
+    }
+
+    // ── still_list_sessions ──────────────────────────────────────────────────
+
+    #[test]
+    fn list_sessions_empty() {
+        let db = test_db();
+        let rows = still_list_sessions(&db, None).unwrap();
+        assert!(rows.is_empty());
+    }
+
+    #[test]
+    fn list_sessions_ordered_newest_first() {
+        let db = test_db();
+        insert_session(&db, "s1", "2026-01-01T09:00:00");
+        insert_session(&db, "s2", "2026-01-02T09:00:00");
+        let rows = still_list_sessions(&db, None).unwrap();
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].id, "s2");
+        assert_eq!(rows[1].id, "s1");
+    }
+
+    #[test]
+    fn list_sessions_respects_limit() {
+        let db = test_db();
+        for i in 0..5u8 {
+            insert_session(
+                &db,
+                &format!("s{i}"),
+                &format!("2026-01-0{}T09:00:00", i + 1),
+            );
+        }
+        let rows = still_list_sessions(&db, Some(2)).unwrap();
+        assert_eq!(rows.len(), 2);
+    }
+
+    // ── still_get_session_with_samples ───────────────────────────────────────
+
+    #[test]
+    fn get_session_with_samples_returns_none_for_missing() {
+        let db = test_db();
+        let result = still_get_session_with_samples(&db, "nonexistent").unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn get_session_with_samples_no_activation_records() {
+        let db = test_db();
+        insert_session(&db, "s1", "2026-01-01T10:00:00");
+        let result = still_get_session_with_samples(&db, "s1").unwrap().unwrap();
+        assert_eq!(result.session.id, "s1");
+        assert!(result.samples.is_empty());
+    }
+
+    #[test]
+    fn get_session_with_samples_returns_both() {
+        let db = test_db();
+        insert_session(&db, "s1", "2026-01-01T10:00:00");
+        still_record_activation(&db, "s1", "pre", 6, None, None, None).unwrap();
+        still_record_activation(&db, "s1", "post", 3, None, None, None).unwrap();
+        let result = still_get_session_with_samples(&db, "s1").unwrap().unwrap();
+        assert_eq!(result.samples.len(), 2);
+        assert_eq!(result.samples[0].phase, "pre");
+        assert_eq!(result.samples[1].phase, "post");
+    }
+
+    // ── get_session_brief ────────────────────────────────────────────────────
+
+    #[test]
+    fn get_session_brief_returns_none_for_missing() {
+        let db = test_db();
+        let result = get_session_brief(&db, "nonexistent").unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn get_session_brief_with_pre_and_post() {
+        let db = test_db();
+        insert_session(&db, "s1", "2026-01-01T10:00:00");
+        still_record_activation(&db, "s1", "pre", 5, None, None, None).unwrap();
+        still_record_activation(&db, "s1", "post", 3, None, None, None).unwrap();
+        let brief = get_session_brief(&db, "s1").unwrap().unwrap();
+        assert_eq!(brief.protocol, "general_activation");
+        assert_eq!(brief.pre_activation, Some(5));
+        assert_eq!(brief.post_activation, Some(3));
+    }
+
+    // ── still_complete_session / still_abandon_session — nonexistent id ────────
+
+    #[test]
+    fn complete_session_nonexistent_id_errors() {
+        let db = test_db();
+        let result = still_complete_session(&db, "nope", "2026-01-01T11:00:00", 600);
+        assert!(result.is_err(), "expected Err for nonexistent session id");
+    }
+
+    #[test]
+    fn abandon_session_nonexistent_id_errors() {
+        let db = test_db();
+        let result = still_abandon_session(&db, "nope", "2026-01-01T10:05:00");
+        assert!(result.is_err(), "expected Err for nonexistent session id");
+    }
+
+    // ── get_session_brief — partial activation ───────────────────────────────
+
+    #[test]
+    fn get_session_brief_only_pre_activation() {
+        let db = test_db();
+        insert_session(&db, "s1", "2026-01-01T10:00:00");
+        still_record_activation(&db, "s1", "pre", 8, None, None, None).unwrap();
+        let brief = get_session_brief(&db, "s1").unwrap().unwrap();
+        assert_eq!(brief.pre_activation, Some(8));
+        assert!(brief.post_activation.is_none());
+    }
+
+    #[test]
+    fn get_session_brief_only_post_activation() {
+        let db = test_db();
+        insert_session(&db, "s1", "2026-01-01T10:00:00");
+        still_record_activation(&db, "s1", "post", 2, None, None, None).unwrap();
+        let brief = get_session_brief(&db, "s1").unwrap().unwrap();
+        assert!(brief.pre_activation.is_none());
+        assert_eq!(brief.post_activation, Some(2));
+    }
+
+    // ── get_journal_brief_for_session ────────────────────────────────────────
+
+    #[test]
+    fn get_journal_brief_returns_none_when_no_entry() {
+        let db = test_db();
+        insert_session(&db, "s1", "2026-01-01T10:00:00");
+        let result = get_journal_brief_for_session(&db, "s1").unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn get_journal_brief_returns_entry() {
+        let db = test_db();
+        insert_session(&db, "s1", "2026-01-01T10:00:00");
+        {
+            let conn = db.conn.lock().unwrap();
+            conn.execute(
+                "INSERT INTO journal_entries (id, mood, session_id, created_at, updated_at)
+                 VALUES ('e1', 4, 's1', '2026-01-01T11:00:00', '2026-01-01T11:00:00')",
+                [],
+            )
+            .unwrap();
+        }
+        let brief = get_journal_brief_for_session(&db, "s1").unwrap().unwrap();
+        assert_eq!(brief.entry_id, "e1");
+        assert_eq!(brief.mood, 4);
+    }
+
+    // ── get_wellbeing_context ────────────────────────────────────────────────
+
+    #[test]
+    fn get_wellbeing_context_empty_db() {
+        let db = test_db();
+        let ctx = get_wellbeing_context(&db).unwrap();
+        assert!(ctx.oura_readiness_today.is_none());
+        assert!(ctx.last_still_session_days_ago.is_none());
+        assert!(ctx.yesterday_mood_avg.is_none());
+        assert_eq!(ctx.yesterday_entry_count, 0);
+        assert_eq!(ctx.streak_days, 0);
+    }
+
+    #[test]
+    fn get_wellbeing_context_yesterday_entries() {
+        let db = test_db();
+        insert_entry_yesterday(&db, "e1", 3);
+        insert_entry_yesterday(&db, "e2", 5);
+        let ctx = get_wellbeing_context(&db).unwrap();
+        assert_eq!(ctx.yesterday_entry_count, 2);
+        let avg = ctx.yesterday_mood_avg.expect("should have avg");
+        assert!((avg - 4.0).abs() < 0.001, "expected avg 4.0, got {avg}");
+    }
+
+    #[test]
+    fn get_wellbeing_context_streak_from_only_yesterday() {
+        let db = test_db();
+        insert_entry_yesterday(&db, "e1", 3);
+        let ctx = get_wellbeing_context(&db).unwrap();
+        // Streak of 1: no entry today, but yesterday counts (allow-missing-today path)
+        assert_eq!(
+            ctx.streak_days, 1,
+            "yesterday-only should give streak 1, got {}",
+            ctx.streak_days
+        );
+    }
+
+    #[test]
+    fn get_wellbeing_context_streak_from_today_and_yesterday() {
+        let db = test_db();
+        // Entry today
+        {
+            let conn = db.conn.lock().unwrap();
+            conn.execute(
+                "INSERT INTO journal_entries (id, mood, created_at, updated_at)
+                 VALUES ('today', 3, datetime('now'), datetime('now'))",
+                [],
+            )
+            .unwrap();
+        }
+        // Entry yesterday
+        insert_entry_yesterday(&db, "yesterday", 4);
+        let ctx = get_wellbeing_context(&db).unwrap();
+        assert!(
+            ctx.streak_days >= 2,
+            "streak should be ≥2 with today + yesterday entries, got {}",
+            ctx.streak_days
+        );
+    }
 }

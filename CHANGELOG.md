@@ -5,6 +5,22 @@ All notable changes to MoodHaven Journal are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.3.2.0] — 2026-06-02
+
+### Fixed
+- **Journaling streak counted wrong for users who skip today** — the "allow missing today" path in the streak calculation used the wrong date for comparison, making it unreachable; a user who last journaled yesterday now correctly shows a streak of 1+ instead of 0.
+- **StillHaven session completion/abandonment on wrong ID was silent** — `still_complete_session` and `still_abandon_session` now return an error when the session ID doesn't exist, instead of silently returning success with 0 rows affected.
+- **StillHaven session brief showed wrong activation values** — the activation delta displayed after a session could be incorrect if you recorded more than one check-in sample for a phase; now always picks the most recent sample per phase.
+- **Streak query was unbounded** — `get_wellbeing_context` loaded all distinct journal entry dates into memory; now bounded to the last 1,000 entries (covers 2.7+ years of daily journaling).
+- **`onWordsWritten` could hold stale `isVisible` value** — wrapped in `useCallback` so memoized consumers always see the current card visibility state.
+- Nosemgrep suppression comment in `journal.rs` test moved to its own line for consistency with `cargo fmt`.
+
+### Added (tests)
+- 25 new Rust unit tests covering `src-tauri/src/db/still.rs` — all 9 DB functions including `get_wellbeing_context`, `get_session_brief`, and the corrected streak logic.
+- 7 new TypeScript tests for `useWellbeingContext` hook — load/suppress/dismiss/word-count threshold/fetch-failure/get_setting-failure/clock-safety paths.
+
+---
+
 ## [1.3.1.0] — 2026-06-01
 
 ### Security

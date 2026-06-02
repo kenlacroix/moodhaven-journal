@@ -28,10 +28,24 @@ export function LinkDialog({ initialUrl, onSubmit, onClose }: LinkDialogProps) {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
+  const ALLOWED_SCHEMES = ['https:', 'http:', 'ftp:', 'mailto:', 'tel:'];
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = url.trim();
-    onSubmit(trimmed === 'https://' ? '' : trimmed);
+    if (trimmed === '' || trimmed === 'https://') {
+      onSubmit('');
+      return;
+    }
+    try {
+      const parsed = new URL(trimmed);
+      if (!ALLOWED_SCHEMES.includes(parsed.protocol)) {
+        return; // silently reject javascript:, file:, data:, etc.
+      }
+    } catch {
+      return; // not a valid URL
+    }
+    onSubmit(trimmed);
   };
 
   const handleRemoveLink = () => {

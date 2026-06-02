@@ -2,6 +2,18 @@
 //!
 //! These commands are invoked from the React frontend via IPC.
 
+use crate::AppLockState;
+use tauri::State;
+
+/// Shared lock guard used by all command modules.
+pub(crate) fn require_unlocked(lock: &State<'_, AppLockState>) -> Result<(), String> {
+    if lock.is_locked() {
+        Err("Session is locked".to_string())
+    } else {
+        Ok(())
+    }
+}
+
 pub mod analytics;
 pub mod books;
 pub mod data_management;

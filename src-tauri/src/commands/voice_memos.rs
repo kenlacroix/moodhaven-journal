@@ -66,9 +66,7 @@ pub fn store_voice_memo(
     if id.is_empty() {
         return Err("store_voice_memo: id must not be empty".to_string());
     }
-    if incoming_file.is_empty() {
-        return Err("store_voice_memo: incoming_file must not be empty".to_string());
-    }
+    validate_incoming_filename(&incoming_file).map_err(|e| format!("store_voice_memo: {e}"))?;
 
     let src = incoming_dir(&app)?.join(&incoming_file);
     let dest_dir = voice_memos_dir(&app)?;
@@ -445,4 +443,64 @@ pub fn list_pending_drafts(
         return Err("Session is locked".to_string());
     }
     db::list_pending_drafts(&db, limit)
+}
+
+// ── pure helpers exposed for testing ─────────────────────────────────────────
+
+/// Returns `Ok(())` if `filename` is a safe plain filename (no path traversal).
+pub(crate) fn validate_incoming_filename(filename: &str) -> Result<(), &'static str> {
+    if filename.is_empty() {
+        return Err("filename must not be empty");
+    }
+    if filename == "." {
+        return Err("filename must not be `.`");
+    }
+    if filename.contains('/') || filename.contains('\\') || filename.contains("..") {
+        return Err("filename must be a plain filename with no path components");
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_incoming_filename;
+
+    #[test]
+    fn plain_filename_accepted() {
+        assert!(validate_incoming_filename("abc123.m4a").is_ok());
+        assert!(validate_incoming_filename("voice-2026-06-01.m4a").is_ok());
+    }
+
+    #[test]
+    fn traversal_with_dotdot_rejected() {
+        assert!(validate_incoming_filename("../moodhaven.db").is_err());
+        assert!(validate_incoming_filename("../../etc/passwd").is_err());
+        assert!(validate_incoming_filename("..\\windows\\system32\\cmd.exe").is_err());
+    }
+
+    #[test]
+    fn absolute_unix_path_rejected() {
+        assert!(validate_incoming_filename("/etc/passwd").is_err());
+        assert!(validate_incoming_filename("/app/data/secret.db").is_err());
+    }
+
+    #[test]
+    fn relative_subdir_path_rejected() {
+        assert!(validate_incoming_filename("subdir/file.m4a").is_err());
+    }
+
+    #[test]
+    fn windows_backslash_path_rejected() {
+        assert!(validate_incoming_filename("subdir\\file.m4a").is_err());
+    }
+
+    #[test]
+    fn empty_filename_rejected() {
+        assert!(validate_incoming_filename("").is_err());
+    }
+
+    #[test]
+    fn dot_filename_rejected() {
+        assert!(validate_incoming_filename(".").is_err());
+    }
 }

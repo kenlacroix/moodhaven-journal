@@ -10,6 +10,9 @@ use tauri::State;
 // ── Sync field validation ─────────────────────────────────────────────────────
 
 const ALLOWED_CAPSULE_TYPES: &[&str] = &["letter", "vault", "anniversary"];
+/// Maximum number of seconds a peer's `updated_at` may be ahead of local clock.
+/// 10 s accommodates minor clock skew without letting an attacker manipulate LWW ordering.
+const MAX_FUTURE_SECS: i64 = 10;
 const MAX_TAG_COUNT: usize = 50;
 const MAX_TAG_LEN: usize = 64;
 const MAX_BOOK_ID_LEN: usize = 64;
@@ -103,6 +106,16 @@ pub fn upsert_entry_from_sync(db: State<Database>, entry_json: String) -> Result
 
     let updated_at = v["updated_at"].as_str().ok_or("Missing updated_at")?;
     validate_timestamp(updated_at, "updated_at")?;
+    // Reject timestamps too far in the future — prevents a malicious peer
+    // from injecting a far-future updated_at that always wins LWW resolution.
+    if let Ok(ts) = chrono::DateTime::parse_from_rfc3339(updated_at) {
+        let limit = chrono::Utc::now() + chrono::TimeDelta::seconds(MAX_FUTURE_SECS);
+        if ts.with_timezone(&chrono::Utc) > limit {
+            return Err(
+                "updated_at is too far in the future — possible LWW manipulation".to_string(),
+            );
+        }
+    }
 
     let created_at = v["created_at"].as_str().ok_or("Missing created_at")?;
     validate_timestamp(created_at, "created_at")?;

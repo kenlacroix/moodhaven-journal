@@ -4,20 +4,14 @@
 //! Backend only stores/retrieves encrypted blobs.
 
 use crate::db::{self, Database, EncryptedContent, JournalEntryRow, UserSettings};
-use crate::{AppLockState, PasswordRateLimiter};
+use crate::{AppLockState, PasswordRateLimiter, TwoFactorPendingState};
 use base64::Engine;
 use hmac::Hmac;
 use pbkdf2::pbkdf2;
 use sha2::Sha256;
 use tauri::State;
 
-fn require_unlocked(lock: &State<'_, AppLockState>) -> Result<(), String> {
-    if lock.is_locked() {
-        Err("Session is locked".to_string())
-    } else {
-        Ok(())
-    }
-}
+use super::require_unlocked;
 
 /// Check if user has set up their password
 #[tauri::command]
@@ -25,9 +19,20 @@ pub fn check_password_exists(db: State<Database>) -> Result<bool, String> {
     db::has_password(&db)
 }
 
-/// Store password verification hash (not the password itself)
+/// Store password verification hash (not the password itself).
+/// First-run exception: allowed while locked if no password exists yet (setup flow).
+/// If a password already exists, session must be unlocked (password change flow).
 #[tauri::command]
-pub fn store_password_hash(db: State<Database>, hash: String, salt: String) -> Result<(), String> {
+pub fn store_password_hash(
+    db: State<Database>,
+    lock: State<'_, AppLockState>,
+    hash: String,
+    salt: String,
+) -> Result<(), String> {
+    let password_already_set = db::has_password(&db)?;
+    if password_already_set {
+        require_unlocked(&lock)?;
+    }
     db::set_password_hash(&db, &hash, &salt)
 }
 
@@ -45,12 +50,15 @@ pub fn get_password_hash(db: State<Database>) -> Result<Option<UserSettings>, St
 /// - Hash comparison is constant-time to prevent timing attacks
 /// - Backend rate limiter (5 failures → 30s lockout) prevents brute force from
 ///   WebView code regardless of frontend lockout state.
+/// - On success, records whether 2FA is required in TwoFactorPendingState so
+///   that unlock_app can enforce 2FA completion backend-side.
 ///
 /// Returns `Ok(true)` on match, `Ok(false)` on mismatch, `Err` on bad inputs or lockout.
 #[tauri::command]
 pub fn verify_password(
     db: State<Database>,
     rate_limiter: State<'_, PasswordRateLimiter>,
+    twofa_state: State<'_, TwoFactorPendingState>,
     password: String,
 ) -> Result<bool, String> {
     if password.is_empty() {
@@ -84,6 +92,9 @@ pub fn verify_password(
     let matched = constant_time_eq(&derived_b64, &settings.password_hash);
     if matched {
         rate_limiter.record_success();
+        // Check whether 2FA is enabled so unlock_app can enforce it backend-side.
+        let twofa_enabled = db::is_2fa_enabled(&db).unwrap_or(false);
+        twofa_state.on_password_verified(twofa_enabled);
     } else {
         rate_limiter.record_failure();
     }

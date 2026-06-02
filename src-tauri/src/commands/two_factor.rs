@@ -13,6 +13,7 @@
 //! verify TOTP while the user re-enables 2FA to trigger re-encryption.
 
 use crate::db::Database;
+use crate::{PasswordRateLimiter, TotpUsedCodes, TwoFactorPendingState};
 use aes_gcm::{aead::Aead, Aes256Gcm, KeyInit, Nonce};
 use base64::Engine as _;
 use hmac::Hmac;
@@ -187,24 +188,100 @@ fn generate_backup_codes_internal() -> Vec<String> {
         .collect()
 }
 
-/// Hash a backup code for storage
-fn hash_backup_code(code: &str) -> String {
-    // Normalize: remove dashes, uppercase
+// Backup code hash format v2: PBKDF2-HMAC-SHA-256 with per-code random salt.
+// Stored as "pbkdf2:v2:{base64(16-byte salt)}:{base64(32-byte derived key)}"
+//
+// v1 (legacy) was bare SHA-256 with no salt — fast to crack offline.
+// v2 hashes use 600k iterations, matching the password hash strength.
+// Old v1 hashes are still verified for backward compat but never generated.
+const BACKUP_CODE_PBKDF2_ITERATIONS: u32 = 600_000;
+const BACKUP_V2_PREFIX: &str = "pbkdf2:v2:";
+
+/// Hash a backup code using PBKDF2-HMAC-SHA-256 with a random per-code salt.
+/// Replaces the legacy bare-SHA-256 approach which was brute-forceable in minutes.
+fn hash_backup_code_v2(code: &str) -> String {
     let normalized = code.replace('-', "").to_uppercase();
-    let mut hasher = Sha256::new();
-    hasher.update(normalized.as_bytes());
-    hex::encode(hasher.finalize())
+    let mut salt = [0u8; 16];
+    rand::thread_rng().fill_bytes(&mut salt);
+
+    let mut derived = [0u8; 32];
+    pbkdf2::<Hmac<Sha256>>(
+        normalized.as_bytes(),
+        &salt,
+        BACKUP_CODE_PBKDF2_ITERATIONS,
+        &mut derived,
+    )
+    .expect("PBKDF2 is infallible for valid inputs");
+
+    let b64 = base64::engine::general_purpose::STANDARD;
+    format!(
+        "{}{}:{}",
+        BACKUP_V2_PREFIX,
+        b64.encode(salt),
+        b64.encode(derived)
+    )
 }
 
-// We need hex encoding for the hash
-mod hex {
-    pub fn encode(bytes: impl AsRef<[u8]>) -> String {
-        bytes
-            .as_ref()
+/// Verify a backup code against a stored hash.
+/// Handles both v2 (PBKDF2) and legacy v1 (bare SHA-256) formats.
+fn verify_backup_code_hash(code: &str, stored: &str) -> bool {
+    let normalized = code.replace('-', "").to_uppercase();
+
+    if let Some(rest) = stored.strip_prefix(BACKUP_V2_PREFIX) {
+        // v2: "pbkdf2:v2:{salt_b64}:{hash_b64}"
+        let parts: Vec<&str> = rest.splitn(2, ':').collect();
+        if parts.len() != 2 {
+            return false;
+        }
+        let b64 = base64::engine::general_purpose::STANDARD;
+        let salt = match b64.decode(parts[0]) {
+            Ok(s) => s,
+            Err(_) => return false,
+        };
+        let stored_hash = match b64.decode(parts[1]) {
+            Ok(h) => h,
+            Err(_) => return false,
+        };
+        if stored_hash.len() != 32 {
+            return false;
+        }
+        let mut derived = [0u8; 32];
+        if pbkdf2::<Hmac<Sha256>>(
+            normalized.as_bytes(),
+            &salt,
+            BACKUP_CODE_PBKDF2_ITERATIONS,
+            &mut derived,
+        )
+        .is_err()
+        {
+            return false;
+        }
+        // Constant-time comparison
+        derived
             .iter()
-            .map(|b| format!("{:02x}", b))
-            .collect()
+            .zip(stored_hash.iter())
+            .fold(0u8, |acc, (a, b)| acc | (a ^ b))
+            == 0
+    } else {
+        // v1 legacy: bare SHA-256 hex (no salt). Accept but log for migration tracking.
+        let mut hasher = Sha256::new();
+        hasher.update(normalized.as_bytes());
+        let expected = hex_encode(hasher.finalize().as_slice());
+        // Constant-time string comparison
+        let a = expected.as_bytes();
+        let b = stored.as_bytes();
+        if a.len() != b.len() {
+            return false;
+        }
+        a.iter()
+            .zip(b.iter())
+            .fold(0u8, |acc, (x, y)| acc | (x ^ y))
+            == 0
     }
+}
+
+fn hex_encode(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{:02x}", b)).collect()
 }
 
 // ============================================================================
@@ -387,7 +464,7 @@ pub fn enable_totp(
 
     // Generate backup codes
     let codes = generate_backup_codes_internal();
-    let hashed_codes: Vec<String> = codes.iter().map(|c| hash_backup_code(c)).collect();
+    let hashed_codes: Vec<String> = codes.iter().map(|c| hash_backup_code_v2(c)).collect();
     let backup_codes_json = serde_json::to_string(&hashed_codes)
         .map_err(|e| format!("JSON serialization failed: {}", e))?;
 
@@ -410,7 +487,7 @@ pub fn regenerate_backup_codes(db: State<Database>) -> Result<BackupCodes, Strin
     }
 
     let codes = generate_backup_codes_internal();
-    let hashed_codes: Vec<String> = codes.iter().map(|c| hash_backup_code(c)).collect();
+    let hashed_codes: Vec<String> = codes.iter().map(|c| hash_backup_code_v2(c)).collect();
     let backup_codes_json = serde_json::to_string(&hashed_codes)
         .map_err(|e| format!("JSON serialization failed: {}", e))?;
 
@@ -422,32 +499,69 @@ pub fn regenerate_backup_codes(db: State<Database>) -> Result<BackupCodes, Strin
     })
 }
 
-/// Verify a backup code (single-use)
+/// Verify a backup code (single-use).
+/// Rate-limited via PasswordRateLimiter — same budget as password attempts.
+/// Supports both v2 (PBKDF2) and legacy v1 (bare SHA-256) hash formats.
+/// On success, marks 2FA complete in TwoFactorPendingState so unlock_app proceeds.
 #[tauri::command]
-pub fn verify_backup_code(db: State<Database>, code: String) -> Result<bool, String> {
-    let row = get_2fa_row(&db)?.ok_or_else(|| "2FA not enabled".to_string())?;
+pub fn verify_backup_code(
+    db: State<Database>,
+    rate_limiter: State<'_, PasswordRateLimiter>,
+    twofa_state: State<'_, TwoFactorPendingState>,
+    code: String,
+) -> Result<bool, String> {
+    // Apply the same rate limit used for password verification.
+    rate_limiter
+        .check()
+        .map_err(|secs| format!("Too many failed attempts. Try again in {secs}s."))?;
 
-    let backup_codes_json = row
-        .backup_codes
-        .ok_or_else(|| "No backup codes found".to_string())?;
+    let result = (|| -> Result<bool, String> {
+        let row = get_2fa_row(&db)?.ok_or_else(|| "2FA not enabled".to_string())?;
 
-    let mut hashed_codes: Vec<String> = serde_json::from_str(&backup_codes_json)
-        .map_err(|e| format!("Invalid backup codes data: {}", e))?;
+        let backup_codes_json = row
+            .backup_codes
+            .ok_or_else(|| "No backup codes found".to_string())?;
 
-    let code_hash = hash_backup_code(&code);
+        let mut hashed_codes: Vec<String> = serde_json::from_str(&backup_codes_json)
+            .map_err(|e| format!("Invalid backup codes data: {}", e))?;
 
-    // Find and remove the used code
-    if let Some(pos) = hashed_codes.iter().position(|h| h == &code_hash) {
-        hashed_codes.remove(pos);
+        // Scan all codes without short-circuiting to avoid leaking timing info
+        // about which position matched (each verify_backup_code_hash call is
+        // constant-time internally, but .position() would stop early).
+        let mut match_pos: Option<usize> = None;
+        for (i, h) in hashed_codes.iter().enumerate() {
+            if verify_backup_code_hash(&code, h) && match_pos.is_none() {
+                match_pos = Some(i);
+            }
+        }
+        if let Some(pos) = match_pos {
+            hashed_codes.remove(pos);
 
-        // Update the database with remaining codes
-        let updated_json = serde_json::to_string(&hashed_codes)
-            .map_err(|e| format!("JSON serialization failed: {}", e))?;
-        update_backup_codes(&db, &updated_json)?;
+            // Update the database with remaining codes
+            let updated_json = serde_json::to_string(&hashed_codes)
+                .map_err(|e| format!("JSON serialization failed: {}", e))?;
+            update_backup_codes(&db, &updated_json)?;
 
-        Ok(true)
-    } else {
-        Ok(false)
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    })();
+
+    match result {
+        Ok(true) => {
+            rate_limiter.record_success();
+            twofa_state.on_twofa_completed();
+            Ok(true)
+        }
+        Ok(false) => {
+            rate_limiter.record_failure();
+            Ok(false)
+        }
+        Err(e) => {
+            rate_limiter.record_failure();
+            Err(e)
+        }
     }
 }
 
@@ -496,9 +610,24 @@ pub fn get_2fa_status(db: State<Database>) -> Result<TwoFactorStatus, String> {
     }
 }
 
-/// Disable 2FA (requires password verification done on frontend)
+/// Disable 2FA.
+/// Requires a fully authenticated session (password + 2FA if previously enabled).
+/// Without this guard, a locked-screen IPC call could disable 2FA and bypass
+/// the TwoFactorPendingState enforcement on the next unlock.
 #[tauri::command]
-pub fn disable_2fa(db: State<Database>) -> Result<bool, String> {
+pub fn disable_2fa(
+    db: State<Database>,
+    lock: State<'_, crate::AppLockState>,
+    twofa_state: State<'_, TwoFactorPendingState>,
+) -> Result<bool, String> {
+    if lock.is_locked() {
+        return Err("Session is locked".to_string());
+    }
+    if !twofa_state.is_fully_authenticated() {
+        return Err(
+            "Authentication incomplete: cannot disable 2FA without completing auth".to_string(),
+        );
+    }
     disable_2fa_in_db(&db)?;
     Ok(true)
 }
@@ -527,12 +656,21 @@ pub fn totp_needs_reencryption(db: State<Database>) -> Result<bool, String> {
 
 /// Verify TOTP code for login (returns true if valid).
 /// `password` is required to decrypt the stored secret blob.
+/// On success, marks the 2FA step complete in TwoFactorPendingState so
+/// unlock_app will proceed.
 #[tauri::command]
 pub fn verify_2fa_totp(
     db: State<Database>,
+    twofa_state: State<'_, TwoFactorPendingState>,
+    rate_limiter: State<'_, PasswordRateLimiter>,
+    used_codes: State<'_, TotpUsedCodes>,
     code: String,
     password: String,
 ) -> Result<bool, String> {
+    rate_limiter
+        .check()
+        .map_err(|secs| format!("Too many failed attempts. Try again in {secs}s."))?;
+
     let row = get_2fa_row(&db)?.ok_or_else(|| "2FA not enabled".to_string())?;
 
     if !row.enabled {
@@ -561,10 +699,18 @@ pub fn verify_2fa_totp(
         let time = (now as i64 + offset) as u64;
         let expected = totp.generate(time);
         if expected == code {
+            // Reject if this code was already used within the 90-second window.
+            if used_codes.check_and_record(&code, now) {
+                rate_limiter.record_failure();
+                return Ok(false);
+            }
+            rate_limiter.record_success();
+            twofa_state.on_twofa_completed();
             return Ok(true);
         }
     }
 
+    rate_limiter.record_failure();
     Ok(false)
 }
 
@@ -631,5 +777,83 @@ mod tests {
         // in generate_totp_secret (the Tauri command layer).
         let result = encrypt_totp_secret("SOMESECRET", "");
         assert!(result.is_ok());
+    }
+
+    // ── backup code hash v2 ───────────────────────────────────────────────────
+
+    #[test]
+    fn hash_backup_code_v2_produces_expected_prefix() {
+        let h = hash_backup_code_v2("ABCD-EFGH");
+        assert!(h.starts_with("pbkdf2:v2:"), "got: {h}");
+    }
+
+    #[test]
+    fn hash_backup_code_v2_two_calls_produce_different_salts() {
+        // Each call generates a fresh random salt — two hashes of the same code differ.
+        let h1 = hash_backup_code_v2("ABCD-EFGH");
+        let h2 = hash_backup_code_v2("ABCD-EFGH");
+        assert_ne!(
+            h1, h2,
+            "different salts should yield different stored hashes"
+        );
+    }
+
+    #[test]
+    fn verify_backup_code_hash_v2_correct_code() {
+        let code = "ABCD-EFGH";
+        let stored = hash_backup_code_v2(code);
+        assert!(verify_backup_code_hash(code, &stored));
+    }
+
+    #[test]
+    fn verify_backup_code_hash_v2_wrong_code() {
+        let stored = hash_backup_code_v2("ABCD-EFGH");
+        assert!(!verify_backup_code_hash("WXYZ-1234", &stored));
+    }
+
+    #[test]
+    fn verify_backup_code_hash_v2_normalizes_dashes_and_case() {
+        // User might type "abcdefgh" or "ABCD-EFGH" — both must match.
+        let code = "ABCD-EFGH";
+        let stored = hash_backup_code_v2(code);
+        assert!(
+            verify_backup_code_hash("abcdefgh", &stored),
+            "lowercase no-dash should match"
+        );
+        assert!(
+            verify_backup_code_hash("abcd-efgh", &stored),
+            "lowercase with-dash should match"
+        );
+    }
+
+    #[test]
+    fn verify_backup_code_hash_v1_legacy_sha256() {
+        // v1: bare hex SHA-256 of normalized code (no prefix, no salt).
+        let code = "ABCD-EFGH";
+        let normalized = "ABCDEFGH";
+        let mut hasher = sha2::Sha256::new();
+        use sha2::Digest;
+        hasher.update(normalized.as_bytes());
+        let legacy_hash = hex_encode(hasher.finalize().as_slice());
+        // v1 hash must still verify against the code.
+        assert!(
+            verify_backup_code_hash(code, &legacy_hash),
+            "legacy v1 hash must still work"
+        );
+    }
+
+    #[test]
+    fn verify_backup_code_hash_v1_wrong_code_fails() {
+        let mut hasher = sha2::Sha256::new();
+        use sha2::Digest;
+        hasher.update(b"ABCDEFGH");
+        let legacy_hash = hex_encode(hasher.finalize().as_slice());
+        assert!(!verify_backup_code_hash("WXYZ-1234", &legacy_hash));
+    }
+
+    #[test]
+    fn verify_backup_code_hash_malformed_v2_returns_false() {
+        assert!(!verify_backup_code_hash("ABCD-EFGH", "pbkdf2:v2:onlyone"));
+        assert!(!verify_backup_code_hash("ABCD-EFGH", "pbkdf2:v2:!!!:!!!"));
     }
 }

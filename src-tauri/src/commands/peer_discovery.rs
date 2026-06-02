@@ -523,7 +523,7 @@ fn run_discovery(
                     device_name: peer_name,
                     device_type: peer_type,
                     host,
-                    port: info.get_port(),
+                    port: sync_port_for_device(&peer_device_id),
                     version: peer_version,
                     pubkey_hint: peer_pubkey_hint,
                     is_trusted: crate::commands::peer_pairing::is_device_trusted(

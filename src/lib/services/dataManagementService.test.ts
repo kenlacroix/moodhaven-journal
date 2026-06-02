@@ -25,40 +25,41 @@ describe('dataManagementService encryption', () => {
   });
 
   describe('encryptedExport', () => {
-    it('returns JSON with format marker and encrypted payload', async () => {
-      mockInvoke.mockResolvedValueOnce('eyJ2ZXJzaW9uIjoiMS4wLjAifQ==');
-      mockEncrypt.mockResolvedValueOnce({ success: true, data: fakeEncryptedData });
+    it('calls export_data with password and no filter, returns envelope directly', async () => {
+      const fakeEnvelope = JSON.stringify({
+        format: 'moodhaven-encrypted-v1',
+        payload: fakeEncryptedData,
+      });
+      mockInvoke.mockResolvedValueOnce(fakeEnvelope);
 
       const result = await encryptedExport('test-password');
+
+      expect(mockInvoke).toHaveBeenCalledWith('export_data', {
+        password: 'test-password',
+        filter: null,
+      });
+      expect(result).toBe(fakeEnvelope);
+    });
+
+    it('returns the Rust-encrypted envelope without re-encrypting via WebCrypto', async () => {
+      const fakeEnvelope = JSON.stringify({
+        format: 'moodhaven-encrypted-v1',
+        payload: fakeEncryptedData,
+      });
+      mockInvoke.mockResolvedValueOnce(fakeEnvelope);
+
+      const result = await encryptedExport('my-password');
       const parsed = JSON.parse(result);
 
       expect(parsed.format).toBe('moodhaven-encrypted-v1');
       expect(parsed.payload).toEqual(fakeEncryptedData);
+      expect(mockEncrypt).not.toHaveBeenCalled();
     });
 
-    it('calls export_data with no filter', async () => {
-      mockInvoke.mockResolvedValueOnce('dGVzdA==');
-      mockEncrypt.mockResolvedValueOnce({ success: true, data: fakeEncryptedData });
+    it('propagates IPC errors from Rust', async () => {
+      mockInvoke.mockRejectedValueOnce(new Error('export encryption failed'));
 
-      await encryptedExport('my-password');
-
-      expect(mockInvoke).toHaveBeenCalledWith('export_data', { filter: null });
-    });
-
-    it('encrypts the base64 data with the provided password', async () => {
-      mockInvoke.mockResolvedValueOnce('base64-export-data');
-      mockEncrypt.mockResolvedValueOnce({ success: true, data: fakeEncryptedData });
-
-      await encryptedExport('my-password');
-
-      expect(mockEncrypt).toHaveBeenCalledWith('base64-export-data', 'my-password');
-    });
-
-    it('throws when encryption fails', async () => {
-      mockInvoke.mockResolvedValueOnce('data');
-      mockEncrypt.mockResolvedValueOnce({ success: false, error: 'Encryption error' });
-
-      await expect(encryptedExport('password')).rejects.toThrow('Encryption error');
+      await expect(encryptedExport('password')).rejects.toThrow('export encryption failed');
     });
   });
 
@@ -66,19 +67,21 @@ describe('dataManagementService encryption', () => {
     it('G2-1: passes tags + moodRange filter params to invoke', async () => {
       mockInvoke.mockResolvedValueOnce('base64result');
 
-      await exportData({ tags: ['work'], moodMin: 1, moodMax: 3 });
+      await exportData(undefined, { tags: ['work'], moodMin: 1, moodMax: 3 });
 
       expect(mockInvoke).toHaveBeenCalledWith('export_data', {
+        password: null,
         filter: { tags: ['work'], moodMin: 1, moodMax: 3 },
       });
     });
 
-    it('G2-2: exportData() with no filters passes filter: null — WebDAV regression', async () => {
+    it('G2-2: exportData() with no args passes password: null, filter: null — WebDAV regression', async () => {
       mockInvoke.mockResolvedValueOnce('base64result');
 
       await exportData();
 
       expect(mockInvoke).toHaveBeenCalledWith('export_data', {
+        password: null,
         filter: null,
       });
     });

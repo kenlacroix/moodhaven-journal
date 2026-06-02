@@ -24,7 +24,11 @@
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "hardware-key")]
+use super::require_unlocked;
+#[cfg(feature = "hardware-key")]
 use crate::db::Database;
+#[cfg(feature = "hardware-key")]
+use crate::AppLockState;
 #[cfg(feature = "hardware-key")]
 use tauri::State;
 
@@ -470,7 +474,10 @@ mod implementation {
 
 #[cfg(feature = "hardware-key")]
 #[tauri::command]
-pub fn hardware_key_detect() -> Result<Vec<HardwareKeyDevice>, String> {
+pub fn hardware_key_detect(
+    lock: State<'_, AppLockState>,
+) -> Result<Vec<HardwareKeyDevice>, String> {
+    require_unlocked(&lock)?;
     implementation::detect_devices()
 }
 
@@ -482,14 +489,26 @@ pub fn hardware_key_status(db: State<Database>) -> Result<HardwareKeyStatus, Str
 
 #[cfg(feature = "hardware-key")]
 #[tauri::command]
-pub fn hardware_key_register(db: State<Database>) -> Result<HardwareKeyRegistration, String> {
+pub fn hardware_key_register(
+    db: State<Database>,
+    lock: State<'_, AppLockState>,
+) -> Result<HardwareKeyRegistration, String> {
+    require_unlocked(&lock)?;
     implementation::register_key(&db)
 }
 
 #[cfg(feature = "hardware-key")]
 #[tauri::command]
-pub fn hardware_key_verify(db: State<Database>) -> Result<String, String> {
-    implementation::verify_key(&db)
+pub fn hardware_key_verify(
+    db: State<Database>,
+    twofa_state: tauri::State<'_, crate::TwoFactorPendingState>,
+) -> Result<String, String> {
+    let result = implementation::verify_key(&db)?;
+    // Mark 2FA complete so unlock_app will proceed for hardware key users.
+    // Without this, TwoFactorPendingState would leave twofa_completed=false and
+    // unlock_app would reject the session even after successful key verification.
+    twofa_state.on_twofa_completed();
+    Ok(result)
 }
 
 #[cfg(feature = "hardware-key")]

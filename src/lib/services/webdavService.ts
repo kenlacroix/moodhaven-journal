@@ -28,9 +28,26 @@ export function buildAuthHeader(username: string, password: string): string {
 }
 
 /**
+ * Validate that a WebDAV URL uses an allowed scheme (http or https only).
+ * Rejects file://, ftp://, javascript:, and other non-HTTP schemes.
+ */
+export function validateWebDAVUrl(url: string): void {
+  let parsed: URL;
+  try {
+    parsed = new URL(url.trim());
+  } catch {
+    throw new Error('Invalid WebDAV URL');
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new Error('WebDAV URL must use http or https');
+  }
+}
+
+/**
  * Normalize WebDAV URL: ensure trailing slash, trim whitespace
  */
 export function normalizeWebDAVUrl(url: string): string {
+  validateWebDAVUrl(url);
   let normalized = url.trim();
   if (!normalized.endsWith('/')) {
     normalized += '/';

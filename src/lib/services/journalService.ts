@@ -106,6 +106,27 @@ export async function unlockJournal(password: string): Promise<boolean> {
 }
 
 /**
+ * Finalize an already-authenticated session by calling unlock_app directly,
+ * without re-running verify_password. Use this after 2FA completion or when
+ * the session bridge provides a password already verified by the main window.
+ * Calling verify_password a second time resets TwoFactorPendingState and
+ * causes unlock_app to reject — this path avoids that.
+ */
+export async function finalizeUnlock(password: string): Promise<boolean> {
+  try {
+    await invoke('unlock_app');
+  } catch (e) {
+    // "Authentication incomplete" is a real auth failure; re-throw it as false.
+    // Any other error is the browser mode where unlock_app is unavailable.
+    if (String(e).includes('Authentication incomplete')) {
+      return false;
+    }
+  }
+  sessionPassword = password;
+  return true;
+}
+
+/**
  * Lock the journal (clear session password and derived key cache)
  */
 export function lockJournal(): void {
@@ -201,10 +222,8 @@ export async function createEntry(
     wordCount,
   });
 
-  // Persist tags to the entry_tags table
-  if (data.tags.length > 0) {
-    await invoke('sync_entry_tags', { id, tags: data.tags });
-  }
+  // Persist tags — call unconditionally so removing all tags deletes them from DB
+  await invoke('sync_entry_tags', { id, tags: data.tags });
 
   // Link to StillHaven session if marker was present
   if (sessionId) {

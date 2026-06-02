@@ -32,6 +32,11 @@ use tauri::{AppHandle, Manager, State};
 use uuid::Uuid;
 
 use crate::db::Database;
+use crate::AppLockState;
+
+const MAX_MEDIA_BYTES: u64 = 500 * 1024 * 1024; // 500 MB hard cap
+
+use super::require_unlocked;
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -300,10 +305,12 @@ fn mime_from_filename(filename: &str) -> &'static str {
 pub fn save_media_attachment(
     app: AppHandle,
     db: State<'_, Database>,
+    lock: State<'_, AppLockState>,
     entry_id: String,
     file_path: String,
     password: String,
 ) -> Result<MediaAttachment, String> {
+    require_unlocked(&lock)?;
     let src = Path::new(&file_path);
     let filename = src
         .file_name()
@@ -316,6 +323,16 @@ pub fn save_media_attachment(
         .unwrap_or("bin")
         .to_ascii_lowercase();
     let mime_type = mime_from_filename(&filename).to_string();
+
+    // Reject files that are too large before reading them into memory.
+    let file_size = std::fs::metadata(src).map(|m| m.len()).unwrap_or(0);
+    if file_size > MAX_MEDIA_BYTES {
+        return Err(format!(
+            "File too large ({} MB, max {} MB)",
+            file_size / (1024 * 1024),
+            MAX_MEDIA_BYTES / (1024 * 1024)
+        ));
+    }
 
     let plaintext =
         std::fs::read(src).map_err(|e| format!("Failed to read '{}': {}", filename, e))?;
@@ -361,8 +378,10 @@ pub fn save_media_attachment(
 #[tauri::command]
 pub fn list_entry_media(
     db: State<'_, Database>,
+    lock: State<'_, AppLockState>,
     entry_id: String,
 ) -> Result<Vec<MediaAttachment>, String> {
+    require_unlocked(&lock)?;
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let mut stmt = conn
         .prepare(
@@ -395,9 +414,11 @@ pub fn list_entry_media(
 pub fn open_media_attachment(
     app: AppHandle,
     db: State<'_, Database>,
+    lock: State<'_, AppLockState>,
     media_id: String,
     password: String,
 ) -> Result<(), String> {
+    require_unlocked(&lock)?;
     let (enc_path, filename) = {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
         conn.query_row(
@@ -438,9 +459,9 @@ pub fn open_media_attachment(
         .spawn()
         .map_err(|e| format!("xdg-open: {}", e))?;
 
-    // Auto-cleanup after 60 s
+    // Auto-cleanup after 10 s
     std::thread::spawn(move || {
-        std::thread::sleep(std::time::Duration::from_secs(60));
+        std::thread::sleep(std::time::Duration::from_secs(10));
         let _ = std::fs::remove_file(&temp_path);
     });
 
@@ -453,9 +474,11 @@ pub fn open_media_attachment(
 pub fn get_media_thumbnail(
     app: AppHandle,
     db: State<'_, Database>,
+    lock: State<'_, AppLockState>,
     media_id: String,
     password: String,
 ) -> Result<String, String> {
+    require_unlocked(&lock)?;
     let (enc_path, mime_type) = {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
         conn.query_row(
@@ -498,8 +521,10 @@ pub fn get_media_thumbnail(
 pub fn delete_media_attachment(
     app: AppHandle,
     db: State<'_, Database>,
+    lock: State<'_, AppLockState>,
     media_id: String,
 ) -> Result<(), String> {
+    require_unlocked(&lock)?;
     let enc_path = {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
         conn.query_row(
@@ -526,7 +551,11 @@ pub fn delete_media_attachment(
 
 /// List every media attachment across all entries (used during WebDAV sync).
 #[tauri::command]
-pub fn list_all_media(db: State<'_, Database>) -> Result<Vec<MediaAttachment>, String> {
+pub fn list_all_media(
+    db: State<'_, Database>,
+    lock: State<'_, AppLockState>,
+) -> Result<Vec<MediaAttachment>, String> {
+    require_unlocked(&lock)?;
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let mut stmt = conn
         .prepare(
@@ -561,8 +590,10 @@ pub fn list_all_media(db: State<'_, Database>) -> Result<Vec<MediaAttachment>, S
 pub fn read_media_for_sync(
     app: AppHandle,
     db: State<'_, Database>,
+    lock: State<'_, AppLockState>,
     media_id: String,
 ) -> Result<serde_json::Value, String> {
+    require_unlocked(&lock)?;
     let (entry_id, filename, mime_type, size_bytes, enc_path, created_at) = {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
         conn.query_row(
@@ -605,6 +636,7 @@ pub fn read_media_for_sync(
 pub fn write_media_from_sync(
     app: AppHandle,
     db: State<'_, Database>,
+    lock: State<'_, AppLockState>,
     entry_id: String,
     media_id: String,
     filename: String,
@@ -613,6 +645,7 @@ pub fn write_media_from_sync(
     created_at: String,
     data_base64: String,
 ) -> Result<(), String> {
+    require_unlocked(&lock)?;
     // Idempotency: skip if this media ID already exists locally
     {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;

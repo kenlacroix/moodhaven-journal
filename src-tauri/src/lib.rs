@@ -160,6 +160,109 @@ impl Default for AppLockState {
     }
 }
 
+/// Rust-side 2FA enforcement state.
+///
+/// Tracks whether the user completed both authentication factors before `unlock_app`
+/// is called. This is separate from `AppLockState` so that a compromised frontend
+/// cannot bypass 2FA by calling `unlock_app` directly after `verify_password`.
+///
+/// Lifecycle:
+///   verify_password (success) → password_verified=true, twofa_required=<from DB>
+///   verify_2fa_totp / verify_backup_code (success) → twofa_completed=true
+///   unlock_app → checks twofa_required; rejects if required && !twofa_completed
+///   lock_app → resets all three flags
+pub struct TwoFactorPendingState(pub Mutex<TwoFactorPending>);
+
+#[derive(Default)]
+pub struct TwoFactorPending {
+    pub password_verified: bool,
+    pub twofa_required: bool,
+    pub twofa_completed: bool,
+}
+
+impl TwoFactorPendingState {
+    pub fn new() -> Self {
+        TwoFactorPendingState(Mutex::new(TwoFactorPending::default()))
+    }
+
+    /// Called on successful password verification. Records whether 2FA is required
+    /// (passed in from the caller which has DB access).
+    pub fn on_password_verified(&self, twofa_required: bool) {
+        let mut s = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        s.password_verified = true;
+        s.twofa_required = twofa_required;
+        s.twofa_completed = false;
+    }
+
+    /// Called on successful 2FA factor verification (TOTP or backup code).
+    pub fn on_twofa_completed(&self) {
+        let mut s = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        s.twofa_completed = true;
+    }
+
+    /// Returns true if the session is fully authenticated (password done, and
+    /// either 2FA was not required or has been completed).
+    pub fn is_fully_authenticated(&self) -> bool {
+        let s = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        s.password_verified && (!s.twofa_required || s.twofa_completed)
+    }
+
+    /// Reset all auth flags (called on lock_app).
+    pub fn reset(&self) {
+        let mut s = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        *s = TwoFactorPending::default();
+    }
+}
+
+impl Default for TwoFactorPendingState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// In-memory cache of recently used TOTP codes.
+/// Key: `"{time_step}:{code}"` — time_step is unix_secs / 30.
+/// Entries are pruned when the owning time step is more than 3 steps old,
+/// so the set stays small (at most a few dozen entries in normal usage).
+pub struct TotpUsedCodes(pub Mutex<std::collections::HashSet<String>>);
+
+impl TotpUsedCodes {
+    pub fn new() -> Self {
+        TotpUsedCodes(Mutex::new(std::collections::HashSet::new()))
+    }
+
+    /// Returns true if the code has already been used for this time step.
+    /// Also evicts stale entries (steps older than current - 3).
+    pub fn check_and_record(&self, code: &str, now_secs: u64) -> bool {
+        let current_step = now_secs / 30;
+        let mut set = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        // Evict entries from steps older than current - 3 (they can never be valid again).
+        set.retain(|k| {
+            k.split_once(':')
+                .and_then(|(step_str, _)| step_str.parse::<u64>().ok())
+                .map(|step| step + 4 > current_step)
+                .unwrap_or(false)
+        });
+        // Check all three valid steps (current ± 1).
+        for offset in [-1i64, 0, 1] {
+            let step = (current_step as i64 + offset) as u64;
+            let key = format!("{step}:{code}");
+            if set.contains(&key) {
+                return true; // already used
+            }
+        }
+        // Record use for the current step.
+        set.insert(format!("{current_step}:{code}"));
+        false
+    }
+}
+
+impl Default for TotpUsedCodes {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 use commands::peer_discovery::PeerDiscoveryState;
 use commands::peer_pairing::PairingServerState;
 use commands::peer_sync_engine::SyncEngineState;
@@ -294,6 +397,13 @@ pub fn run() {
                 pw_rate_limiter.initialize(&app_data);
             }
             app.manage(pw_rate_limiter);
+
+            // 2FA pending state — enforces that both auth factors are complete
+            // before unlock_app succeeds, even if the frontend skips the 2FA step.
+            app.manage(TwoFactorPendingState::new());
+
+            // TOTP replay prevention — tracks used codes for the current 90s window.
+            app.manage(TotpUsedCodes::new());
 
             // One-shot session bridge for breakout writer password hand-off
             app.manage(SessionBridge::new());
@@ -611,5 +721,62 @@ mod tests {
             limiter.record_failure();
         }
         assert!(limiter.check().is_ok());
+    }
+
+    // ── TwoFactorPendingState ─────────────────────────────────────────────────
+
+    #[test]
+    fn twofa_initial_state_not_authenticated() {
+        let state = TwoFactorPendingState::new();
+        assert!(
+            !state.is_fully_authenticated(),
+            "new state must not be authenticated"
+        );
+    }
+
+    #[test]
+    fn twofa_password_only_no_2fa_is_authenticated() {
+        let state = TwoFactorPendingState::new();
+        state.on_password_verified(false); // 2FA not required
+        assert!(state.is_fully_authenticated());
+    }
+
+    #[test]
+    fn twofa_password_only_with_2fa_required_is_not_authenticated() {
+        let state = TwoFactorPendingState::new();
+        state.on_password_verified(true); // 2FA is required
+        assert!(
+            !state.is_fully_authenticated(),
+            "2FA required but not completed"
+        );
+    }
+
+    #[test]
+    fn twofa_password_plus_twofa_completed_is_authenticated() {
+        let state = TwoFactorPendingState::new();
+        state.on_password_verified(true);
+        state.on_twofa_completed();
+        assert!(state.is_fully_authenticated());
+    }
+
+    #[test]
+    fn twofa_reset_clears_all_state() {
+        let state = TwoFactorPendingState::new();
+        state.on_password_verified(true);
+        state.on_twofa_completed();
+        state.reset();
+        assert!(
+            !state.is_fully_authenticated(),
+            "reset must clear auth state"
+        );
+    }
+
+    #[test]
+    fn twofa_bypass_attempt_without_password_fails() {
+        // Simulates: attacker calls on_twofa_completed() without verify_password first.
+        let state = TwoFactorPendingState::new();
+        state.on_twofa_completed(); // called out of order
+                                    // password_verified is still false → not fully authenticated
+        assert!(!state.is_fully_authenticated());
     }
 }

@@ -10,13 +10,7 @@ use crate::AppLockState;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
-fn require_unlocked(lock: &State<'_, AppLockState>) -> Result<(), String> {
-    if lock.is_locked() {
-        Err("Session is locked".to_string())
-    } else {
-        Ok(())
-    }
-}
+use super::require_unlocked;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct MoodDelta {
@@ -76,13 +70,26 @@ pub fn get_due_capsules(
     // Use the caller-supplied local date (YYYY-MM-DD) so comparisons match the
     // user's wall-clock date rather than the UTC date from SQLite's 'now'.
     // Falls back to SQLite 'now' if not provided.
-    let today_expr = match &local_date {
-        Some(d) if !d.is_empty() => format!("date('{}')", d.replace('\'', "")),
-        _ => "date('now')".to_string(),
+    // Validate local_date is strictly YYYY-MM-DD to prevent any injection into the
+    // format!()-interpolated SQL expressions below. Empty → fall back to SQLite 'now'.
+    let validated_date: Option<&str> = match &local_date {
+        Some(d) if d.len() == 10 && d.chars().all(|c| c.is_ascii_digit() || c == '-') => {
+            Some(d.as_str())
+        }
+        Some(d) if !d.is_empty() => {
+            return Err(format!(
+                "Invalid local_date format (expected YYYY-MM-DD): {d:?}"
+            ));
+        }
+        _ => None,
     };
-    let now_expr = match &local_date {
-        Some(d) if !d.is_empty() => format!("datetime('{} 23:59:59')", d.replace('\'', "")),
-        _ => "datetime('now')".to_string(),
+    let today_expr = match validated_date {
+        Some(d) => format!("date('{d}')"),
+        None => "date('now')".to_string(),
+    };
+    let now_expr = match validated_date {
+        Some(d) => format!("datetime('{d} 23:59:59')"),
+        None => "datetime('now')".to_string(),
     };
 
     let anniversary_clause = if include_anniversary {
@@ -176,7 +183,10 @@ pub fn unseal_entry(
                  sealed_until = NULL,
                  updated_at   = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
              WHERE id = ?1
-               AND unsealed_at IS NULL",
+               AND unsealed_at IS NULL
+               AND (sealed_until IS NOT NULL
+                    OR capsule_type IN ('letter', 'vault', 'anniversary')
+                    OR date(created_at) <= date('now', '-365 days'))",
             rusqlite::params![id],
         )
         .map_err(|e| format!("Failed to unseal entry: {}", e))?;

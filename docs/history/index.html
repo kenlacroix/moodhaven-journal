@@ -1,0 +1,900 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MoodHaven Journal — The Build Story</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+
+    :root {
+      --bg:     #080810;
+      --bg2:    #0d0d1a;
+      --text:   #e2e8f0;
+      --muted:  #94a3b8;
+      --faint:  #1e1b4b;
+      --accent: #8b5cf6;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      line-height: 1.65;
+      overflow-x: hidden;
+    }
+
+    /* ── Layout ───────────────────────────────────────── */
+    .stage {
+      display: grid;
+      grid-template-columns: 1fr 400px;
+      min-height: 100vh;
+    }
+
+    .text-pane { /* natural document flow */ }
+
+    .building-pane {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg2);
+      border-left: 1px solid #16123a;
+      gap: 16px;
+    }
+
+    /* ── Progress dots ────────────────────────────────── */
+    #dots {
+      position: fixed;
+      right: 418px;
+      top: 50%;
+      transform: translateY(-50%);
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #1e1b4b;
+      border: 1px solid #2d2060;
+      cursor: pointer;
+      transition: background 0.3s, transform 0.3s, border-color 0.3s;
+    }
+
+    .dot.active {
+      background: var(--dot-color, #8b5cf6);
+      border-color: var(--dot-color, #8b5cf6);
+      transform: scale(1.4);
+    }
+
+    /* ── Hero section ─────────────────────────────────── */
+    #hero {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 60px 56px;
+      border-left: 2px solid transparent;
+    }
+
+    .hero-eyebrow {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 20px;
+    }
+
+    .hero-title {
+      font-size: clamp(2rem, 4vw, 3.2rem);
+      font-weight: 700;
+      line-height: 1.15;
+      color: #fff;
+      margin-bottom: 20px;
+    }
+
+    .hero-title span { color: var(--accent); }
+
+    .hero-subtitle {
+      font-size: 1.05rem;
+      color: var(--muted);
+      max-width: 520px;
+      margin-bottom: 40px;
+    }
+
+    .hero-stats {
+      display: flex;
+      gap: 32px;
+      flex-wrap: wrap;
+    }
+
+    .stat {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .stat-num {
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: #fff;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .stat-label {
+      font-size: 12px;
+      color: var(--muted);
+      letter-spacing: 0.04em;
+    }
+
+    .scroll-hint {
+      margin-top: 48px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .scroll-arrow {
+      width: 20px;
+      height: 20px;
+      border-right: 2px solid currentColor;
+      border-bottom: 2px solid currentColor;
+      transform: rotate(45deg);
+      animation: bounce 1.5s ease-in-out infinite;
+    }
+
+    @keyframes bounce {
+      0%, 100% { transform: rotate(45deg) translateY(0); }
+      50% { transform: rotate(45deg) translateY(4px); }
+    }
+
+    /* ── Era sections ─────────────────────────────────── */
+    .era {
+      min-height: 90vh;
+      padding: 72px 56px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      border-left: 2px solid #12103a;
+      transition: border-color 0.5s ease;
+      position: relative;
+    }
+
+    .era.active { border-color: var(--ec, var(--accent)); }
+
+    .era-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 24px;
+    }
+
+    .era-num {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--ec, var(--accent));
+      background: color-mix(in srgb, var(--ec, var(--accent)) 12%, transparent);
+      border: 1px solid color-mix(in srgb, var(--ec, var(--accent)) 30%, transparent);
+      padding: 3px 10px;
+      border-radius: 20px;
+    }
+
+    .era-date {
+      font-size: 12px;
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .era-ver {
+      font-size: 12px;
+      color: var(--ec, var(--accent));
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+    }
+
+    .era-name {
+      font-size: clamp(1.6rem, 2.8vw, 2.2rem);
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 10px;
+      line-height: 1.2;
+    }
+
+    .era-tagline {
+      font-size: 1rem;
+      color: var(--muted);
+      margin-bottom: 28px;
+      max-width: 480px;
+      font-style: italic;
+    }
+
+    .era-body {
+      font-size: 0.925rem;
+      color: var(--muted);
+      max-width: 500px;
+      margin-bottom: 28px;
+      line-height: 1.7;
+    }
+
+    .features {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      list-style: none;
+      max-width: 560px;
+    }
+
+    .feat {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 20px;
+      padding: 4px 12px;
+      font-size: 12.5px;
+      color: var(--muted);
+      transition: background 0.4s, color 0.4s, border-color 0.4s, opacity 0.4s, transform 0.4s;
+      opacity: 0.4;
+      transform: translateY(4px);
+    }
+
+    .era.active .feat {
+      background: color-mix(in srgb, var(--ec, var(--accent)) 10%, transparent);
+      border-color: color-mix(in srgb, var(--ec, var(--accent)) 30%, transparent);
+      color: var(--text);
+      opacity: 1;
+      transform: none;
+    }
+
+    /* Stagger chip animations */
+    .era.active .feat:nth-child(1)  { transition-delay: 0.05s; }
+    .era.active .feat:nth-child(2)  { transition-delay: 0.10s; }
+    .era.active .feat:nth-child(3)  { transition-delay: 0.15s; }
+    .era.active .feat:nth-child(4)  { transition-delay: 0.20s; }
+    .era.active .feat:nth-child(5)  { transition-delay: 0.25s; }
+    .era.active .feat:nth-child(6)  { transition-delay: 0.30s; }
+    .era.active .feat:nth-child(7)  { transition-delay: 0.35s; }
+    .era.active .feat:nth-child(8)  { transition-delay: 0.40s; }
+    .era.active .feat:nth-child(9)  { transition-delay: 0.45s; }
+    .era.active .feat:nth-child(10) { transition-delay: 0.50s; }
+    .era.active .feat:nth-child(11) { transition-delay: 0.55s; }
+    .era.active .feat:nth-child(12) { transition-delay: 0.60s; }
+    .era.active .feat:nth-child(13) { transition-delay: 0.65s; }
+    .era.active .feat:nth-child(14) { transition-delay: 0.70s; }
+
+    .era-highlight {
+      margin-top: 24px;
+      padding: 14px 18px;
+      border-left: 3px solid var(--ec, var(--accent));
+      background: color-mix(in srgb, var(--ec, var(--accent)) 6%, transparent);
+      border-radius: 0 8px 8px 0;
+      font-size: 13px;
+      color: var(--text);
+      opacity: 0;
+      transform: translateX(-8px);
+      transition: opacity 0.5s 0.3s, transform 0.5s 0.3s;
+      max-width: 480px;
+    }
+
+    .era.active .era-highlight { opacity: 1; transform: none; }
+
+    /* ── Finale section ───────────────────────────────── */
+    #finale {
+      min-height: 70vh;
+      padding: 80px 56px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      border-left: 2px solid #7c3aed;
+      background: linear-gradient(180deg, transparent, color-mix(in srgb, #8b5cf6 4%, transparent));
+    }
+
+    .finale-title {
+      font-size: clamp(1.6rem, 3vw, 2.4rem);
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 16px;
+    }
+
+    .finale-sub {
+      font-size: 0.95rem;
+      color: var(--muted);
+      max-width: 500px;
+      margin-bottom: 36px;
+    }
+
+    .finale-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 12px;
+      max-width: 560px;
+    }
+
+    .finale-stat {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(139,92,246,0.2);
+      border-radius: 10px;
+      padding: 16px;
+    }
+
+    .finale-stat .n {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #a78bfa;
+      display: block;
+      margin-bottom: 2px;
+    }
+
+    .finale-stat .l {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    /* ── Building SVG ─────────────────────────────────── */
+    #bld {
+      width: 200px;
+      height: 346px;
+      overflow: visible;
+    }
+
+    /* Floor group defaults */
+    .bfl .fr {
+      fill: #080810;
+      stroke: #14103a;
+      stroke-width: 1.5;
+      transition: fill 0.6s ease-out, stroke 0.6s ease-out;
+    }
+
+    .bfl .win {
+      fill: #060609;
+      stroke: #14103a;
+      stroke-width: 0.5;
+      transition: fill 0.7s ease-out, stroke 0.7s ease-out, filter 0.7s ease-out;
+      filter: none;
+    }
+
+    /* Lit state */
+    .bfl.lit .fr {
+      fill: #10102e;
+      stroke: color-mix(in srgb, var(--ec, #7c3aed) 80%, #fff);
+      stroke-width: 1.5;
+    }
+
+    .bfl.lit .win {
+      fill: var(--ec, #8b5cf6);
+      stroke: color-mix(in srgb, var(--ec, #8b5cf6) 60%, #fff);
+      filter: drop-shadow(0 0 5px var(--ec, #8b5cf6))
+              drop-shadow(0 0 12px color-mix(in srgb, var(--ec, #8b5cf6) 50%, transparent));
+    }
+
+    /* Special elements */
+    .bld-antenna { opacity: 0; transition: opacity 0.8s 0.3s; }
+    .bld-antenna.visible { opacity: 1; }
+    .bld-signals { opacity: 0; transition: opacity 0.8s 0.4s; }
+    .bld-signals.visible { opacity: 1; }
+
+    .bld-logo-text {
+      opacity: 0;
+      transition: opacity 0.8s 0.5s;
+    }
+    .bld-logo-text.visible { opacity: 1; }
+
+    /* Antenna blink */
+    .antenna-dot {
+      animation: ablink 2s ease-in-out infinite;
+      animation-play-state: paused;
+    }
+    .bld-antenna.visible .antenna-dot {
+      animation-play-state: running;
+    }
+    @keyframes ablink {
+      0%, 70%, 100% { opacity: 1; }
+      35% { opacity: 0.2; }
+    }
+
+    /* Signal waves pulse */
+    .sig-arc {
+      animation: sigpulse 2.5s ease-out infinite;
+      animation-play-state: paused;
+      transform-origin: 0 50%;
+    }
+    .bld-signals.visible .sig-arc:nth-child(1) { animation-play-state: running; animation-delay: 0s; }
+    .bld-signals.visible .sig-arc:nth-child(2) { animation-play-state: running; animation-delay: 0.4s; }
+    .bld-signals.visible .sig-arc:nth-child(3) { animation-play-state: running; animation-delay: 0.8s; }
+    @keyframes sigpulse {
+      0% { opacity: 0; transform: scale(0.5); }
+      30% { opacity: 1; }
+      100% { opacity: 0; transform: scale(1.2); }
+    }
+
+    /* Building label below SVG */
+    .bld-label {
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #2d2060;
+      text-align: center;
+      font-weight: 600;
+      transition: color 0.5s;
+    }
+
+    .bld-label.active { color: #7c3aed; }
+
+    .bld-version {
+      font-size: 12px;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      color: #2d2060;
+      text-align: center;
+      transition: color 0.5s;
+    }
+
+    .bld-version.active { color: var(--accent); }
+
+    /* ── Responsive ───────────────────────────────────── */
+    @media (max-width: 860px) {
+      .stage { grid-template-columns: 1fr; }
+      .building-pane {
+        position: relative;
+        height: auto;
+        padding: 32px 0 20px;
+        border-left: none;
+        border-bottom: 1px solid #16123a;
+      }
+      #dots { display: none; }
+      .era, #hero { padding: 48px 24px; }
+      #finale { padding: 60px 24px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.1ms !important;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Progress dots -->
+<nav id="dots" aria-label="Section navigation">
+  <button class="dot active" data-target="hero"   style="--dot-color:#64748b" title="Intro"></button>
+  <button class="dot"        data-target="era-1"  style="--dot-color:#64748b" title="Foundation"></button>
+  <button class="dot"        data-target="era-2"  style="--dot-color:#10b981" title="Intelligence"></button>
+  <button class="dot"        data-target="era-3"  style="--dot-color:#84cc16" title="Organization"></button>
+  <button class="dot"        data-target="era-4"  style="--dot-color:#8b5cf6" title="Connection"></button>
+  <button class="dot"        data-target="era-5"  style="--dot-color:#06b6d4" title="Openness"></button>
+  <button class="dot"        data-target="era-6"  style="--dot-color:#f59e0b" title="Hardening"></button>
+  <button class="dot"        data-target="era-7"  style="--dot-color:#a855f7" title="Enrichment"></button>
+  <button class="dot"        data-target="finale" style="--dot-color:#8b5cf6" title="Today"></button>
+</nav>
+
+<div class="stage">
+
+  <!-- ── Left: scrollable text ────────────────────────── -->
+  <main class="text-pane">
+
+    <!-- Hero -->
+    <section id="hero" data-era="0">
+      <p class="hero-eyebrow">Build in the Open · 8 Months</p>
+      <h1 class="hero-title">How <span>MoodHaven Journal</span><br>came to life</h1>
+      <p class="hero-subtitle">From a first commit in October 2025 to a fully encrypted, cross-platform journaling app with peer sync, speech-to-text, a browser build, a Wear OS companion, and a somatic wellness module — seven eras, one building at a time.</p>
+      <div class="hero-stats">
+        <div class="stat"><span class="stat-num">8</span><span class="stat-label">months</span></div>
+        <div class="stat"><span class="stat-num">1,165</span><span class="stat-label">tests</span></div>
+        <div class="stat"><span class="stat-num">148</span><span class="stat-label">Tauri commands</span></div>
+        <div class="stat"><span class="stat-num">3</span><span class="stat-label">platforms</span></div>
+        <div class="stat"><span class="stat-num">∞</span><span class="stat-label">entries encrypted</span></div>
+      </div>
+      <p class="scroll-hint"><span class="scroll-arrow"></span> Scroll to build</p>
+    </section>
+
+    <!-- Era 1: Foundation -->
+    <section class="era" id="era-1" data-era="1" style="--ec:#64748b">
+      <div class="era-badge">
+        <span class="era-num">Era 1</span>
+        <span class="era-date">October 2025</span>
+        <span class="era-ver">v0.1.0</span>
+      </div>
+      <h2 class="era-name">Foundation</h2>
+      <p class="era-tagline">"The non-negotiables, from day one."</p>
+      <p class="era-body">AES-256-GCM encryption with PBKDF2 (600,000 iterations). The backend never sees plaintext. TOTP and FIDO2 hardware keys via native Rust CTAP2 — no browser WebAuthn. A mood scale. A TipTap editor. WebDAV sync. Oura integration. The ground floor was load-bearing from the start.</p>
+      <ul class="features">
+        <li class="feat">AES-256-GCM encryption</li>
+        <li class="feat">PBKDF2 · 600k iterations</li>
+        <li class="feat">Mood 1–5 scale</li>
+        <li class="feat">TipTap rich-text editor</li>
+        <li class="feat">TOTP 2FA</li>
+        <li class="feat">FIDO2 hardware key (Rust)</li>
+        <li class="feat">24-char recovery key</li>
+        <li class="feat">WebDAV cloud sync</li>
+        <li class="feat">Location &amp; weather</li>
+        <li class="feat">Privacy modes per entry</li>
+        <li class="feat">Full-text search (Ctrl+K)</li>
+        <li class="feat">On This Day view</li>
+        <li class="feat">Oura Ring integration</li>
+        <li class="feat">Focus mode</li>
+      </ul>
+      <div class="era-highlight">Backend never sees plaintext — enforced on day one, not retrofitted.</div>
+    </section>
+
+    <!-- Era 2: Intelligence -->
+    <section class="era" id="era-2" data-era="2" style="--ec:#10b981">
+      <div class="era-badge">
+        <span class="era-num">Era 2</span>
+        <span class="era-date">Nov–Dec 2025</span>
+        <span class="era-ver">v0.2.0–v0.3.2</span>
+      </div>
+      <h2 class="era-name">Intelligence</h2>
+      <p class="era-tagline">"Making the journal talk back."</p>
+      <p class="era-body">Analytics surfaced patterns the user couldn't see in individual entries. AI turned those patterns into prompts and insights — using only anonymised metadata, never journal text. The first-run wizard made onboarding coherent. Seven journal templates gave new writers a starting point.</p>
+      <ul class="features">
+        <li class="feat">Calendar heatmap</li>
+        <li class="feat">Mood trend chart</li>
+        <li class="feat">Streak tracking</li>
+        <li class="feat">Day-of-week patterns</li>
+        <li class="feat">AI insights (BYOK + Ollama)</li>
+        <li class="feat">Metadata-only AI (never journal text)</li>
+        <li class="feat">First-run setup wizard</li>
+        <li class="feat">Encrypted export · import</li>
+        <li class="feat">Factory reset</li>
+        <li class="feat">7 journal templates</li>
+      </ul>
+      <div class="era-highlight">AI sends only anonymised metadata — mood scores, patterns, frequency. Journal text never leaves the device.</div>
+    </section>
+
+    <!-- Era 3: Organization -->
+    <section class="era" id="era-3" data-era="3" style="--ec:#84cc16">
+      <div class="era-badge">
+        <span class="era-num">Era 3</span>
+        <span class="era-date">Feb–Mar 2026</span>
+        <span class="era-ver">v0.4.0–v0.5.0</span>
+      </div>
+      <h2 class="era-name">Organization</h2>
+      <p class="era-tagline">"A journal for each part of your life."</p>
+      <p class="era-body">Multiple named, colour-coded journals (Books) separated work from personal, daily from long-form. The major polish sprint added hashtag extraction, pinned entries, a 24-hour calendar timeline, reading time estimates, mood milestone animations, and a daily-rotating greeting.</p>
+      <ul class="features">
+        <li class="feat">Multiple journals (Books)</li>
+        <li class="feat">Emoji + colour coding</li>
+        <li class="feat">WebDAV sync modal</li>
+        <li class="feat">Hashtag auto-extraction</li>
+        <li class="feat">Pinned entries</li>
+        <li class="feat">Calendar 24h timeline</li>
+        <li class="feat">MoodWeatherCard</li>
+        <li class="feat">GratitudeStreakCard</li>
+        <li class="feat">WeeklyReflectionCard</li>
+        <li class="feat">Reading time estimates</li>
+        <li class="feat">Daily-rotating greeting</li>
+        <li class="feat">Mood milestone glow</li>
+        <li class="feat">Settings deep-linking</li>
+      </ul>
+      <div class="era-highlight">The hashtag and books systems both use additive SQLite migrations — no data loss, no re-encryption.</div>
+    </section>
+
+    <!-- Era 4: Connection -->
+    <section class="era" id="era-4" data-era="4" style="--ec:#8b5cf6">
+      <div class="era-badge">
+        <span class="era-num">Era 4</span>
+        <span class="era-date">March 2026</span>
+        <span class="era-ver">v0.6.0–v0.7.15</span>
+      </div>
+      <h2 class="era-name">Connection</h2>
+      <p class="era-tagline">"Offline-first, device-aware."</p>
+      <p class="era-body">The biggest era by commit count. Ed25519 device identity, mDNS discovery, PIN/QR pairing, and an AES-256-GCM TCP sync engine. Whisper.cpp speech-to-text via a local sidecar. A 3-layer formatting pipeline. Time capsules. The Wear OS companion. And a full rebrand to MoodHaven Journal.</p>
+      <ul class="features">
+        <li class="feat">Ed25519 device identity</li>
+        <li class="feat">mDNS peer discovery</li>
+        <li class="feat">PIN / QR pairing</li>
+        <li class="feat">AES-256-GCM peer sync</li>
+        <li class="feat">Port 44000–44999 range</li>
+        <li class="feat">whisper.cpp STT sidecar</li>
+        <li class="feat">4 Whisper models (75MB–1.5GB)</li>
+        <li class="feat">3-layer transcript formatting</li>
+        <li class="feat">Time capsules</li>
+        <li class="feat">SQLite WAL mode</li>
+        <li class="feat">Analytics bundle command</li>
+        <li class="feat">Structured logging</li>
+        <li class="feat">Wear OS voice capture</li>
+        <li class="feat">Rebrand → MoodHaven Journal</li>
+      </ul>
+      <div class="era-highlight">Zero cloud required. Two trusted devices on the same LAN sync within 30 seconds of appearing together.</div>
+    </section>
+
+    <!-- Era 5: Openness -->
+    <section class="era" id="era-5" data-era="5" style="--ec:#06b6d4">
+      <div class="era-badge">
+        <span class="era-num">Era 5</span>
+        <span class="era-date">April 2026</span>
+        <span class="era-ver">v0.8.0</span>
+      </div>
+      <h2 class="era-name">Openness</h2>
+      <p class="era-tagline">"No install required."</p>
+      <p class="era-body">A full browser build backed by IndexedDB — the same zero-knowledge encryption model, any modern browser. Open it on a borrowed laptop. Close the tab. Nothing left behind. WebDAV sync uses ETag headers to prevent concurrent desktop/browser writes from clobbering each other.</p>
+      <ul class="features">
+        <li class="feat">Browser port (IndexedDB)</li>
+        <li class="feat">Identical zero-knowledge model</li>
+        <li class="feat">WebDAV sync for browser</li>
+        <li class="feat">ETag concurrency guard</li>
+        <li class="feat">PWA (installable)</li>
+        <li class="feat">npm run dev:web</li>
+        <li class="feat">VITE_TARGET=web build mode</li>
+        <li class="feat">isBrowser feature flag</li>
+      </ul>
+      <div class="era-highlight">Same encryption. Any browser. No account. No install. Nothing left on the machine after the tab closes.</div>
+    </section>
+
+    <!-- Era 6: Hardening -->
+    <section class="era" id="era-6" data-era="6" style="--ec:#f59e0b">
+      <div class="era-badge">
+        <span class="era-num">Era 6</span>
+        <span class="era-date">Apr–May 2026</span>
+        <span class="era-ver">v0.9.0–v1.0.0</span>
+      </div>
+      <h2 class="era-name">Hardening</h2>
+      <p class="era-tagline">"From feature-complete to production-ready."</p>
+      <p class="era-body">Password verification moved to Rust — the hash never leaves the backend. Seventeen Tauri commands gained lock guards. DOMPurify on all rendered journal HTML. Path traversal blocked in media commands. SHA-pinned CI supply chain. Rate limiting. 702 tests. Then v1.0.0 shipped.</p>
+      <ul class="features">
+        <li class="feat">verify_password in Rust</li>
+        <li class="feat">17 commands lock-guarded</li>
+        <li class="feat">STT URL allowlist</li>
+        <li class="feat">DOMPurify integration</li>
+        <li class="feat">Path traversal blocking</li>
+        <li class="feat">Constant-time comparisons</li>
+        <li class="feat">Rate limiting (5 fail → 30s)</li>
+        <li class="feat">SHA-pinned CI actions</li>
+        <li class="feat">Vite 5→8 · vitest 1→4</li>
+        <li class="feat">Timeline virtual scroll</li>
+        <li class="feat">Keyboard shortcuts (1–5, ?)</li>
+        <li class="feat">STT recording strip UI</li>
+        <li class="feat">702 tests · 48 files</li>
+        <li class="feat">v1.0.0 — stable release</li>
+      </ul>
+      <div class="era-highlight">v1.0.0 · May 24, 2026. Ready for daily use on Linux, macOS, and Windows. MIT-licensed. No telemetry.</div>
+    </section>
+
+    <!-- Era 7: Enrichment -->
+    <section class="era" id="era-7" data-era="7" style="--ec:#a855f7">
+      <div class="era-badge">
+        <span class="era-num">Era 7</span>
+        <span class="era-date">May 2026</span>
+        <span class="era-ver">v1.1.0–v1.3.0</span>
+      </div>
+      <h2 class="era-name">Enrichment</h2>
+      <p class="era-tagline">"Settle the nervous system. Then write."</p>
+      <p class="era-body">StillHaven brought bilateral audio stimulation — alternating left-right tones that help settle the nervous system before a journaling session. Bio-adaptive: reads Oura HRV at check-in, adjusts on live heart-rate signals from the Wear OS watch. Voice memo drafts made the watch a first-class writing tool.</p>
+      <ul class="features">
+        <li class="feat">StillHaven (bilateral audio)</li>
+        <li class="feat">Protocol picker + activation dial</li>
+        <li class="feat">Bio-adaptive (Oura + watch HRV)</li>
+        <li class="feat">Session history · journal handoff</li>
+        <li class="feat">Voice memo draft cards</li>
+        <li class="feat">Full-screen draft editor</li>
+        <li class="feat">Writing appearance drawer</li>
+        <li class="feat">TOTP encrypted at rest</li>
+        <li class="feat">Writer window scoped capability</li>
+        <li class="feat">Word count tracking</li>
+        <li class="feat">Session-linked journal entries</li>
+        <li class="feat">WellbeingCard (morning context)</li>
+        <li class="feat">Wrist Loop (watch → StillHaven)</li>
+        <li class="feat">1,165 tests · 148 commands</li>
+      </ul>
+      <div class="era-highlight">StillHaven is the first feature that uses the journal as an outcome — not just a container.</div>
+    </section>
+
+    <!-- Finale -->
+    <section id="finale" data-era="8">
+      <h2 class="finale-title">MoodHaven Journal · v1.3.0</h2>
+      <p class="finale-sub">A complete privacy-first journaling platform built in the open — no accounts, no telemetry, no mandatory cloud. AES-256-GCM encryption throughout. A browser build for anywhere. A Wear OS companion for your wrist. A somatic wellness companion for your nervous system.</p>
+      <div class="finale-grid">
+        <div class="finale-stat"><span class="n">1,165</span><span class="l">JS/TS tests</span></div>
+        <div class="finale-stat"><span class="n">70</span><span class="l">test files</span></div>
+        <div class="finale-stat"><span class="n">148</span><span class="l">Tauri commands</span></div>
+        <div class="finale-stat"><span class="n">21</span><span class="l">Rust modules</span></div>
+        <div class="finale-stat"><span class="n">3</span><span class="l">desktop platforms</span></div>
+        <div class="finale-stat"><span class="n">600k</span><span class="l">PBKDF2 iterations</span></div>
+        <div class="finale-stat"><span class="n">MIT</span><span class="l">licence</span></div>
+        <div class="finale-stat"><span class="n">0</span><span class="l">telemetry</span></div>
+      </div>
+    </section>
+
+  </main><!-- /text-pane -->
+
+  <!-- ── Right: sticky building ────────────────────────── -->
+  <aside class="building-pane" aria-hidden="true">
+    <svg id="bld" viewBox="0 0 220 380" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+
+      <!-- ── Static skeleton (always visible, dark) ── -->
+      <g id="skeleton" opacity="0.35">
+        <!-- Foundation line -->
+        <line x1="0" y1="358" x2="220" y2="358" stroke="#4c1d95" stroke-width="2"/>
+        <!-- Main building outline -->
+        <rect x="10" y="76" width="200" height="282" fill="none" stroke="#2d1b69" stroke-width="1.2"/>
+        <!-- Floor dividers -->
+        <line x1="10" y1="121" x2="210" y2="121" stroke="#1e1040" stroke-width="0.6" stroke-dasharray="3 2"/>
+        <line x1="10" y1="166" x2="210" y2="166" stroke="#1e1040" stroke-width="0.6" stroke-dasharray="3 2"/>
+        <line x1="10" y1="211" x2="210" y2="211" stroke="#1e1040" stroke-width="0.6" stroke-dasharray="3 2"/>
+        <line x1="10" y1="256" x2="210" y2="256" stroke="#1e1040" stroke-width="0.6" stroke-dasharray="3 2"/>
+        <line x1="10" y1="301" x2="210" y2="301" stroke="#1e1040" stroke-width="0.6" stroke-dasharray="3 2"/>
+        <!-- Penthouse outline -->
+        <rect x="55" y="16" width="110" height="60" fill="none" stroke="#2d1b69" stroke-width="1.2"/>
+        <!-- Shoulder lines (connecting building top to penthouse) -->
+        <line x1="10" y1="76" x2="55" y2="76" stroke="#2d1b69" stroke-width="0.8"/>
+        <line x1="165" y1="76" x2="210" y2="76" stroke="#2d1b69" stroke-width="0.8"/>
+      </g>
+
+      <!-- ── Floor groups (light up as eras activate) ── -->
+
+      <!-- Era 1: Ground floor — y=301 to y=358 -->
+      <g id="bld-1" class="bfl" style="--ec:#64748b">
+        <rect class="fr" x="10" y="301" width="200" height="57"/>
+        <!-- Window left -->
+        <rect class="win" x="34" y="315" width="35" height="22"/>
+        <!-- Door (center, taller) -->
+        <rect class="win" x="93" y="320" width="34" height="38"/>
+        <!-- Window right -->
+        <rect class="win" x="151" y="315" width="35" height="22"/>
+      </g>
+
+      <!-- Era 2: Floor 2 — y=256 to y=301 -->
+      <g id="bld-2" class="bfl" style="--ec:#10b981">
+        <rect class="fr" x="10" y="256" width="200" height="45"/>
+        <rect class="win" x="34" y="267" width="35" height="23"/>
+        <rect class="win" x="93" y="267" width="35" height="23"/>
+        <rect class="win" x="151" y="267" width="35" height="23"/>
+      </g>
+
+      <!-- Era 3: Floor 3 — y=211 to y=256 -->
+      <g id="bld-3" class="bfl" style="--ec:#84cc16">
+        <rect class="fr" x="10" y="211" width="200" height="45"/>
+        <rect class="win" x="34" y="222" width="35" height="23"/>
+        <rect class="win" x="93" y="222" width="35" height="23"/>
+        <rect class="win" x="151" y="222" width="35" height="23"/>
+      </g>
+
+      <!-- Era 4: Floor 4 — y=166 to y=211 -->
+      <g id="bld-4" class="bfl" style="--ec:#8b5cf6">
+        <rect class="fr" x="10" y="166" width="200" height="45"/>
+        <rect class="win" x="34" y="177" width="35" height="23"/>
+        <rect class="win" x="93" y="177" width="35" height="23"/>
+        <rect class="win" x="151" y="177" width="35" height="23"/>
+      </g>
+
+      <!-- Era 5: Floor 5 — y=121 to y=166 -->
+      <g id="bld-5" class="bfl" style="--ec:#06b6d4">
+        <rect class="fr" x="10" y="121" width="200" height="45"/>
+        <rect class="win" x="34" y="132" width="35" height="23"/>
+        <rect class="win" x="93" y="132" width="35" height="23"/>
+        <rect class="win" x="151" y="132" width="35" height="23"/>
+      </g>
+
+      <!-- Era 6: Floor 6 — y=76 to y=121 -->
+      <g id="bld-6" class="bfl" style="--ec:#f59e0b">
+        <rect class="fr" x="10" y="76" width="200" height="45"/>
+        <rect class="win" x="34" y="87" width="35" height="23"/>
+        <rect class="win" x="93" y="87" width="35" height="23"/>
+        <rect class="win" x="151" y="87" width="35" height="23"/>
+      </g>
+
+      <!-- Era 7: Penthouse — y=16 to y=76 -->
+      <g id="bld-7" class="bfl" style="--ec:#a855f7">
+        <rect class="fr" x="55" y="16" width="110" height="60"/>
+        <rect class="win" x="72" y="29" width="30" height="25"/>
+        <rect class="win" x="118" y="29" width="30" height="25"/>
+      </g>
+
+      <!-- ── Antenna (appears at Era 4) ── -->
+      <g class="bld-antenna" id="antenna">
+        <line x1="215" y1="76" x2="215" y2="42" stroke="#a78bfa" stroke-width="1.5"/>
+        <line x1="209" y1="56" x2="221" y2="56" stroke="#a78bfa" stroke-width="1.5"/>
+        <line x1="211" y1="49" x2="219" y2="49" stroke="#a78bfa" stroke-width="1.2"/>
+        <circle class="antenna-dot" cx="215" cy="40" r="3" fill="#a78bfa"/>
+      </g>
+
+      <!-- ── Signal waves (appears at Era 5) ── -->
+      <g class="bld-signals" id="signals" fill="none" stroke="#67e8f9" stroke-width="1.2">
+        <path class="sig-arc" d="M 215 143 Q 222 136 215 129"/>
+        <path class="sig-arc" d="M 215 143 Q 226 133 215 123"/>
+        <path class="sig-arc" d="M 215 143 Q 230 130 215 117"/>
+      </g>
+
+      <!-- ── MoodHaven label (appears at Era 1) ── -->
+      <text class="bld-logo-text" id="bld-logo"
+        x="110" y="374" text-anchor="middle"
+        font-size="7" font-family="system-ui,sans-serif"
+        font-weight="600" letter-spacing="0.1em"
+        fill="#64748b">MOODHAVEN</text>
+
+    </svg>
+
+    <p class="bld-label" id="bld-label">Under Construction</p>
+    <p class="bld-version" id="bld-version">—</p>
+  </aside>
+
+</div><!-- /stage -->
+
+<script>
+  const ERAS = [
+    { n: 0, label: 'Under Construction', ver: '—' },
+    { n: 1, label: 'Foundation',   ver: 'v0.1.0' },
+    { n: 2, label: 'Intelligence', ver: 'v0.2.0–v0.3.2' },
+    { n: 3, label: 'Organization', ver: 'v0.4.0–v0.5.0' },
+    { n: 4, label: 'Connection',   ver: 'v0.6.0–v0.7.15' },
+    { n: 5, label: 'Openness',     ver: 'v0.8.0' },
+    { n: 6, label: 'Hardening',    ver: 'v0.9.0–v1.0.0' },
+    { n: 7, label: 'Enrichment',   ver: 'v1.1.0–v1.3.0' },
+    { n: 8, label: 'Complete',     ver: 'v1.3.0' },
+  ];
+
+  let currentEra = -1;
+
+  function activateEra(n) {
+    if (n === currentEra) return;
+    currentEra = n;
+
+    // Light up floors cumulatively
+    for (let i = 1; i <= 7; i++) {
+      const fl = document.getElementById('bld-' + i);
+      if (fl) fl.classList.toggle('lit', i <= n);
+    }
+
+    // Special elements
+    document.getElementById('antenna').classList.toggle('visible', n >= 4);
+    document.getElementById('signals').classList.toggle('visible', n >= 5);
+    document.getElementById('bld-logo').classList.toggle('visible', n >= 1);
+
+    // Building label
+    const info = ERAS[Math.min(n, ERAS.length - 1)];
+    const lbl  = document.getElementById('bld-label');
+    const ver  = document.getElementById('bld-version');
+    lbl.textContent  = info.label;
+    ver.textContent  = info.ver;
+    lbl.classList.toggle('active', n > 0);
+    ver.classList.toggle('active', n > 0);
+
+    // Progress dots
+    document.querySelectorAll('.dot').forEach((dot, i) => {
+      dot.classList.toggle('active', i === n);
+    });
+
+    // Active era section glow
+    document.querySelectorAll('.era').forEach(el => {
+      el.classList.toggle('active', parseInt(el.dataset.era) === n);
+    });
+  }
+
+  // IntersectionObserver — triggers when a section is at least 30% visible
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        activateEra(parseInt(e.target.dataset.era ?? '0'));
+      }
+    });
+  }, {
+    threshold: 0.3,
+    rootMargin: '0px 0px -20% 0px',
+  });
+
+  document.querySelectorAll('[data-era]').forEach(el => io.observe(el));
+
+  // Progress dot click → smooth scroll
+  document.querySelectorAll('.dot').forEach(dot => {
+    dot.addEventListener('click', () => {
+      const target = document.getElementById(dot.dataset.target);
+      if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+
+  // Seed initial state
+  activateEra(0);
+</script>
+</body>
+</html>

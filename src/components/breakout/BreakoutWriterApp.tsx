@@ -16,7 +16,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { hasPassword, unlockJournal } from '../../lib/services/journalService';
+import { hasPassword, unlockJournal, finalizeUnlock } from '../../lib/services/journalService';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { WritingView } from '../../pages/WritingView';
 
@@ -69,9 +69,12 @@ export function BreakoutWriterApp() {
       await loadSettings();
 
       // Attempt to retrieve a password deposited by the main window.
+      // Use finalizeUnlock — NOT unlockJournal — to avoid calling verify_password,
+      // which would reset TwoFactorPendingState and cause unlock_app to reject for
+      // users with 2FA enabled. The main window already completed full auth.
       const bridgedPw = await invoke<string | null>('retrieve_session_password').catch(() => null);
       if (bridgedPw) {
-        const ok = await unlockJournal(bridgedPw).catch(() => false);
+        const ok = await finalizeUnlock(bridgedPw).catch(() => false);
         if (ok) { setPhase('writing'); return; }
       }
 

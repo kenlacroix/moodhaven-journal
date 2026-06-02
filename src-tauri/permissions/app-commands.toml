@@ -121,9 +121,11 @@ commands.allow = [
   "download_and_install_update",
   # Breakout writer window
   "open_writer_window",
-  # Session bridge (password hand-off to breakout window)
+  # Session bridge — main window stores, writer window retrieves (one-shot)
+  # retrieve_session_password is intentionally NOT listed here; only the writer
+  # window capability (allow-writer-commands) grants retrieve access, preventing
+  # the main window from draining the bridge before the writer window can read it.
   "store_session_password",
-  "retrieve_session_password",
   # Signals (structured data points, Wear OS events, health snapshots)
   "create_signal",
   "list_signals",
@@ -133,8 +135,6 @@ commands.allow = [
   # Sync log (incremental sync infrastructure)
   "get_unsynced_log",
   "mark_sync_log_synced",
-  # Signal pipeline self-test
-  "debug_signal_self_test",
   # Voice memos (Wear OS audio recordings)
   "store_voice_memo",
   "list_voice_memos",
@@ -143,6 +143,12 @@ commands.allow = [
   "patch_voice_memo_transcription",
   "link_voice_memo_to_entry",
   "transcribe_voice_memo",
+  # Voice memo draft pipeline (Phase 5 — v1.2.0)
+  "patch_voice_memo_context",
+  "patch_voice_memo_mood",
+  "list_pending_drafts",
+  "publish_voice_memo_draft",
+  "discard_voice_memo_draft",
   # Peer-to-peer sync — Phase 1: identity + discovery
   "peer_get_identity",
   "peer_rename_device",
@@ -185,11 +191,13 @@ identifier = "allow-writer-commands"
 description = "Minimal command set for the breakout writer window. Excludes factory_reset, export_data, peer sync, 2FA management, and other main-window-only operations."
 commands.allow = [
   # Auth (writer must unlock via session bridge)
+  # get_password_hash is intentionally excluded — the writer window uses
+  # verify_password (Rust-side comparison) and never needs the raw hash+salt.
+  # Removing it prevents hash exfiltration if the writer WebView is compromised.
   "verify_password",
   "unlock_app",
   "check_password_exists",
-  "get_password_hash",
-  # Session bridge (password hand-off)
+  # Session bridge (password hand-off — retrieve is writer-only)
   "retrieve_session_password",
   # Journal CRUD
   "create_journal_entry",
@@ -225,6 +233,12 @@ commands.allow = [
   "patch_voice_memo_transcription",
   "link_voice_memo_to_entry",
   "transcribe_voice_memo",
+  # Voice memo draft pipeline (Phase 5)
+  "patch_voice_memo_context",
+  "patch_voice_memo_mood",
+  "list_pending_drafts",
+  "publish_voice_memo_draft",
+  "discard_voice_memo_draft",
   # Speech-to-Text
   "stt_check_sidecar",
   "stt_check_model",

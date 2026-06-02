@@ -9,13 +9,7 @@ use crate::db::{
 use crate::AppLockState;
 use tauri::State;
 
-fn require_unlocked(lock: &State<'_, AppLockState>) -> Result<(), String> {
-    if lock.is_locked() {
-        Err("Session is locked".to_string())
-    } else {
-        Ok(())
-    }
-}
+use super::require_unlocked;
 
 /// Get mood distribution (count per mood level 1-5)
 #[tauri::command]
@@ -59,6 +53,10 @@ pub fn get_monthly_mood_data(
     // Validate month range
     if !(1..=12).contains(&month) {
         return Err("Month must be between 1 and 12".to_string());
+    }
+    // Validate year bounds — year 0 or negative causes strftime to produce corrupt dates
+    if !(1900..=9999).contains(&year) {
+        return Err("Year must be between 1900 and 9999".to_string());
     }
 
     db::get_monthly_mood_data(&db, year, month)

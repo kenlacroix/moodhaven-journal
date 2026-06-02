@@ -72,6 +72,7 @@ export function LockScreen() {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const unlock = useAppStore((state) => state.unlock);
+  const finalizeUnlock = useAppStore((state) => state.finalizeUnlock);
 
   const lockedOut = lockoutRemaining > 0;
 
@@ -219,7 +220,10 @@ export function LockScreen() {
 
     setIsLoading(true);
     try {
-      const success = await unlock(verifiedPassword);
+      // Use finalizeUnlock — NOT unlock — to avoid calling verify_password a
+      // second time. A second verify_password call resets TwoFactorPendingState
+      // (twofa_completed=false) and causes unlock_app to reject.
+      const success = await finalizeUnlock(verifiedPassword);
       if (success) {
         // Reset rate limit only after the session is unlocked (delete_setting requires unlock)
         await resetRateLimit().catch((err) => logger.warn('resetRateLimit failed', { error: String(err) }));
@@ -238,7 +242,7 @@ export function LockScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, [verifiedPassword, unlock, setRateLimitState]);
+  }, [verifiedPassword, finalizeUnlock, setRateLimitState]);
 
   // Handle 2FA cancellation - go back to password entry
   const handle2FACancel = useCallback(() => {

@@ -2,35 +2,48 @@
 //!
 //! Provides factory reset, export, and import functionality.
 
+use aes_gcm::{
+    aead::{Aead, KeyInit},
+    Aes256Gcm, Nonce,
+};
+use base64::{engine::general_purpose, Engine as _};
+use pbkdf2::pbkdf2_hmac;
+use rand::RngCore;
+use sha2::Sha256;
 use std::fs;
 use tauri::{AppHandle, Manager, State};
 
 use crate::db::{self, Database};
-use crate::AppLockState;
+use crate::{AppLockState, TwoFactorPendingState};
 
-/// Mark the session as unlocked. Called by the frontend after successful
-/// password verification. Sensitive commands gate on this state.
+/// Mark the session as unlocked.
+/// Enforces that both authentication factors were completed in Rust — a compromised
+/// frontend cannot bypass 2FA by calling this directly after verify_password.
 #[tauri::command]
-pub fn unlock_app(lock: State<'_, AppLockState>) -> Result<(), String> {
+pub fn unlock_app(
+    lock: State<'_, AppLockState>,
+    twofa: State<'_, TwoFactorPendingState>,
+) -> Result<(), String> {
+    if !twofa.is_fully_authenticated() {
+        return Err("Authentication incomplete: password verification or 2FA not done".to_string());
+    }
     *lock.0.lock().map_err(|e| e.to_string())? = false;
     Ok(())
 }
 
-/// Mark the session as locked. Called by the frontend on manual lock or app exit.
+/// Mark the session as locked. Resets all pending auth state.
 #[tauri::command]
-pub fn lock_app(lock: State<'_, AppLockState>) -> Result<(), String> {
+pub fn lock_app(
+    lock: State<'_, AppLockState>,
+    twofa: State<'_, TwoFactorPendingState>,
+) -> Result<(), String> {
     *lock.0.lock().map_err(|e| e.to_string())? = true;
+    twofa.reset();
     Ok(())
 }
 
 /// Helper used by guarded commands — returns Err if the session is locked.
-fn require_unlocked(lock: &State<'_, AppLockState>) -> Result<(), String> {
-    if lock.is_locked() {
-        Err("Session is locked".to_string())
-    } else {
-        Ok(())
-    }
-}
+use super::require_unlocked;
 
 /// Optional filters for selective export.
 /// All fields are optional; absent means "no filter" (export all).
@@ -145,12 +158,22 @@ pub async fn factory_reset(app: AppHandle) -> Result<bool, String> {
     }
 
     // Delete any other app data files
+    // All app-data paths to remove. Directories are removed recursively;
+    // missing entries are silently skipped. Errors are non-fatal — a partial
+    // reset is still better than a failed one.
     let files_to_delete = [
         "keys.bin",
         "cache.db",
         "logs",
         "peer_key.bin",
         "trusted_devices.json",
+        "device.json",     // Ed25519 public key metadata (low-sensitivity but stale)
+        "pw_lockout.json", // Password rate-limiter state — reset with the app
+        "voice_memos",     // Encrypted audio files from watch companion
+        "voice_memos_incoming", // Staging directory for incoming watch audio
+        "media",           // Encrypted media attachments
+        "moodhaven_restore.pending", // Staged full-restore DB file — must not re-apply after reset
+        "moodhaven_restore.pending.sha256", // Integrity check file for the above
     ];
     for file in files_to_delete {
         let path = app_data.join(file);
@@ -174,11 +197,52 @@ pub async fn factory_reset(app: AppHandle) -> Result<bool, String> {
     Ok(true)
 }
 
+// Matches frontend crypto.ts constants exactly so WebCrypto decrypt() is interoperable.
+const EXPORT_PBKDF2_ROUNDS: u32 = 600_000;
+const EXPORT_SALT_LEN: usize = 16; // 128 bits — matches WebCrypto SALT_LENGTH
+const EXPORT_NONCE_LEN: usize = 12; // 96 bits — matches WebCrypto IV_LENGTH
+
+/// Encrypt `plaintext` (the base64-encoded export payload) using PBKDF2-HMAC-SHA256 +
+/// AES-256-GCM with parameters matching the frontend WebCrypto encrypt() in crypto.ts.
+/// Returns a JSON envelope that the frontend decrypt() can unwrap without modification.
+fn encrypt_export_payload(plaintext: &str, password: &str) -> Result<String, String> {
+    let mut salt = [0u8; EXPORT_SALT_LEN];
+    let mut nonce_bytes = [0u8; EXPORT_NONCE_LEN];
+    rand::thread_rng().fill_bytes(&mut salt);
+    rand::thread_rng().fill_bytes(&mut nonce_bytes);
+
+    let mut key = [0u8; 32];
+    pbkdf2_hmac::<Sha256>(password.as_bytes(), &salt, EXPORT_PBKDF2_ROUNDS, &mut key);
+
+    let cipher = Aes256Gcm::new_from_slice(&key).map_err(|e| format!("cipher init: {e}"))?;
+    let nonce = Nonce::from_slice(&nonce_bytes);
+    let ciphertext = cipher
+        .encrypt(nonce, plaintext.as_bytes())
+        .map_err(|_| "export encryption failed".to_string())?;
+
+    let envelope = serde_json::json!({
+        "format": "moodhaven-encrypted-v1",
+        "payload": {
+            "ciphertext": general_purpose::STANDARD.encode(&ciphertext),
+            "iv": general_purpose::STANDARD.encode(nonce_bytes),
+            "salt": general_purpose::STANDARD.encode(salt),
+            "version": 1
+        }
+    });
+    serde_json::to_string(&envelope).map_err(|e| format!("serialize: {e}"))
+}
+
 /// Export journal entries, settings, 2FA config, and tags to encrypted backup.
 /// Accepts optional filters (tags, mood range, date range) for selective export.
-/// When no filters are provided, exports all entries — WebDAV compat path unchanged.
+/// When `password` is provided the payload is encrypted (AES-256-GCM) before
+/// returning; when omitted (full-backup callers) the raw base64 is returned for
+/// the caller to wrap with its own encryption envelope.
 #[tauri::command]
-pub async fn export_data(app: AppHandle, filter: Option<ExportFilter>) -> Result<String, String> {
+pub async fn export_data(
+    app: AppHandle,
+    password: Option<String>,
+    filter: Option<ExportFilter>,
+) -> Result<String, String> {
     let lock = app.state::<AppLockState>();
     require_unlocked(&lock)?;
     let db = app.state::<Database>();
@@ -339,10 +403,12 @@ pub async fn export_data(app: AppHandle, filter: Option<ExportFilter>) -> Result
     let json_str = serde_json::to_string_pretty(&export_data)
         .map_err(|e| format!("Failed to serialize export data: {}", e))?;
 
-    use base64::{engine::general_purpose, Engine as _};
     let encoded = general_purpose::STANDARD.encode(json_str.as_bytes());
 
-    Ok(encoded)
+    match password {
+        Some(pw) => encrypt_export_payload(&encoded, &pw),
+        None => Ok(encoded),
+    }
 }
 
 /// Import entries from backup file
@@ -352,7 +418,6 @@ pub async fn import_data(app: AppHandle, data: String) -> Result<i32, String> {
     require_unlocked(&lock)?;
     let db = app.state::<Database>();
 
-    use base64::{engine::general_purpose, Engine as _};
     let decoded = general_purpose::STANDARD
         .decode(&data)
         .map_err(|e| format!("Failed to decode backup data: {}", e))?;
@@ -369,7 +434,8 @@ pub async fn import_data(app: AppHandle, data: String) -> Result<i32, String> {
         .and_then(|v| v.as_str())
         .unwrap_or("unknown");
 
-    if !version.starts_with("1.") {
+    const ALLOWED_IMPORT_VERSIONS: &[&str] = &["1.0", "1.1", "1.2", "1.3"];
+    if !ALLOWED_IMPORT_VERSIONS.contains(&version) {
         return Err(format!("Unsupported backup version: {}", version));
     }
 
@@ -381,99 +447,144 @@ pub async fn import_data(app: AppHandle, data: String) -> Result<i32, String> {
 
     let mut imported_count = 0;
 
-    for entry in entries {
-        let id = entry
-            .get("id")
-            .and_then(|v| v.as_str())
-            .ok_or("Invalid entry: missing id")?;
+    // Begin an explicit transaction so the entire entry import is atomic.
+    // We lock once for BEGIN, then release so the per-entry helpers can acquire
+    // the lock independently (rusqlite is non-reentrant).
+    {
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        conn.execute_batch("BEGIN IMMEDIATE")
+            .map_err(|e| format!("Failed to begin import transaction: {}", e))?;
+    }
 
-        let encrypted_content = entry
-            .get("encrypted_content")
-            .ok_or("Invalid entry: missing encrypted_content")?;
+    let import_result: Result<(), String> = (|| {
+        for entry in entries {
+            let id = entry
+                .get("id")
+                .and_then(|v| v.as_str())
+                .ok_or("Invalid entry: missing id")?;
 
-        let ec: db::EncryptedContent = serde_json::from_value(encrypted_content.clone())
-            .map_err(|e| format!("Invalid encrypted content: {}", e))?;
+            let encrypted_content = entry
+                .get("encrypted_content")
+                .ok_or("Invalid entry: missing encrypted_content")?;
 
-        let mood = entry
-            .get("mood")
-            .and_then(|v| v.as_i64())
-            .ok_or("Invalid entry: missing mood")? as i32;
+            let ec: db::EncryptedContent = serde_json::from_value(encrypted_content.clone())
+                .map_err(|e| format!("Invalid encrypted content: {}", e))?;
 
-        let privacy_mode = entry
-            .get("privacy_mode")
-            .and_then(|v| v.as_i64())
-            .map(|v| v as i32)
-            .unwrap_or(0)
-            .clamp(0, 2);
+            let mood = (entry
+                .get("mood")
+                .and_then(|v| v.as_i64())
+                .ok_or("Invalid entry: missing mood")? as i32)
+                .clamp(1, 5);
 
-        let location_weather = entry.get("location_weather").and_then(|v| v.as_str());
+            let privacy_mode = entry
+                .get("privacy_mode")
+                .and_then(|v| v.as_i64())
+                .map(|v| v as i32)
+                .unwrap_or(0)
+                .clamp(0, 2);
 
-        let book_id = entry.get("book_id").and_then(|v| v.as_str());
+            let location_weather = entry.get("location_weather").and_then(|v| v.as_str());
 
-        let word_count = entry
-            .get("word_count")
-            .and_then(|v| v.as_i64())
-            .map(|v| v as i32);
+            let book_id = entry.get("book_id").and_then(|v| v.as_str());
 
-        // Try to create entry (skip if already exists)
-        match db::create_entry(
-            &db,
-            id,
-            &ec,
-            mood,
-            privacy_mode,
-            location_weather,
-            book_id,
-            word_count,
-        ) {
-            Ok(_) => imported_count += 1,
-            Err(e) if e.contains("UNIQUE constraint") => continue,
-            Err(e) => return Err(e),
+            let word_count = entry
+                .get("word_count")
+                .and_then(|v| v.as_i64())
+                .map(|v| v as i32);
+
+            // Try to create entry (skip if already exists)
+            match db::create_entry(
+                &db,
+                id,
+                &ec,
+                mood,
+                privacy_mode,
+                location_weather,
+                book_id,
+                word_count,
+            ) {
+                Ok(_) => imported_count += 1,
+                Err(e) if e.contains("UNIQUE constraint") => continue,
+                Err(e) => return Err(e),
+            }
+
+            // Restore fields that create_entry does not write: timestamps, pinned, capsule columns.
+            let created_at = entry
+                .get("created_at")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let updated_at = entry
+                .get("updated_at")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            // Reject malformed or missing timestamps — both fields are required.
+            let valid_ts =
+                |s: &str| !s.is_empty() && chrono::DateTime::parse_from_rfc3339(s).is_ok();
+            if !valid_ts(created_at) || !valid_ts(updated_at) {
+                return Err(format!(
+                    "Invalid timestamps in entry {id}: created_at={created_at:?}, updated_at={updated_at:?}"
+                ));
+            }
+            let pinned: i32 = if entry
+                .get("pinned")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false)
+            {
+                1
+            } else {
+                0
+            };
+            let sealed_until = entry.get("sealed_until").and_then(|v| v.as_str());
+            let capsule_type = entry
+                .get("capsule_type")
+                .and_then(|v| v.as_str())
+                .and_then(|ct| {
+                    const VALID: &[&str] = &["letter", "vault", "anniversary"];
+                    if VALID.contains(&ct) {
+                        Some(ct)
+                    } else {
+                        None
+                    }
+                });
+            let linked_original_id = entry.get("linked_original_id").and_then(|v| v.as_str());
+            let unsealed_at = entry.get("unsealed_at").and_then(|v| v.as_str());
+
+            {
+                let conn = db.conn.lock().map_err(|e| e.to_string())?;
+                conn.execute(
+                    "UPDATE journal_entries
+                     SET created_at = ?2, updated_at = ?3, pinned = ?4,
+                         sealed_until = ?5, capsule_type = ?6,
+                         linked_original_id = ?7, unsealed_at = ?8
+                     WHERE id = ?1",
+                    rusqlite::params![
+                        id,
+                        created_at,
+                        updated_at,
+                        pinned,
+                        sealed_until,
+                        capsule_type,
+                        linked_original_id,
+                        unsealed_at
+                    ],
+                )
+                .map_err(|e| format!("Failed to restore entry metadata: {}", e))?;
+            }
         }
+        Ok(())
+    })();
 
-        // Restore fields that create_entry does not write: timestamps, pinned, capsule columns.
-        let created_at = entry
-            .get("created_at")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
-        let updated_at = entry
-            .get("updated_at")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
-        let pinned: i32 = if entry
-            .get("pinned")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false)
-        {
-            1
-        } else {
-            0
-        };
-        let sealed_until = entry.get("sealed_until").and_then(|v| v.as_str());
-        let capsule_type = entry.get("capsule_type").and_then(|v| v.as_str());
-        let linked_original_id = entry.get("linked_original_id").and_then(|v| v.as_str());
-        let unsealed_at = entry.get("unsealed_at").and_then(|v| v.as_str());
-
-        {
+    match import_result {
+        Ok(()) => {
             let conn = db.conn.lock().map_err(|e| e.to_string())?;
-            conn.execute(
-                "UPDATE journal_entries
-                 SET created_at = ?2, updated_at = ?3, pinned = ?4,
-                     sealed_until = ?5, capsule_type = ?6,
-                     linked_original_id = ?7, unsealed_at = ?8
-                 WHERE id = ?1",
-                rusqlite::params![
-                    id,
-                    created_at,
-                    updated_at,
-                    pinned,
-                    sealed_until,
-                    capsule_type,
-                    linked_original_id,
-                    unsealed_at
-                ],
-            )
-            .map_err(|e| format!("Failed to restore entry metadata: {}", e))?;
+            conn.execute_batch("COMMIT")
+                .map_err(|e| format!("Failed to commit import transaction: {}", e))?;
+        }
+        Err(e) => {
+            if let Ok(conn) = db.conn.lock() {
+                let _ = conn.execute_batch("ROLLBACK");
+            }
+            return Err(e);
         }
     }
 
@@ -496,10 +607,10 @@ pub async fn import_data(app: AppHandle, data: String) -> Result<i32, String> {
                 setting.get("key").and_then(|v| v.as_str()),
                 setting.get("value").and_then(|v| v.as_str()),
             ) {
-                // Skip keys that must not be restored from backup
-                // rate_limit_state: don't import lockout state from another device
-                // log_level: don't silently restore a debug-level setting on import
-                if key == "rate_limit_state" || key == "log_level" {
+                // Allowlist: only restore keys that are safe to import across devices.
+                // All device-specific, auth, and runtime keys are excluded.
+                const IMPORT_ALLOWED_KEYS: &[&str] = &["app_settings"];
+                if !IMPORT_ALLOWED_KEYS.contains(&key) {
                     continue;
                 }
                 conn.execute(
@@ -542,20 +653,32 @@ pub async fn import_data(app: AppHandle, data: String) -> Result<i32, String> {
     }
 
     // Import 2FA configuration (v1.1.0+)
+    // Only restore 2FA config if this device has no 2FA enabled — overwriting
+    // an active 2FA setup from a backup would silently disable the user's protection.
     if let Some(tfa) = export_data.get("twoFactor") {
         if !tfa.is_null() {
             let conn = db.conn.lock().map_err(|e| e.to_string())?;
-            let enabled = tfa.get("enabled").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-            let method = tfa.get("method").and_then(|v| v.as_str());
-            let totp_secret = tfa.get("totp_secret").and_then(|v| v.as_str());
-            let webauthn_creds = tfa.get("webauthn_credentials").and_then(|v| v.as_str());
-            let backup_codes = tfa.get("backup_codes").and_then(|v| v.as_str());
+            let existing_2fa_enabled: bool = conn
+                .query_row(
+                    "SELECT enabled FROM two_factor_auth WHERE id = 1",
+                    [],
+                    |row| row.get::<_, i32>(0),
+                )
+                .map(|v| v != 0)
+                .unwrap_or(false);
+            if !existing_2fa_enabled {
+                let enabled = tfa.get("enabled").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+                let method = tfa.get("method").and_then(|v| v.as_str());
+                let totp_secret = tfa.get("totp_secret").and_then(|v| v.as_str());
+                let webauthn_creds = tfa.get("webauthn_credentials").and_then(|v| v.as_str());
+                let backup_codes = tfa.get("backup_codes").and_then(|v| v.as_str());
 
-            conn.execute(
-                "INSERT OR REPLACE INTO two_factor_auth (id, enabled, method, totp_secret, webauthn_credentials, backup_codes, updated_at)
-                 VALUES (1, ?1, ?2, ?3, ?4, ?5, datetime('now'))",
-                rusqlite::params![enabled, method, totp_secret, webauthn_creds, backup_codes],
-            ).ok();
+                conn.execute(
+                    "INSERT OR REPLACE INTO two_factor_auth (id, enabled, method, totp_secret, webauthn_credentials, backup_codes, updated_at)
+                     VALUES (1, ?1, ?2, ?3, ?4, ?5, datetime('now'))",
+                    rusqlite::params![enabled, method, totp_secret, webauthn_creds, backup_codes],
+                ).ok();
+            }
         }
     }
 
@@ -575,23 +698,6 @@ pub async fn import_data(app: AppHandle, data: String) -> Result<i32, String> {
 
     Ok(imported_count)
 }
-
-/// Blocked path prefixes — never allow writing to these locations even if the
-/// parent directory exists. This defends against XSS → IPC write-primitive abuse.
-const BLOCKED_PREFIXES: &[&str] = &[
-    ".ssh",
-    ".bashrc",
-    ".bash_profile",
-    ".zshrc",
-    ".profile",
-    ".config/autostart",
-    ".config/systemd",
-    "/etc/",
-    "/usr/",
-    "/bin/",
-    "/sbin/",
-    "/lib",
-];
 
 /// Write text to a file and verify it was written correctly.
 /// Used instead of the FS plugin which has scope restrictions on user-selected paths.
@@ -620,16 +726,31 @@ pub async fn write_text_file(
         return Err("Invalid path".to_string());
     };
 
+    // Block writes to sensitive system and shell-config paths using component-based
+    // matching so that ".ssh" in a directory name elsewhere does not false-match.
+    let blocked_by_component = canonical.components().any(|c| {
+        matches!(
+            c.as_os_str().to_str().unwrap_or(""),
+            ".ssh" | ".gnupg" | ".aws" | ".config"
+        )
+    });
+    // Also block absolute system path prefixes that must match from the root.
     let canonical_str = canonical.to_string_lossy().to_lowercase();
+    let blocked_by_prefix = ["/etc/", "/usr/", "/bin/", "/sbin/", "/lib"]
+        .iter()
+        .any(|p| canonical_str.starts_with(p));
+    // Block shell config dot-files by name (not directory components).
+    let blocked_by_filename = canonical
+        .file_name()
+        .and_then(|n| n.to_str())
+        .map(|n| matches!(n, ".bashrc" | ".bash_profile" | ".zshrc" | ".profile"))
+        .unwrap_or(false);
 
-    // Block writes to sensitive system and shell-config paths.
-    for blocked in BLOCKED_PREFIXES {
-        if canonical_str.contains(blocked) {
-            return Err(format!(
-                "Writing to '{}' is not permitted",
-                canonical.display()
-            ));
-        }
+    if blocked_by_component || blocked_by_prefix || blocked_by_filename {
+        return Err(format!(
+            "Writing to '{}' is not permitted",
+            canonical.display()
+        ));
     }
 
     let file_path = canonical.as_path();
@@ -672,4 +793,61 @@ pub async fn get_data_stats(app: AppHandle) -> Result<serde_json::Value, String>
         "totalEntries": total_entries,
         "averageMood": avg_mood,
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn decrypt_export_payload(envelope_json: &str, password: &str) -> Result<String, String> {
+        let envelope: serde_json::Value =
+            serde_json::from_str(envelope_json).map_err(|e| format!("parse envelope: {e}"))?;
+        let payload = envelope.get("payload").ok_or("missing payload field")?;
+        let ciphertext = general_purpose::STANDARD
+            .decode(payload["ciphertext"].as_str().ok_or("missing ciphertext")?)
+            .map_err(|e| format!("decode ciphertext: {e}"))?;
+        let nonce_bytes = general_purpose::STANDARD
+            .decode(payload["iv"].as_str().ok_or("missing iv")?)
+            .map_err(|e| format!("decode iv: {e}"))?;
+        let salt = general_purpose::STANDARD
+            .decode(payload["salt"].as_str().ok_or("missing salt")?)
+            .map_err(|e| format!("decode salt: {e}"))?;
+        if nonce_bytes.len() != EXPORT_NONCE_LEN {
+            return Err(format!("invalid nonce len: {}", nonce_bytes.len()));
+        }
+        let mut key = [0u8; 32];
+        pbkdf2_hmac::<Sha256>(password.as_bytes(), &salt, EXPORT_PBKDF2_ROUNDS, &mut key);
+        let cipher = Aes256Gcm::new_from_slice(&key).map_err(|e| format!("cipher: {e}"))?;
+        let nonce = Nonce::from_slice(&nonce_bytes);
+        let plaintext = cipher
+            .decrypt(nonce, ciphertext.as_ref())
+            .map_err(|_| "decryption failed — wrong password or corrupted data".to_string())?;
+        String::from_utf8(plaintext).map_err(|e| format!("utf8: {e}"))
+    }
+
+    #[test]
+    fn encrypt_decrypt_roundtrip() {
+        let plaintext = "SGVsbG8gV29ybGQ="; // base64 of "Hello World"
+        let password = "s3cr3t-p@ssw0rd!";
+        let encrypted = encrypt_export_payload(plaintext, password).unwrap();
+
+        let envelope: serde_json::Value = serde_json::from_str(&encrypted).unwrap();
+        assert_eq!(envelope["format"], "moodhaven-encrypted-v1");
+        let payload = &envelope["payload"];
+        assert!(payload["ciphertext"].is_string());
+        assert!(payload["iv"].is_string());
+        assert!(payload["salt"].is_string());
+        assert_eq!(payload["version"], 1);
+
+        let decrypted = decrypt_export_payload(&encrypted, password).unwrap();
+        assert_eq!(decrypted, plaintext);
+    }
+
+    #[test]
+    fn wrong_password_fails() {
+        let plaintext = "dGVzdA=="; // base64 of "test"
+        let encrypted = encrypt_export_payload(plaintext, "correct-password").unwrap();
+        let result = decrypt_export_payload(&encrypted, "wrong-password");
+        assert!(result.is_err(), "decryption with wrong password must fail");
+    }
 }

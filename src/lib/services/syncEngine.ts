@@ -42,6 +42,9 @@ import {
   decryptManifest,
   type SyncManifest,
 } from './syncManifest';
+import { forModule } from './logger';
+
+const log = forModule('sync');
 
 // ── WebDAV paths (relative to MoodHaven/ root) ────────────────────────────────
 
@@ -179,6 +182,7 @@ export async function syncWithWebDAV(
     );
     for (const id of tombstoneIds) {
       if (localMap.has(id)) {
+        log.warn('Sync: applying tombstone — deleting local entry', { id });
         await invoke('delete_journal_entry', { id }).catch(() => {});
         localMap.delete(id);
       }

@@ -465,3 +465,19 @@ pub fn get_password_hash(db: &Database) -> Result<Option<UserSettings>, String> 
         Err(e) => Err(format!("Query failed: {}", e)),
     }
 }
+
+/// Check whether 2FA is currently enabled in the database.
+/// Used by verify_password to populate TwoFactorPendingState.
+pub fn is_2fa_enabled(db: &Database) -> Result<bool, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let result = conn.query_row(
+        "SELECT enabled FROM two_factor_auth WHERE id = 1",
+        [],
+        |row| row.get::<_, i32>(0),
+    );
+    match result {
+        Ok(v) => Ok(v == 1),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(false),
+        Err(e) => Err(format!("is_2fa_enabled: {e}")),
+    }
+}

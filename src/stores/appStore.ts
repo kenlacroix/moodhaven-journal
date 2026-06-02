@@ -11,6 +11,7 @@ import {
   hasPassword,
   setupPassword,
   unlockJournal,
+  finalizeUnlock as finalizeUnlockService,
   lockJournal,
   devBypassUnlock,
 } from '../lib/services/journalService';
@@ -20,7 +21,12 @@ interface AppState {
   // Authentication
   isInitialized: boolean;
   isUnlocked: boolean;
-  /** Session password cached in-memory after unlock for auto-sync. Never persisted. */
+  /**
+   * Session password cached in-memory after unlock for auto-sync. Never persisted.
+   * SECURITY: prefer journalService.getSessionPassword() for new code — the module-level
+   * closure in journalService.ts is narrower in scope than this Zustand field which is
+   * readable by any component. Full migration tracked in SEC-017.
+   */
   sessionPassword: string | null;
 
   // Theme
@@ -30,6 +36,7 @@ interface AppState {
   checkInitialization: () => Promise<void>;
   initialize: (password: string) => Promise<boolean>;
   unlock: (password: string) => Promise<boolean>;
+  finalizeUnlock: (password: string) => Promise<boolean>;
   lock: () => void;
   setTheme: (theme: 'light' | 'dark' | 'system') => void;
 }
@@ -44,6 +51,9 @@ export const useAppStore = create<AppState>((set) => ({
   // Check if user has set up password
   checkInitialization: async () => {
     if (import.meta.env.DEV && (import.meta.env.VITE_DEV_MODE === 'bypass' || import.meta.env.VITE_DEV_MODE === 'seeded')) {
+      if (import.meta.env.PROD) {
+        throw new Error('devBypassUnlock is not available in production builds');
+      }
       devBypassUnlock('dev-bypass');
       set({ isInitialized: true, isUnlocked: true, sessionPassword: 'dev-bypass' });
       if (import.meta.env.VITE_DEV_MODE === 'seeded') {
@@ -84,6 +94,22 @@ export const useAppStore = create<AppState>((set) => ({
       return success;
     } catch (error) {
       logger.error('Failed to unlock:', { error: String(error) });
+      return false;
+    }
+  },
+
+  // Finalize an already-authenticated session (after 2FA or session bridge).
+  // Does NOT call verify_password — use this when the Rust TwoFactorPendingState
+  // is already fully authenticated and calling verify_password again would reset it.
+  finalizeUnlock: async (password: string) => {
+    try {
+      const success = await finalizeUnlockService(password);
+      if (success) {
+        set({ isUnlocked: true, sessionPassword: password });
+      }
+      return success;
+    } catch (error) {
+      logger.error('Failed to finalize unlock:', { error: String(error) });
       return false;
     }
   },

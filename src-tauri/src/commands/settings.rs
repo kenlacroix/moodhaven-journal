@@ -9,13 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::PoisonError;
 use tauri::State;
 
-fn require_unlocked(lock: &State<'_, AppLockState>) -> Result<(), String> {
-    if lock.is_locked() {
-        Err("Session is locked".to_string())
-    } else {
-        Ok(())
-    }
-}
+use super::require_unlocked;
 
 /// Settings stored in the database
 #[derive(Debug, Clone, Serialize, Deserialize)]

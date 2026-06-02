@@ -1,6 +1,6 @@
 # Tauri Command Reference
 
-> **Version:** v1.3.1.0 | **Total commands:** ~147
+> **Version:** v1.6.0.1 | **Total commands:** ~150
 >
 > This document lists all `#[tauri::command]` functions exposed by MoodHaven Journal's Rust backend.
 > Commands are registered in `src-tauri/src/lib.rs` and permitted in `src-tauri/capabilities/default.json`.
@@ -1879,6 +1879,54 @@ invoke('link_journal_entry_to_session', {
   sessionId: string,
 }) → Promise<void>
 ```
+
+---
+
+### `still_get_session_brief`
+
+Lightweight session metadata for the timeline badge hover popover. Called lazily on hover — not during timeline load. Requires unlock.
+
+```typescript
+invoke('still_get_session_brief', {
+  sessionId: string,
+}) → Promise<StillSessionBrief | null>
+```
+
+---
+
+### `still_get_journal_brief_for_session`
+
+Return the journal entry written after a given session, if any. Used by the session history card. Requires unlock.
+
+```typescript
+invoke('still_get_journal_brief_for_session', {
+  sessionId: string,
+}) → Promise<JournalBrief | null>
+```
+
+---
+
+### `still_get_wellbeing_context`
+
+Bundled wellbeing context for the morning WellbeingCard in WritingView. Single lock acquisition — all queries run under one mutex hold. Requires unlock.
+
+```typescript
+invoke('still_get_wellbeing_context') → Promise<WellbeingContext>
+```
+
+`WellbeingContext` includes recent StillHaven session data, last entry date, and streak info.
+
+---
+
+### `still_get_effect_stats`
+
+Per-protocol effect statistics: activation delta correlated with post-session journal mood. Powers the StillEffectCard in Session History. Requires unlock.
+
+```typescript
+invoke('still_get_effect_stats') → Promise<StillEffectStats>
+```
+
+`StillEffectStats`: `{ protocols: Array<{ protocol: string; avgDelta: number; sessionCount: number }> }`
 
 ---
 

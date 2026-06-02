@@ -55,9 +55,9 @@
 
 | Platform | Installer |
 |:---|:---|
-| Windows | `MoodHaven_1.3.1_x64-setup.exe` |
-| macOS | `MoodHaven_1.3.1_x64.dmg` |
-| Linux | `moodhaven_1.3.1_amd64.AppImage` or `.deb` |
+| Windows | `MoodHaven_1.6.0.1_x64-setup.exe` |
+| macOS | `MoodHaven_1.6.0.1_x64.dmg` |
+| Linux | `moodhaven_1.6.0.1_amd64.AppImage` or `.deb` |
 
 **Browser** — Run directly in your browser or self-host with the `dist-web/` build. No Rust or install required.
 
@@ -116,10 +116,10 @@ Grab the latest build from the [Releases](https://github.com/kenlacroix/moodhave
 
 | Platform | Installer | Minimum Version |
 |:---|:---|:---|
-| **Windows** | `MoodHaven_1.3.1_x64-setup.exe` | Windows 10 |
-| **macOS** | `MoodHaven_1.3.1_x64.dmg` | macOS 10.15 Catalina |
-| **Linux** | `moodhaven_1.3.1_amd64.AppImage` | Any modern distro |
-| **Linux (Debian)** | `moodhaven_1.3.1_amd64.deb` | Ubuntu 22.04+ |
+| **Windows** | `MoodHaven_1.6.0.1_x64-setup.exe` | Windows 10 |
+| **macOS** | `MoodHaven_1.6.0.1_x64.dmg` | macOS 10.15 Catalina |
+| **Linux** | `moodhaven_1.6.0.1_amd64.AppImage` | Any modern distro |
+| **Linux (Debian)** | `moodhaven_1.6.0.1_amd64.deb` | Ubuntu 22.04+ |
 | **Web** | `npm run build:web` → serve `dist-web/` | Any modern browser |
 
 ### First Launch
@@ -340,7 +340,7 @@ MoodHaven Journal v1.0 is stable and used in daily production. If you encounter 
 - **Write entries and use Books** — Does auto-save, mood detection, and templates behave as expected?
 - **Test on your OS** — Especially Windows and macOS (primary dev is on Linux)
 - **Exercise peer sync** — If you have two machines on the same LAN, try pairing and syncing
-- **StillHaven** — Enable in Settings → Health; run a session and check the journal handoff
+- **StillHaven** — Enable in Settings → Health; run a session (try Forest/Sky environments), check journal handoff and Wrist Loop banner
 
 **Wear OS companion *(needs Wear OS 3+ hardware)*:**
 - **Record a voice memo** — tap to record, stop, confirm it arrives and transcribes on the desktop
@@ -396,7 +396,10 @@ See [CLAUDE.md](CLAUDE.md) for architecture, security guidelines, and convention
 
 ## Recent Changes
 
-**v1.3.1.0** — Wrist Loop foundation: watch can now send a `still_trigger` signal to request a StillHaven session start on desktop; `WristLoopBanner` renders a dismissable toast. Time of Day Insight card and Writing Momentum card added to the Insights view (no AI required). ACL fix: four StillHaven commands were silently unreachable at runtime. 1245 tests.
+**v1.6.0.1** — Forest and Sky rendering environments for StillHaven sessions. `EnvironmentPicker` lets users select the visual backdrop before starting a session. Patch fixes an environment-state regression from v1.6.0. 1283 tests.
+**v1.5.0** — Wrist Loop: watch sends a `still_trigger` signal to request a StillHaven session; `WristLoopBanner` renders a dismissable toast on desktop; `still_signal_links` table records signal→session provenance. Time of Day Insight card and Writing Momentum card added to the Insights view (no AI required). `useWristLoop` hook. 1245 tests.
+**v1.4.0** — StillHaven Effect: correlation card shows per-protocol activation delta vs. post-session journal mood; protocol recommendations surface in Session History. New `still_get_effect_stats` command. 1201 tests.
+**v1.3.1.0** — ACL hardening: four StillHaven commands were silently unreachable at runtime; 2FA backend enforcement; backup code KDF upgrade. 1185 tests.
 **v1.3.0** — Word count tracking: `word_count` column added to journal entries, displayed below tags in Timeline. Session linkage: entries can be linked to StillHaven sessions; WellbeingCard morning context card shows once per day. Three new StillHaven commands (`still_get_wellbeing_context`, `still_get_session_brief`, `still_get_journal_brief_for_session`). 1165 tests.
 **v1.2.1** — Security hardening: TOTP secrets encrypted at rest (AES-256-GCM, amber migration banner for v1.1.x users), path traversal fix in media storage, writer window scoped to ~30 commands only, backend rate limiting on `verify_password` (5 failures → 30s lockout), settings sync allowlist, full-restore SHA-256 integrity check, CSP narrowed.
 **v1.2.0** — Voice memo draft pipeline: watch recordings surface as reviewable draft cards in the Timeline with transcription preview, inferred mood, biometric context, and hashtag suggestions. Full TipTap editor to edit before publishing. Writing appearance drawer: inline font, size, line height, paragraph spacing, background tint, and accessibility options (high contrast, reduced motion, dyslexia profile) in WritingView. Wear OS Phase B brand sweep (60+ hex colors to @color/ references), Phase C splash screen, Phase 2e/5a polish (shortcut row, ambient mood wash, steps + activity in HealthSnapshot). Codebase cleanup: 5 large components split, dead code removed. 1143 tests.

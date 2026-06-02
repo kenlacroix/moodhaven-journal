@@ -1,6 +1,6 @@
 # MoodHaven Journal — Architecture Reference
 
-> **Version:** v1.3.0 | **Last Updated:** 2026-05-31
+> **Version:** v1.6.0.1 | **Last Updated:** 2026-06-02
 
 ---
 
@@ -32,7 +32,7 @@ MoodHaven Journal is a **local-first desktop application** built on Tauri v2 (Ru
 │  Only ciphertext crosses the Tauri IPC boundary                      │
 └───────────────────────────┬─────────────────────────────────────────┘
                             │  Tauri IPC (invoke / emit)
-                            │  ~132 Tauri commands
+                            │  ~150 Tauri commands
 ┌───────────────────────────▼─────────────────────────────────────────┐
 │                        Rust Backend (Tauri)                          │
 │  Command handlers · Database (rusqlite) · Peer sync engine           │
@@ -66,7 +66,7 @@ MoodHaven Journal is a **local-first desktop application** built on Tauri v2 (Ru
 | 2FA | totp-rs + native CTAP2/HID | TOTP + hardware keys |
 | Charts | Custom SVG | No charting library |
 | Logging | tauri-plugin-log + `src/lib/services/logger.ts` | Rotating file (prod), stderr (dev); `set_log_level` at runtime |
-| Testing | Vitest + Testing Library | 743 tests |
+| Testing | Vitest + Testing Library | 1,283 tests |
 | Build | Vite 8 + Tauri CLI | |
 
 ---
@@ -108,7 +108,7 @@ moodbloom-tauri/
 ├── src-tauri/                  # Rust backend
 │   ├── src/
 │   │   ├── lib.rs              # Tauri builder + command registration
-│   │   ├── commands/           # ~21 command modules (~132 commands)
+│   │   ├── commands/           # ~21 command modules (~150 commands)
 │   │   ├── db/
 │   │   │   └── mod.rs          # SQLite schema, migrations, Database struct
 │   │   └── crypto/             # Rust-side crypto helpers (if any)
@@ -236,6 +236,12 @@ signal_entry_links (
   signal_id    TEXT REFERENCES signals(id) ON DELETE CASCADE,
   entry_id     TEXT REFERENCES journal_entries(id) ON DELETE CASCADE,
   PRIMARY KEY (signal_id, entry_id)
+)
+
+still_signal_links (                -- v1.5.0 Wrist Loop
+  session_id   TEXT NOT NULL REFERENCES still_sessions(id) ON DELETE CASCADE,
+  signal_id    TEXT NOT NULL REFERENCES signals(id) ON DELETE CASCADE,
+  PRIMARY KEY (session_id, signal_id)
 )
 ```
 

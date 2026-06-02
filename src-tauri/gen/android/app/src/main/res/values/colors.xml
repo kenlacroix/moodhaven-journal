@@ -1,10 +1,49 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  MoodHaven brand colors for the Android phone companion.
+
+  Mirrors the desktop app's primary violet scale and the website's
+  warm cream / accent orange. See DESIGN.md at the repo root for the
+  canonical brand definition.
+
+  This file serves the Tauri WebView host — the WebView renders
+  the full journal UI. These colors appear during splash and in any
+  native chrome (status bar, nav bar, dialogs).
+-->
 <resources>
-    <color name="purple_200">#FFBB86FC</color>
-    <color name="purple_500">#FF6200EE</color>
-    <color name="purple_700">#FF3700B3</color>
-    <color name="teal_200">#FF03DAC5</color>
-    <color name="teal_700">#FF018786</color>
-    <color name="black">#FF000000</color>
-    <color name="white">#FFFFFFFF</color>
+
+  <!-- Primary (violet) scale — matches tailwind.config.js primary tokens -->
+  <color name="brand_primary_50">#F5F3FF</color>
+  <color name="brand_primary_100">#EDE9FE</color>
+  <color name="brand_primary_200">#DDD6FE</color>
+  <color name="brand_primary_300">#C4B5FD</color>
+  <color name="brand_primary_400">#A78BFA</color>
+  <color name="brand_primary_500">#8B5CF6</color>
+  <color name="brand_primary_600">#7C3AED</color>
+  <color name="brand_primary_700">#6D28D9</color>
+  <color name="brand_primary_800">#5B21B6</color>
+  <color name="brand_primary_900">#4C1D95</color>
+  <color name="brand_primary_950">#2E1065</color>
+
+  <!-- Accent (CTA orange) — matches website -->
+  <color name="brand_accent_cta">#F28C38</color>
+
+  <!-- Warm cream (website page background) — light-mode surface/splash -->
+  <color name="brand_cream">#F3F0EA</color>
+
+  <!-- Mood scale (matches DESIGN.md mood tokens) -->
+  <color name="mood_struggling">#F43F5E</color>
+  <color name="mood_low">#FB923C</color>
+  <color name="mood_okay">#FBBF24</color>
+  <color name="mood_good">#A3E635</color>
+  <color name="mood_great">#10B981</color>
+
+  <!-- Phone light-mode surfaces -->
+  <color name="phone_surface">#FFFFFF</color>
+  <color name="phone_on_surface">#1C1B1F</color>
+
+  <!-- Phone dark-mode surfaces (used in values-night/themes.xml) -->
+  <color name="phone_surface_dark">#1A1A2E</color>
+  <color name="phone_on_surface_dark">#E6E1E5</color>
+
 </resources>

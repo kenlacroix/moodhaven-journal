@@ -289,28 +289,28 @@ export default function DownloadClient({ release }: { release: LatestRelease | n
               </p>
             </div>
           ) : (
-            /* No matching asset — no release published yet */
+            /* release is null (fetch failed) or no matching asset for this platform */
             <div className="text-center">
-              <p className="text-sm text-neutral-600 mb-3">
-                No installer available yet for {OS_LABELS[os]}.
-              </p>
               <a
-                href="https://journal.moodhaven.app"
+                href="https://github.com/kenlacroix/moodhaven-journal/releases/latest"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="inline-block rounded-full bg-accent-cta text-neutral-900 px-6 py-4 text-sm font-semibold shadow transition-all duration-200 ease-out hover:bg-accent-cta/90 hover:scale-105 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-cta/60"
               >
-                Use the web app in the meantime <span aria-hidden="true">→</span>
+                Download from GitHub Releases <span aria-hidden="true">↗</span>
               </a>
               <p className="mt-2 text-xs text-neutral-500">
+                Find the installer for {OS_LABELS[os]} in the assets list.
+              </p>
+              <p className="mt-1 text-xs text-neutral-400">
                 Or{" "}
                 <a
-                  href="https://github.com/kenlacroix/moodhaven-journal/releases"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="underline hover:text-neutral-700"
+                  href="https://journal.moodhaven.app"
+                  className="underline hover:text-neutral-600"
                 >
-                  watch GitHub releases
+                  use the web app
                 </a>{" "}
-                to be notified when a build ships.
+                — no install needed.
               </p>
             </div>
           )}
@@ -377,16 +377,16 @@ export default function DownloadClient({ release }: { release: LatestRelease | n
                       >
                         Download
                       </a>
-                    ) : release ? (
+                    ) : (
                       <a
                         href="https://github.com/kenlacroix/moodhaven-journal/releases/latest"
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="mt-auto text-[11px] font-medium text-neutral-400 underline hover:text-neutral-600 focus-visible:ring-1 focus-visible:ring-neutral-400 rounded"
+                        className="mt-auto text-[11px] font-medium text-primary-700 underline hover:text-primary-900 focus-visible:ring-1 focus-visible:ring-primary-700 rounded"
                       >
-                        GitHub <span aria-hidden="true">↗</span>
+                        GitHub Releases <span aria-hidden="true">↗</span>
                       </a>
-                    ) : null}
+                    )}
                   </div>
                 </AnimatedReveal>
               );

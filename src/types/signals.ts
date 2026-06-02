@@ -27,6 +27,7 @@ export type SignalType =
   | 'voice_memo'      // short audio snippet (references an attachment id)
   | 'health_snapshot' // biometric snapshot (sleep, HRV, readiness, steps)
   | 'location_tag'    // voluntary location tag (city-level, never coordinates)
+  | 'still_trigger'   // watch tap requesting a StillHaven session start on desktop
   | 'custom';         // extensible — future watch faces / widgets
 
 // ── Signal payload shapes (before encryption) ────────────────────────────────
@@ -64,12 +65,18 @@ export interface LocationTagPayload {
   timezone?: string;
 }
 
+export interface StillTriggerPayload {
+  protocol?: 'general_activation' | 'fake_danger';
+  note?: string;
+}
+
 export type SignalPayload =
   | MoodTapPayload
   | CheckInPayload
   | VoiceMemoPayload
   | HealthSnapshotPayload
   | LocationTagPayload
+  | StillTriggerPayload
   | Record<string, unknown>; // custom / future types
 
 // ── Signal as returned by the Rust layer ─────────────────────────────────────

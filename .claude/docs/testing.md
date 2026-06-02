@@ -72,13 +72,18 @@ For heavy crypto files, use Node environment: `// @vitest-environment node` at t
 - E2E, visual regression (future work)
 - React hooks in isolation — test through components
 
-## Current Coverage (as of v1.2.0)
+## Current Coverage (as of v1.3.1.0)
 | Test File | Tests |
 |-----------|-------|
 | `lib/backend/browser.test.ts` | 43 |
 | `lib/backend/browser-invoke.test.ts` | 5 |
 | `components/ai/AICardWrapper.test.tsx` | 8 |
+| `components/ai/GratitudeStreakCard.test.tsx` | 8 |
+| `components/ai/MoodWeatherCard.test.tsx` | 6 |
+| `components/ai/TimeOfDayInsightCard.test.tsx` | 8 |
+| `components/ai/WeeklyReflectionCard.test.tsx` | 7 |
 | `components/ai/WeeklyStreakCard.test.tsx` | 5 |
+| `components/ai/WritingMomentumCard.test.tsx` | 9 |
 | `components/analytics/MoodDistributionChart.test.tsx` | 3 |
 | `components/calendar/CalendarDay.test.tsx` | 3 |
 | `components/ErrorBoundary.test.tsx` | 3 |
@@ -106,10 +111,9 @@ For heavy crypto files, use Node environment: `// @vitest-environment node` at t
 | `hooks/useJournalPrompts.test.ts` | 26 |
 | `hooks/useOuraContext.test.ts` | 62 |
 | `hooks/useSpeechToText.test.ts` | 7 |
-| `hooks/useStillBioFeedback.test.ts` | 8 |
-| `hooks/useWellbeingContext.test.ts` | 11 |
 | `hooks/useVoiceMemoDrafts.test.ts` | 12 |
 | `hooks/useWearVoiceMemos.test.ts` | 9 |
+| `hooks/useWristLoop.test.ts` | 6 |
 | `lib/services/aiService.test.ts` | 28 |
 | `lib/services/analyticsService.test.ts` | 12 |
 | `lib/services/cloudSyncService.test.ts` | 13 |
@@ -125,6 +129,7 @@ For heavy crypto files, use Node environment: `// @vitest-environment node` at t
 | `lib/services/settingsService.test.ts` | 10 |
 | `lib/services/timeCapsuleService.test.ts` | 6 |
 | `lib/services/voiceMemoService.test.ts` | 14 |
+| `lib/stillService.test.ts` | 16 |
 | `lib/services/webdavService.test.ts` | 34 |
 | `lib/utils/chartUtils.test.ts` | 27 |
 | `lib/utils/dateUtils.test.ts` | 61 |
@@ -132,6 +137,7 @@ For heavy crypto files, use Node environment: `// @vitest-environment node` at t
 | `lib/utils/metadataExtractor.test.ts` | 84 |
 | `lib/utils/transcriptFormatter.test.ts` | 18 |
 | `lib/utils/writingUtils.test.ts` | 10 |
+| `components/stillhaven/WristLoopBanner.test.tsx` | 8 |
 | `modules/stillhaven/engine/bioMapping.test.ts` | 20 |
 | `modules/stillhaven/handoff.test.ts` | 16 |
 | `modules/stillhaven/StillhavenConsentModal.test.tsx` | 12 |
@@ -139,8 +145,10 @@ For heavy crypto files, use Node environment: `// @vitest-environment node` at t
 | `modules/stillhaven/components/ActivationDial.test.tsx` | 6 |
 | `modules/stillhaven/components/HrvInput.test.tsx` | 5 |
 | `modules/stillhaven/components/ProtocolPicker.test.tsx` | 7 |
-| `modules/stillhaven/components/StillEffectCard.test.tsx` | 12 |
 | `modules/stillhaven/components/WelcomeCard.test.tsx` | 5 |
+| `pages/CalendarPage.test.tsx` | 7 |
+| `pages/InsightsView.test.tsx` | 12 |
+| `pages/OnThisDayView.test.tsx` | 6 |
 | `pages/TimelineView.test.tsx` | 9 |
 | `stores/appStore.test.ts` | 18 |
 | `stores/booksStore.test.ts` | 25 |
@@ -148,4 +156,4 @@ For heavy crypto files, use Node environment: `// @vitest-environment node` at t
 | `stores/settingsStore.test.ts` | 18 |
 | `stores/stillStore.test.ts` | 31 |
 | `types/writingAppearance.test.ts` | 4 |
-| **Total** | **1177 (71 files)** |
+| **Total** | **1245 (82 files)** |

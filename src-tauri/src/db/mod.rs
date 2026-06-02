@@ -206,6 +206,16 @@ impl Database {
         )
         .map_err(|e| format!("Failed to create reflection_signals table: {}", e))?;
 
+        // still_signal_links — associates a still_trigger signal with the session it spawned (v1.5.0)
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS still_signal_links (
+                session_id TEXT NOT NULL REFERENCES still_sessions(id) ON DELETE CASCADE,
+                signal_id  TEXT NOT NULL REFERENCES signals(id) ON DELETE CASCADE,
+                PRIMARY KEY (session_id, signal_id)
+            );",
+        )
+        .map_err(|e| format!("Failed to create still_signal_links table: {}", e))?;
+
         // Extend entry_media with optional signal_id (nullable, additive)
         let _ = conn.execute(
             "ALTER TABLE entry_media ADD COLUMN signal_id TEXT REFERENCES signals(id)",

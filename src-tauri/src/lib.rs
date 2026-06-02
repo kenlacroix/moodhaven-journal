@@ -641,6 +641,7 @@ pub fn run() {
             commands::still_get_journal_brief_for_session,
             commands::still_get_wellbeing_context,
             commands::still_get_effect_stats,
+            commands::still_link_signal_to_session,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

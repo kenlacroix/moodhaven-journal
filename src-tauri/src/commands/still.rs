@@ -180,6 +180,21 @@ pub fn still_get_effect_stats(
     db::get_effect_stats(&db)
 }
 
+// ── v1.5.0 Wrist Loop signal link ─────────────────────────────────────────────
+
+/// Record that a still_trigger signal spawned this session (v1.5.0 Wrist Loop).
+/// Called after still_create_session succeeds when the session originated from the watch.
+#[tauri::command]
+pub fn still_link_signal_to_session(
+    db: State<Database>,
+    lock: State<'_, AppLockState>,
+    session_id: String,
+    signal_id: String,
+) -> Result<(), String> {
+    require_unlocked(&lock)?;
+    db::still_link_signal_to_session(&db, &session_id, &signal_id)
+}
+
 #[cfg(test)]
 mod tests {
     // Validate that the allowlists used in still_create_session match all values

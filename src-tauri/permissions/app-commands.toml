@@ -188,6 +188,8 @@ commands.allow = [
   "still_get_wellbeing_context",
   # StillHaven v1.4.0 effect stats
   "still_get_effect_stats",
+  # StillHaven v1.5.0 wrist-loop signal link
+  "still_link_signal_to_session",
   # Journal ↔ session link
   "link_journal_entry_to_session",
 ]

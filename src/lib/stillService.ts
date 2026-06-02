@@ -139,3 +139,12 @@ export interface StillEffectStats {
 export async function stillGetEffectStats(): Promise<StillEffectStats> {
   return invoke('still_get_effect_stats');
 }
+
+// ── v1.5.0 Wrist Loop signal link ─────────────────────────────────────────────
+
+export async function stillLinkSignalToSession(
+  sessionId: string,
+  signalId: string,
+): Promise<void> {
+  return invoke('still_link_signal_to_session', { sessionId, signalId });
+}

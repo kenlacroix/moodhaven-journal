@@ -1,6 +1,6 @@
 # Tauri Command Reference
 
-> **Version:** v1.3.0 | **Total commands:** ~150
+> **Version:** v1.3.1.0 | **Total commands:** ~147
 >
 > This document lists all `#[tauri::command]` functions exposed by MoodHaven Journal's Rust backend.
 > Commands are registered in `src-tauri/src/lib.rs` and permitted in `src-tauri/capabilities/default.json`.
@@ -1882,72 +1882,15 @@ invoke('link_journal_entry_to_session', {
 
 ---
 
-### `still_get_session_brief`
+### `still_link_signal_to_session`
 
-Get a compact summary of a session for the Timeline session badge — protocol, duration, and pre/post activation values without loading full sample rows.
+Record that a `still_trigger` signal (sent from the Wear OS watch via the Wrist Loop feature) spawned a specific StillHaven session. Inserts a row into `still_signal_links`. Used by `useWristLoop` after the user accepts the "Start StillHaven" banner.
 
 ```typescript
-invoke('still_get_session_brief', {
+invoke('still_link_signal_to_session', {
+  signalId: string,
   sessionId: string,
-}) → Promise<{
-  protocol: string,
-  duration_seconds: number,
-  pre_activation: number | null,
-  post_activation: number | null,
-} | null>
-```
-
----
-
-### `still_get_journal_brief_for_session`
-
-Get the journal entry linked to a specific session — entry ID, mood, word count, and creation timestamp. Returns `null` if no entry has been linked yet.
-
-```typescript
-invoke('still_get_journal_brief_for_session', {
-  sessionId: string,
-}) → Promise<{
-  entry_id: string,
-  mood: number,
-  word_count: number | null,
-  created_at: string,
-} | null>
-```
-
----
-
-### `still_get_wellbeing_context`
-
-Get the morning wellbeing context shown in `WellbeingCard`: Oura readiness for today, days since the last StillHaven session, yesterday's mood average and entry count, and the current journaling streak. Requires unlock.
-
-```typescript
-invoke('still_get_wellbeing_context') → Promise<{
-  oura_readiness_today: number | null,
-  last_still_session_days_ago: number | null,
-  yesterday_mood_avg: number | null,
-  yesterday_entry_count: number,
-  streak_days: number,
-}>
-```
-
----
-
-### `still_get_effect_stats`
-
-Per-protocol effect statistics: average activation delta (pre − post, positive = improvement) and average post-session journal mood, grouped by protocol. Also returns the best-performing protocol (requires ≥ 2 qualifying sessions) and overall stats. Powers `StillEffectCard` in Session History. Requires unlock.
-
-```typescript
-invoke('still_get_effect_stats') → Promise<{
-  per_protocol: Array<{
-    protocol: string,
-    session_count: number,
-    avg_activation_delta: number | null,
-    avg_mood_after: number | null,
-  }>,
-  best_protocol: string | null,
-  sessions_with_data: number,
-  avg_mood_after: number | null,
-}>
+}) → Promise<void>
 ```
 
 ---

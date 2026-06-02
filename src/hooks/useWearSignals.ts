@@ -67,6 +67,8 @@ interface UseWearSignalsOptions {
   onSignal?: (signal: Signal) => void;
   /** Called after a voice memo is successfully stored */
   onVoiceMemo?: (memo: VoiceMemo) => void;
+  /** Called when the watch requests a StillHaven grounding session start */
+  onStillhavenStart?: () => void;
   /** Called on error (validation failure, encryption error, etc.) */
   onError?: (error: string) => void;
   /** If false, the listener is not attached (e.g., while locked) */
@@ -79,15 +81,18 @@ export function useWearSignals({
   password,
   onSignal,
   onVoiceMemo,
+  onStillhavenStart,
   onError,
   enabled = true,
 }: UseWearSignalsOptions) {
   const onSignalRef = useRef(onSignal);
   const onVoiceMemoRef = useRef(onVoiceMemo);
+  const onStillhavenStartRef = useRef(onStillhavenStart);
   const onErrorRef = useRef(onError);
 
   useEffect(() => { onSignalRef.current = onSignal; }, [onSignal]);
   useEffect(() => { onVoiceMemoRef.current = onVoiceMemo; }, [onVoiceMemo]);
+  useEffect(() => { onStillhavenStartRef.current = onStillhavenStart; }, [onStillhavenStart]);
   useEffect(() => { onErrorRef.current = onError; }, [onError]);
 
   // ── "wear://signal" event listener ─────────────────────────────────────────
@@ -97,8 +102,17 @@ export function useWearSignals({
 
     let unlisten: UnlistenFn | null = null;
     let unlistenMemo: UnlistenFn | null = null;
+    let unlistenStillhaven: UnlistenFn | null = null;
+    let cancelled = false;
 
     (async () => {
+      // StillHaven start listener
+      const fn = await listen('wear://stillhaven_start', () => {
+        onStillhavenStartRef.current?.();
+      });
+      if (cancelled) { fn(); return; }
+      unlistenStillhaven = fn;
+
       // Signal listener
       unlisten = await listen<WearSignalEvent>('wear://signal', async (event) => {
         const { id, timestamp, type, source, payload } = event.payload;
@@ -164,8 +178,10 @@ export function useWearSignals({
     })();
 
     return () => {
+      cancelled = true;
       unlisten?.();
       unlistenMemo?.();
+      unlistenStillhaven?.();
     };
   }, [enabled, password]);
 

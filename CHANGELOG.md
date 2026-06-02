@@ -5,6 +5,20 @@ All notable changes to MoodHaven Journal are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.5.0] — 2026-06-02
+
+### Added
+- **Wrist Loop foundation** — watch can now send a `still_trigger` signal to request a StillHaven protocol start on desktop. New `useWristLoop` hook manages pending-trigger state; `WristLoopBanner` renders a dismissable toast with "Start StillHaven" / "Not now" actions. Signal-to-session links stored in new `still_signal_links` table via `still_link_signal_to_session` Rust command.
+- **Time of Day Insight card** — shows which time of day you write most with a slot bar and streak message. Displayed in the Insights view when local metadata is ready, no AI required.
+- **Writing Momentum card** — shows your journaling cadence ("On a roll", "Building momentum", "Getting started", "Just warming up") with a weekly goal progress bar. Displayed alongside the Time of Day card.
+- **68 new tests** — page-level coverage for `CalendarPage`, `InsightsView`, `OnThisDayView`; component coverage for `GratitudeStreakCard`, `WeeklyReflectionCard`, `MoodWeatherCard`, `WristLoopBanner`, `TimeOfDayInsightCard`, `WritingMomentumCard`; hook coverage for `useWristLoop`; service coverage for `stillLinkSignalToSession`.
+
+### Fixed
+- `app-commands.toml` — `still_get_session_brief`, `still_get_journal_brief_for_session`, `still_get_wellbeing_context`, and `still_link_signal_to_session` were missing from the Tauri ACL; all four commands were silently unreachable at runtime.
+- `WritingMomentumCard` — goal bar no longer produces `Infinity%` when `weeklyGoal` is 0; denominator is now `Math.max(1, weeklyGoal)`.
+
+---
+
 ## [1.4.0] — 2026-05-31
 
 ### Added

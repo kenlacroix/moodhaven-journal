@@ -5,6 +5,13 @@ All notable changes to MoodHaven Journal are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.6.0.1] — 2026-06-02
+
+### Fixed
+- CI: move `still_link_signal_to_session` before `#[cfg(test)] mod tests` in `db/still.rs` — Clippy 1.96 `items_after_test_module` lint caused build failures on all 3 platforms after the v1.5.0/v1.6.0 rebase merge.
+
+---
+
 ## [1.6.0] — 2026-06-02
 
 ### Added

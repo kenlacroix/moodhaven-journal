@@ -392,24 +392,14 @@ jobs:
           # Comma-join, then pretty-print with jq for safety
           ASSETS_RAW="[$(printf '%s\n' "${ASSETS[@]}" | paste -sd ',')]"
 
-          python3 - <<PYEOF
-import json, sys
-tag = "$TAG"
-version = "$VERSION"
-repo = "${{ github.repository }}"
-published_at = "$PUBLISHED_AT"
-assets = json.loads("""${ASSETS_RAW}""")
-manifest = {
-  "version": version,
-  "releaseUrl": f"https://github.com/{repo}/releases/tag/{tag}",
-  "publishedAt": published_at,
-  "assets": assets,
-}
-with open("latest-release.json", "w") as f:
-    json.dump(manifest, f, indent=2)
-    f.write("\n")
-print(f"Generated latest-release.json with {len(assets)} assets")
-PYEOF
+          jq -n \
+            --arg version "$VERSION" \
+            --arg releaseUrl "https://github.com/${{ github.repository }}/releases/tag/$TAG" \
+            --arg publishedAt "$PUBLISHED_AT" \
+            --argjson assets "$ASSETS_RAW" \
+            '{ version: $version, releaseUrl: $releaseUrl, publishedAt: $publishedAt, assets: $assets }' \
+            > latest-release.json
+          echo "Generated latest-release.json with $(jq 'length' <<< "$ASSETS_RAW") assets"
 
           gh release upload "$TAG" latest-release.json --clobber
 

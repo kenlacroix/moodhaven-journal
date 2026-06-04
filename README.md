@@ -205,6 +205,8 @@ Encryption Key (256-bit, never stored)
 
 Full security model: [SECURITY.md](SECURITY.md)
 
+MoodHaven Journal is an indie project built and maintained by one person. The cryptographic primitives (AES-256-GCM, PBKDF2, Ed25519) are standard and auditable; no independent third-party security audit has been conducted.
+
 ---
 
 ## Local Peer Sync

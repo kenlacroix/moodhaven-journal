@@ -44,7 +44,7 @@ TOTP backup codes are stored as SHA-256 hashes — the plaintext codes are shown
 
 ### Development Model
 
-This codebase is developed with significant AI assistance (Claude Code). The cryptographic primitives (AES-256-GCM, PBKDF2, Ed25519, X25519 ECDH) are standard and correctly parameterised. The codebase has undergone internal security review but **has not been audited by an independent third-party security firm**. We invite security researchers to review the code and report findings via GitHub Security Advisories. Treat the "you can read and audit it" invitation in our documentation as "the source is available for review", not as an assurance that the code has been professionally audited.
+MoodHaven Journal is built and maintained by a solo indie developer. The security model relies on established cryptographic primitives — AES-256-GCM, PBKDF2, Ed25519 — not proprietary systems. The codebase has **not been audited by an independent third-party security firm**. Security researchers are welcome to review the source and report findings via GitHub Security Advisories.
 
 ---
 

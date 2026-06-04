@@ -336,7 +336,8 @@ fn read_request_body(stream: &mut std::net::TcpStream) -> Option<serde_json::Val
         }
     }
 
-    if content_length == 0 {
+    const MAX_BODY: usize = 1024 * 1024; // 1 MB
+    if content_length == 0 || content_length > MAX_BODY {
         return None;
     }
 

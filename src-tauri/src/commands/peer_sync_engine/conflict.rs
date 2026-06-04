@@ -7,6 +7,23 @@ use crate::db::JournalEntryRow;
 
 use super::protocol::{SyncBookRow, SyncMeta, SyncSignalRow};
 
+// Maximum seconds a peer's `updated_at` may be ahead of local clock.
+const MAX_FUTURE_SECS: i64 = 10;
+
+/// Parse and validate a peer-supplied timestamp. Returns Err if the value cannot
+/// be parsed as RFC 3339 or is more than MAX_FUTURE_SECS ahead of now — both of
+/// which are signs of a malformed or malicious payload.
+fn parse_peer_timestamp(ts: &str) -> Result<chrono::DateTime<chrono::Utc>, String> {
+    let dt = chrono::DateTime::parse_from_rfc3339(ts)
+        .map(|dt| dt.with_timezone(&chrono::Utc))
+        .map_err(|_| format!("invalid timestamp: {ts:?}"))?;
+    let limit = chrono::Utc::now() + chrono::TimeDelta::seconds(MAX_FUTURE_SECS);
+    if dt > limit {
+        return Err(format!("timestamp too far in future: {ts:?}"));
+    }
+    Ok(dt)
+}
+
 // ── Manifest helpers ──────────────────────────────────────────────────────────
 
 pub fn db_get_entries_manifest(conn: &Connection) -> Result<Vec<SyncMeta>, String> {
@@ -218,6 +235,8 @@ pub fn db_get_setting_for_sync(
 // ── LWW upserts ───────────────────────────────────────────────────────────────
 
 pub fn db_upsert_book(conn: &Connection, row: &SyncBookRow) -> Result<bool, String> {
+    let remote_ts = parse_peer_timestamp(&row.updated_at)?;
+
     let existing: Option<String> = conn
         .query_row(
             "SELECT COALESCE(updated_at, created_at) FROM books WHERE id = ?1",
@@ -240,7 +259,9 @@ pub fn db_upsert_book(conn: &Connection, row: &SyncBookRow) -> Result<bool, Stri
             .map_err(|e| format!("insert book: {e}"))?;
             Ok(true)
         }
-        Some(ref local) if row.updated_at.as_str() > local.as_str() => {
+        Some(ref local) if {
+            parse_peer_timestamp(local).map(|local_ts| remote_ts > local_ts).unwrap_or(false)
+        } => {
             conn.execute(
                 "UPDATE books \
                  SET name = ?2, emoji = ?3, color = ?4, sort_order = ?5, \
@@ -342,11 +363,15 @@ pub fn db_upsert_setting(
         );
         return Ok(false);
     }
+    let remote_ts = parse_peer_timestamp(remote_updated_at)?;
     let local = db_get_setting_for_sync(conn, key)?;
     let new_value = match &local {
         None => remote_value.to_string(),
         Some((local_value, local_updated_at)) => {
-            if remote_updated_at <= local_updated_at.as_str() {
+            let local_is_newer = parse_peer_timestamp(local_updated_at)
+                .map(|local_ts| local_ts >= remote_ts)
+                .unwrap_or(true);
+            if local_is_newer {
                 return Ok(false); // local is same age or newer
             }
             if key == "app_settings" {
@@ -407,6 +432,11 @@ pub fn db_upsert_entry(conn: &Connection, row: &JournalEntryRow) -> Result<bool,
         .ok_or("encrypted_content is None — cannot sync sealed entry")?;
     let ec_json = serde_json::to_string(ec).map_err(|e| format!("serialize ec: {e}"))?;
 
+    // Validate and parse incoming timestamp before any LWW comparison.
+    // Rejects date-only strings ("9999-12-31") and far-future timestamps that
+    // would permanently win every conflict, preventing LWW bypass attacks.
+    let remote_ts = parse_peer_timestamp(&row.updated_at)?;
+
     // Check existing updated_at
     let existing: Option<String> = conn
         .query_row(
@@ -445,7 +475,10 @@ pub fn db_upsert_entry(conn: &Connection, row: &JournalEntryRow) -> Result<bool,
             db_upsert_tags(conn, &row.id, &row.tags)?;
             Ok(true)
         }
-        Some(ref local) if row.updated_at.as_str() > local.as_str() => {
+        Some(ref local) if {
+            // Parse local timestamp for comparison; fall back to "remote loses" on parse error.
+            parse_peer_timestamp(local).map(|local_ts| remote_ts > local_ts).unwrap_or(false)
+        } => {
             // UPDATE — set updated_at explicitly so the trigger (WHEN NEW.updated_at = OLD.updated_at) doesn't fire
             conn.execute(
                 "UPDATE journal_entries \

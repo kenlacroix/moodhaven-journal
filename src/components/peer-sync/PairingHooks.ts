@@ -5,13 +5,18 @@ export function useQRCode(payload: string | null): string | null {
 
   useEffect(() => {
     if (!payload) { setDataUrl(null); return; }
-    import('qrcode').then((QRCode) => {
-      QRCode.toDataURL(payload, {
-        width: 200,
-        margin: 2,
-        color: { dark: '#4c1d95', light: '#faf5ff' },
-      }).then(setDataUrl);
-    });
+    import('qrcode')
+      .then((QRCode) =>
+        QRCode.toDataURL(payload, {
+          width: 200,
+          margin: 2,
+          color: { dark: '#4c1d95', light: '#faf5ff' },
+        })
+      )
+      .then(setDataUrl)
+      .catch((err) => {
+        console.error('[PairingHooks] QR code generation failed:', err);
+      });
   }, [payload]);
 
   return dataUrl;

@@ -50,6 +50,9 @@ import {
 // Injected by vite.config.ts web build; fallback to package.json version at build time
 const APP_VERSION = import.meta.env.VITE_APP_VERSION ?? '0.0.0';
 
+// Mirrors the Tauri session lock state so browser-mode commands can gate on it.
+let _browserSessionUnlocked = false;
+
 type Params = Record<string, unknown>;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -87,6 +90,14 @@ async function dispatch(command: string, p: Params): Promise<any> {
       if (!hash || !salt) return false;
       const { verifyPasswordHash } = await import('../services/crypto');
       return verifyPasswordHash(p.password as string, hash, salt);
+    }
+    case 'unlock_app': {
+      _browserSessionUnlocked = true;
+      return;
+    }
+    case 'lock_app': {
+      _browserSessionUnlocked = false;
+      return;
     }
 
     // -----------------------------------------------------------------------
@@ -299,6 +310,9 @@ async function dispatch(command: string, p: Params): Promise<any> {
       return true;
     }
     case 'factory_reset': {
+      if (!_browserSessionUnlocked) {
+        throw new Error('Session is locked');
+      }
       const db = await openDB();
       const stores = ['journal_entries', 'settings', 'books', 'webdav_state'];
       for (const storeName of stores) {

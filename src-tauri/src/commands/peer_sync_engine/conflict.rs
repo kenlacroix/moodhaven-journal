@@ -538,27 +538,189 @@ pub fn db_set_peer_sync_at(conn: &Connection, peer_id: &str, at: &str) -> Result
 
 #[cfg(test)]
 mod tests {
-    use super::db_upsert_setting;
+    use super::{
+        db_insert_signal_if_new, db_upsert_book, db_upsert_entry, db_upsert_setting,
+        merge_settings_json, parse_peer_timestamp,
+    };
+    use crate::commands::peer_sync_engine::protocol::{SyncBookRow, SyncSignalRow};
+    use crate::db::journal::{EncryptedContent, JournalEntryRow};
 
-    fn make_test_conn() -> rusqlite::Connection {
+    // ── Schema helpers ────────────────────────────────────────────────────────
+
+    fn make_settings_conn() -> rusqlite::Connection {
         let conn = rusqlite::Connection::open_in_memory().unwrap();
         conn.execute_batch(
-            "CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT DEFAULT CURRENT_TIMESTAMP);"
-        ).unwrap();
+            "CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, \
+             updated_at TEXT DEFAULT CURRENT_TIMESTAMP);",
+        )
+        .unwrap();
         conn
     }
 
+    fn make_entry_conn() -> rusqlite::Connection {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE journal_entries (
+                id TEXT PRIMARY KEY,
+                encrypted_content TEXT NOT NULL,
+                mood INTEGER NOT NULL,
+                privacy_mode INTEGER NOT NULL DEFAULT 0,
+                location_weather TEXT,
+                book_id TEXT NOT NULL DEFAULT 'default',
+                pinned INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                sealed_until TEXT,
+                capsule_type TEXT,
+                linked_original_id TEXT,
+                unsealed_at TEXT
+            );
+            CREATE TABLE tags (id TEXT PRIMARY KEY, name TEXT UNIQUE NOT NULL);
+            CREATE TABLE entry_tags (
+                entry_id TEXT REFERENCES journal_entries(id) ON DELETE CASCADE,
+                tag_id TEXT REFERENCES tags(id) ON DELETE CASCADE,
+                PRIMARY KEY (entry_id, tag_id)
+            );",
+        )
+        .unwrap();
+        conn
+    }
+
+    fn make_books_conn() -> rusqlite::Connection {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE books (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                emoji TEXT NOT NULL DEFAULT '📔',
+                color TEXT NOT NULL DEFAULT 'violet',
+                sort_order INTEGER NOT NULL DEFAULT 0,
+                description TEXT,
+                settings TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT
+            );",
+        )
+        .unwrap();
+        conn
+    }
+
+    fn make_signals_conn() -> rusqlite::Connection {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE signals (
+                id TEXT PRIMARY KEY,
+                timestamp TEXT NOT NULL,
+                type TEXT NOT NULL,
+                source TEXT NOT NULL,
+                payload TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );",
+        )
+        .unwrap();
+        conn
+    }
+
+    fn stub_entry(id: &str, updated_at: &str) -> JournalEntryRow {
+        JournalEntryRow {
+            id: id.to_string(),
+            encrypted_content: Some(EncryptedContent {
+                ciphertext: "ct".into(),
+                iv: "iv".into(),
+                salt: "sa".into(),
+                version: 1,
+            }),
+            mood: 3,
+            privacy_mode: 0,
+            location_weather: None,
+            book_id: "default".into(),
+            pinned: false,
+            created_at: "2026-01-01T00:00:00Z".into(),
+            updated_at: updated_at.to_string(),
+            tags: vec![],
+            sealed_until: None,
+            capsule_type: None,
+            linked_original_id: None,
+            unsealed_at: None,
+            status: None,
+            session_id: None,
+            word_count: None,
+        }
+    }
+
+    fn stub_book(id: &str, updated_at: &str) -> SyncBookRow {
+        SyncBookRow {
+            id: id.to_string(),
+            name: "Test Book".into(),
+            emoji: "📔".into(),
+            color: "#8b5cf6".into(),
+            sort_order: 0,
+            description: None,
+            settings: None,
+            created_at: "2026-01-01T00:00:00Z".into(),
+            updated_at: updated_at.to_string(),
+        }
+    }
+
+    fn stub_signal(id: &str) -> SyncSignalRow {
+        SyncSignalRow {
+            id: id.to_string(),
+            timestamp: "2026-01-01T10:00:00Z".into(),
+            signal_type: "mood_tap".into(),
+            source: "watch".into(),
+            payload: r#"{"ciphertext":"ct","iv":"iv","salt":"sa","version":1}"#.into(),
+            created_at: "2026-01-01T10:00:00Z".into(),
+        }
+    }
+
+    // ── parse_peer_timestamp ──────────────────────────────────────────────────
+
+    #[test]
+    fn past_timestamp_is_accepted() {
+        let result = parse_peer_timestamp("2026-01-01T00:00:00Z");
+        assert!(result.is_ok(), "a past timestamp must be accepted");
+    }
+
+    #[test]
+    fn far_future_timestamp_is_rejected() {
+        let result = parse_peer_timestamp("9999-12-31T23:59:59Z");
+        assert!(result.is_err(), "far-future timestamp must be rejected (clock-skew attack guard)");
+        assert!(result.unwrap_err().contains("future"));
+    }
+
+    #[test]
+    fn invalid_timestamp_format_is_rejected() {
+        let result = parse_peer_timestamp("not-a-timestamp");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn date_only_string_is_rejected() {
+        let result = parse_peer_timestamp("9999-12-31");
+        assert!(result.is_err(), "date-only string must not be accepted as a timestamp");
+    }
+
+    // ── db_upsert_setting ─────────────────────────────────────────────────────
+
     #[test]
     fn allowed_key_is_accepted() {
-        let conn = make_test_conn();
+        let conn = make_settings_conn();
         let result = db_upsert_setting(&conn, "app_settings", "{}", "2026-01-01T00:00:00Z");
         assert!(result.is_ok());
         assert!(result.unwrap());
     }
 
     #[test]
+    fn disallowed_key_password_hash_is_dropped() {
+        let conn = make_settings_conn();
+        let result = db_upsert_setting(&conn, "password_hash", "evil", "2099-01-01T00:00:00Z");
+        assert!(result.is_ok());
+        assert!(!result.unwrap(), "password_hash must never be synced");
+    }
+
+    #[test]
     fn disallowed_key_is_dropped() {
-        let conn = make_test_conn();
+        let conn = make_settings_conn();
         let result = db_upsert_setting(&conn, "password_hash", "evil", "2099-01-01T00:00:00Z");
         assert!(result.is_ok());
         assert!(!result.unwrap());
@@ -566,7 +728,7 @@ mod tests {
 
     #[test]
     fn totp_secret_key_is_dropped() {
-        let conn = make_test_conn();
+        let conn = make_settings_conn();
         let result = db_upsert_setting(
             &conn,
             "totp_secret",
@@ -574,27 +736,196 @@ mod tests {
             "2099-01-01T00:00:00Z",
         );
         assert!(result.is_ok());
-        assert!(!result.unwrap());
+        assert!(!result.unwrap(), "totp_secret must never be synced");
     }
 
     #[test]
     fn oura_pat_key_is_dropped() {
-        let conn = make_test_conn();
+        let conn = make_settings_conn();
         let result = db_upsert_setting(&conn, "oura_pat", "secret_token", "2099-01-01T00:00:00Z");
         assert!(result.is_ok());
-        assert!(!result.unwrap());
+        assert!(!result.unwrap(), "oura_pat must never be synced");
+    }
+
+    #[test]
+    fn far_future_timestamp_rejected_in_upsert_setting() {
+        let conn = make_settings_conn();
+        let result = db_upsert_setting(&conn, "app_settings", "{}", "9999-12-31T23:59:59Z");
+        assert!(result.is_err(), "far-future timestamp must be rejected");
     }
 
     #[test]
     fn lww_older_value_not_applied() {
-        let conn = make_test_conn();
-        // Insert a newer local value first
+        let conn = make_settings_conn();
         let r1 = db_upsert_setting(&conn, "app_settings", "{\"v\":1}", "2026-01-02T00:00:00Z");
         assert!(r1.is_ok());
         assert!(r1.unwrap());
-        // Attempt to upsert an older remote value — should be dropped
         let r2 = db_upsert_setting(&conn, "app_settings", "{\"v\":0}", "2026-01-01T00:00:00Z");
         assert!(r2.is_ok());
-        assert!(!r2.unwrap());
+        assert!(!r2.unwrap(), "older remote must not overwrite newer local");
+    }
+
+    #[test]
+    fn lww_newer_remote_overwrites_older_local() {
+        let conn = make_settings_conn();
+        let r1 = db_upsert_setting(&conn, "app_settings", r#"{"v":1}"#, "2026-01-01T00:00:00Z");
+        assert!(r1.unwrap());
+        let r2 = db_upsert_setting(&conn, "app_settings", r#"{"v":2}"#, "2026-01-02T00:00:00Z");
+        assert!(r2.unwrap(), "newer remote must overwrite older local");
+    }
+
+    // ── merge_settings_json ───────────────────────────────────────────────────
+
+    #[test]
+    fn merge_copies_journal_section_from_remote() {
+        let local = r#"{"journal":{"fontSize":14},"ai":{"enabled":false}}"#;
+        let remote = r#"{"journal":{"fontSize":16},"ai":{"enabled":true}}"#;
+        let merged: serde_json::Value =
+            serde_json::from_str(&merge_settings_json(local, remote).unwrap()).unwrap();
+        assert_eq!(merged["journal"]["fontSize"], 16, "journal section must come from remote");
+    }
+
+    #[test]
+    fn merge_does_not_copy_credentials_section() {
+        let local = r#"{"openai":{"key":"local-key"},"journal":{}}"#;
+        let remote = r#"{"openai":{"key":"injected-key"},"journal":{"x":1}}"#;
+        let merged: serde_json::Value =
+            serde_json::from_str(&merge_settings_json(local, remote).unwrap()).unwrap();
+        assert_eq!(
+            merged["openai"]["key"].as_str().unwrap_or(""),
+            "local-key",
+            "non-whitelisted credentials must not be overwritten"
+        );
+    }
+
+    #[test]
+    fn merge_copies_ai_features_not_ai_key() {
+        let local =
+            r#"{"ai":{"enabled":false,"features":{"contextualPrompts":false},"openai":{"key":"mine"}}}"#;
+        let remote =
+            r#"{"ai":{"enabled":true,"features":{"contextualPrompts":true},"openai":{"key":"theirs"}}}"#;
+        let merged: serde_json::Value =
+            serde_json::from_str(&merge_settings_json(local, remote).unwrap()).unwrap();
+        assert_eq!(merged["ai"]["features"]["contextualPrompts"], true, "ai.features must come from remote");
+        assert_eq!(
+            merged["ai"]["openai"]["key"].as_str().unwrap_or(""),
+            "mine",
+            "ai.openai must be preserved from local"
+        );
+    }
+
+    #[test]
+    fn merge_copies_reminders_from_remote() {
+        let local = r#"{"reminders":{"enabled":false}}"#;
+        let remote = r#"{"reminders":{"enabled":true,"time":"09:00"}}"#;
+        let merged: serde_json::Value =
+            serde_json::from_str(&merge_settings_json(local, remote).unwrap()).unwrap();
+        assert_eq!(merged["reminders"]["enabled"], true);
+    }
+
+    #[test]
+    fn merge_rejects_invalid_json() {
+        assert!(merge_settings_json("not-json", "{}").is_err());
+        assert!(merge_settings_json("{}", "also-not-json").is_err());
+    }
+
+    // ── db_upsert_entry ───────────────────────────────────────────────────────
+
+    #[test]
+    fn new_entry_is_inserted() {
+        let conn = make_entry_conn();
+        let changed = db_upsert_entry(&conn, &stub_entry("e-001", "2026-01-01T10:00:00Z")).unwrap();
+        assert!(changed, "new entry must be inserted");
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM journal_entries WHERE id = 'e-001'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn remote_newer_entry_overwrites_local() {
+        let conn = make_entry_conn();
+        db_upsert_entry(&conn, &stub_entry("e-002", "2026-01-01T10:00:00Z")).unwrap();
+        let changed =
+            db_upsert_entry(&conn, &stub_entry("e-002", "2026-01-02T10:00:00Z")).unwrap();
+        assert!(changed, "remote-newer entry must update local");
+    }
+
+    #[test]
+    fn remote_older_entry_is_skipped() {
+        let conn = make_entry_conn();
+        db_upsert_entry(&conn, &stub_entry("e-003", "2026-01-10T10:00:00Z")).unwrap();
+        let changed =
+            db_upsert_entry(&conn, &stub_entry("e-003", "2026-01-01T10:00:00Z")).unwrap();
+        assert!(!changed, "remote-older entry must not overwrite local");
+    }
+
+    #[test]
+    fn equal_timestamps_are_skipped() {
+        let conn = make_entry_conn();
+        let ts = "2026-06-01T12:00:00Z";
+        db_upsert_entry(&conn, &stub_entry("e-004", ts)).unwrap();
+        let changed = db_upsert_entry(&conn, &stub_entry("e-004", ts)).unwrap();
+        assert!(!changed, "equal timestamps must result in no change");
+    }
+
+    #[test]
+    fn far_future_updated_at_is_rejected() {
+        let conn = make_entry_conn();
+        let entry = stub_entry("e-005", "9999-12-31T23:59:59Z");
+        let result = db_upsert_entry(&conn, &entry);
+        assert!(result.is_err(), "far-future updated_at must be rejected (LWW bypass guard)");
+    }
+
+    // ── db_upsert_book ────────────────────────────────────────────────────────
+
+    #[test]
+    fn new_book_is_inserted() {
+        let conn = make_books_conn();
+        assert!(db_upsert_book(&conn, &stub_book("b-001", "2026-01-01T10:00:00Z")).unwrap());
+    }
+
+    #[test]
+    fn remote_newer_book_overwrites_local() {
+        let conn = make_books_conn();
+        db_upsert_book(&conn, &stub_book("b-002", "2026-01-01T00:00:00Z")).unwrap();
+        let changed =
+            db_upsert_book(&conn, &stub_book("b-002", "2026-01-02T00:00:00Z")).unwrap();
+        assert!(changed, "newer remote book must update local");
+    }
+
+    #[test]
+    fn remote_older_book_is_skipped() {
+        let conn = make_books_conn();
+        db_upsert_book(&conn, &stub_book("b-003", "2026-01-10T00:00:00Z")).unwrap();
+        let changed =
+            db_upsert_book(&conn, &stub_book("b-003", "2026-01-01T00:00:00Z")).unwrap();
+        assert!(!changed, "older remote book must not overwrite local");
+    }
+
+    // ── db_insert_signal_if_new ───────────────────────────────────────────────
+
+    #[test]
+    fn new_signal_is_inserted() {
+        let conn = make_signals_conn();
+        assert!(db_insert_signal_if_new(&conn, &stub_signal("sig-001")).unwrap());
+    }
+
+    #[test]
+    fn duplicate_signal_is_idempotent() {
+        let conn = make_signals_conn();
+        db_insert_signal_if_new(&conn, &stub_signal("sig-002")).unwrap();
+        let again = db_insert_signal_if_new(&conn, &stub_signal("sig-002")).unwrap();
+        assert!(!again, "duplicate signal must be idempotent (INSERT OR IGNORE)");
+    }
+
+    #[test]
+    fn different_signals_are_both_inserted() {
+        let conn = make_signals_conn();
+        assert!(db_insert_signal_if_new(&conn, &stub_signal("sig-a")).unwrap());
+        assert!(db_insert_signal_if_new(&conn, &stub_signal("sig-b")).unwrap());
+        let count: i64 =
+            conn.query_row("SELECT COUNT(*) FROM signals", [], |r| r.get(0)).unwrap();
+        assert_eq!(count, 2);
     }
 }

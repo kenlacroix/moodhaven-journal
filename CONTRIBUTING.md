@@ -53,7 +53,7 @@ npm run tauri dev      # Hot-reload dev server
 ### Verify the Setup
 
 ```bash
-npm test               # All 1172 tests should pass
+npm test               # All tests should pass
 npm run typecheck      # No TypeScript errors
 cd src-tauri && cargo check    # Rust compiles cleanly
 ```
@@ -207,6 +207,8 @@ Key files to read before making changes:
 |:---|:---|
 | `CLAUDE.md` | AI assistant context — also the best single-file project reference |
 | `docs/architecture.md` | Data model, command registry, component map |
+| `docs/threat-model.md` | Assets, trust boundaries, adversary model, mitigations vs gaps |
+| `docs/peer-sync-security.md` | Peer sync wire protocol, key derivation, conflict resolution |
 | `src/lib/services/crypto.ts` | AES-256-GCM + PBKDF2 — the encryption core |
 | `src-tauri/src/db/mod.rs` | SQLite schema and migrations |
 | `src-tauri/src/lib.rs` | Tauri command registration |

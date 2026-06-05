@@ -453,14 +453,16 @@ Full details: [`docs/peer-sync-security.md`](peer-sync-security.md)
 └─────────────────────────────────────────────────────────────┘
 ```
 
-**Sync protocol (simplified):**
+**Sync protocol (v2 summary):**
 1. Device A connects to Device B's TCP port.
-2. Plain `HELLO` exchange (device IDs, not trusted yet — aborted if unknown).
-3. Transport key derived: `SHA-256("moodhaven-sync-v1:" + sorted(pubKeyA, pubKeyB))`.
-4. Encrypted `MANIFEST` exchange — each side lists entry IDs + `updated_at`.
-5. Entries the peer is missing are sent as encrypted delta.
-6. `DONE` / `DONE_ACK` closes the session.
+2. Plain `HELLO` / `Ok` exchange — both sides advertise ephemeral X25519 public keys.
+3. Server issues a 32-byte Ed25519 challenge; client responds with `Auth { signature }` to prove device identity.
+4. Session key derived: `SHA-256("moodhaven-sync-v2:" || X25519_shared || sorted(static_A, static_B))`.
+5. Encrypted `MANIFEST` exchange — each side lists entry IDs + `updated_at`.
+6. Four sync phases (Entries → Books → Signals → Settings), each with its own `Done` / `Ack`.
 7. `peer_sync_state` table updated with `last_sync_at` for each peer.
+
+Full wire protocol details (including v1 static fallback) in [`docs/peer-sync-security.md`](peer-sync-security.md).
 
 ---
 

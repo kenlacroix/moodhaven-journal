@@ -70,10 +70,13 @@ export function CollapsibleToolbar({
       <button
         type="button"
         onClick={() => onToggle(!expanded)}
-        className="w-full flex items-center gap-1.5 px-2 py-1.5 text-xs text-slate-400 dark:text-slate-500 hover:text-slate-500 dark:hover:text-slate-400 transition-colors"
+        aria-expanded={expanded}
+        aria-controls="editor-toolbar-row"
+        className="w-full flex items-center gap-1.5 px-2 py-1.5 text-xs text-slate-400 dark:text-slate-500 hover:text-slate-500 dark:hover:text-slate-400 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
       >
         <svg
           className={`w-3 h-3 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`}
+          aria-hidden="true"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -86,6 +89,7 @@ export function CollapsibleToolbar({
 
       {/* Expandable button row — overflow-x-auto so mobile can scroll horizontally */}
       <div
+        id="editor-toolbar-row"
         className={`overflow-y-hidden transition-all duration-300 ease-out ${expanded ? 'max-h-16 opacity-100' : 'max-h-0 opacity-0'}`}
       >
         <div className="overflow-x-auto scrollbar-hide">
@@ -222,11 +226,14 @@ export function ToolbarBtn({
       }}
       className={`
         p-1.5 rounded transition-all duration-150 active:scale-90
+        focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500
         ${isActive
           ? 'bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400'
           : 'text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-600 dark:hover:text-slate-300'
         }
       `}
+      aria-label={label}
+      aria-pressed={isActive}
       title={label}
     >
       {icon}
@@ -286,7 +293,8 @@ export function MicButton({
           onClick();
         }}
         disabled={isProcessing}
-        className={`p-1.5 rounded transition-all duration-150 active:scale-90 ${buttonClass} ${isProcessing ? 'cursor-wait' : ''}`}
+        className={`p-1.5 rounded transition-all duration-150 active:scale-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 ${buttonClass} ${isProcessing ? 'cursor-wait' : ''}`}
+        aria-label={title}
         title={title}
       >
         {isProcessing ? (
@@ -312,6 +320,7 @@ export function MicButton({
             onCancel();
           }}
           className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-300 dark:hover:bg-slate-600 flex items-center justify-center text-xs"
+          aria-label="Cancel recording"
           title="Cancel recording"
         >
           <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>

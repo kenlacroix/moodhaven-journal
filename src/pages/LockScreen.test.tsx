@@ -29,7 +29,10 @@ vi.mock('../stores/appStore', () => ({
 }));
 
 vi.mock('../lib/services/twoFactorService', () => ({
-  get2FAStatus: vi.fn().mockResolvedValue({ enabled: false, method: null, backupCodesRemaining: 0 }),
+  get2FAStatus: vi.fn().mockResolvedValue({ enabled: false, method: null, has_backup_codes: false }),
+  getBackupCodesCount: vi.fn().mockResolvedValue(5),
+  verify2FATOTP: vi.fn(),
+  verifyBackupCode: vi.fn(),
 }));
 
 vi.mock('../lib/services/journalService', () => ({
@@ -73,7 +76,8 @@ vi.mock('../lib/services/rateLimitService', () => ({
 }));
 
 function setupStore(overrides = {}) {
-  vi.mocked(useAppStore).mockImplementation((selector: (s: ReturnType<typeof useAppStore>) => unknown) =>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (vi.mocked(useAppStore) as any).mockImplementation((selector: (s: unknown) => unknown) =>
     selector({
       isInitialized: true,
       isUnlocked: false,
@@ -86,7 +90,7 @@ function setupStore(overrides = {}) {
       lock: vi.fn(),
       setTheme: vi.fn(),
       ...overrides,
-    } as ReturnType<typeof useAppStore>)
+    })
   );
 }
 
@@ -233,6 +237,96 @@ describe('LockScreen — PIN submit: unexpected error', () => {
   });
 });
 
+describe('LockScreen — PIN submit: 2FA required', () => {
+  it('transitions to 2FA step when twoFactorStatus.enabled is true and verifyUserPassword passes', async () => {
+    const { verifyUserPassword } = await import('../lib/services/journalService');
+    vi.mocked(verifyUserPassword).mockResolvedValueOnce(true);
+
+    const { get2FAStatus } = await import('../lib/services/twoFactorService');
+    vi.mocked(get2FAStatus).mockResolvedValueOnce({
+      enabled: true,
+      method: 'totp',
+      has_backup_codes: true,
+    });
+
+    mockInvoke
+      .mockResolvedValueOnce(true)            // pin_is_enabled
+      .mockResolvedValueOnce('secretpass');  // pin_unlock success
+
+    render(<LockScreen />);
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /use pin/i })).toBeInTheDocument()
+    );
+    await userEvent.click(screen.getByRole('button', { name: /use pin/i }));
+    await userEvent.type(screen.getByLabelText(/^PIN$/i), '1234');
+    await userEvent.click(screen.getByRole('button', { name: /unlock/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/complete two-factor authentication/i)).toBeInTheDocument();
+    });
+  });
+});
+
+describe('LockScreen — PIN submit: unlock() returns false', () => {
+  it('shows "Failed to unlock" error when unlock() returns false after correct PIN', async () => {
+    mockUnlock.mockResolvedValueOnce(false);
+
+    mockInvoke
+      .mockResolvedValueOnce(true)            // pin_is_enabled
+      .mockResolvedValueOnce('secretpass');  // pin_unlock success
+
+    render(<LockScreen />);
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /use pin/i })).toBeInTheDocument()
+    );
+    await userEvent.click(screen.getByRole('button', { name: /use pin/i }));
+    await userEvent.type(screen.getByLabelText(/^PIN$/i), '1234');
+    await userEvent.click(screen.getByRole('button', { name: /unlock/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent(/failed to unlock/i);
+    });
+  });
+});
+
+describe('LockScreen — PIN lockout: countdown expiry re-enables input', () => {
+  afterEach(() => vi.useRealTimers());
+
+  it('re-enables PIN input after countdown reaches zero', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+
+    mockInvoke
+      .mockResolvedValueOnce(true)
+      .mockRejectedValueOnce(new Error('locked:2'));
+
+    render(<LockScreen />);
+
+    // Wait for PIN button with real-time ticking (shouldAdvanceTime: true)
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /use pin/i })).toBeInTheDocument(),
+      { timeout: 3000 }
+    );
+    await userEvent.click(screen.getByRole('button', { name: /use pin/i }));
+    await userEvent.type(screen.getByLabelText(/^PIN$/i), '1234');
+    await userEvent.click(screen.getByRole('button', { name: /unlock/i }));
+
+    await waitFor(() =>
+      expect(screen.getByLabelText(/^PIN$/i)).toBeDisabled(),
+      { timeout: 3000 }
+    );
+
+    // Advance past the 2s lockout
+    await act(async () => {
+      vi.advanceTimersByTime(3000);
+    });
+
+    await waitFor(() =>
+      expect(screen.getByLabelText(/^PIN$/i)).not.toBeDisabled(),
+      { timeout: 3000 }
+    );
+  }, 15000);
+});
+
 describe('LockScreen — PIN submit: stale password', () => {
   it('shows stale-password error when PIN decrypts but verifyUserPassword fails', async () => {
     const { verifyUserPassword } = await import('../lib/services/journalService');
@@ -242,7 +336,7 @@ describe('LockScreen — PIN submit: stale password', () => {
     vi.mocked(get2FAStatus).mockResolvedValueOnce({
       enabled: true,
       method: 'totp',
-      backupCodesRemaining: 5,
+      has_backup_codes: true,
     });
 
     mockInvoke

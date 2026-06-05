@@ -16,7 +16,9 @@
 //! ## Security invariants
 //! - `pin_setup` and `pin_disable` require session unlock (user must be authenticated).
 //! - `pin_is_enabled` and `pin_unlock` are pre-auth (they run on the lock screen).
-//! - The master password is cleared from memory immediately after encryption/decryption.
+//! - Key material and the decrypted password are wrapped in `Zeroizing<>` so they are
+//!   zeroed when dropped. The returned `String` remains in JS heap until GC; this matches
+//!   the existing password-unlock memory model and is not novel to PIN unlock.
 //! - Changing the master password invalidates the PIN (the wrapped copy becomes stale);
 //!   the frontend must detect this and prompt to re-setup the PIN.
 
@@ -28,6 +30,7 @@ use rand::RngCore;
 use sha2::Sha256;
 use std::sync::PoisonError;
 use tauri::State;
+use zeroize::Zeroizing;
 
 use crate::db::Database;
 use crate::{AppLockState, PinRateLimiter};
@@ -81,7 +84,7 @@ fn db_set(conn: &rusqlite::Connection, key: &str, value: &str) -> Result<(), Str
     .map_err(|e| e.to_string())?;
 
     conn.execute(
-        "INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?1, ?2, datetime('now'))",
+        "INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?1, ?2, CURRENT_TIMESTAMP)",
         [key, value],
     )
     .map_err(|e| e.to_string())?;
@@ -148,8 +151,8 @@ pub fn pin_setup(
     rand::rngs::OsRng.fill_bytes(&mut salt);
     rand::rngs::OsRng.fill_bytes(&mut nonce_bytes);
 
-    let key_bytes = derive_key(&pin, &salt)?;
-    let cipher = Aes256Gcm::new_from_slice(&key_bytes).map_err(|e| format!("aes init: {e}"))?;
+    let key_bytes = Zeroizing::new(derive_key(&pin, &salt)?);
+    let cipher = Aes256Gcm::new_from_slice(&*key_bytes).map_err(|e| format!("aes init: {e}"))?;
     let nonce = Nonce::from_slice(&nonce_bytes);
 
     let ciphertext = cipher
@@ -178,11 +181,13 @@ pub fn pin_unlock(
     pin_limiter: State<'_, PinRateLimiter>,
     pin: String,
 ) -> Result<String, String> {
-    validate_pin(&pin)?;
-
+    // Check lockout before format validation so that format-invalid PINs
+    // still consume from the rate-limit budget.
     if let Err(remaining_secs) = pin_limiter.0.check() {
         return Err(format!("locked:{remaining_secs}"));
     }
+
+    validate_pin(&pin)?;
 
     let (salt_b64, blob) = {
         let conn = db.conn.lock().map_err(|e: PoisonError<_>| e.to_string())?;
@@ -201,14 +206,16 @@ pub fn pin_unlock(
         return Err("invalid nonce length".to_string());
     }
 
-    let key_bytes = derive_key(&pin, &salt)?;
-    let cipher = Aes256Gcm::new_from_slice(&key_bytes).map_err(|e| format!("aes init: {e}"))?;
+    let key_bytes = Zeroizing::new(derive_key(&pin, &salt)?);
+    let cipher = Aes256Gcm::new_from_slice(&*key_bytes).map_err(|e| format!("aes init: {e}"))?;
     let nonce = Nonce::from_slice(&nonce_bytes);
 
     match cipher.decrypt(nonce, ciphertext.as_ref()) {
         Ok(plaintext) => {
+            let plaintext = Zeroizing::new(plaintext);
             pin_limiter.0.record_success();
-            String::from_utf8(plaintext).map_err(|_| "invalid password encoding".to_string())
+            String::from_utf8(plaintext.to_vec())
+                .map_err(|_| "invalid password encoding".to_string())
         }
         Err(_) => {
             if let Some(lockout_secs) = pin_limiter.0.record_failure() {

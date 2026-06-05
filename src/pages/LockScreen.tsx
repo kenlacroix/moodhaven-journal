@@ -160,7 +160,7 @@ export function LockScreen() {
         pinTimerRef.current = null;
       }
     };
-  }, [pinLockoutSecs > 0]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [pinLockoutSecs]);
 
   // Helper: handle a failed auth attempt (shared by password and recovery key)
   const handleFailedAttempt = useCallback(
@@ -506,13 +506,15 @@ export function LockScreen() {
             <p className="text-slate-500 dark:text-slate-400 mt-1">
               {step === 'password'
                 ? 'Enter your password to unlock'
+                : step === 'pin'
+                ? 'Enter your PIN to unlock'
                 : 'Complete two-factor authentication'}
             </p>
           </div>
 
           {/* Lockout Banner — shown on password and recovery-key steps */}
           {lockedOut && (step === 'password' || step === 'recovery-key') && (
-            <div className="mb-6 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl">
+            <div role="alert" className="mb-6 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl">
               <div className="flex items-center gap-3">
                 <svg className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
@@ -743,10 +745,10 @@ export function LockScreen() {
               </div>
 
               {pinLockoutSecs > 0 && (
-                <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl">
+                <div role="status" aria-live="polite" className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl">
                   <p className="text-sm font-medium text-amber-800 dark:text-amber-200 text-center">
                     Too many attempts. Try again in{' '}
-                    <span className="font-mono">{pinLockoutSecs}s</span>
+                    <span className="font-mono" aria-live="off">{pinLockoutSecs}s</span>
                   </p>
                 </div>
               )}
@@ -765,12 +767,14 @@ export function LockScreen() {
                   placeholder="••••"
                   autoFocus
                   disabled={pinLoading || pinLockoutSecs > 0}
+                  aria-disabled={pinLockoutSecs > 0}
+                  aria-describedby="pin-error"
                   className="input font-mono text-center tracking-[0.5em]"
                 />
               </div>
 
               {pinError && pinLockoutSecs === 0 && (
-                <p role="alert" className="text-sm text-rose-500 dark:text-rose-400">{pinError}</p>
+                <p id="pin-error" role="alert" className="text-sm text-rose-500 dark:text-rose-400">{pinError}</p>
               )}
 
               <div className="flex gap-3">
@@ -789,7 +793,7 @@ export function LockScreen() {
                 >
                   {pinLoading ? (
                     <>
-                      <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      <span aria-hidden="true" className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                       Verifying...
                     </>
                   ) : (

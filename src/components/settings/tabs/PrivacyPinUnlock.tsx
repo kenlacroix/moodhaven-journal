@@ -116,6 +116,7 @@ export function PrivacyPinUnlock({ sessionPassword }: PrivacyPinUnlockProps) {
             type="button"
             disabled={isDisabling}
             onClick={handleDisable}
+            aria-label="Disable PIN unlock"
             className="px-3 py-1.5 text-sm font-medium text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/20 rounded-lg hover:bg-rose-100 dark:hover:bg-rose-900/40 transition-colors disabled:opacity-50"
           >
             {isDisabling ? 'Disabling…' : 'Disable'}
@@ -154,11 +155,12 @@ export function PrivacyPinUnlock({ sessionPassword }: PrivacyPinUnlockProps) {
               value={pinInput}
               onChange={(e) => setPinInput(e.target.value.replace(/\D/g, ''))}
               placeholder="••••"
+              aria-describedby="pin-new-error"
               className="input font-mono text-center tracking-[0.5em]"
             />
           </div>
           {error && (
-            <p className="text-sm text-rose-500 dark:text-rose-400">{error}</p>
+            <p id="pin-new-error" role="alert" className="text-sm text-rose-500 dark:text-rose-400">{error}</p>
           )}
           <div className="flex gap-3">
             <button
@@ -192,11 +194,12 @@ export function PrivacyPinUnlock({ sessionPassword }: PrivacyPinUnlockProps) {
               value={confirmInput}
               onChange={(e) => setConfirmInput(e.target.value.replace(/\D/g, ''))}
               placeholder="••••"
+              aria-describedby="pin-confirm-error"
               className="input font-mono text-center tracking-[0.5em]"
             />
           </div>
           {error && (
-            <p className="text-sm text-rose-500 dark:text-rose-400">{error}</p>
+            <p id="pin-confirm-error" role="alert" className="text-sm text-rose-500 dark:text-rose-400">{error}</p>
           )}
           <div className="flex gap-3">
             <button

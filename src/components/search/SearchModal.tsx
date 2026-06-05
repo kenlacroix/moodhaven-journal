@@ -40,11 +40,13 @@ function ResultCard({
   query,
   isSelected,
   onClick,
+  resultId,
 }: {
   entry: JournalEntry;
   query: string;
   isSelected: boolean;
   onClick: () => void;
+  resultId: string;
 }) {
   const moodColor = getMoodColor(entry.mood ?? 0);
   const moodEmoji = MOOD_OPTIONS.find((o) => o.level === entry.mood)?.emoji;
@@ -52,7 +54,10 @@ function ResultCard({
 
   return (
     <button
+      id={resultId}
       type="button"
+      role="option"
+      aria-selected={isSelected}
       onClick={onClick}
       style={{ borderLeftColor: moodColor }}
       className={`w-full text-left px-3 py-2.5 rounded-lg border-l-2 transition-colors ${
@@ -209,6 +214,11 @@ export function SearchModal({ onClose, onSelectEntry }: SearchModalProps) {
             <input
               ref={inputRef}
               type="text"
+              role="combobox"
+              aria-label="Search entries"
+              aria-expanded={results.length > 0}
+              aria-controls="search-results-listbox"
+              aria-activedescendant={selectedIdx >= 0 && results.length > 0 ? `search-result-${selectedIdx}` : undefined}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search entries…"
@@ -239,6 +249,7 @@ export function SearchModal({ onClose, onSelectEntry }: SearchModalProps) {
               <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide w-10">Mood</span>
               <button
                 type="button"
+                aria-pressed={moodFilter === null}
                 onClick={() => setMoodFilter(null)}
                 className={`px-2 py-0.5 rounded-full text-xs font-medium transition-colors ${
                   moodFilter === null
@@ -252,6 +263,7 @@ export function SearchModal({ onClose, onSelectEntry }: SearchModalProps) {
                 <button
                   key={opt.level}
                   type="button"
+                  aria-pressed={moodFilter === opt.level}
                   onClick={() => setMoodFilter(moodFilter === opt.level ? null : opt.level)}
                   title={opt.label}
                   className={`px-2 py-0.5 rounded-full text-sm transition-colors ${
@@ -277,6 +289,7 @@ export function SearchModal({ onClose, onSelectEntry }: SearchModalProps) {
                 <button
                   key={value}
                   type="button"
+                  aria-pressed={dateRange === value}
                   onClick={() => setDateRange(value)}
                   className={`px-2 py-0.5 rounded-full text-xs font-medium transition-colors ${
                     dateRange === value
@@ -303,7 +316,12 @@ export function SearchModal({ onClose, onSelectEntry }: SearchModalProps) {
                   : 'Start typing to search'}
               </div>
             ) : (
-              <div className="space-y-0.5">
+              <div
+                id="search-results-listbox"
+                role="listbox"
+                aria-label="Search results"
+                className="space-y-0.5"
+              >
                 {results.map((entry, i) => (
                   <ResultCard
                     key={entry.id}
@@ -311,6 +329,7 @@ export function SearchModal({ onClose, onSelectEntry }: SearchModalProps) {
                     query={debouncedQuery}
                     isSelected={i === selectedIdx}
                     onClick={() => handleSelect(entry.id)}
+                    resultId={`search-result-${i}`}
                   />
                 ))}
               </div>

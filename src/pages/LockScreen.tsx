@@ -458,7 +458,7 @@ export function LockScreen() {
               </div>
 
               {error && (
-                <p className="text-sm text-rose-500 dark:text-rose-400">{error}</p>
+                <p role="alert" className="text-sm text-rose-500 dark:text-rose-400">{error}</p>
               )}
 
               {/* Attempts remaining warning */}
@@ -505,7 +505,7 @@ export function LockScreen() {
                     Touch to unlock
                   </p>
                   {biometricError && (
-                    <p className="text-xs text-rose-500 dark:text-rose-400 text-center">{biometricError}</p>
+                    <p role="alert" className="text-xs text-rose-500 dark:text-rose-400 text-center">{biometricError}</p>
                   )}
                 </div>
               )}
@@ -583,7 +583,7 @@ export function LockScreen() {
               </div>
 
               {error && (
-                <p className="text-sm text-rose-500 dark:text-rose-400">{error}</p>
+                <p role="alert" className="text-sm text-rose-500 dark:text-rose-400">{error}</p>
               )}
 
               {/* Attempts remaining warning */}
@@ -673,7 +673,7 @@ export function LockScreen() {
               </div>
 
               {error && (
-                <p className="text-sm text-rose-500 dark:text-rose-400">{error}</p>
+                <p role="alert" className="text-sm text-rose-500 dark:text-rose-400">{error}</p>
               )}
 
               <div className="flex gap-3">

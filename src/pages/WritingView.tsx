@@ -996,18 +996,24 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
               /* Formatting mini-toolbar when keyboard is open */
               <>
                 <button
+                  type="button"
                   onMouseDown={(e) => { e.preventDefault(); editorInstanceRef.current?.chain().focus().toggleBold().run(); }}
                   className="w-9 h-9 flex items-center justify-center rounded-lg text-slate-600 dark:text-slate-300 font-bold text-sm active:bg-black/8 active:scale-95 transition-all"
+                  aria-label="Bold"
                   title="Bold"
                 >B</button>
                 <button
+                  type="button"
                   onMouseDown={(e) => { e.preventDefault(); editorInstanceRef.current?.chain().focus().toggleItalic().run(); }}
                   className="w-9 h-9 flex items-center justify-center rounded-lg text-slate-600 dark:text-slate-300 italic text-sm active:bg-black/8 active:scale-95 transition-all"
+                  aria-label="Italic"
                   title="Italic"
                 >I</button>
                 <button
+                  type="button"
                   onMouseDown={(e) => { e.preventDefault(); editorInstanceRef.current?.chain().focus().toggleBulletList().run(); }}
                   className="w-9 h-9 flex items-center justify-center rounded-lg text-slate-600 dark:text-slate-300 active:bg-black/8 active:scale-95 transition-all"
+                  aria-label="Bullet list"
                   title="Bullet list"
                 >
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -1033,27 +1039,33 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
               /* Default toolbar when keyboard is dismissed */
               <>
                 <button
+                  type="button"
                   onClick={handleAttach}
                   disabled={!savedEntryIdRef.current || !sessionPassword}
+                  aria-label="Attach files"
                   title="Attach"
                   className="w-10 h-10 flex items-center justify-center rounded-xl text-slate-400 dark:text-slate-500 disabled:opacity-30 active:bg-black/5 active:scale-95 transition-all"
                 >
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                  <svg className="w-5 h-5" aria-hidden="true" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94A3 3 0 1119.5 7.372L8.552 18.32m.009-.01l-.01.01m5.699-9.941l-7.81 7.81a1.5 1.5 0 002.112 2.13" />
                   </svg>
                 </button>
 
                 <button
+                  type="button"
                   onClick={() => { setTagManagerOpen(true); haptic(8); }}
+                  aria-label="Manage tags"
                   title="Tags"
                   className="w-10 h-10 flex items-center justify-center rounded-xl text-slate-400 dark:text-slate-500 active:bg-black/5 active:scale-95 transition-all"
                 >
-                  <span className="text-base font-bold">#</span>
+                  <span aria-hidden="true" className="text-base font-bold">#</span>
                 </button>
 
                 {isNewEntry && showPrompts && (
                   <button
+                    type="button"
                     onClick={() => { setDrawerOpen(true); haptic(8); }}
+                    aria-label="Writing prompts"
                     title="Writing prompts"
                     className="w-10 h-10 flex items-center justify-center rounded-xl text-slate-400 dark:text-slate-500 active:bg-black/5 active:scale-95 transition-all"
                   >
@@ -1113,10 +1125,12 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
                   </p>
                 </div>
                 <button
+                  type="button"
                   onClick={() => {
                     const p = forYouPrompts[0] ?? generalPrompts[0];
                     if (p) { handleUsePrompt(p); haptic(10); }
                   }}
+                  aria-label="Use this prompt"
                   className="flex-shrink-0 px-3 py-1.5 rounded-lg bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 text-xs font-semibold active:scale-95 transition-transform"
                 >
                   Use
@@ -1283,7 +1297,7 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
                   <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 select-none">
                     Mood
                   </span>
-                  <div className="flex items-center gap-2">
+                  <div role="group" aria-label="Set mood" className="flex items-center gap-2">
                     {([1, 2, 3, 4, 5] as MoodLevel[]).map((level) => {
                       const isActive = level === mood;
                       return (
@@ -1291,8 +1305,9 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
                           key={level}
                           type="button"
                           onClick={() => { setMood(level); setMoodIsAuto(false); }}
-                          title={`${MOOD_OPTIONS[level - 1].emoji} ${MOOD_OPTIONS[level - 1].label}`}
-                          className={`rounded-full transition-all duration-300 flex-shrink-0 ${
+                          aria-label={`${MOOD_OPTIONS[level - 1].label} mood`}
+                          aria-pressed={isActive}
+                          className={`rounded-full transition-all duration-300 flex-shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-1 ${
                             isActive
                               ? `w-4 h-4 ${DOT_COLORS[level]} shadow-sm ring-2 ring-offset-2 ring-offset-white dark:ring-offset-slate-900 ${RING_COLORS[level]} ${moodPulse ? 'animate-mood-pop' : ''}`
                               : isScanning
@@ -1308,7 +1323,7 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
                   {mood !== null && (
                     <button
                       type="button"
-                      title={moodIsAuto ? 'Auto-detected from your writing' : 'Mood set manually — click to re-enable auto'}
+                      aria-label={moodIsAuto ? 'Auto-detected mood — click to lock' : 'Mood set manually — click to re-enable auto'}
                       onClick={() => { if (!moodIsAuto) handleResetMoodToAuto(); }}
                       className={`flex items-center gap-0.5 text-sm leading-none ${moodIsAuto ? 'cursor-default' : 'cursor-pointer'}`}
                     >
@@ -1344,6 +1359,7 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
                     type="button"
                     onClick={handleAttach}
                     disabled={!savedEntryIdRef.current || !sessionPassword}
+                    aria-label={!savedEntryIdRef.current ? 'Attach files (write a few words first)' : 'Attach files'}
                     title={!savedEntryIdRef.current ? 'Write a few words first to enable attachments' : 'Attach files'}
                     className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-slate-400 dark:text-slate-500 hover:text-violet-600 dark:hover:text-violet-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-slate-400 dark:disabled:hover:text-slate-500"
                   >
@@ -1357,6 +1373,7 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
                   <button
                     type="button"
                     onClick={() => setTagManagerOpen(true)}
+                    aria-label="Manage tags"
                     title="Manage tags"
                     className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-slate-400 dark:text-slate-500 hover:text-violet-600 dark:hover:text-violet-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                   >
@@ -1365,12 +1382,14 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
                   </button>
 
                   {/* Privacy segmented control */}
-                  <div className="flex items-center gap-0.5 bg-slate-100 dark:bg-slate-800 rounded-lg p-0.5">
+                  <div role="group" aria-label="Privacy mode" className="flex items-center gap-0.5 bg-slate-100 dark:bg-slate-800 rounded-lg p-0.5">
                     {([0, 1, 2] as PrivacyMode[]).map((mode) => (
                       <button
                         key={mode}
                         type="button"
                         onClick={() => setPrivacyMode(mode)}
+                        aria-pressed={privacyMode === mode}
+                        aria-label={`${PRIVACY_MODE_LABELS[mode]} privacy — ${PRIVACY_MODE_DESCRIPTIONS[mode]}`}
                         title={PRIVACY_MODE_DESCRIPTIONS[mode]}
                         className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all duration-200 ${
                           privacyMode === mode
@@ -1378,7 +1397,7 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
                             : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'
                         }`}
                       >
-                        {PRIVACY_ICONS[mode]}
+                        <span aria-hidden="true">{PRIVACY_ICONS[mode]}</span>
                         <span>{PRIVACY_MODE_LABELS[mode]}</span>
                       </button>
                     ))}
@@ -1413,6 +1432,7 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
                   <button
                     type="button"
                     onClick={() => setTagManagerOpen(true)}
+                    aria-label="Add tag"
                     className="inline-flex items-center text-[11px] px-2 py-0.5 rounded-full border border-dashed border-slate-300 dark:border-slate-600 text-slate-400 hover:text-violet-500 hover:border-violet-400 dark:hover:text-violet-400 dark:hover:border-violet-600 transition-colors"
                   >
                     + tag

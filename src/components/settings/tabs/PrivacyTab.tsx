@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import type { AppSettings } from '../../../types/settings';
 import type { TwoFactorStatus } from '../../../types/twoFactor';
 import { usePlatform } from '../../../hooks/usePlatform';
@@ -50,6 +51,38 @@ export function PrivacyTab({
     handleDisable2FA,
   } = use2FASetup(refresh2FAStatus);
 
+  const totpCancelRef = useRef<HTMLButtonElement>(null);
+  const webauthnCancelRef = useRef<HTMLButtonElement>(null);
+  const backupCodesCloseRef = useRef<HTMLButtonElement>(null);
+  const disable2FAKeepRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (show2FASetup === 'totp') totpCancelRef.current?.focus();
+  }, [show2FASetup]);
+
+  useEffect(() => {
+    if (show2FASetup === 'webauthn') webauthnCancelRef.current?.focus();
+  }, [show2FASetup]);
+
+  useEffect(() => {
+    if (showBackupCodes) backupCodesCloseRef.current?.focus();
+  }, [showBackupCodes]);
+
+  useEffect(() => {
+    if (showDisable2FAConfirm) disable2FAKeepRef.current?.focus();
+  }, [showDisable2FAConfirm]);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (show2FASetup !== null) { setShow2FASetup(null); return; }
+      if (showBackupCodes) { setShowBackupCodes(false); return; }
+      if (showDisable2FAConfirm) { setShowDisable2FAConfirm(false); }
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [show2FASetup, showBackupCodes, showDisable2FAConfirm, setShow2FASetup, setShowBackupCodes, setShowDisable2FAConfirm]);
+
   return (
     <>
       <div id="panel-privacy" role="tabpanel" className="space-y-6">
@@ -82,8 +115,16 @@ export function PrivacyTab({
 
       {/* 2FA Setup Modal - TOTP */}
       {show2FASetup === 'totp' && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Set up authenticator app"
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm"
+        >
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-6 max-w-md mx-4 w-full">
+            <button ref={totpCancelRef} type="button" className="sr-only" onClick={() => setShow2FASetup(null)}>
+              Close
+            </button>
             <TotpSetup
               password={sessionPassword}
               onComplete={handle2FASetupComplete}
@@ -95,8 +136,16 @@ export function PrivacyTab({
 
       {/* 2FA Setup Modal - Hardware Key */}
       {show2FASetup === 'webauthn' && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Set up hardware security key"
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm"
+        >
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-6 max-w-md mx-4 w-full">
+            <button ref={webauthnCancelRef} type="button" className="sr-only" onClick={() => setShow2FASetup(null)}>
+              Close
+            </button>
             <HardwareKeySetup
               onComplete={handle2FASetupComplete}
               onCancel={() => setShow2FASetup(null)}
@@ -107,9 +156,17 @@ export function PrivacyTab({
 
       {/* Backup Codes Modal */}
       {showBackupCodes && backupCodes && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="backup-codes-heading"
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm"
+        >
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-6 max-w-md mx-4 w-full">
-            <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-4">
+            <button ref={backupCodesCloseRef} type="button" className="sr-only" onClick={() => setShowBackupCodes(false)}>
+              Close
+            </button>
+            <h3 id="backup-codes-heading" className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-4">
               New Backup Codes
             </h3>
             <BackupCodesDisplay
@@ -122,7 +179,12 @@ export function PrivacyTab({
 
       {/* Disable 2FA Confirmation */}
       {showDisable2FAConfirm && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="disable-2fa-heading"
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm"
+        >
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-6 max-w-md mx-4">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
@@ -131,7 +193,7 @@ export function PrivacyTab({
                 </svg>
               </div>
               <div>
-                <h3 className="text-lg font-semibold text-slate-800 dark:text-white">
+                <h3 id="disable-2fa-heading" className="text-lg font-semibold text-slate-800 dark:text-white">
                   Disable 2FA
                 </h3>
                 <p className="text-sm text-slate-500 dark:text-slate-400">
@@ -147,6 +209,7 @@ export function PrivacyTab({
 
             <div className="flex gap-3">
               <button
+                ref={disable2FAKeepRef}
                 type="button"
                 className="flex-1 px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
                 onClick={() => setShowDisable2FAConfirm(false)}

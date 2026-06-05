@@ -5,6 +5,7 @@ import { TotpSetup, HardwareKeySetup, BackupCodesDisplay } from '../../two-facto
 import { use2FASetup } from '../../../hooks/use2FASetup';
 import { PrivacyAutoLock } from './PrivacyAutoLock';
 import { PrivacyBiometric } from './PrivacyBiometric';
+import { PrivacyPinUnlock } from './PrivacyPinUnlock';
 import { PrivacyTwoFactor } from './PrivacyTwoFactor';
 import { PrivacyDataManagement } from './PrivacyDataManagement';
 import { TransparencySection } from './PrivacyTransparency';
@@ -59,6 +60,8 @@ export function PrivacyTab({
         />
 
         <PrivacyBiometric isAndroid={isAndroid} />
+
+        <PrivacyPinUnlock sessionPassword={sessionPassword} />
 
         <PrivacyTwoFactor
           twoFactorStatus={twoFactorStatus}

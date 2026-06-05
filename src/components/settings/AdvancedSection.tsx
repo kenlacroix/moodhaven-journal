@@ -46,11 +46,13 @@ export function AdvancedSection({ storageKey, children }: AdvancedSectionProps) 
         Advanced options
       </button>
 
-      {open && (
-        <div id={`advanced-section-${storageKey}`} className="mt-3 space-y-6">
-          {children}
-        </div>
-      )}
+      <div
+        id={`advanced-section-${storageKey}`}
+        hidden={!open}
+        className="mt-3 space-y-6"
+      >
+        {children}
+      </div>
     </div>
   );
 }

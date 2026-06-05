@@ -49,6 +49,15 @@ export function TranscriptPreviewOverlay({
   const useFormattedRef = useRef<HTMLButtonElement>(null);
   const editFirstRef = useRef<HTMLButtonElement>(null);
   const useRawRef = useRef<HTMLButtonElement>(null);
+  const sheetRef = useRef<HTMLDivElement>(null);
+
+  // Block keyboard focus into the closed sheet via `inert`.
+  useEffect(() => {
+    const el = sheetRef.current as HTMLElement | null;
+    if (!el) return;
+    if (isOpen) el.removeAttribute('inert');
+    else el.setAttribute('inert', '');
+  }, [isOpen]);
 
   // Focus the primary CTA on open
   useEffect(() => {
@@ -103,6 +112,7 @@ export function TranscriptPreviewOverlay({
 
       {/* Bottom sheet */}
       <div
+        ref={sheetRef}
         role="dialog"
         aria-modal="true"
         aria-label="Transcript preview"

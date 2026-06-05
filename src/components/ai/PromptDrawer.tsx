@@ -13,7 +13,7 @@
  * Closes on backdrop click, close button, or after using a prompt.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import type { AIPrompt } from '../../types/ai';
 import { TemplateSelector } from '../journal/TemplateSelector';
 import type { JournalTemplate } from '../../lib/utils/journalTemplates';
@@ -183,6 +183,15 @@ export function PromptDrawer({
   usedTemplateIds,
 }: PromptDrawerProps) {
   const [tab, setTab] = useState<Tab>('forYou');
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // Block keyboard focus into the closed drawer via `inert`.
+  useEffect(() => {
+    const el = panelRef.current as HTMLElement | null;
+    if (!el) return;
+    if (isOpen) el.removeAttribute('inert');
+    else el.setAttribute('inert', '');
+  }, [isOpen]);
 
   // Reset to For You whenever drawer opens
   useEffect(() => {
@@ -248,6 +257,7 @@ export function PromptDrawer({
         `}
       >
         <div
+          ref={panelRef}
           className="w-full max-w-3xl lg:max-w-[75%] bg-white dark:bg-slate-900 rounded-t-2xl shadow-2xl flex flex-col"
           style={{ height: '56vh', maxHeight: '520px' }}
           role="dialog"

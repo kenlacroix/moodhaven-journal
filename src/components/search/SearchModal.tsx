@@ -222,7 +222,6 @@ export function SearchModal({ onClose, onSelectEntry }: SearchModalProps) {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search entries…"
-              aria-label="Search entries"
               className="flex-1 bg-transparent text-sm text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 outline-none"
             />
             {query && (

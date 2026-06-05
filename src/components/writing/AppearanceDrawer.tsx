@@ -37,6 +37,15 @@ export function AppearanceDrawer({ open, onClose, returnFocusTo }: AppearanceDra
   const drawerRef = useRef<HTMLDivElement>(null);
   const firstFocusableRef = useRef<HTMLButtonElement>(null);
 
+  // Imperatively set/remove `inert` so keyboard focus cannot reach the closed drawer.
+  // (aria-hidden alone only hides from AT; inert also blocks focus.)
+  useEffect(() => {
+    const el = drawerRef.current as HTMLElement | null;
+    if (!el) return;
+    if (open) el.removeAttribute('inert');
+    else el.setAttribute('inert', '');
+  }, [open]);
+
   // Close on Esc + restore focus
   useEffect(() => {
     if (!open) return;

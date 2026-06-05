@@ -26,8 +26,8 @@ describe('TranscriptPreviewOverlay', () => {
   describe('visibility', () => {
     it('hides the sheet (translate-y-full) when isOpen is false', () => {
       render(<TranscriptPreviewOverlay {...defaultProps} isOpen={false} />);
-      // Component uses CSS slide animation — dialog stays in DOM but slides out
-      expect(screen.getByRole('dialog')).toHaveClass('translate-y-full');
+      // aria-hidden="true" when closed — use hidden:true to query
+      expect(screen.getByRole('dialog', { hidden: true })).toHaveClass('translate-y-full');
     });
 
     it('shows the sheet (translate-y-0) when isOpen is true', () => {

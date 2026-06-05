@@ -252,6 +252,7 @@ export function PromptDrawer({
           style={{ height: '56vh', maxHeight: '520px' }}
           role="dialog"
           aria-label="Writing prompts"
+          aria-hidden={!isOpen}
         >
           {/* ── Drag handle ── */}
           <div className="flex-shrink-0 pt-3 flex justify-center">

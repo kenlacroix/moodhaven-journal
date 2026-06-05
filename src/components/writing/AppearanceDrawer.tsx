@@ -76,6 +76,7 @@ export function AppearanceDrawer({ open, onClose, returnFocusTo }: AppearanceDra
         role="dialog"
         aria-label="Writing appearance settings"
         aria-modal="false"
+        aria-hidden={!open}
         className={`fixed z-50 bg-white dark:bg-slate-900 shadow-2xl
           /* sm: bottom sheet */
           inset-x-0 bottom-0 max-h-[80vh] rounded-t-2xl

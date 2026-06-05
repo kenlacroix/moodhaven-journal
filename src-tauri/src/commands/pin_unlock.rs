@@ -16,9 +16,11 @@
 //! ## Security invariants
 //! - `pin_setup` and `pin_disable` require session unlock (user must be authenticated).
 //! - `pin_is_enabled` and `pin_unlock` are pre-auth (they run on the lock screen).
-//! - Key material and the decrypted password are wrapped in `Zeroizing<>` so they are
-//!   zeroed when dropped. The returned `String` remains in JS heap until GC; this matches
-//!   the existing password-unlock memory model and is not novel to PIN unlock.
+//! - Key material and the raw decrypt buffer are wrapped in `Zeroizing<>` so they are
+//!   zeroed when dropped. `String::from_utf8(plaintext.to_vec())` creates an unzeroed copy
+//!   for the return value — the original decrypt buffer is still zeroed. The returned
+//!   `String` remains in JS heap until GC; this matches the existing password-unlock memory
+//!   model and is not novel to PIN unlock.
 //! - Changing the master password invalidates the PIN (the wrapped copy becomes stale);
 //!   the frontend must detect this and prompt to re-setup the PIN.
 
@@ -181,8 +183,8 @@ pub fn pin_unlock(
     pin_limiter: State<'_, PinRateLimiter>,
     pin: String,
 ) -> Result<String, String> {
-    // Check lockout before format validation so that format-invalid PINs
-    // still consume from the rate-limit budget.
+    // Check lockout BEFORE format validation so that a locked user always
+    // sees the lockout error regardless of what PIN they type.
     if let Err(remaining_secs) = pin_limiter.0.check() {
         return Err(format!("locked:{remaining_secs}"));
     }

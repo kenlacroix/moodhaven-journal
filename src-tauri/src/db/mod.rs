@@ -85,11 +85,54 @@ impl Database {
     /// call `apply_key()` after the user authenticates before the connection is usable.
     pub fn new(db_path: PathBuf) -> Result<Self, String> {
         let state = read_db_state(&db_path);
+
+        // Recovery: if db_state.json says encrypted=true and moodhaven_enc.db still exists,
+        // the previous migration was interrupted between db_state.json write and the rename.
+        // Complete the rename now to bring the file to a consistent encrypted state.
+        if state.encrypted {
+            let tmp_path = db_path.with_file_name("moodhaven_enc.db");
+            if tmp_path.exists() {
+                log::info!("[sqlcipher] Completing interrupted migration on startup");
+                #[cfg(target_os = "windows")]
+                let _ = std::fs::remove_file(&db_path);
+                if let Err(e) = std::fs::rename(&tmp_path, &db_path) {
+                    log::error!("[sqlcipher] Startup recovery rename failed: {e}");
+                }
+            }
+        }
+
         let conn =
             Connection::open(&db_path).map_err(|e| format!("Failed to open database: {}", e))?;
+
         if !state.encrypted {
-            Self::run_pragmas_and_migrations(&conn)?;
+            if let Err(migration_err) = Self::run_pragmas_and_migrations(&conn) {
+                // Probe: if migration failed because the file is a SQLCipher binary opened
+                // without a key (db_state.json missing or stale), detect it and write a
+                // recovery marker so the next startup takes the encrypted path.
+                let is_ciphertext = conn
+                    .execute_batch("SELECT count(*) FROM sqlite_master;")
+                    .is_err();
+                if is_ciphertext {
+                    log::warn!(
+                        "[sqlcipher] Detected encrypted database without db_state.json \
+                         — writing recovery state"
+                    );
+                    let _ = write_db_state(
+                        &db_path,
+                        &DbStateFile {
+                            encrypted: true,
+                            salt: None,
+                        },
+                    );
+                    return Ok(Self {
+                        conn: Mutex::new(conn),
+                        path: db_path,
+                    });
+                }
+                return Err(migration_err);
+            }
         }
+
         Ok(Self {
             conn: Mutex::new(conn),
             path: db_path,
@@ -155,7 +198,9 @@ impl Database {
                 .map_err(|_| "encrypted db unreadable after export".to_string())?;
         }
 
-        // 3. Write db_state.json before the file swap (reverted on rename failure)
+        // 3. Write db_state.json BEFORE releasing the file handle. This must happen before
+        //    the rename: if a crash occurs between here and step 6, Database::new() will
+        //    detect moodhaven_enc.db still present and complete the rename on next startup.
         write_db_state(
             &self.path,
             &DbStateFile {
@@ -170,20 +215,40 @@ impl Database {
             let placeholder =
                 Connection::open_in_memory().map_err(|e| format!("placeholder: {e}"))?;
             *conn = placeholder;
-            // Old connection (to moodhaven.db) drops here, releasing the file handle
+            // Original connection drops here, releasing the file handle
         }
 
         // 5. Remove WAL/SHM for the original file (should be empty after TRUNCATE checkpoint)
         let _ = std::fs::remove_file(self.path.with_extension("db-wal"));
         let _ = std::fs::remove_file(self.path.with_extension("db-shm"));
 
-        // 6. Rename encrypted tmp to final path
+        // 6. Rename encrypted tmp to final path.
+        //    On Windows, rename fails if the destination exists — move the original to a
+        //    backup first so we can restore it on failure rather than deleting it outright.
         #[cfg(target_os = "windows")]
-        {
-            let _ = std::fs::remove_file(&self.path);
-        }
-        if let Err(e) = std::fs::rename(&tmp_path, &self.path) {
-            // Revert db_state.json so next startup tries unencrypted open again
+        let rename_result: Result<(), String> = {
+            let backup = self.path.with_file_name("moodhaven_old.db");
+            match std::fs::rename(&self.path, &backup) {
+                Err(e) => Err(format!("backup original db: {e}")),
+                Ok(()) => match std::fs::rename(&tmp_path, &self.path) {
+                    Ok(()) => {
+                        let _ = std::fs::remove_file(&backup);
+                        Ok(())
+                    }
+                    Err(e) => {
+                        let _ = std::fs::rename(&backup, &self.path); // restore original
+                        Err(format!("rename encrypted db: {e}"))
+                    }
+                },
+            }
+        };
+
+        #[cfg(not(target_os = "windows"))]
+        let rename_result: Result<(), String> =
+            std::fs::rename(&tmp_path, &self.path).map_err(|e| format!("rename encrypted db: {e}"));
+
+        if let Err(e) = rename_result {
+            // Revert db_state.json and restore the original connection so the app stays usable.
             let _ = write_db_state(
                 &self.path,
                 &DbStateFile {
@@ -191,10 +256,20 @@ impl Database {
                     salt: None,
                 },
             );
-            return Err(format!("rename encrypted db: {e}"));
+            let mut conn = self.conn.lock().map_err(|e| e.to_string())?;
+            match Connection::open(&self.path) {
+                Ok(restored) if Self::run_pragmas_and_migrations(&restored).is_ok() => {
+                    *conn = restored;
+                }
+                _ => log::error!(
+                    "[sqlcipher] Could not restore DB connection after migration failure \
+                     — restart required"
+                ),
+            }
+            return Err(e);
         }
 
-        // 7. Open final keyed connection to the file at its permanent path
+        // 7. Open final keyed connection to the encrypted file
         {
             let mut conn = self.conn.lock().map_err(|e| e.to_string())?;
             let final_conn = Connection::open(&self.path)

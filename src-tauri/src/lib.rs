@@ -6,6 +6,7 @@ pub mod commands;
 pub mod db;
 
 use std::sync::Mutex;
+use zeroize::Zeroize;
 
 /// Tracks whether the user has authenticated this session.
 /// Starts locked (true). Set to false by `unlock_app` after the frontend
@@ -238,13 +239,12 @@ impl DbKeyState {
         *self.0.lock().unwrap_or_else(|e| e.into_inner())
     }
 
-    /// Overwrite the key bytes with zeros before clearing.
+    /// Overwrite the key bytes before clearing. Uses volatile writes via the
+    /// `zeroize` crate to prevent the compiler from eliding the stores under LTO.
     pub fn clear(&self) {
         let mut guard = self.0.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(ref mut k) = *guard {
-            for b in k.iter_mut() {
-                *b = 0;
-            }
+            k.zeroize();
         }
         *guard = None;
     }

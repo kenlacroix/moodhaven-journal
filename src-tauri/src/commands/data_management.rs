@@ -147,7 +147,8 @@ pub fn set_log_level(db: tauri::State<'_, Database>, level: String) -> Result<()
 
 /// Exit the application (used after factory reset)
 #[tauri::command]
-pub fn exit_app() {
+pub fn exit_app(db_key: State<'_, DbKeyState>) {
+    db_key.clear();
     std::process::exit(0);
 }
 
@@ -189,12 +190,13 @@ pub async fn factory_reset(app: AppHandle) -> Result<bool, String> {
         "logs",
         "peer_key.bin",
         "trusted_devices.json",
-        "device.json",     // Ed25519 public key metadata (low-sensitivity but stale)
-        "pw_lockout.json", // Password rate-limiter state — reset with the app
-        "db_state.json",   // SQLCipher encryption state — must be removed with the DB
-        "voice_memos",     // Encrypted audio files from watch companion
+        "device.json",      // Ed25519 public key metadata (low-sensitivity but stale)
+        "pw_lockout.json",  // Password rate-limiter state — reset with the app
+        "db_state.json",    // SQLCipher encryption state — must be removed with the DB
+        "moodhaven_enc.db", // Encrypted export tmp — survives interrupted migrations
+        "voice_memos",      // Encrypted audio files from watch companion
         "voice_memos_incoming", // Staging directory for incoming watch audio
-        "media",           // Encrypted media attachments
+        "media",            // Encrypted media attachments
         "moodhaven_restore.pending", // Staged full-restore DB file — must not re-apply after reset
         "moodhaven_restore.pending.sha256", // Integrity check file for the above
     ];

@@ -4,7 +4,7 @@
 //! Backend only stores/retrieves encrypted blobs.
 
 use crate::db::{self, Database, EncryptedContent, JournalEntryRow, UserSettings};
-use crate::{AppLockState, PasswordRateLimiter, TwoFactorPendingState};
+use crate::{AppLockState, DbKeyState, PasswordRateLimiter, TwoFactorPendingState};
 use base64::Engine;
 use hmac::Hmac;
 use pbkdf2::pbkdf2;
@@ -42,16 +42,14 @@ pub fn get_password_hash(db: State<Database>) -> Result<Option<UserSettings>, St
     db::get_password_hash(&db)
 }
 
-/// Verify a password against the stored PBKDF2 hash.
+/// Verify a password against the stored PBKDF2 hash (unencrypted DB) or by attempting
+/// to open the SQLCipher-encrypted database (post-migration DB).
 ///
-/// Mirrors the frontend `verifyPasswordHash` in crypto.ts exactly:
 /// - PBKDF2-HMAC-SHA-256, 600 000 iterations, 32-byte output
-/// - Salt is stored as standard base64 (btoa/atob) and must be decoded before use
-/// - Hash comparison is constant-time to prevent timing attacks
-/// - Backend rate limiter (5 failures → 30s lockout) prevents brute force from
-///   WebView code regardless of frontend lockout state.
-/// - On success, records whether 2FA is required in TwoFactorPendingState so
-///   that unlock_app can enforce 2FA completion backend-side.
+/// - Salt source: user_settings table (unencrypted path) or db_state.json (encrypted path)
+/// - Hash comparison is constant-time (unencrypted) or implicit via SQLCipher key check
+/// - Backend rate limiter: 5 failures → 30-second lockout
+/// - On success, records derived key in DbKeyState and sets TwoFactorPendingState
 ///
 /// Returns `Ok(true)` on match, `Ok(false)` on mismatch, `Err` on bad inputs or lockout.
 #[tauri::command]
@@ -59,46 +57,75 @@ pub fn verify_password(
     db: State<Database>,
     rate_limiter: State<'_, PasswordRateLimiter>,
     twofa_state: State<'_, TwoFactorPendingState>,
+    db_key_state: State<'_, DbKeyState>,
     password: String,
 ) -> Result<bool, String> {
     if password.is_empty() {
         return Err("empty password".to_string());
     }
 
-    // Check rate limit before doing any crypto work.
     rate_limiter
         .check()
         .map_err(|secs| format!("Too many failed attempts. Try again in {secs}s."))?;
 
-    let settings = db::get_password_hash(&db)?;
-    let settings = match settings {
-        Some(s) => s,
-        None => return Ok(false),
-    };
+    if db.is_encrypted() {
+        // ── Encrypted path (post-migration) ──────────────────────────────────
+        // Proof of correct password: derive key from db_state.json salt and try to
+        // open the encrypted database. SQLCipher's MAC verification fails immediately
+        // on a wrong key, so there is no separate hash check needed.
+        let salt_b64 = db
+            .db_salt()
+            .ok_or("Encrypted database is missing salt in db_state.json")?;
+        let salt = base64::engine::general_purpose::STANDARD
+            .decode(&salt_b64)
+            .map_err(|e| format!("invalid db_state salt: {e}"))?;
+        let mut derived = [0u8; 32];
+        pbkdf2::<Hmac<Sha256>>(password.as_bytes(), &salt, 600_000, &mut derived)
+            .map_err(|e| format!("pbkdf2 error: {e}"))?;
 
-    // Decode the stored base64 salt — critical: pass raw bytes to pbkdf2, not the base64 string
-    let salt = base64::engine::general_purpose::STANDARD
-        .decode(&settings.password_salt)
-        .map_err(|e| format!("invalid salt encoding: {e}"))?;
-
-    // Derive 32 bytes (256 bits) using PBKDF2-HMAC-SHA-256, 600 000 iterations
-    let mut derived = [0u8; 32];
-    pbkdf2::<Hmac<Sha256>>(password.as_bytes(), &salt, 600_000, &mut derived)
-        .map_err(|e| format!("pbkdf2 error: {e}"))?;
-
-    let derived_b64 = base64::engine::general_purpose::STANDARD.encode(derived);
-
-    // Constant-time comparison
-    let matched = constant_time_eq(&derived_b64, &settings.password_hash);
-    if matched {
-        rate_limiter.record_success();
-        // Check whether 2FA is enabled so unlock_app can enforce it backend-side.
-        let twofa_enabled = db::is_2fa_enabled(&db).unwrap_or(false);
-        twofa_state.on_password_verified(twofa_enabled);
+        match db.apply_key(&derived) {
+            Ok(()) => {
+                rate_limiter.record_success();
+                let twofa_enabled = db::is_2fa_enabled(&db).unwrap_or(false);
+                twofa_state.on_password_verified(twofa_enabled);
+                db_key_state.set(derived);
+                Ok(true)
+            }
+            Err(_) => {
+                rate_limiter.record_failure();
+                Ok(false)
+            }
+        }
     } else {
-        rate_limiter.record_failure();
+        // ── Unencrypted path (existing install or first run) ──────────────────
+        // Classic PBKDF2 hash comparison. On success, store the derived key so
+        // unlock_app can trigger the migration to an encrypted DB.
+        let settings = db::get_password_hash(&db)?;
+        let settings = match settings {
+            Some(s) => s,
+            None => return Ok(false),
+        };
+
+        let salt = base64::engine::general_purpose::STANDARD
+            .decode(&settings.password_salt)
+            .map_err(|e| format!("invalid salt encoding: {e}"))?;
+        let mut derived = [0u8; 32];
+        pbkdf2::<Hmac<Sha256>>(password.as_bytes(), &salt, 600_000, &mut derived)
+            .map_err(|e| format!("pbkdf2 error: {e}"))?;
+
+        let derived_b64 = base64::engine::general_purpose::STANDARD.encode(derived);
+        let matched = constant_time_eq(&derived_b64, &settings.password_hash);
+        if matched {
+            rate_limiter.record_success();
+            let twofa_enabled = db::is_2fa_enabled(&db).unwrap_or(false);
+            twofa_state.on_password_verified(twofa_enabled);
+            // Store derived key bytes — unlock_app will use them to encrypt the DB.
+            db_key_state.set(derived);
+        } else {
+            rate_limiter.record_failure();
+        }
+        Ok(matched)
     }
-    Ok(matched)
 }
 
 fn constant_time_eq(a: &str, b: &str) -> bool {

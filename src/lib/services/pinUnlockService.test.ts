@@ -49,10 +49,28 @@ describe('pinUnlock', () => {
   });
 });
 
+describe('pinUnlock — additional edge cases', () => {
+  it('calls pin_unlock with the provided pin', async () => {
+    mockInvoke.mockResolvedValue('password123');
+    await pinUnlock('123456');
+    expect(mockInvoke).toHaveBeenCalledWith('pin_unlock', { pin: '123456' });
+  });
+
+  it('propagates unexpected errors from the backend', async () => {
+    mockInvoke.mockRejectedValue(new Error('Database error'));
+    await expect(pinUnlock('1234')).rejects.toThrow('Database error');
+  });
+});
+
 describe('pinDisable', () => {
   it('calls pin_disable', async () => {
     mockInvoke.mockResolvedValue(undefined);
     await pinDisable();
     expect(mockInvoke).toHaveBeenCalledWith('pin_disable');
+  });
+
+  it('propagates errors from the backend', async () => {
+    mockInvoke.mockRejectedValue(new Error('Session is locked'));
+    await expect(pinDisable()).rejects.toThrow('Session is locked');
   });
 });

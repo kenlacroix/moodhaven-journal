@@ -89,7 +89,13 @@ export function VoiceDraftEditor({ memo, onPublish, onClose, activeBookId }: Voi
       className="fixed inset-0 z-50 flex items-stretch justify-center bg-black/40 dark:bg-black/60 backdrop-blur-sm"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="relative flex flex-col w-full max-w-2xl bg-white dark:bg-slate-900 shadow-xl overflow-hidden sm:my-4 sm:rounded-2xl">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="voice-draft-editor-title"
+        onClick={(e) => e.stopPropagation()}
+        className="relative flex flex-col w-full max-w-2xl bg-white dark:bg-slate-900 shadow-xl overflow-hidden sm:my-4 sm:rounded-2xl"
+      >
         {/* Header */}
         <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex-shrink-0">
           <button
@@ -98,11 +104,11 @@ export function VoiceDraftEditor({ memo, onPublish, onClose, activeBookId }: Voi
             className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors duration-150"
             aria-label="Close editor"
           >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <svg aria-hidden="true" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
-          <h2 className="flex-1 text-sm font-semibold text-slate-700 dark:text-slate-200">
+          <h2 id="voice-draft-editor-title" className="flex-1 text-sm font-semibold text-slate-700 dark:text-slate-200">
             Voice Memo Draft
           </h2>
           <button

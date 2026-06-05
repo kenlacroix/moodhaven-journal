@@ -118,7 +118,7 @@ function makeEntryRow(id: string, updatedAt: string) {
 describe('syncWithWebDAV', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockEnsureDirs.mockResolvedValue({ success: true });
+    mockEnsureDirs.mockResolvedValue(undefined);
     mockUpload.mockResolvedValue({ success: true });
     mockDeleteFile.mockResolvedValue({ success: true });
   });

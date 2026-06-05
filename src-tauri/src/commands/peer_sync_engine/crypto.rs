@@ -91,7 +91,10 @@ mod tests {
     fn static_key_differs_for_different_peer_pairs() {
         let k1 = derive_sync_key_static("device-a", "device-b");
         let k2 = derive_sync_key_static("device-a", "device-c");
-        assert_ne!(k1, k2, "distinct peer pairs must yield distinct transport keys");
+        assert_ne!(
+            k1, k2,
+            "distinct peer pairs must yield distinct transport keys"
+        );
     }
 
     #[test]
@@ -110,7 +113,10 @@ mod tests {
         let enc1 = encrypt_payload(&key, plaintext).unwrap();
         let enc2 = encrypt_payload(&key, plaintext).unwrap();
         // Different random nonces → different outputs (overwhelmingly likely)
-        assert_ne!(enc1, enc2, "two encryptions of same plaintext must differ (unique nonces)");
+        assert_ne!(
+            enc1, enc2,
+            "two encryptions of same plaintext must differ (unique nonces)"
+        );
     }
 
     #[test]
@@ -173,7 +179,10 @@ mod tests {
         let key_a = derive_sync_key_ecdh(secret_a, &pub_b_hex, &pub_a_hex, &pub_b_hex).unwrap();
         let key_b = derive_sync_key_ecdh(secret_b, &pub_a_hex, &pub_b_hex, &pub_a_hex).unwrap();
 
-        assert_eq!(key_a, key_b, "both parties must derive the same session key");
+        assert_eq!(
+            key_a, key_b,
+            "both parties must derive the same session key"
+        );
     }
 
     #[test]

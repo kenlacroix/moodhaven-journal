@@ -56,8 +56,12 @@ export function LinkDialog({ initialUrl, onSubmit, onClose }: LinkDialogProps) {
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
       onClick={onClose}
+      aria-hidden="true"
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="link-dialog-title"
         className="w-full max-w-sm bg-white dark:bg-slate-900 rounded-2xl shadow-2xl animate-slide-up"
         onClick={(e) => e.stopPropagation()}
       >
@@ -65,11 +69,11 @@ export function LinkDialog({ initialUrl, onSubmit, onClose }: LinkDialogProps) {
         <div className="flex items-center justify-between px-5 pt-5 pb-3">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center">
-              <svg className="w-4 h-4 text-violet-600 dark:text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <svg className="w-4 h-4 text-violet-600 dark:text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
               </svg>
             </div>
-            <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100">
+            <h2 id="link-dialog-title" className="text-base font-semibold text-slate-800 dark:text-slate-100">
               {initialUrl ? 'Edit Link' : 'Add Link'}
             </h2>
           </div>

@@ -76,29 +76,41 @@ export function NewBookModal({ onClose, onCreate }: NewBookModalProps) {
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      aria-hidden="true"
     >
-      <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl shadow-xl overflow-hidden animate-slide-up">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="new-book-title"
+        className="w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl shadow-xl overflow-hidden animate-slide-up"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="px-6 pt-5 pb-4 border-b border-slate-100 dark:border-slate-800">
           <div className="flex items-center justify-between">
-            <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">New Journal</h2>
+            <h2 id="new-book-title" className="text-base font-semibold text-slate-900 dark:text-slate-100">New Journal</h2>
             <button
               type="button"
               onClick={onClose}
+              aria-label="Close"
               className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-md transition-colors"
             >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <svg className="w-4 h-4" aria-hidden="true" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
           </div>
 
           {/* Tabs */}
-          <div className="flex gap-1 mt-3">
+          <div role="tablist" className="flex gap-1 mt-3">
             {(['basic', 'advanced'] as Tab[]).map((t) => (
               <button
                 key={t}
                 type="button"
+                role="tab"
+                aria-selected={tab === t}
+                aria-controls={`tab-panel-${t}`}
+                id={`tab-${t}`}
                 onClick={() => setTab(t)}
                 className={`px-3 py-1 text-xs font-medium rounded-md capitalize transition-colors ${
                   tab === t
@@ -115,18 +127,26 @@ export function NewBookModal({ onClose, onCreate }: NewBookModalProps) {
         <form onSubmit={handleSubmit}>
           <div className="px-6 py-4 space-y-4 max-h-[60vh] overflow-y-auto">
             {tab === 'basic' && (
-              <>
+              <div
+                role="tabpanel"
+                id="tab-panel-basic"
+                aria-labelledby="tab-basic"
+                tabIndex={0}
+                className="space-y-4 outline-none"
+              >
                 {/* Emoji picker */}
                 <div>
                   <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
                     Icon
                   </label>
-                  <div className="mt-2 grid grid-cols-8 gap-1.5">
+                  <div role="group" aria-label="Journal icon" className="mt-2 grid grid-cols-8 gap-1.5">
                     {QUICK_EMOJIS.map((e) => (
                       <button
                         key={e}
                         type="button"
                         onClick={() => setEmoji(e)}
+                        aria-label={e}
+                        aria-pressed={emoji === e}
                         className={`w-8 h-8 text-lg flex items-center justify-center rounded-lg transition-all ${
                           emoji === e
                             ? 'bg-violet-100 dark:bg-violet-900/30 ring-2 ring-violet-400 scale-110'
@@ -159,16 +179,17 @@ export function NewBookModal({ onClose, onCreate }: NewBookModalProps) {
                   <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
                     Color
                   </label>
-                  <div className="mt-2 flex gap-2 flex-wrap">
+                  <div role="group" aria-label="Journal color" className="mt-2 flex gap-2 flex-wrap">
                     {(BOOK_COLORS as readonly string[]).map((c) => (
                       <button
                         key={c}
                         type="button"
                         onClick={() => setColor(c)}
+                        aria-label={c}
+                        aria-pressed={color === c}
                         className={`w-7 h-7 rounded-full ${COLOR_CLASSES[c] ?? 'bg-slate-500'} transition-all ${
                           color === c ? 'ring-2 ring-offset-2 ring-slate-400 scale-110' : 'hover:scale-105'
                         }`}
-                        title={c}
                       />
                     ))}
                   </div>
@@ -187,17 +208,23 @@ export function NewBookModal({ onClose, onCreate }: NewBookModalProps) {
                     className="mt-1.5 w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400 resize-none"
                   />
                 </div>
-              </>
+              </div>
             )}
 
             {tab === 'advanced' && (
-              <>
+              <div
+                role="tabpanel"
+                id="tab-panel-advanced"
+                aria-labelledby="tab-advanced"
+                tabIndex={0}
+                className="space-y-4 outline-none"
+              >
                 {/* Default privacy */}
                 <div>
                   <label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">
                     Default Privacy
                   </label>
-                  <div className="mt-2 flex rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+                  <div role="group" aria-label="Default privacy" className="mt-2 flex rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
                     {([0, 1, 2] as PrivacyMode[]).map((mode, i) => {
                       const labels = ['Open', 'Mindful', 'Private'];
                       const selected = (settings.privacyDefault ?? 0) === mode;
@@ -273,10 +300,10 @@ export function NewBookModal({ onClose, onCreate }: NewBookModalProps) {
                     </div>
                   );
                 })}
-              </>
+              </div>
             )}
 
-            {error && <p className="text-xs text-red-500">{error}</p>}
+            {error && <p role="alert" className="text-xs text-red-500">{error}</p>}
           </div>
 
           {/* Footer */}

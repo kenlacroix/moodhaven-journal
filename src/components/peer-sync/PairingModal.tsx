@@ -77,15 +77,19 @@ export function PairingModal({
           ) : (
             <>
               {/* Tab switcher */}
-              <div className="flex rounded-xl bg-slate-100 dark:bg-slate-800 p-1 mb-5">
+              <div role="tablist" className="flex rounded-xl bg-slate-100 dark:bg-slate-800 p-1 mb-5">
                 {(
                   [
-                    { key: 'show', label: 'Show My Code' },
-                    { key: 'enter', label: 'Enter Their Code' },
+                    { key: 'show', label: 'Show My Code', id: 'pairing-tab-show', controls: 'pairing-panel-show' },
+                    { key: 'enter', label: 'Enter Their Code', id: 'pairing-tab-enter', controls: 'pairing-panel-enter' },
                   ] as const
-                ).map(({ key, label }) => (
+                ).map(({ key, label, id, controls }) => (
                   <button
                     key={key}
+                    id={id}
+                    role="tab"
+                    aria-selected={tab === key}
+                    aria-controls={controls}
                     onClick={() => setTab(key)}
                     className={`flex-1 py-1.5 text-sm font-medium rounded-lg transition-all ${
                       tab === key
@@ -100,9 +104,13 @@ export function PairingModal({
 
               {/* Tab content */}
               {tab === 'show' ? (
-                <ShowCodeTab onSuccess={handleSuccess} />
+                <div id="pairing-panel-show" role="tabpanel" aria-labelledby="pairing-tab-show">
+                  <ShowCodeTab onSuccess={handleSuccess} />
+                </div>
               ) : (
-                <EnterCodeTab peer={peer} onSuccess={handleSuccess} />
+                <div id="pairing-panel-enter" role="tabpanel" aria-labelledby="pairing-tab-enter">
+                  <EnterCodeTab peer={peer} onSuccess={handleSuccess} />
+                </div>
               )}
             </>
           )}

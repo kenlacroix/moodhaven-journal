@@ -109,7 +109,14 @@ function StatusBadge({ color, children }: { color: 'green' | 'violet' | 'slate' 
 
 function ProgressBar({ percent }: { percent: number }) {
   return (
-    <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2 overflow-hidden">
+    <div
+      className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2 overflow-hidden"
+      role="progressbar"
+      aria-valuenow={percent}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-label="Download progress"
+    >
       <div
         className="h-2 bg-violet-500 rounded-full transition-all duration-300"
         style={{ width: `${Math.min(percent, 100)}%` }}
@@ -202,62 +209,64 @@ export function UpdatePanel({ hook, currentVersion }: UpdatePanelProps) {
   return (
     <div className="space-y-4">
 
-      {/* ── Checking spinner ── */}
-      {isChecking && (
-        <StatusBadge color="slate">
-          <svg className="w-4 h-4 animate-spin flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/>
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 12h4z"/>
-          </svg>
-          <span className="text-sm">Checking for updates…</span>
-        </StatusBadge>
-      )}
+      <div role="status" aria-live="polite">
+        {/* ── Checking spinner ── */}
+        {isChecking && (
+          <StatusBadge color="slate">
+            <svg className="w-4 h-4 animate-spin flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 12h4z"/>
+            </svg>
+            <span className="text-sm">Checking for updates…</span>
+          </StatusBadge>
+        )}
 
-      {/* ── Check error ── */}
-      {!isChecking && checkError && (
-        <StatusBadge color="red">
-          <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
-          </svg>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium">Could not check for updates</p>
-            <p className="text-xs mt-0.5 opacity-80 break-words">{checkError}</p>
-            {checkError.includes('404') && (
-              <p className="text-xs mt-1 opacity-70">
-                The repository may be private or has no releases yet.
+        {/* ── Check error ── */}
+        {!isChecking && checkError && (
+          <StatusBadge color="red">
+            <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
+            </svg>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium">Could not check for updates</p>
+              <p className="text-xs mt-0.5 opacity-80 break-words">{checkError}</p>
+              {checkError.includes('404') && (
+                <p className="text-xs mt-1 opacity-70">
+                  The repository may be private or has no releases yet.
+                </p>
+              )}
+            </div>
+          </StatusBadge>
+        )}
+
+        {/* ── Up to date ── */}
+        {!isChecking && !checkError && updateInfo && !updateInfo.is_available && (
+          <StatusBadge color="green">
+            <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <div>
+              <p className="text-sm font-medium">MoodHaven Journal is up to date</p>
+              <p className="text-xs mt-0.5 opacity-70">
+                v{currentVersion}
+                {updateInfo.version && semverGt(updateInfo.version, currentVersion)
+                  ? ` — latest is ${updateInfo.version}`
+                  : ' is the latest release'}
               </p>
-            )}
-          </div>
-        </StatusBadge>
-      )}
+            </div>
+          </StatusBadge>
+        )}
 
-      {/* ── Up to date ── */}
-      {!isChecking && !checkError && updateInfo && !updateInfo.is_available && (
-        <StatusBadge color="green">
-          <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-          </svg>
-          <div>
-            <p className="text-sm font-medium">MoodHaven Journal is up to date</p>
-            <p className="text-xs mt-0.5 opacity-70">
-              v{currentVersion}
-              {updateInfo.version && semverGt(updateInfo.version, currentVersion)
-                ? ` — latest is ${updateInfo.version}`
-                : ' is the latest release'}
-            </p>
-          </div>
-        </StatusBadge>
-      )}
-
-      {/* ── No releases yet (fresh repo) ── */}
-      {!isChecking && !checkError && !updateInfo && (
-        <StatusBadge color="slate">
-          <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z"/>
-          </svg>
-          <p className="text-sm">Click "Check now" to look for updates.</p>
-        </StatusBadge>
-      )}
+        {/* ── No releases yet (fresh repo) ── */}
+        {!isChecking && !checkError && !updateInfo && (
+          <StatusBadge color="slate">
+            <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z"/>
+            </svg>
+            <p className="text-sm">Click "Check now" to look for updates.</p>
+          </StatusBadge>
+        )}
+      </div>
 
       {/* ── Update available card ── */}
       {!isChecking && updateInfo?.is_available && phase === 'idle' && (

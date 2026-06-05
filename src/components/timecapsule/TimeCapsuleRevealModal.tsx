@@ -127,9 +127,9 @@ export function TimeCapsuleRevealModal({ capsule, password, onReveal, onWriteRes
         {/* Content */}
         <div className="px-6 py-4 overflow-y-auto max-h-80 flex-1">
           {error ? (
-            <p className="text-sm text-rose-500">{error}</p>
+            <p role="alert" className="text-sm text-rose-500">{error}</p>
           ) : decryptedContent === null ? (
-            <p className="text-sm text-slate-400 animate-pulse">Decrypting…</p>
+            <p role="status" className="text-sm text-slate-400 animate-pulse">Decrypting…</p>
           ) : (
             <div
               className="prose prose-sm dark:prose-invert max-w-none text-slate-700 dark:text-slate-200"

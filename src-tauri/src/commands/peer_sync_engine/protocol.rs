@@ -19,7 +19,9 @@ mod tests {
 
     #[test]
     fn port_always_in_valid_range() {
-        for prefix in ["0000", "ffff", "8000", "1234", "abcd", "0001", "fffe", "cafe"] {
+        for prefix in [
+            "0000", "ffff", "8000", "1234", "abcd", "0001", "fffe", "cafe",
+        ] {
             let id = format!("{prefix}extra-ignored-chars");
             let port = sync_port_for_device(&id);
             assert!(
@@ -66,22 +68,33 @@ mod tests {
 
     #[test]
     fn msg_hello_omits_eph_pub_when_none() {
-        let msg = Msg::Hello { did: "dev-001".into(), eph_pub: None };
+        let msg = Msg::Hello {
+            did: "dev-001".into(),
+            eph_pub: None,
+        };
         let json = serde_json::to_string(&msg).unwrap();
-        assert!(!json.contains("eph_pub"), "absent eph_pub must be omitted from JSON");
+        assert!(
+            !json.contains("eph_pub"),
+            "absent eph_pub must be omitted from JSON"
+        );
         assert!(json.contains("dev-001"));
     }
 
     #[test]
     fn msg_hello_includes_eph_pub_when_some() {
-        let msg = Msg::Hello { did: "dev-002".into(), eph_pub: Some("deadbeef".into()) };
+        let msg = Msg::Hello {
+            did: "dev-002".into(),
+            eph_pub: Some("deadbeef".into()),
+        };
         let json = serde_json::to_string(&msg).unwrap();
         assert!(json.contains("deadbeef"));
     }
 
     #[test]
     fn msg_not_trusted_round_trips() {
-        let msg = Msg::NotTrusted { server_device_id: "rogue-device-id".into() };
+        let msg = Msg::NotTrusted {
+            server_device_id: "rogue-device-id".into(),
+        };
         let json = serde_json::to_string(&msg).unwrap();
         let back: Msg = serde_json::from_str(&json).unwrap();
         match back {
@@ -95,7 +108,9 @@ mod tests {
     #[test]
     fn msg_auth_round_trips() {
         let sig = "a".repeat(128);
-        let msg = Msg::Auth { signature: sig.clone() };
+        let msg = Msg::Auth {
+            signature: sig.clone(),
+        };
         let json = serde_json::to_string(&msg).unwrap();
         let back: Msg = serde_json::from_str(&json).unwrap();
         match back {

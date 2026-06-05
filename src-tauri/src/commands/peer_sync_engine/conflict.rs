@@ -259,9 +259,13 @@ pub fn db_upsert_book(conn: &Connection, row: &SyncBookRow) -> Result<bool, Stri
             .map_err(|e| format!("insert book: {e}"))?;
             Ok(true)
         }
-        Some(ref local) if {
-            parse_peer_timestamp(local).map(|local_ts| remote_ts > local_ts).unwrap_or(false)
-        } => {
+        Some(ref local)
+            if {
+                parse_peer_timestamp(local)
+                    .map(|local_ts| remote_ts > local_ts)
+                    .unwrap_or(false)
+            } =>
+        {
             conn.execute(
                 "UPDATE books \
                  SET name = ?2, emoji = ?3, color = ?4, sort_order = ?5, \
@@ -475,10 +479,14 @@ pub fn db_upsert_entry(conn: &Connection, row: &JournalEntryRow) -> Result<bool,
             db_upsert_tags(conn, &row.id, &row.tags)?;
             Ok(true)
         }
-        Some(ref local) if {
-            // Parse local timestamp for comparison; fall back to "remote loses" on parse error.
-            parse_peer_timestamp(local).map(|local_ts| remote_ts > local_ts).unwrap_or(false)
-        } => {
+        Some(ref local)
+            if {
+                // Parse local timestamp for comparison; fall back to "remote loses" on parse error.
+                parse_peer_timestamp(local)
+                    .map(|local_ts| remote_ts > local_ts)
+                    .unwrap_or(false)
+            } =>
+        {
             // UPDATE — set updated_at explicitly so the trigger (WHEN NEW.updated_at = OLD.updated_at) doesn't fire
             conn.execute(
                 "UPDATE journal_entries \
@@ -684,7 +692,10 @@ mod tests {
     #[test]
     fn far_future_timestamp_is_rejected() {
         let result = parse_peer_timestamp("9999-12-31T23:59:59Z");
-        assert!(result.is_err(), "far-future timestamp must be rejected (clock-skew attack guard)");
+        assert!(
+            result.is_err(),
+            "far-future timestamp must be rejected (clock-skew attack guard)"
+        );
         assert!(result.unwrap_err().contains("future"));
     }
 
@@ -697,7 +708,10 @@ mod tests {
     #[test]
     fn date_only_string_is_rejected() {
         let result = parse_peer_timestamp("9999-12-31");
-        assert!(result.is_err(), "date-only string must not be accepted as a timestamp");
+        assert!(
+            result.is_err(),
+            "date-only string must not be accepted as a timestamp"
+        );
     }
 
     // ── db_upsert_setting ─────────────────────────────────────────────────────
@@ -782,7 +796,10 @@ mod tests {
         let remote = r#"{"journal":{"fontSize":16},"ai":{"enabled":true}}"#;
         let merged: serde_json::Value =
             serde_json::from_str(&merge_settings_json(local, remote).unwrap()).unwrap();
-        assert_eq!(merged["journal"]["fontSize"], 16, "journal section must come from remote");
+        assert_eq!(
+            merged["journal"]["fontSize"], 16,
+            "journal section must come from remote"
+        );
     }
 
     #[test]
@@ -800,13 +817,14 @@ mod tests {
 
     #[test]
     fn merge_copies_ai_features_not_ai_key() {
-        let local =
-            r#"{"ai":{"enabled":false,"features":{"contextualPrompts":false},"openai":{"key":"mine"}}}"#;
-        let remote =
-            r#"{"ai":{"enabled":true,"features":{"contextualPrompts":true},"openai":{"key":"theirs"}}}"#;
+        let local = r#"{"ai":{"enabled":false,"features":{"contextualPrompts":false},"openai":{"key":"mine"}}}"#;
+        let remote = r#"{"ai":{"enabled":true,"features":{"contextualPrompts":true},"openai":{"key":"theirs"}}}"#;
         let merged: serde_json::Value =
             serde_json::from_str(&merge_settings_json(local, remote).unwrap()).unwrap();
-        assert_eq!(merged["ai"]["features"]["contextualPrompts"], true, "ai.features must come from remote");
+        assert_eq!(
+            merged["ai"]["features"]["contextualPrompts"], true,
+            "ai.features must come from remote"
+        );
         assert_eq!(
             merged["ai"]["openai"]["key"].as_str().unwrap_or(""),
             "mine",
@@ -837,7 +855,11 @@ mod tests {
         let changed = db_upsert_entry(&conn, &stub_entry("e-001", "2026-01-01T10:00:00Z")).unwrap();
         assert!(changed, "new entry must be inserted");
         let count: i64 = conn
-            .query_row("SELECT COUNT(*) FROM journal_entries WHERE id = 'e-001'", [], |r| r.get(0))
+            .query_row(
+                "SELECT COUNT(*) FROM journal_entries WHERE id = 'e-001'",
+                [],
+                |r| r.get(0),
+            )
             .unwrap();
         assert_eq!(count, 1);
     }
@@ -846,8 +868,7 @@ mod tests {
     fn remote_newer_entry_overwrites_local() {
         let conn = make_entry_conn();
         db_upsert_entry(&conn, &stub_entry("e-002", "2026-01-01T10:00:00Z")).unwrap();
-        let changed =
-            db_upsert_entry(&conn, &stub_entry("e-002", "2026-01-02T10:00:00Z")).unwrap();
+        let changed = db_upsert_entry(&conn, &stub_entry("e-002", "2026-01-02T10:00:00Z")).unwrap();
         assert!(changed, "remote-newer entry must update local");
     }
 
@@ -855,8 +876,7 @@ mod tests {
     fn remote_older_entry_is_skipped() {
         let conn = make_entry_conn();
         db_upsert_entry(&conn, &stub_entry("e-003", "2026-01-10T10:00:00Z")).unwrap();
-        let changed =
-            db_upsert_entry(&conn, &stub_entry("e-003", "2026-01-01T10:00:00Z")).unwrap();
+        let changed = db_upsert_entry(&conn, &stub_entry("e-003", "2026-01-01T10:00:00Z")).unwrap();
         assert!(!changed, "remote-older entry must not overwrite local");
     }
 
@@ -874,7 +894,10 @@ mod tests {
         let conn = make_entry_conn();
         let entry = stub_entry("e-005", "9999-12-31T23:59:59Z");
         let result = db_upsert_entry(&conn, &entry);
-        assert!(result.is_err(), "far-future updated_at must be rejected (LWW bypass guard)");
+        assert!(
+            result.is_err(),
+            "far-future updated_at must be rejected (LWW bypass guard)"
+        );
     }
 
     // ── db_upsert_book ────────────────────────────────────────────────────────
@@ -889,8 +912,7 @@ mod tests {
     fn remote_newer_book_overwrites_local() {
         let conn = make_books_conn();
         db_upsert_book(&conn, &stub_book("b-002", "2026-01-01T00:00:00Z")).unwrap();
-        let changed =
-            db_upsert_book(&conn, &stub_book("b-002", "2026-01-02T00:00:00Z")).unwrap();
+        let changed = db_upsert_book(&conn, &stub_book("b-002", "2026-01-02T00:00:00Z")).unwrap();
         assert!(changed, "newer remote book must update local");
     }
 
@@ -898,8 +920,7 @@ mod tests {
     fn remote_older_book_is_skipped() {
         let conn = make_books_conn();
         db_upsert_book(&conn, &stub_book("b-003", "2026-01-10T00:00:00Z")).unwrap();
-        let changed =
-            db_upsert_book(&conn, &stub_book("b-003", "2026-01-01T00:00:00Z")).unwrap();
+        let changed = db_upsert_book(&conn, &stub_book("b-003", "2026-01-01T00:00:00Z")).unwrap();
         assert!(!changed, "older remote book must not overwrite local");
     }
 
@@ -916,7 +937,10 @@ mod tests {
         let conn = make_signals_conn();
         db_insert_signal_if_new(&conn, &stub_signal("sig-002")).unwrap();
         let again = db_insert_signal_if_new(&conn, &stub_signal("sig-002")).unwrap();
-        assert!(!again, "duplicate signal must be idempotent (INSERT OR IGNORE)");
+        assert!(
+            !again,
+            "duplicate signal must be idempotent (INSERT OR IGNORE)"
+        );
     }
 
     #[test]
@@ -924,8 +948,9 @@ mod tests {
         let conn = make_signals_conn();
         assert!(db_insert_signal_if_new(&conn, &stub_signal("sig-a")).unwrap());
         assert!(db_insert_signal_if_new(&conn, &stub_signal("sig-b")).unwrap());
-        let count: i64 =
-            conn.query_row("SELECT COUNT(*) FROM signals", [], |r| r.get(0)).unwrap();
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM signals", [], |r| r.get(0))
+            .unwrap();
         assert_eq!(count, 2);
     }
 }

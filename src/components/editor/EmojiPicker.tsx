@@ -129,7 +129,8 @@ export function EmojiPicker({ onSelect, onClose, position }: EmojiPickerProps) {
             key={`${emoji}-${i}`}
             type="button"
             onClick={() => handleSelect(emoji)}
-            className="w-9 h-9 flex items-center justify-center text-xl rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+            aria-label={`Insert ${emoji}`}
+            className="w-9 h-9 flex items-center justify-center text-xl rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
           >
             {emoji}
           </button>
@@ -154,8 +155,11 @@ function CategoryTab({
     <button
       type="button"
       onClick={onClick}
+      aria-label={label}
+      aria-pressed={isActive}
       className={`
         flex-1 py-2 text-lg rounded-t-lg transition-colors
+        focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500
         ${isActive
           ? 'bg-slate-100 dark:bg-slate-700'
           : 'hover:bg-slate-50 dark:hover:bg-slate-700/50'

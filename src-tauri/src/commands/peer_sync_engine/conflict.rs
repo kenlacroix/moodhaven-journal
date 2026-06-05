@@ -259,9 +259,13 @@ pub fn db_upsert_book(conn: &Connection, row: &SyncBookRow) -> Result<bool, Stri
             .map_err(|e| format!("insert book: {e}"))?;
             Ok(true)
         }
-        Some(ref local) if {
-            parse_peer_timestamp(local).map(|local_ts| remote_ts > local_ts).unwrap_or(false)
-        } => {
+        Some(ref local)
+            if {
+                parse_peer_timestamp(local)
+                    .map(|local_ts| remote_ts > local_ts)
+                    .unwrap_or(false)
+            } =>
+        {
             conn.execute(
                 "UPDATE books \
                  SET name = ?2, emoji = ?3, color = ?4, sort_order = ?5, \
@@ -475,10 +479,14 @@ pub fn db_upsert_entry(conn: &Connection, row: &JournalEntryRow) -> Result<bool,
             db_upsert_tags(conn, &row.id, &row.tags)?;
             Ok(true)
         }
-        Some(ref local) if {
-            // Parse local timestamp for comparison; fall back to "remote loses" on parse error.
-            parse_peer_timestamp(local).map(|local_ts| remote_ts > local_ts).unwrap_or(false)
-        } => {
+        Some(ref local)
+            if {
+                // Parse local timestamp for comparison; fall back to "remote loses" on parse error.
+                parse_peer_timestamp(local)
+                    .map(|local_ts| remote_ts > local_ts)
+                    .unwrap_or(false)
+            } =>
+        {
             // UPDATE — set updated_at explicitly so the trigger (WHEN NEW.updated_at = OLD.updated_at) doesn't fire
             conn.execute(
                 "UPDATE journal_entries \

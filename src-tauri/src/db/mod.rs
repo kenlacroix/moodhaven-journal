@@ -102,8 +102,8 @@ impl Database {
     /// Called by `verify_password` when the DB is already encrypted.
     pub fn apply_key(&self, key: &[u8; 32]) -> Result<(), String> {
         let hex_key = hex::encode(key);
-        let new_conn = Connection::open(&self.path)
-            .map_err(|e| format!("reopen db for key: {e}"))?;
+        let new_conn =
+            Connection::open(&self.path).map_err(|e| format!("reopen db for key: {e}"))?;
         new_conn
             .execute_batch(&format!("PRAGMA hexkey = '{hex_key}';"))
             .map_err(|e| format!("PRAGMA hexkey: {e}"))?;
@@ -146,8 +146,7 @@ impl Database {
 
         // 2. Verify the exported file opens with the key
         {
-            let verify = Connection::open(&tmp_path)
-                .map_err(|e| format!("verify open: {e}"))?;
+            let verify = Connection::open(&tmp_path).map_err(|e| format!("verify open: {e}"))?;
             verify
                 .execute_batch(&format!("PRAGMA hexkey = '{hex_key}';"))
                 .map_err(|e| format!("verify hexkey: {e}"))?;
@@ -168,8 +167,8 @@ impl Database {
         // 4. Release the original file by replacing the conn with an in-memory placeholder
         {
             let mut conn = self.conn.lock().map_err(|e| e.to_string())?;
-            let placeholder = Connection::open_in_memory()
-                .map_err(|e| format!("placeholder: {e}"))?;
+            let placeholder =
+                Connection::open_in_memory().map_err(|e| format!("placeholder: {e}"))?;
             *conn = placeholder;
             // Old connection (to moodhaven.db) drops here, releasing the file handle
         }
@@ -185,7 +184,13 @@ impl Database {
         }
         if let Err(e) = std::fs::rename(&tmp_path, &self.path) {
             // Revert db_state.json so next startup tries unencrypted open again
-            let _ = write_db_state(&self.path, &DbStateFile { encrypted: false, salt: None });
+            let _ = write_db_state(
+                &self.path,
+                &DbStateFile {
+                    encrypted: false,
+                    salt: None,
+                },
+            );
             return Err(format!("rename encrypted db: {e}"));
         }
 

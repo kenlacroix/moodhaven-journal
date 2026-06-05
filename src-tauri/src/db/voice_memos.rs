@@ -233,6 +233,7 @@ mod tests {
         .expect("create tables");
         Database {
             conn: Mutex::new(conn),
+            path: std::path::PathBuf::new(),
         }
     }
 

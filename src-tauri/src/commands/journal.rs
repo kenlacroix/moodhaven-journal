@@ -73,9 +73,10 @@ pub fn verify_password(
         // Proof of correct password: derive key from db_state.json salt and try to
         // open the encrypted database. SQLCipher's MAC verification fails immediately
         // on a wrong key, so there is no separate hash check needed.
-        let salt_b64 = db
-            .db_salt()
-            .ok_or("Encrypted database is missing salt in db_state.json")?;
+        let salt_b64 = db.db_salt().ok_or(
+            "Database encryption record is missing. \
+             If this persists, use \"Erase & Start Fresh\" in Settings to recover.",
+        )?;
         let salt = base64::engine::general_purpose::STANDARD
             .decode(&salt_b64)
             .map_err(|e| format!("invalid db_state salt: {e}"))?;

@@ -194,6 +194,7 @@ pub async fn factory_reset(app: AppHandle) -> Result<bool, String> {
         "pw_lockout.json",  // Password rate-limiter state — reset with the app
         "db_state.json",    // SQLCipher encryption state — must be removed with the DB
         "moodhaven_enc.db", // Encrypted export tmp — survives interrupted migrations
+        "moodhaven_old.db", // Windows-only rename backup — may survive interrupted migrations
         "voice_memos",      // Encrypted audio files from watch companion
         "voice_memos_incoming", // Staging directory for incoming watch audio
         "media",            // Encrypted media attachments

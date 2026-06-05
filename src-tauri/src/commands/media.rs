@@ -503,13 +503,13 @@ pub fn get_media_thumbnail(
 
     let mut jpeg_bytes: Vec<u8> = Vec::new();
     use image::codecs::jpeg::JpegEncoder;
-    use image::ColorType;
+    use image::ExtendedColorType;
     JpegEncoder::new_with_quality(&mut jpeg_bytes, 80)
         .encode(
             thumb.as_raw(),
             thumb.width(),
             thumb.height(),
-            ColorType::Rgb8,
+            ExtendedColorType::Rgb8,
         )
         .map_err(|e| format!("JPEG encode: {}", e))?;
 

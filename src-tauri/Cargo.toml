@@ -45,7 +45,7 @@ hex = "0.4"
 aes-gcm = "0.10"
 pbkdf2 = { version = "0.12", features = ["simple"] }
 hmac = "0.12"
-image = { version = "0.24", default-features = false, features = ["jpeg", "png", "gif", "webp"] }
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "webp"] }
 
 # FIDO/Hardware Key support (native, not WebAuthn) - optional
 ctap-hid-fido2 = { version = "3", optional = true }

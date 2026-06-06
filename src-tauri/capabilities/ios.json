@@ -1,0 +1,22 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "identifier": "ios",
+  "description": "iOS-specific capabilities — applies only to the iOS target",
+  "platforms": ["iOS"],
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "log:default",
+    {
+      "identifier": "http:allow-fetch",
+      "allow": [{ "url": "https://**" }, { "url": "http://**" }]
+    },
+    "http:allow-fetch-cancel",
+    "http:allow-fetch-read-body",
+    "http:allow-fetch-send",
+    "notification:default",
+    "dialog:default",
+    "fs:default",
+    "allow-all-app-commands"
+  ]
+}

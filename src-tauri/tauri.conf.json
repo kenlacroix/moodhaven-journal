@@ -56,6 +56,10 @@
     "macOS": {
       "minimumSystemVersion": "10.15"
     },
+    "iOS": {
+      "minimumSystemVersion": "16.0",
+      "developmentTeam": "REPLACE_WITH_APPLE_TEAM_ID"
+    },
     "linux": {
       "appimage": {
         "bundleMediaFramework": true

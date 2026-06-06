@@ -70,6 +70,17 @@ class WearPlugin(private val activity: Activity) : Plugin(activity) {
 
     private val ioScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
+    private val channelCallback = object : ChannelClient.ChannelCallback() {
+        override fun onChannelOpened(channel: ChannelClient.Channel) {
+            if (channel.path != WearProtocol.CHANNEL_AUDIO) {
+                Log.w(TAG, "Plugin: unexpected channel path: ${channel.path}")
+                return
+            }
+            Log.i(TAG, "Plugin: audio channel opened from ${channel.nodeId}")
+            ioScope.launch { processAudioChannel(channel) }
+        }
+    }
+
     // Set singleton, drain any buffered events, and register foreground channel callback
     init {
         _instance = this
@@ -79,18 +90,14 @@ class WearPlugin(private val activity: Activity) : Plugin(activity) {
         // When the app is in the foreground GMS routes ChannelAPI events to a registered
         // ChannelCallback rather than WearableListenerService.onChannelOpened().
         // Registering here ensures audio arrives regardless of app state.
-        val cb = object : ChannelClient.ChannelCallback() {
-            override fun onChannelOpened(channel: ChannelClient.Channel) {
-                if (channel.path != WearProtocol.CHANNEL_AUDIO) {
-                    Log.w(TAG, "Plugin: unexpected channel path: ${channel.path}")
-                    return
-                }
-                Log.i(TAG, "Plugin: audio channel opened from ${channel.nodeId}")
-                ioScope.launch { processAudioChannel(channel) }
-            }
-        }
-        Wearable.getChannelClient(activity).registerChannelCallback(cb)
+        Wearable.getChannelClient(activity).registerChannelCallback(channelCallback)
         Log.i(TAG, "ChannelClient foreground callback registered")
+    }
+
+    override fun onDestroy() {
+        Wearable.getChannelClient(activity).unregisterChannelCallback(channelCallback)
+        Log.i(TAG, "ChannelClient foreground callback unregistered")
+        super.onDestroy()
     }
 
     // ── Bridge from WearListenerService ──────────────────────────────────────
@@ -171,9 +178,7 @@ class WearPlugin(private val activity: Activity) : Plugin(activity) {
     private suspend fun processAudioChannel(channel: ChannelClient.Channel) {
         val channelClient = Wearable.getChannelClient(activity)
         try {
-            val inputStream = channelClient.getInputStream(channel).await()
-            val allBytes = inputStream.readBytes()
-            inputStream.close()
+            val allBytes = channelClient.getInputStream(channel).await().use { it.readBytes() }
 
             val frame = AudioFrameParser.parse(allBytes) ?: return
             Log.i(TAG, "Plugin: audio received id=${frame.id} duration=${frame.durationMs}ms size=${frame.audioBytes.size}")
@@ -222,7 +227,7 @@ class WearPlugin(private val activity: Activity) : Plugin(activity) {
                 val id = json.optString("id").takeIf { it.isNotBlank() }
                 if (id == null) { Log.w(TAG, "Dropping buffered signal with missing id"); continue }
                 bridgeFromWatch(
-                    id = id!!,
+                    id = id,
                     timestamp = json.optString("timestamp", nowIso8601()),
                     type = json.optString("type", "unknown"),
                     source = json.optString("source", "watch"),

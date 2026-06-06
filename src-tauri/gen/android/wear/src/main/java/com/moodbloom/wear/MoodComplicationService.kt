@@ -20,7 +20,7 @@ import androidx.wear.watchface.complications.datasource.SuspendingComplicationDa
  * LONG_TEXT:  last mood + time     e.g. "😊 Great · Today 09:14"
  *
  * Watch face users: long-press the watch face → Complications → choose a slot
- * → scroll to MoodBloom.
+ * → scroll to MoodHaven.
  */
 class MoodComplicationService : SuspendingComplicationDataSourceService() {
 
@@ -53,7 +53,7 @@ class MoodComplicationService : SuspendingComplicationDataSourceService() {
             // No history yet — prompt user to log
             when (request.complicationType) {
                 ComplicationType.SHORT_TEXT -> shortText("🌱", "Log mood")
-                ComplicationType.LONG_TEXT  -> longText("🌱 Log your mood", "MoodBloom")
+                ComplicationType.LONG_TEXT  -> longText("🌱 Log your mood", "MoodHaven")
                 else -> null
             }
         } else {
@@ -71,7 +71,7 @@ class MoodComplicationService : SuspendingComplicationDataSourceService() {
     private fun shortText(text: String, title: String): ShortTextComplicationData =
         ShortTextComplicationData.Builder(
             text  = PlainComplicationText.Builder(text).build(),
-            contentDescription = PlainComplicationText.Builder("MoodBloom: $title").build(),
+            contentDescription = PlainComplicationText.Builder("MoodHaven: $title").build(),
         )
             .setTitle(PlainComplicationText.Builder(title).build())
             .build()
@@ -79,7 +79,7 @@ class MoodComplicationService : SuspendingComplicationDataSourceService() {
     private fun longText(text: String, title: String): LongTextComplicationData =
         LongTextComplicationData.Builder(
             text  = PlainComplicationText.Builder(text).build(),
-            contentDescription = PlainComplicationText.Builder("MoodBloom: $text").build(),
+            contentDescription = PlainComplicationText.Builder("MoodHaven: $text").build(),
         )
             .setTitle(PlainComplicationText.Builder(title).build())
             .build()

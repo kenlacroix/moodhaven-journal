@@ -11,7 +11,7 @@ import { usePlatform } from '../../hooks/usePlatform';
 import { useAppStore } from '../../stores/appStore';
 import { usePeerSyncStore } from '../../stores/peerSyncStore';
 import { getAllEntries } from '../../lib/services/journalService';
-import { syncWithWebDAV, type SyncProgress } from '../../lib/services/syncEngine';
+import type { SyncProgress } from '../../lib/services/syncEngine';
 import { getDeviceName, setDeviceName as persistDeviceName } from '../../lib/services/deviceIdentity';
 import { startDiscovery } from '../../lib/services/peerDiscoveryService';
 import { peerSyncNow } from '../../lib/services/peerSyncEngineService';
@@ -128,6 +128,7 @@ export function SyncDetailsModal({ onClose, onNavigateToSettings }: SyncDetailsM
     setSyncOutcome(null);
     setSyncProgress(null);
     try {
+      const { syncWithWebDAV } = await import('../../lib/services/syncEngine');
       const result = await syncWithWebDAV(storage.webdav, sessionPassword, setSyncProgress);
       setSyncOutcome({ pulled: result.pulled, pushed: result.pushed, error: result.error });
       if (result.success) {

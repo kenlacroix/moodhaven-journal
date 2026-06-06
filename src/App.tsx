@@ -26,6 +26,7 @@ import { LockScreen } from './pages/LockScreen';
 import { SetupScreen } from './pages/SetupScreen';
 import { MainLayout, MobileLayout, type ViewType } from './components/layout';
 import { usePlatform } from './hooks/usePlatform';
+import { useIsMobile } from './hooks/useIsMobile';
 import { TutorialWizard } from './components/tutorial';
 const SyncDetailsModal = lazy(() => import('./components/sync/SyncDetailsModal').then((m) => ({ default: m.SyncDetailsModal })));
 import { useAppStore } from './stores/appStore';
@@ -86,6 +87,7 @@ function MainApp() {
   const [timelineRefresh, setTimelineRefresh] = useState(0);
 
   const { isAndroid, isBrowser } = usePlatform();
+  const isMobileViewport = useIsMobile();
 
   // Schedule reminder notifications (hook checks enabled state internally)
   useReminderScheduler();
@@ -273,8 +275,8 @@ function MainApp() {
     return <WellnessDisclaimerScreen onAccept={handleDisclaimerAccept} />;
   }
 
-  // Main app — MobileLayout on Android, MainLayout on desktop
-  const Layout = isAndroid ? MobileLayout : MainLayout;
+  // Main app — MobileLayout on Android or narrow viewports, MainLayout on desktop
+  const Layout = (isAndroid || isMobileViewport) ? MobileLayout : MainLayout;
   return (
     <ErrorBoundary>
       <Layout

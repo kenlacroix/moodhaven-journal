@@ -477,6 +477,17 @@
   animation: drawer-hint-pulse-kf 3000ms ease-out 1;
 }
 
+/* ── User-controlled reduced-motion override ──
+ * When the user explicitly enables "Reduce motion" in the Appearance drawer,
+ * suppress all animations/transitions inside the writing view. */
+[data-writing-prefs][data-writing-reduced-motion='true'] *,
+[data-writing-prefs][data-writing-reduced-motion='true'] *::before,
+[data-writing-prefs][data-writing-reduced-motion='true'] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}
+
 /* ── Editor surface consumption — the .ProseMirror node reads the variables ── */
 
 [data-writing-prefs] .ProseMirror {

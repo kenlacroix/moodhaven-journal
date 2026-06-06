@@ -220,8 +220,8 @@ Added `buildFeatures { buildConfig = true }` to `wear/build.gradle.kts`. Replace
 
 ### SETTINGS-002: `React.lazy()` tab loading (P4)
 **What:** Wrap each tab import in `SettingsPage.tsx` with `React.lazy()` and add a `<Suspense fallback={null}>` wrapper around the rendered tab. Only the active tab's JS chunk is loaded on first render.
-**Why:** Settings is loaded lazily already at the page level; per-tab lazy loading would be a micro-optimization. Deferred until bundle analysis shows it matters.
-**Context:** Deferred from settings refactor plan (2026-04-01).
+**Why:** `SettingsPage` itself is now lazy-loaded at the page level (v1.6.0.4). Per-tab lazy loading is a further micro-optimization. Deferred until bundle analysis shows it matters.
+**Context:** Deferred from settings refactor plan (2026-04-01); page-level lazy loading completed v1.6.0.4.
 **Effort:** human ~30min / CC+gstack ~5min
 
 ---

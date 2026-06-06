@@ -5,6 +5,15 @@ All notable changes to MoodHaven Journal are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.6.0.4] — 2026-06-06
+
+### Changed
+- **Faster startup** — initial JavaScript bundle reduced from 1,399 KB to 529 KB (−62%). The editor (TipTap/ProseMirror, ~520 KB) now loads in a separate chunk, and secondary views (Settings, Insights, StillHaven, Journal Overview) are deferred until first use.
+- **No more Google Fonts network request** — removed the render-blocking CDN stylesheet. The app now uses system fonts, which were already the Tailwind fallback. No visual change on desktop.
+- **WebDAV sync code loads on demand** — the sync engine is now fetched only when you click "Sync Now", removing it from the startup bundle.
+
+---
+
 ## [1.6.0.1] — 2026-06-02
 
 ### Fixed

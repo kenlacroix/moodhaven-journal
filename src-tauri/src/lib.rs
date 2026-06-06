@@ -528,6 +528,11 @@ pub fn run() {
             commands::pin_setup,
             commands::pin_unlock,
             commands::pin_disable,
+            // Desktop biometric unlock (OS keyring — Windows Credential Manager / macOS Keychain / libsecret)
+            commands::biometric_is_available,
+            commands::biometric_store_session,
+            commands::biometric_retrieve_session,
+            commands::biometric_clear_session,
             // Password management
             commands::check_password_exists,
             commands::store_password_hash,

@@ -17,7 +17,10 @@ import {
   biometricIsEnrolled,
   biometricAuthenticate,
   biometricEnroll,
+  desktopBiometricRetrieveSession,
 } from '../lib/services/biometricService';
+import { useSettingsStore } from '../stores/settingsStore';
+import { usePlatform } from '../hooks/usePlatform';
 import { TwoFactorVerify } from '../components/two-factor';
 import type { TwoFactorStatus } from '../types/twoFactor';
 import {
@@ -71,6 +74,9 @@ export function LockScreen() {
   // Rust-side PIN lockout countdown (seconds remaining)
   const [pinLockoutSecs, setPinLockoutSecs] = useState(0);
   const pinTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Desktop OS-keyring biometric state
+  const [desktopBiometricLoading, setDesktopBiometricLoading] = useState(false);
+  const [desktopBiometricError, setDesktopBiometricError] = useState<string | null>(null);
 
   // Rate limiting state
   const [rateLimitState, setRateLimitState] = useState<RateLimitState>({
@@ -83,6 +89,9 @@ export function LockScreen() {
 
   const unlock = useAppStore((state) => state.unlock);
   const finalizeUnlock = useAppStore((state) => state.finalizeUnlock);
+  const { isDesktop } = usePlatform();
+  const biometricEnabledSetting =
+    useSettingsStore((s) => s.settings.privacy.biometricEnabled) ?? false;
 
   const lockedOut = lockoutRemaining > 0;
 
@@ -484,6 +493,28 @@ export function LockScreen() {
     }
   }, [unlock, setRateLimitState]);
 
+  // Desktop OS-keyring unlock — retrieves password from the OS credential store
+  const handleDesktopBiometricUnlock = useCallback(async () => {
+    setDesktopBiometricLoading(true);
+    setDesktopBiometricError(null);
+    try {
+      const retrieved = await desktopBiometricRetrieveSession();
+      const success = await unlock(retrieved);
+      if (!success) {
+        setDesktopBiometricError('Unlock failed. Please use your password.');
+      }
+    } catch (e) {
+      const msg = String(e);
+      if (msg.includes('No biometric session stored')) {
+        setDesktopBiometricError('No credential stored. Please unlock with your password first.');
+      } else {
+        setDesktopBiometricError('OS keyring error. Please use your password.');
+      }
+    } finally {
+      setDesktopBiometricLoading(false);
+    }
+  }, [unlock]);
+
   // Derived UI helpers
   const freeAttemptsLeft = getRemainingFreeAttempts(rateLimitState);
   const showAttemptsWarning =
@@ -600,6 +631,31 @@ export function LockScreen() {
                   </p>
                   {biometricError && (
                     <p className="text-xs text-rose-500 dark:text-rose-400 text-center">{biometricError}</p>
+                  )}
+                </div>
+              )}
+
+              {/* Desktop OS-keyring unlock button */}
+              {isDesktop && biometricEnabledSetting && (
+                <div className="flex flex-col items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleDesktopBiometricUnlock}
+                    disabled={desktopBiometricLoading || lockedOut}
+                    className="w-full py-2.5 rounded-xl border border-violet-200 dark:border-violet-700 bg-violet-50 dark:bg-violet-900/20 text-sm font-medium text-violet-700 dark:text-violet-300 hover:bg-violet-100 dark:hover:bg-violet-900/40 active:scale-[0.99] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                    aria-label="Unlock with OS keyring"
+                  >
+                    {desktopBiometricLoading ? (
+                      <span className="w-4 h-4 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 5.25a3 3 0 013 3m3 0a6 6 0 01-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1121.75 8.25z" />
+                      </svg>
+                    )}
+                    Use saved password
+                  </button>
+                  {desktopBiometricError && (
+                    <p className="text-xs text-rose-500 dark:text-rose-400 text-center">{desktopBiometricError}</p>
                   )}
                 </div>
               )}

@@ -65,6 +65,8 @@ export interface PrivacySettings {
   autoLockTimeout: number; // minutes, 0 = disabled
   clearClipboardOnLock: boolean;
   hideContentInTaskbar: boolean;
+  /** Desktop: password stored in OS keyring (Keychain / Credential Manager / libsecret). Default: false */
+  biometricEnabled: boolean;
 }
 
 // Appearance settings
@@ -297,6 +299,7 @@ export function createDefaultSettings(): AppSettings {
       autoLockTimeout: 5,
       clearClipboardOnLock: true,
       hideContentInTaskbar: false,
+      biometricEnabled: false,
     },
     appearance: {
       theme: 'system',

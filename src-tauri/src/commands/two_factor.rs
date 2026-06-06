@@ -415,30 +415,23 @@ pub fn generate_totp_secret(
     })
 }
 
-/// Verify a TOTP code against the pending secret.
-/// `password` is required to decrypt the stored secret blob.
-#[tauri::command]
-pub fn verify_totp_code(
-    db: State<Database>,
-    code: String,
-    password: String,
-) -> Result<bool, String> {
-    let row = get_2fa_row(&db)?.ok_or_else(|| "No 2FA setup in progress".to_string())?;
+/// Core TOTP verification logic — not rate-limited, used internally by `enable_totp`.
+/// The public Tauri command `verify_totp_code` wraps this with rate limiting.
+fn verify_totp_code_inner(db: &Database, code: &str, password: &str) -> Result<bool, String> {
+    let row = get_2fa_row(db)?.ok_or_else(|| "No 2FA setup in progress".to_string())?;
 
     let stored = row
         .totp_secret
         .ok_or_else(|| "No TOTP secret found".to_string())?;
-    let secret = decrypt_totp_secret(&stored, &password)?;
+    let secret = decrypt_totp_secret(&stored, password)?;
 
     let totp = create_totp(&secret)?;
 
-    // Verify with some time tolerance (1 step before/after)
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_err(|e| format!("Time error: {}", e))?
         .as_secs();
 
-    // Check current, previous, and next time step
     for offset in [-30i64, 0, 30] {
         let time = (now as i64 + offset) as u64;
         let expected = totp.generate(time);
@@ -450,6 +443,30 @@ pub fn verify_totp_code(
     Ok(false)
 }
 
+/// Verify a TOTP code against the pending secret.
+/// `password` is required to decrypt the stored secret blob.
+/// Rate-limited via PasswordRateLimiter — same budget as password attempts,
+/// preventing brute-force of the 6-digit code during the setup window.
+#[tauri::command]
+pub fn verify_totp_code(
+    db: State<Database>,
+    rate_limiter: State<'_, crate::PasswordRateLimiter>,
+    code: String,
+    password: String,
+) -> Result<bool, String> {
+    rate_limiter
+        .check()
+        .map_err(|secs| format!("Too many failed attempts. Try again in {secs}s."))?;
+
+    let matched = verify_totp_code_inner(&db, &code, &password)?;
+    if matched {
+        rate_limiter.record_success();
+    } else {
+        rate_limiter.record_failure();
+    }
+    Ok(matched)
+}
+
 /// Enable TOTP after successful verification.
 /// `password` is required to decrypt the stored pending secret.
 #[tauri::command]
@@ -458,7 +475,7 @@ pub fn enable_totp(
     code: String,
     password: String,
 ) -> Result<BackupCodes, String> {
-    if !verify_totp_code(db.clone(), code, password)? {
+    if !verify_totp_code_inner(&db, &code, &password)? {
         return Err("Invalid verification code".to_string());
     }
 

@@ -1,6 +1,6 @@
 # Tauri Command Reference
 
-> **Version:** v1.6.0.1 | **Total commands:** ~150
+> **Version:** v1.6.0 (feat/cloud-sync-phase1) | **Total commands:** ~156
 >
 > This document lists all `#[tauri::command]` functions exposed by MoodHaven Journal's Rust backend.
 > Commands are registered in `src-tauri/src/lib.rs` and permitted in `src-tauri/capabilities/default.json`.
@@ -41,6 +41,7 @@ Parameter names in TypeScript use **camelCase**; Rust receives them as **snake_c
 - [Writer Window](#writer-window)
 - [StillHaven](#stillhaven)
 - [Logging](#logging)
+- [Cloud Providers (Phase 1)](#cloud-providers-phase-1)
 
 ---
 
@@ -1980,5 +1981,99 @@ Set the active log level at runtime. Changes take effect immediately without res
 ```typescript
 invoke('set_log_level', {
   level: 'trace' | 'debug' | 'info' | 'warn' | 'error',
+}) → Promise<void>
+```
+
+---
+
+## Cloud Providers (Phase 1)
+
+**Source:** `src-tauri/src/commands/cloud_providers.rs`
+**IPC wrappers:** `src/lib/services/cloudProvidersService.ts`
+
+> **Status:** feat/cloud-sync-phase1 — implemented but not yet shipping. Compile-time OAuth credentials are placeholders; all commands return an error until real credentials are compiled in.
+
+Cloud provider commands handle OAuth 2.0 PKCE flows (RFC 8252) for Dropbox and Google Drive. All journal data passed to these commands must already be AES-256-GCM encrypted by the frontend — the providers only ever see ciphertext.
+
+---
+
+### `cloud_provider_auth_start`
+
+Start the OAuth 2.0 PKCE authorization flow for the specified provider. Opens the provider's authorization URL in the system browser and waits up to 5 minutes for the localhost redirect callback. Exchanges the authorization code for tokens and stores them in the SQLite `settings` table.
+
+Returns an error if credentials are still placeholders (`*_PLACEHOLDER`), if the provider name is unknown, or if the authorization callback times out.
+
+```typescript
+invoke('cloud_provider_auth_start', {
+  provider: 'dropbox' | 'gdrive',
+}) → Promise<void>
+```
+
+---
+
+### `cloud_provider_upload_blob`
+
+Upload an encrypted backup blob to the specified cloud provider. Refreshes the access token automatically if expired.
+
+The blob must be the full ciphertext string produced by `exportData()` in the frontend — equivalent to a `.moodhaven` file export. Stored at:
+- Dropbox: `/Apps/MoodHaven/moodhaven-backup.moodhaven`
+- Google Drive: `appDataFolder/moodhaven-backup.moodhaven` (hidden, app-only)
+
+```typescript
+invoke('cloud_provider_upload_blob', {
+  provider: 'dropbox' | 'gdrive',
+  blob: string,   // AES-256-GCM ciphertext — never plaintext
+}) → Promise<void>
+```
+
+---
+
+### `cloud_provider_download_blob`
+
+Download the backup blob from the specified cloud provider. Refreshes the access token automatically if expired. Returns an error if no backup file exists.
+
+```typescript
+invoke('cloud_provider_download_blob', {
+  provider: 'dropbox' | 'gdrive',
+}) → Promise<string>   // AES-256-GCM ciphertext; pass to encryptedImport()
+```
+
+---
+
+### `cloud_provider_status`
+
+Get the connection status for one or all providers. Returns an empty array if no providers are connected.
+
+```typescript
+invoke('cloud_provider_status', {
+  provider?: string | null,   // null = all providers
+}) → Promise<Array<{
+  provider: string,
+  connected: boolean,
+  lastSyncAt: string | null,   // ISO 8601, or null if never synced
+}>>
+```
+
+---
+
+### `cloud_provider_disconnect`
+
+Revoke the stored tokens for a provider. Does not call the provider's revocation endpoint — only clears local token rows from the `settings` table.
+
+```typescript
+invoke('cloud_provider_disconnect', {
+  provider: 'dropbox' | 'gdrive',
+}) → Promise<void>
+```
+
+---
+
+### `cloud_provider_refresh_token`
+
+Force-refresh the access token for a provider using the stored refresh token. Called automatically by upload/download commands when the token is expired; can also be called explicitly.
+
+```typescript
+invoke('cloud_provider_refresh_token', {
+  provider: 'dropbox' | 'gdrive',
 }) → Promise<void>
 ```

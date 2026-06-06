@@ -40,8 +40,16 @@
 //! ```
 //!
 //! ## Transport encryption
-//! Shared key = SHA-256("moodhaven-sync-v1:" || sorted(pubKeyA, pubKeyB)).
-//! Both sides derive independently — deterministic from stored public keys.
+//!
+//! **v2 (primary):** Forward-secret session key via ephemeral X25519 ECDH.
+//! Both sides include an ephemeral X25519 public key in their HELLO/Ok messages.
+//! After ECDH the server issues a 32-byte random challenge; the client responds
+//! with an Ed25519 signature over `"moodhaven-hello-auth-v1:" || challenge_bytes`
+//! using their device private key, proving possession before any data is exchanged.
+//! `session_key = SHA-256("moodhaven-sync-v2:" || ecdh_shared || sorted(pub_A, pub_B))`
+//!
+//! **v1 (fallback, no forward secrecy):** Used when the peer omits `eph_pub`.
+//! `session_key = SHA-256("moodhaven-sync-v1:" || sorted(pub_A, pub_B))`
 //!
 //! Frame format: [4-byte big-endian length][12-byte nonce][AES-256-GCM ciphertext]
 

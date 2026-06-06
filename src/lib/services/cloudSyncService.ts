@@ -64,7 +64,8 @@ export async function uploadBackup(
     let uploadResult: Awaited<ReturnType<typeof uploadFile>>;
 
     if (IS_BROWSER) {
-      // Browser: fixed filename + ETag-guarded upload to prevent data loss on concurrent edits
+      // Browser uses a fixed filename so the same slot is always overwritten.
+      // ETag guard prevents a second tab from silently clobbering a concurrent upload.
       filename = BROWSER_SYNC_FILENAME;
       const state = await dbGetWebDAVState();
       uploadResult = await uploadFileWithETagRetry(webdavConfig, filename, encryptedData, state?.etag ?? null);

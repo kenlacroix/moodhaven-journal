@@ -37,7 +37,7 @@ describe('CollapsibleToolbar — iOS STT gate', () => {
         onMicClick={vi.fn()}
       />
     );
-    expect(screen.getByTitle('Start dictation')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Start dictation' })).toBeInTheDocument();
   });
 
   it('does not render the mic button when isIOS is true, even with onMicClick provided', () => {
@@ -50,19 +50,19 @@ describe('CollapsibleToolbar — iOS STT gate', () => {
         onMicClick={vi.fn()}
       />
     );
-    expect(screen.queryByTitle('Start dictation')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Start dictation' })).not.toBeInTheDocument();
   });
 
   it('does not render the mic button when onMicClick is not provided, regardless of platform', () => {
     mockUsePlatform.mockReturnValue({ isIOS: false, isAndroid: false, isMobile: false, isBrowser: false, isDesktop: true });
     render(<CollapsibleToolbar {...baseProps} />);
-    expect(screen.queryByTitle('Start dictation')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Start dictation' })).not.toBeInTheDocument();
   });
 
   it('renders standard formatting buttons on iOS', () => {
     mockUsePlatform.mockReturnValue({ isIOS: true, isAndroid: false, isMobile: true, isBrowser: false, isDesktop: false });
     render(<CollapsibleToolbar {...baseProps} onMicClick={vi.fn()} />);
-    expect(screen.getByTitle('Bold (Ctrl+B)')).toBeInTheDocument();
-    expect(screen.getByTitle('Italic (Ctrl+I)')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Bold (Ctrl+B)' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Italic (Ctrl+I)' })).toBeInTheDocument();
   });
 });

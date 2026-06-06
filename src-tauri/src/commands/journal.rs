@@ -10,6 +10,7 @@ use hmac::Hmac;
 use pbkdf2::pbkdf2;
 use sha2::Sha256;
 use tauri::State;
+use zeroize::Zeroizing;
 
 use super::require_unlocked;
 
@@ -80,16 +81,16 @@ pub fn verify_password(
         let salt = base64::engine::general_purpose::STANDARD
             .decode(&salt_b64)
             .map_err(|e| format!("invalid db_state salt: {e}"))?;
-        let mut derived = [0u8; 32];
-        pbkdf2::<Hmac<Sha256>>(password.as_bytes(), &salt, 600_000, &mut derived)
+        let mut derived = Zeroizing::new([0u8; 32]);
+        pbkdf2::<Hmac<Sha256>>(password.as_bytes(), &salt, 600_000, derived.as_mut())
             .map_err(|e| format!("pbkdf2 error: {e}"))?;
 
-        match db.apply_key(&derived) {
+        match db.apply_key(&*derived) {
             Ok(()) => {
                 rate_limiter.record_success();
                 let twofa_enabled = db::is_2fa_enabled(&db).unwrap_or(false);
                 twofa_state.on_password_verified(twofa_enabled);
-                db_key_state.set(derived);
+                db_key_state.set(*derived);
                 Ok(true)
             }
             Err(_) => {
@@ -110,18 +111,19 @@ pub fn verify_password(
         let salt = base64::engine::general_purpose::STANDARD
             .decode(&settings.password_salt)
             .map_err(|e| format!("invalid salt encoding: {e}"))?;
-        let mut derived = [0u8; 32];
-        pbkdf2::<Hmac<Sha256>>(password.as_bytes(), &salt, 600_000, &mut derived)
+        let mut derived = Zeroizing::new([0u8; 32]);
+        pbkdf2::<Hmac<Sha256>>(password.as_bytes(), &salt, 600_000, derived.as_mut())
             .map_err(|e| format!("pbkdf2 error: {e}"))?;
 
-        let derived_b64 = base64::engine::general_purpose::STANDARD.encode(derived);
+        let derived_b64 =
+            Zeroizing::new(base64::engine::general_purpose::STANDARD.encode(*derived));
         let matched = constant_time_eq(&derived_b64, &settings.password_hash);
         if matched {
             rate_limiter.record_success();
             let twofa_enabled = db::is_2fa_enabled(&db).unwrap_or(false);
             twofa_state.on_password_verified(twofa_enabled);
             // Store derived key bytes — unlock_app will use them to encrypt the DB.
-            db_key_state.set(derived);
+            db_key_state.set(*derived);
         } else {
             rate_limiter.record_failure();
         }

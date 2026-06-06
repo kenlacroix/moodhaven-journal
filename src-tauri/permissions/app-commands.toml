@@ -68,8 +68,6 @@ commands.allow = [
   "generate_totp_secret",
   "verify_totp_code",
   "enable_totp",
-  "store_webauthn_credential_cmd",
-  "get_webauthn_credentials",
   "regenerate_backup_codes",
   "verify_backup_code",
   "get_backup_codes_count",
@@ -115,7 +113,6 @@ commands.allow = [
   "open_media_attachment",
   "get_media_thumbnail",
   "delete_media_attachment",
-  "sweep_preview_temp",
   # Media sync helpers
   "read_media_for_sync",
   "write_media_from_sync",

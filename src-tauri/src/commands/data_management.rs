@@ -12,6 +12,7 @@ use rand::RngCore;
 use sha2::Sha256;
 use std::fs;
 use tauri::{AppHandle, Manager, State};
+use zeroize::Zeroizing;
 
 use crate::commands::peer_sync_engine::SyncEngineState;
 use crate::db::{self, Database};
@@ -40,13 +41,14 @@ pub fn unlock_app(
     // One-time migration: encrypt the database the first time an existing user unlocks
     // after upgrading to a build with SQLCipher. Also runs for fresh installs on first unlock.
     if !db.is_encrypted() {
-        if let Some(key) = db_key.get() {
+        if let Some(key_bytes) = db_key.get() {
+            let key = Zeroizing::new(key_bytes);
             // Retrieve the PBKDF2 salt from the settings table (accessible while unencrypted).
             let salt_b64 = db::get_password_hash(&db)?
                 .map(|s| s.password_salt)
                 .unwrap_or_default();
             if !salt_b64.is_empty() {
-                db.encrypt_in_place(&key, &salt_b64)?;
+                db.encrypt_in_place(&*key, &salt_b64)?;
                 log::info!("[sqlcipher] Database encrypted successfully");
             }
         }

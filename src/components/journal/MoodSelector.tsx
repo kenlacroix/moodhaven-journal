@@ -23,11 +23,15 @@ export function MoodSelector({
 }: MoodSelectorProps) {
   return (
     <div className="space-y-3">
-      <label className="block text-sm font-medium text-slate-600 dark:text-slate-300">
+      <p id="mood-selector-label" className="block text-sm font-medium text-slate-600 dark:text-slate-300">
         How are you feeling?
-      </label>
+      </p>
 
-      <div className="flex items-center justify-center gap-2 sm:gap-4">
+      <div
+        role="group"
+        aria-labelledby="mood-selector-label"
+        className="flex items-center justify-center gap-2 sm:gap-4"
+      >
         {MOOD_OPTIONS.map((option) => {
           const isSelected = value === option.level;
 

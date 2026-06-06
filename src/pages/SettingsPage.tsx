@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { usePlatform } from '../hooks/usePlatform';
+import { useIsMobile } from '../hooks/useIsMobile';
 import { useSettingsStore } from '../stores/settingsStore';
 import {
   getDataStats,
@@ -173,6 +174,8 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
   const setScrollToSection = useSettingsStore((s) => s.setScrollToSection);
 
   const { isAndroid } = usePlatform();
+  const isMobileViewport = useIsMobile();
+  const isMobile = isAndroid || isMobileViewport;
   const [activeTab, setActiveTab] = useState<SettingsTab>('general');
   const [mobileScreen, setMobileScreen] = useState<'list' | 'detail'>('list');
   const [searchQuery, setSearchQuery] = useState('');
@@ -650,7 +653,7 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
     );
   }
 
-  if (isAndroid) {
+  if (isMobile) {
     const activeTabConfig = TABS.find(t => t.id === activeTab);
     return (
       <>

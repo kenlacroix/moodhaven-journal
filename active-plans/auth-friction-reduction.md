@@ -1,6 +1,6 @@
 # Auth Friction Reduction
 
-**Status:** Item 2 (PIN unlock) done — PR #102 merged. Item 1 (desktop biometric) in progress.  
+**Status:** Complete (shipped in v1.7.0). PIN unlock PR #102 merged, desktop biometric PR #106 merged.  
 **Target:** v1.8.x (desktop) | v2.1.0 (iOS, see `ios-app-v2-0.md` Phase 5)
 
 Reduces the unlock barrier without compromising the zero-knowledge encryption model. SSO (Google/Apple sign-in) was explicitly ruled out — it requires either a backend key escrow or abandoning the zero-knowledge guarantee. The items below deliver the same "frictionless" feel while keeping encryption intact.

@@ -2,7 +2,9 @@
 
 **From:** Pentest 2 findings (T7, T8, T9, T10)
 **Blog post:** `.claude/plans/blog-post-pentest-draft.md`
-**Status (2026-06-05):** PR 1 complete (CI green, targeting v1.7.0). PR 2 not started — blocks release gate.
+**Status (2026-06-06): Complete. Both PRs merged to main. Shipped in v1.7.0.**
+- PR 1 (SQLCipher, #97): merged 2026-06-06, closes T7/T8/T9
+- PR 2 (peer_key.bin, #103): merged 2026-06-06, closes T10
 
 Two PRs, one logical group. PR 1 is done. PR 2 (peer_key.bin) is the remaining work before
 cutting the security release tag.
@@ -126,7 +128,7 @@ Launch after update
 
 ## PR 2 — Encrypt peer_key.bin (`security-peer-key`)
 
-**Status:** In progress — PR #103 (`worktree-security-peer-key`, commit `bf3b8d0`). CI running. Blocking gate: plan requires both PRs before cutting the security release tag.
+**Status: Merged (2026-06-06) — PR #103.**
 
 **Closes:** T10 (Ed25519 private key readable at rest)
 
@@ -182,9 +184,9 @@ keyring, then delete `peer_key.bin`. If keyring unavailable, leave as file with 
 ## Order of work
 
 1. ✅ PR 1 done — SQLCipher merged (v1.7.0), closes T7/T8/T9
-2. PR 2 next — no shared files with PR 1, can be built independently
-3. Both must be done before cutting the security release tag — **PR 2 is the current blocker**
-4. Blog post ships after both PRs land
+2. ✅ PR 2 done — peer_key.bin keyring merged (v1.7.0), closes T10
+3. ✅ Both merged — v1.7.0 is the security release
+4. Blog post: pending (can now be drafted against shipped v1.7.0)
 
 ## Not doing (out of scope for these PRs)
 

@@ -1,6 +1,6 @@
 # iOS App — v2.0 Plan
 
-**Status:** Phase 1 (cloud sync) in progress on `feat/cloud-sync-phase1` | Phase 2 config in progress on `feat/ios-phase2-setup`  
+**Status:** Phases 1–4 complete (shipped in v1.7.0). Blocked on Mac + Apple Team ID for `tauri ios init` + TestFlight build.  
 **Target version:** v2.0.0  
 **Approach:** Tauri v2 iOS target (decided)
 

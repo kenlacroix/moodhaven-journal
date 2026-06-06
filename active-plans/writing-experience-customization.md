@@ -1,6 +1,6 @@
 # Writing Experience Customization
 
-**Status:** Designed (2026-05-27), not yet started
+**Status:** Complete (shipped in v1.7.0). Plan archived for reference.
 **Full design doc:** `~/.gstack/projects/kenlacroix-moodhaven-journal/ken-main-design-20260527-141928.md`
 
 ## Summary

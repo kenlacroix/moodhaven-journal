@@ -20,13 +20,9 @@ fn url_encode(s: &str) -> String {
     let mut out = String::with_capacity(s.len() * 3);
     for b in s.bytes() {
         match b {
-            b'A'..=b'Z'
-            | b'a'..=b'z'
-            | b'0'..=b'9'
-            | b'-'
-            | b'_'
-            | b'.'
-            | b'~' => out.push(b as char),
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(b as char)
+            }
             _ => {
                 out.push('%');
                 out.push_str(&format!("{:02X}", b));
@@ -288,9 +284,7 @@ fn store_tokens(
 
     let expires_at = token_resp
         .expires_in
-        .map(|secs| {
-            (chrono::Utc::now() + chrono::Duration::seconds(secs as i64)).to_rfc3339()
-        })
+        .map(|secs| (chrono::Utc::now() + chrono::Duration::seconds(secs as i64)).to_rfc3339())
         .unwrap_or_else(|| {
             // Default 4 hours if provider doesn't return expires_in
             (chrono::Utc::now() + chrono::Duration::hours(4)).to_rfc3339()
@@ -355,10 +349,7 @@ async fn gdrive_find_backup_file(access_token: &str) -> Result<Option<String>, S
     Ok(list.files.into_iter().next().map(|f| f.id))
 }
 
-async fn gdrive_upload_new(
-    access_token: &str,
-    blob_bytes: &[u8],
-) -> Result<String, String> {
+async fn gdrive_upload_new(access_token: &str, blob_bytes: &[u8]) -> Result<String, String> {
     let client = reqwest::Client::new();
 
     let metadata = serde_json::json!({
@@ -392,10 +383,7 @@ async fn gdrive_upload_new(
 
     let resp = client
         .post("https://www.googleapis.com/upload/drive/v3/files")
-        .query(&[
-            ("uploadType", "multipart"),
-            ("spaces", "appDataFolder"),
-        ])
+        .query(&[("uploadType", "multipart"), ("spaces", "appDataFolder")])
         .bearer_auth(access_token)
         .header("Content-Type", content_type)
         .body(body)
@@ -443,10 +431,7 @@ async fn gdrive_update_existing(
     if !resp.status().is_success() {
         let status = resp.status();
         let body = resp.text().await.unwrap_or_default();
-        return Err(format!(
-            "Google Drive update failed ({}): {}",
-            status, body
-        ));
+        return Err(format!("Google Drive update failed ({}): {}", status, body));
     }
 
     Ok(())
@@ -456,10 +441,7 @@ async fn gdrive_update_existing(
 // Internal: load access token, refreshing if expired
 // ============================================================================
 
-async fn load_access_token_refreshing(
-    db: &Database,
-    provider: &str,
-) -> Result<String, String> {
+async fn load_access_token_refreshing(db: &Database, provider: &str) -> Result<String, String> {
     // Read token fields under one lock, then drop lock before any async work.
     let (access_token, expires_at) = {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
@@ -614,10 +596,7 @@ pub async fn cloud_provider_auth_start(
     let listener = TcpListener::bind("127.0.0.1:0")
         .await
         .map_err(|e| format!("Failed to bind OAuth callback listener: {}", e))?;
-    let port = listener
-        .local_addr()
-        .map_err(|e| e.to_string())?
-        .port();
+    let port = listener.local_addr().map_err(|e| e.to_string())?.port();
     let redirect_uri = format!("http://localhost:{}/oauth", port);
 
     // 3. Build authorization URL
@@ -657,10 +636,14 @@ pub async fn cloud_provider_auth_start(
     };
 
     // 4. Open browser
-    use tauri_plugin_shell::ShellExt;
-    app.shell()
-        .open(&auth_url, None)
-        .map_err(|e| format!("Failed to open browser: {}", e))?;
+    // tauri-plugin-opener is not in this project; shell.open is the available API.
+    #[allow(deprecated)]
+    {
+        use tauri_plugin_shell::ShellExt;
+        app.shell()
+            .open(&auth_url, None)
+            .map_err(|e| format!("Failed to open browser: {}", e))?;
+    }
 
     // 5. Wait up to 5 minutes for the OAuth callback
     let code = tokio::time::timeout(
@@ -819,9 +802,7 @@ pub async fn cloud_provider_download_blob(
                 } else {
                     let id = gdrive_find_backup_file(&access_token)
                         .await?
-                        .ok_or_else(|| {
-                            "No MoodHaven backup found in Google Drive".to_string()
-                        })?;
+                        .ok_or_else(|| "No MoodHaven backup found in Google Drive".to_string())?;
                     let conn = db.conn.lock().map_err(|e| e.to_string())?;
                     db_set(&conn, "cloud_gdrive_file_id", &id)?;
                     id
@@ -857,8 +838,7 @@ pub async fn cloud_provider_download_blob(
         _ => return Err(format!("Unknown provider: {}", provider)),
     };
 
-    String::from_utf8(blob_bytes)
-        .map_err(|e| format!("Downloaded blob is not valid UTF-8: {}", e))
+    String::from_utf8(blob_bytes).map_err(|e| format!("Downloaded blob is not valid UTF-8: {}", e))
 }
 
 /// Return connection status for all providers (or the specified one).

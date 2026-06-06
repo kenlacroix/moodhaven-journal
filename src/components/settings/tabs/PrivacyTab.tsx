@@ -70,8 +70,7 @@ export function PrivacyTab({
     if (!dialogRef) return;
 
     savedFocusRef.current = document.activeElement;
-    let rafId: number;
-    rafId = requestAnimationFrame(() => {
+    const rafId = requestAnimationFrame(() => {
       dialogRef.current
         ?.querySelector<HTMLElement>('button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])')
         ?.focus();

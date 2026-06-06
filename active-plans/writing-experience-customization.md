@@ -1,6 +1,6 @@
 # Writing Experience Customization
 
-**Status:** Designed (2026-05-27), not yet started
+**Status:** Shipped. Implementation complete as of v1.6.x. Step 9 test coverage partially open (see below).
 **Full design doc:** `~/.gstack/projects/kenlacroix-moodhaven-journal/ken-main-design-20260527-141928.md`
 
 ## Summary
@@ -13,16 +13,16 @@ Approach A from the office-hours session: inline drawer in `WritingView`, 320px 
 
 ## Build order
 
-1. Extend `AppearanceSettings` with `WritingAppearance` (additive migration)
-2. Add `setWritingAppearance(patch)` to `useSettingsStore`
-3. Bundle Iowan/JetBrains Mono/OpenDyslexic fonts; add `@font-face` rules
-4. Add CSS variables + `data-*` wiring to `WritingView` root
-5. Refactor `src/components/editor/RichTextEditor.tsx` (the TipTap editor — NOT `JournalEditor.tsx`, which is unused) to read from CSS vars. Currently uses `text-lg leading-[1.8]` in `editorProps.attributes.class` at line 143, plus an embedded `<style>` block with em-relative heading sizes that will inherit correctly.
-6. Build `src/components/writing/AppearanceDrawer.tsx`
-7. Wire toggle icon + keybinding (only active while WritingView focused)
-8. One-time discoverability pulse on first visit after release
-9. Tests: 17 cases total (12 unit + 3 E2E + 2 accessibility) — full plan at `~/.gstack/projects/kenlacroix-moodhaven-journal/ken-main-eng-review-test-plan-20260527-143000.md`. Includes WCAG AAA contrast check for high-contrast mode and FOUT/atomicity check for dyslexia profile.
-10. Single source of truth for curated palettes: `src/types/writingAppearance.ts` exports `FONT_OPTIONS`, `TINT_OPTIONS`, `WIDTH_OPTIONS` as `const` arrays.
+1. ✅ Extend `AppearanceSettings` with `WritingAppearance` (additive migration)
+2. ✅ Add `setWritingAppearance(patch)` to `useSettingsStore`
+3. ✅ Bundle Iowan/JetBrains Mono/OpenDyslexic fonts; add `@font-face` rules
+4. ✅ Add CSS variables + `data-*` wiring to `WritingView` root
+5. ✅ Refactor `src/components/editor/RichTextEditor.tsx` (the TipTap editor — NOT `JournalEditor.tsx`, which is unused) to read from CSS vars. Currently uses `text-lg leading-[1.8]` in `editorProps.attributes.class` at line 143, plus an embedded `<style>` block with em-relative heading sizes that will inherit correctly.
+6. ✅ Build `src/components/writing/AppearanceDrawer.tsx`
+7. ✅ Wire toggle icon + keybinding (only active while WritingView focused)
+8. ✅ One-time discoverability pulse on first visit after release
+9. ⚠️ Tests: 17 cases total planned (12 unit + 3 E2E + 2 accessibility) — **21 of 17 exist** (`components/writing/AppearanceDrawer.test.tsx`). Unit cases and WCAG AAA contrast check closed by `task/accessibility-pass` (commit `19145f1`). 3 E2E + FOUT/atomicity check remain for a browser-based follow-up. Full test plan: `~/.gstack/projects/kenlacroix-moodhaven-journal/ken-main-eng-review-test-plan-20260527-143000.md`.
+10. ✅ Single source of truth for curated palettes: `src/types/writingAppearance.ts` exports `FONT_OPTIONS`, `TINT_OPTIONS`, `WIDTH_OPTIONS` as `const` arrays. (`types/writingAppearance.test.ts` — 4 tests.)
 
 Effort: human ~1 week / CC+gstack ~30–60 min.
 
@@ -48,9 +48,9 @@ Effort: human ~1 week / CC+gstack ~30–60 min.
 - **Eng review:** ✓ Done 2026-05-27. 7 findings resolved into the design doc. Status: **CLEAR**.
 - **Design review:** ✓ Done 2026-05-27. 7 passes, overall score 6/10 → 9/10. Section labels reworded for brand voice, font/tint/width rendering specified, mobile bottom-sheet pattern added, full interaction state table including font loading, high-contrast mood-color decision made, presets deferred to v1.1 with reserved data slot. Status: **CLEAR**.
 
-## Next steps when picking this up
+## Remaining work
 
-After `/plan-design-review`, you can begin implementation. Recommended order is the 10-step build sequence above.
+Step 9 test gap: unit cases and WCAG AAA contrast check closed (`task/accessibility-pass`, 2026-06-05). Remaining: 3 E2E + FOUT/atomicity check for dyslexia profile — need a running browser, deferred to v1.7.x QA pass.
 
 ## GSTACK REVIEW REPORT
 

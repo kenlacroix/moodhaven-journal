@@ -268,7 +268,9 @@ impl Database {
                     std::thread::sleep(std::time::Duration::from_millis(50));
                 }
                 match std::fs::rename(&self.path, &backup) {
-                    Err(e) => { last_err = format!("backup original db: {e}"); }
+                    Err(e) => {
+                        last_err = format!("backup original db: {e}");
+                    }
                     Ok(()) => match std::fs::rename(&tmp_path, &self.path) {
                         Ok(()) => {
                             let _ = std::fs::remove_file(&backup);
@@ -282,7 +284,11 @@ impl Database {
                     },
                 }
             }
-            if success { Ok(()) } else { Err(last_err) }
+            if success {
+                Ok(())
+            } else {
+                Err(last_err)
+            }
         };
 
         #[cfg(not(target_os = "windows"))]

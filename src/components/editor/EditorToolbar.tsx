@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { type Editor } from '@tiptap/react';
 import { type STTState } from '../../hooks/useSpeechToText';
+import { usePlatform } from '../../hooks/usePlatform';
 import {
   TBBoldIcon,
   TBItalicIcon,
@@ -51,6 +52,7 @@ export function CollapsibleToolbar({
   quickCapture = false,
   onToggleQuickCapture,
 }: CollapsibleToolbarProps) {
+  const { isIOS } = usePlatform();
   const [formatState, setFormatState] = useState<Record<string, boolean>>({});
 
   // Track format state on selection/transaction changes
@@ -175,8 +177,8 @@ export function CollapsibleToolbar({
             onClick={onEmojiClick}
           />
 
-          {/* Speech-to-text: quick capture toggle + mic button */}
-          {onMicClick && (
+          {/* Speech-to-text: quick capture toggle + mic button — sidecar unavailable on iOS */}
+          {onMicClick && !isIOS && (
             <>
               <TBDivider />
               {onToggleQuickCapture && (

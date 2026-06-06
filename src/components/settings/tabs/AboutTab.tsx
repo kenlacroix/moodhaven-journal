@@ -27,18 +27,20 @@ export function AboutTab({
   handleLogLevelChange,
   setModuleLogLevel,
 }: AboutTabProps) {
-  const { isBrowser } = usePlatform();
+  const { isBrowser, isIOS } = usePlatform();
   const [moduleOverridesOpen, setModuleOverridesOpen] = useState(false);
   return (
     <div id="panel-about" role="tabpanel" className="space-y-6">
 
-      {/* Updates section */}
-      <SettingSection
-        title="Updates"
-        description="Keep MoodHaven Journal up to date"
-      >
-        <UpdatePanel hook={updateHook} currentVersion={appVersion} />
-      </SettingSection>
+      {/* Updates section — App Store handles updates on iOS */}
+      {!isIOS && (
+        <SettingSection
+          title="Updates"
+          description="Keep MoodHaven Journal up to date"
+        >
+          <UpdatePanel hook={updateHook} currentVersion={appVersion} />
+        </SettingSection>
+      )}
 
       <SettingSection
         title="About MoodHaven Journal"
@@ -66,7 +68,7 @@ export function AboutTab({
             </p>
           </div>
 
-          {!isBrowser && (
+          {!isBrowser && !isIOS && (
             <>
               <div className="py-3 border-b border-slate-100 dark:border-slate-700 space-y-2">
                 <div className="flex items-center justify-between">

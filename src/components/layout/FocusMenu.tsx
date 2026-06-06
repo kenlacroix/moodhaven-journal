@@ -16,12 +16,14 @@ import { useRef, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { toggleFullscreen } from '../../lib/services/windowUtils';
+import { usePlatform } from '../../hooks/usePlatform';
 
 interface FocusMenuProps {
   onOpenBreakout: () => void;
 }
 
 export function FocusMenu({ onOpenBreakout }: FocusMenuProps) {
+  const { isIOS } = usePlatform();
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; right: number }>({ top: 0, right: 0 });
 
@@ -144,20 +146,22 @@ export function FocusMenu({ onOpenBreakout }: FocusMenuProps) {
             Fullscreen
           </button>
 
-          {/* Divider */}
-          <div className="my-1 border-t border-slate-100 dark:border-slate-700" />
-
-          {/* Breakout writer */}
-          <button
-            type="button"
-            onClick={handleBreakout}
-            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
-          >
-            <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
-            </svg>
-            Breakout writer
-          </button>
+          {/* Breakout writer — desktop only (no separate windows on iOS) */}
+          {!isIOS && (
+            <>
+              <div className="my-1 border-t border-slate-100 dark:border-slate-700" />
+              <button
+                type="button"
+                onClick={handleBreakout}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
+              >
+                <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
+                </svg>
+                Breakout writer
+              </button>
+            </>
+          )}
         </div>,
         document.body
       )}

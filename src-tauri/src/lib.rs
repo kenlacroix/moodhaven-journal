@@ -6,6 +6,7 @@ pub mod commands;
 pub mod db;
 
 use std::sync::Mutex;
+use zeroize::Zeroize;
 
 /// Tracks whether the user has authenticated this session.
 /// Starts locked (true). Set to false by `unlock_app` after the frontend
@@ -220,6 +221,41 @@ impl Default for TwoFactorPendingState {
     }
 }
 
+/// In-memory store for the 32-byte SQLCipher key derived from the user's password.
+/// Set by `verify_password` on successful authentication; cleared (zeroized) by `lock_app`.
+/// Also consumed by `unlock_app` to trigger the unencrypted → encrypted migration.
+pub struct DbKeyState(pub Mutex<Option<[u8; 32]>>);
+
+impl DbKeyState {
+    pub fn new() -> Self {
+        DbKeyState(Mutex::new(None))
+    }
+
+    pub fn set(&self, key: [u8; 32]) {
+        *self.0.lock().unwrap_or_else(|e| e.into_inner()) = Some(key);
+    }
+
+    pub fn get(&self) -> Option<[u8; 32]> {
+        *self.0.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// Overwrite the key bytes before clearing. Uses volatile writes via the
+    /// `zeroize` crate to prevent the compiler from eliding the stores under LTO.
+    pub fn clear(&self) {
+        let mut guard = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(ref mut k) = *guard {
+            k.zeroize();
+        }
+        *guard = None;
+    }
+}
+
+impl Default for DbKeyState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// In-memory cache of recently used TOTP codes.
 /// Key: `"{time_step}:{code}"` — time_step is unix_secs / 30.
 /// Entries are pruned when the owning time step is more than 3 steps old,
@@ -401,6 +437,10 @@ pub fn run() {
             // 2FA pending state — enforces that both auth factors are complete
             // before unlock_app succeeds, even if the frontend skips the 2FA step.
             app.manage(TwoFactorPendingState::new());
+
+            // SQLCipher key — holds the 32-byte derived key in memory while unlocked.
+            // Cleared (zeroized) on lock_app. Consumed by unlock_app for DB migration.
+            app.manage(DbKeyState::new());
 
             // TOTP replay prevention — tracks used codes for the current 90s window.
             app.manage(TotpUsedCodes::new());

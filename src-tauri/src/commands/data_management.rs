@@ -14,31 +14,53 @@ use std::fs;
 use tauri::{AppHandle, Manager, State};
 
 use crate::db::{self, Database};
-use crate::{AppLockState, TwoFactorPendingState};
+use crate::{AppLockState, DbKeyState, TwoFactorPendingState};
 
 /// Mark the session as unlocked.
 /// Enforces that both authentication factors were completed in Rust — a compromised
 /// frontend cannot bypass 2FA by calling this directly after verify_password.
+/// If the database is still unencrypted and a derived key is available in DbKeyState,
+/// triggers the one-time migration to SQLCipher before setting the unlocked flag.
 #[tauri::command]
 pub fn unlock_app(
     lock: State<'_, AppLockState>,
     twofa: State<'_, TwoFactorPendingState>,
+    db: State<'_, Database>,
+    db_key: State<'_, DbKeyState>,
 ) -> Result<(), String> {
     if !twofa.is_fully_authenticated() {
         return Err("Authentication incomplete: password verification or 2FA not done".to_string());
     }
+
+    // One-time migration: encrypt the database the first time an existing user unlocks
+    // after upgrading to a build with SQLCipher. Also runs for fresh installs on first unlock.
+    if !db.is_encrypted() {
+        if let Some(key) = db_key.get() {
+            // Retrieve the PBKDF2 salt from the settings table (accessible while unencrypted).
+            let salt_b64 = db::get_password_hash(&db)?
+                .map(|s| s.password_salt)
+                .unwrap_or_default();
+            if !salt_b64.is_empty() {
+                db.encrypt_in_place(&key, &salt_b64)?;
+                log::info!("[sqlcipher] Database encrypted successfully");
+            }
+        }
+    }
+
     *lock.0.lock().map_err(|e| e.to_string())? = false;
     Ok(())
 }
 
-/// Mark the session as locked. Resets all pending auth state.
+/// Mark the session as locked. Resets all pending auth state and zeroizes the key.
 #[tauri::command]
 pub fn lock_app(
     lock: State<'_, AppLockState>,
     twofa: State<'_, TwoFactorPendingState>,
+    db_key: State<'_, DbKeyState>,
 ) -> Result<(), String> {
     *lock.0.lock().map_err(|e| e.to_string())? = true;
     twofa.reset();
+    db_key.clear();
     Ok(())
 }
 
@@ -125,7 +147,8 @@ pub fn set_log_level(db: tauri::State<'_, Database>, level: String) -> Result<()
 
 /// Exit the application (used after factory reset)
 #[tauri::command]
-pub fn exit_app() {
+pub fn exit_app(db_key: State<'_, DbKeyState>) {
+    db_key.clear();
     std::process::exit(0);
 }
 
@@ -167,11 +190,14 @@ pub async fn factory_reset(app: AppHandle) -> Result<bool, String> {
         "logs",
         "peer_key.bin",
         "trusted_devices.json",
-        "device.json",     // Ed25519 public key metadata (low-sensitivity but stale)
-        "pw_lockout.json", // Password rate-limiter state — reset with the app
-        "voice_memos",     // Encrypted audio files from watch companion
+        "device.json",      // Ed25519 public key metadata (low-sensitivity but stale)
+        "pw_lockout.json",  // Password rate-limiter state — reset with the app
+        "db_state.json",    // SQLCipher encryption state — must be removed with the DB
+        "moodhaven_enc.db", // Encrypted export tmp — survives interrupted migrations
+        "moodhaven_old.db", // Windows-only rename backup — may survive interrupted migrations
+        "voice_memos",      // Encrypted audio files from watch companion
         "voice_memos_incoming", // Staging directory for incoming watch audio
-        "media",           // Encrypted media attachments
+        "media",            // Encrypted media attachments
         "moodhaven_restore.pending", // Staged full-restore DB file — must not re-apply after reset
         "moodhaven_restore.pending.sha256", // Integrity check file for the above
     ];

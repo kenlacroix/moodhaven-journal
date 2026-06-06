@@ -5,7 +5,7 @@
 
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use tauri::AppHandle;
 use tauri::Manager;
@@ -24,6 +24,47 @@ pub use signals::*;
 pub use still::*;
 pub use voice_memos::*;
 
+// ============================================================================
+// SQLCipher encryption state sidecar
+// ============================================================================
+
+/// Persisted alongside moodhaven.db as db_state.json.
+/// Records whether the database file is SQLCipher-encrypted and the PBKDF2 salt
+/// needed to derive the key before the database can be opened.
+/// Must be readable without opening the database.
+#[derive(Serialize, Deserialize, Default)]
+pub struct DbStateFile {
+    pub encrypted: bool,
+    /// Base64-encoded PBKDF2 salt (copied from user_settings.password_salt at migration time).
+    pub salt: Option<String>,
+}
+
+fn db_state_path(db_path: &Path) -> PathBuf {
+    db_path
+        .parent()
+        .unwrap_or_else(|| Path::new("."))
+        .join("db_state.json")
+}
+
+pub fn read_db_state(db_path: &Path) -> DbStateFile {
+    let path = db_state_path(db_path);
+    std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default()
+}
+
+fn write_db_state(db_path: &Path, state: &DbStateFile) -> Result<(), String> {
+    let path = db_state_path(db_path);
+    let json = serde_json::to_string(state).map_err(|e| format!("serialize db_state: {e}"))?;
+    std::fs::write(&path, json).map_err(|e| format!("write db_state.json: {e}"))?;
+    Ok(())
+}
+
+// ============================================================================
+// User settings row
+// ============================================================================
+
 /// User settings row
 #[derive(Debug, Serialize, Deserialize)]
 pub struct UserSettings {
@@ -34,14 +75,241 @@ pub struct UserSettings {
 /// Database state managed by Tauri
 pub struct Database {
     pub conn: Mutex<Connection>,
+    /// Absolute path to moodhaven.db (needed by apply_key / encrypt_in_place).
+    pub path: PathBuf,
 }
 
 impl Database {
-    /// Initialize database with schema
+    /// Initialize database. If db_state.json reports the file is already encrypted,
+    /// the connection is opened but no pragmas or migrations are run — the caller must
+    /// call `apply_key()` after the user authenticates before the connection is usable.
     pub fn new(db_path: PathBuf) -> Result<Self, String> {
+        let state = read_db_state(&db_path);
+
+        // Recovery: if db_state.json says encrypted=true and moodhaven_enc.db still exists,
+        // the previous migration was interrupted between db_state.json write and the rename.
+        // Complete the rename now to bring the file to a consistent encrypted state.
+        if state.encrypted {
+            let tmp_path = db_path.with_file_name("moodhaven_enc.db");
+            if tmp_path.exists() {
+                log::info!("[sqlcipher] Completing interrupted migration on startup");
+                #[cfg(target_os = "windows")]
+                let _ = std::fs::remove_file(&db_path);
+                if let Err(e) = std::fs::rename(&tmp_path, &db_path) {
+                    log::error!("[sqlcipher] Startup recovery rename failed: {e}");
+                }
+            }
+        }
+
         let conn =
             Connection::open(&db_path).map_err(|e| format!("Failed to open database: {}", e))?;
 
+        if !state.encrypted {
+            if let Err(migration_err) = Self::run_pragmas_and_migrations(&conn) {
+                // Probe: if migration failed because the file is a SQLCipher binary opened
+                // without a key (db_state.json missing or stale), detect it and write a
+                // recovery marker so the next startup takes the encrypted path.
+                let is_ciphertext = conn
+                    .execute_batch("SELECT count(*) FROM sqlite_master;")
+                    .is_err();
+                if is_ciphertext {
+                    log::warn!(
+                        "[sqlcipher] Detected encrypted database without db_state.json \
+                         — writing recovery state"
+                    );
+                    let _ = write_db_state(
+                        &db_path,
+                        &DbStateFile {
+                            encrypted: true,
+                            salt: None,
+                        },
+                    );
+                    return Ok(Self {
+                        conn: Mutex::new(conn),
+                        path: db_path,
+                    });
+                }
+                return Err(migration_err);
+            }
+        }
+
+        Ok(Self {
+            conn: Mutex::new(conn),
+            path: db_path,
+        })
+    }
+
+    /// Apply a SQLCipher key to the database connection after the user authenticates.
+    /// Opens a fresh connection with PRAGMA hexkey set, verifies the key is correct,
+    /// runs all pragmas and migrations, then replaces the stored connection.
+    /// Called by `verify_password` when the DB is already encrypted.
+    pub fn apply_key(&self, key: &[u8; 32]) -> Result<(), String> {
+        let hex_key = hex::encode(key);
+        let new_conn =
+            Connection::open(&self.path).map_err(|e| format!("reopen db for key: {e}"))?;
+        new_conn
+            .execute_batch(&format!("PRAGMA hexkey = '{hex_key}';"))
+            .map_err(|e| format!("PRAGMA hexkey: {e}"))?;
+        new_conn
+            .execute_batch("SELECT count(*) FROM sqlite_master;")
+            .map_err(|_| "wrong key".to_string())?;
+        Self::run_pragmas_and_migrations(&new_conn)?;
+        let mut conn = self.conn.lock().map_err(|e| e.to_string())?;
+        *conn = new_conn;
+        Ok(())
+    }
+
+    /// Encrypt the database in-place using sqlcipher_export.
+    /// Called by `unlock_app` the first time the user authenticates on an unencrypted DB.
+    /// After this returns, db_state.json is updated and the stored connection uses the key.
+    pub fn encrypt_in_place(&self, key: &[u8; 32], salt_b64: &str) -> Result<(), String> {
+        let hex_key = hex::encode(key);
+        let tmp_path = self.path.with_file_name("moodhaven_enc.db");
+        let tmp_str = tmp_path.to_str().ok_or("non-UTF8 db path")?;
+        // Reject paths with single quotes — would break inline SQL
+        if tmp_str.contains('\'') {
+            return Err("Database path contains single quotes — cannot encrypt".to_string());
+        }
+        let tmp_str = tmp_str.to_string();
+
+        // Clean up any previous incomplete attempt
+        let _ = std::fs::remove_file(&tmp_path);
+
+        // 1. Flush WAL and export to encrypted tmp file (hold conn lock for this block)
+        {
+            let conn = self.conn.lock().map_err(|e| e.to_string())?;
+            let _ = conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);");
+            conn.execute_batch(&format!(
+                "ATTACH DATABASE '{tmp_str}' AS encrypted KEY \"x'{hex_key}'\";
+                 SELECT sqlcipher_export('encrypted');
+                 DETACH DATABASE encrypted;"
+            ))
+            .map_err(|e| format!("sqlcipher_export: {e}"))?;
+        }
+
+        // 2. Verify the exported file opens with the key
+        {
+            let verify = Connection::open(&tmp_path).map_err(|e| format!("verify open: {e}"))?;
+            verify
+                .execute_batch(&format!("PRAGMA hexkey = '{hex_key}';"))
+                .map_err(|e| format!("verify hexkey: {e}"))?;
+            verify
+                .execute_batch("SELECT count(*) FROM sqlite_master;")
+                .map_err(|_| "encrypted db unreadable after export".to_string())?;
+        }
+
+        // 3. Write db_state.json BEFORE releasing the file handle. This must happen before
+        //    the rename: if a crash occurs between here and step 6, Database::new() will
+        //    detect moodhaven_enc.db still present and complete the rename on next startup.
+        write_db_state(
+            &self.path,
+            &DbStateFile {
+                encrypted: true,
+                salt: Some(salt_b64.to_string()),
+            },
+        )?;
+
+        // 4. Release the original file by replacing the conn with an in-memory placeholder
+        {
+            let mut conn = self.conn.lock().map_err(|e| e.to_string())?;
+            let placeholder =
+                Connection::open_in_memory().map_err(|e| format!("placeholder: {e}"))?;
+            *conn = placeholder;
+            // Original connection drops here, releasing the file handle
+        }
+
+        // 5. Remove WAL/SHM for the original file (should be empty after TRUNCATE checkpoint)
+        let _ = std::fs::remove_file(self.path.with_extension("db-wal"));
+        let _ = std::fs::remove_file(self.path.with_extension("db-shm"));
+
+        // 6. Rename encrypted tmp to final path.
+        //    On Windows, rename fails if the destination exists — move the original to a
+        //    backup first so we can restore it on failure rather than deleting it outright.
+        #[cfg(target_os = "windows")]
+        let rename_result: Result<(), String> = {
+            let backup = self.path.with_file_name("moodhaven_old.db");
+            match std::fs::rename(&self.path, &backup) {
+                Err(e) => Err(format!("backup original db: {e}")),
+                Ok(()) => match std::fs::rename(&tmp_path, &self.path) {
+                    Ok(()) => {
+                        let _ = std::fs::remove_file(&backup);
+                        Ok(())
+                    }
+                    Err(e) => {
+                        let _ = std::fs::rename(&backup, &self.path); // restore original
+                        Err(format!("rename encrypted db: {e}"))
+                    }
+                },
+            }
+        };
+
+        #[cfg(not(target_os = "windows"))]
+        let rename_result: Result<(), String> =
+            std::fs::rename(&tmp_path, &self.path).map_err(|e| format!("rename encrypted db: {e}"));
+
+        if let Err(e) = rename_result {
+            // Revert db_state.json and restore the original connection so the app stays usable.
+            let _ = write_db_state(
+                &self.path,
+                &DbStateFile {
+                    encrypted: false,
+                    salt: None,
+                },
+            );
+            let mut conn = self.conn.lock().map_err(|e| e.to_string())?;
+            match Connection::open(&self.path) {
+                Ok(restored) if Self::run_pragmas_and_migrations(&restored).is_ok() => {
+                    *conn = restored;
+                }
+                _ => log::error!(
+                    "[sqlcipher] Could not restore DB connection after migration failure \
+                     — restart required"
+                ),
+            }
+            return Err(e);
+        }
+
+        // 7. Open final keyed connection to the encrypted file
+        {
+            let mut conn = self.conn.lock().map_err(|e| e.to_string())?;
+            let final_conn = Connection::open(&self.path)
+                .map_err(|e| format!("open final encrypted db: {e}"))?;
+            final_conn
+                .execute_batch(&format!("PRAGMA hexkey = '{hex_key}';"))
+                .map_err(|e| format!("final hexkey: {e}"))?;
+            final_conn
+                .execute_batch("SELECT count(*) FROM sqlite_master;")
+                .map_err(|_| "final encrypted db unreadable".to_string())?;
+            // Pragmas only (migrations already ran on the pre-encryption DB)
+            final_conn
+                .execute_batch(
+                    "PRAGMA foreign_keys = ON;
+                     PRAGMA journal_mode = WAL;
+                     PRAGMA cache_size = -8000;
+                     PRAGMA synchronous = NORMAL;",
+                )
+                .map_err(|e| format!("final pragmas: {e}"))?;
+            *conn = final_conn;
+        }
+
+        Ok(())
+    }
+
+    /// Returns true if db_state.json reports the database is SQLCipher-encrypted.
+    pub fn is_encrypted(&self) -> bool {
+        read_db_state(&self.path).encrypted
+    }
+
+    /// Returns the base64-encoded PBKDF2 salt from db_state.json, if present.
+    pub fn db_salt(&self) -> Option<String> {
+        read_db_state(&self.path).salt
+    }
+
+    /// Run all pragmas and schema migrations on an open connection.
+    /// Called by `new()` for unencrypted databases and by `apply_key()` after
+    /// the key is set. All migrations use `IF NOT EXISTS` or `ALTER TABLE ADD COLUMN`
+    /// so they are safe to run on an already-migrated database.
+    fn run_pragmas_and_migrations(conn: &Connection) -> Result<(), String> {
         // Enable foreign keys
         conn.execute("PRAGMA foreign_keys = ON", [])
             .map_err(|e| format!("Failed to enable foreign keys: {}", e))?;
@@ -406,9 +674,7 @@ impl Database {
             [],
         );
 
-        Ok(Self {
-            conn: Mutex::new(conn),
-        })
+        Ok(())
     }
 }
 
@@ -429,14 +695,17 @@ pub fn get_db_path(app: &AppHandle) -> Result<PathBuf, String> {
 // User Settings Operations
 // ============================================================================
 
-/// Check if user has set up password
+/// Check if user has set up password.
+/// For an encrypted DB the password must exist (it was set before encryption ran),
+/// so we return true without touching the connection.
 pub fn has_password(db: &Database) -> Result<bool, String> {
+    if db.is_encrypted() {
+        return Ok(true);
+    }
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
-
     let count: i32 = conn
         .query_row("SELECT COUNT(*) FROM user_settings", [], |row| row.get(0))
         .map_err(|e| format!("Query failed: {}", e))?;
-
     Ok(count > 0)
 }
 

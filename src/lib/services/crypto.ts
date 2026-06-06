@@ -35,11 +35,14 @@ export interface CryptoResult<T> {
  */
 function bufferToBase64(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
-  let binary = '';
-  for (let i = 0; i < bytes.byteLength; i++) {
-    binary += String.fromCharCode(bytes[i]);
+  // Process in 32 KB chunks to avoid call-stack overflow on large buffers
+  // while keeping overhead low for typical small ciphertext sizes.
+  const CHUNK = 0x8000;
+  let result = '';
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    result += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK) as unknown as number[]);
   }
-  return btoa(binary);
+  return btoa(result);
 }
 
 /**

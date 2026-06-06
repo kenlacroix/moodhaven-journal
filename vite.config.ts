@@ -60,6 +60,24 @@ export default defineConfig({
     minify: !process.env.TAURI_ENV_DEBUG && !isWebBuild ? 'esbuild' : isWebBuild ? 'esbuild' : false,
     // Produce sourcemaps for debug builds
     sourcemap: !!process.env.TAURI_ENV_DEBUG,
+    rollupOptions: {
+      output: {
+        // Split heavy vendor packages into cacheable chunks separate from app code.
+        // React + DOM never changes between deploys; TipTap/ProseMirror only changes
+        // when we bump the editor version.
+        manualChunks: (id) => {
+          if (id.includes('node_modules/@tiptap') || id.includes('node_modules/prosemirror')) {
+            return 'vendor-editor';
+          }
+          if (id.includes('node_modules/react-dom') || id.includes('node_modules/react/') || id.includes('node_modules/scheduler')) {
+            return 'vendor-react';
+          }
+          if (id.includes('node_modules/zustand')) {
+            return 'vendor-state';
+          }
+        },
+      },
+    },
   },
 
   define: {

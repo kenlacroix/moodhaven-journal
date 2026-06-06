@@ -669,4 +669,20 @@ Frontend: encryptedImport(blob, password)
 | `src/lib/services/cloudProvidersService.ts` | TypeScript IPC wrappers + `syncUpload`/`syncDownload` helpers |
 | `src/components/settings/tabs/SyncTab.tsx` | Settings UI — provider picker, Connect/Disconnect, Sync Now |
 | `src/types/settings.ts` | `CloudProvider`, `StorageBackend`, `CloudProviderStatus` types |
+
+---
+
+## Further Reading
+
+| Document | Purpose |
+|:---|:---|
+| [`docs/peer-sync-security.md`](peer-sync-security.md) | Detailed security model for local peer sync (threat model, key derivation, wire format) |
+| [`docs/speech-to-text.md`](speech-to-text.md) | STT architecture, model options, sidecar build instructions |
+| [`docs/watch-companion.md`](watch-companion.md) | Wear OS companion app, audio transfer protocol, voice memo draft pipeline |
+| [`docs/browser-pwa-mode.md`](browser-pwa-mode.md) | Browser / PWA build: IndexedDB backend, invoke shim, feature parity table |
+| [`docs/howto-getting-started.md`](howto-getting-started.md) | First-run setup tutorial for new users |
+| [`docs/howto-time-capsule.md`](howto-time-capsule.md) | Time capsule feature: sealing, reveal flow, anniversary reveals |
+| [`docs/howto-stillhaven.md`](howto-stillhaven.md) | StillHaven bilateral stimulation: sessions, protocols, journal handoff |
+| [`docs/tauri-commands.md`](tauri-commands.md) | Full reference for all ~150 Tauri commands |
+| [`docs/threat-model.md`](threat-model.md) | Security threat model and mitigations |
 | `src/stores/settingsStore.ts` | `cloudProviders` state (connection status per provider) |

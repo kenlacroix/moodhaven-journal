@@ -129,6 +129,10 @@ cd src-tauri && cargo check
 - Peer sync security: @docs/peer-sync-security.md
 - STT setup: @docs/speech-to-text.md
 - Watch companion: @docs/watch-companion.md
+- Browser / PWA mode: @docs/browser-pwa-mode.md
+- Getting started (first-run tutorial): @docs/howto-getting-started.md
+- Time Capsule user guide: @docs/howto-time-capsule.md
+- StillHaven user guide: @docs/howto-stillhaven.md
 
 ## Health Stack
 

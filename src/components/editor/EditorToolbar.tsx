@@ -221,7 +221,7 @@ export function CollapsibleToolbar({
   );
 }
 
-export function ToolbarBtn({
+function ToolbarBtn({
   icon,
   label,
   isActive,
@@ -256,11 +256,11 @@ export function ToolbarBtn({
   );
 }
 
-export function TBDivider() {
+function TBDivider() {
   return <div className="w-px h-5 bg-slate-200 dark:bg-slate-700 mx-1" />;
 }
 
-export function MicButton({
+function MicButton({
   state,
   error,
   onClick,
@@ -347,7 +347,7 @@ export function MicButton({
   );
 }
 
-export function QuickCaptureToggle({
+function QuickCaptureToggle({
   active,
   onToggle,
 }: {

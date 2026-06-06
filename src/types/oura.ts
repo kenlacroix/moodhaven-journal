@@ -2,9 +2,6 @@
  * Oura Ring integration types for MoodHaven Journal
  */
 
-// Connection status
-export type OuraConnectionStatus = 'disconnected' | 'connected' | 'error';
-
 // Stress classification from Oura API
 export type OuraStressSummary = 'restored' | 'normal' | 'stressful' | 'demanding' | 'engaged';
 

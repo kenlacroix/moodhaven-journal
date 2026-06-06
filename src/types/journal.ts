@@ -2,8 +2,6 @@
  * Journal and Mood entry type definitions
  */
 
-import type { EncryptedData } from '../lib/services/crypto';
-
 // Mood scale from 1-5 with semantic labels
 export type MoodLevel = 1 | 2 | 3 | 4 | 5;
 
@@ -67,7 +65,6 @@ export interface Book {
 export const BOOK_COLORS = [
   'violet', 'rose', 'amber', 'emerald', 'sky', 'indigo', 'teal', 'slate',
 ] as const;
-export type BookColor = typeof BOOK_COLORS[number];
 
 /**
  * Weather and location context captured at the time of writing.
@@ -136,15 +133,6 @@ export interface JournalEntry {
   wordCount?: number | null;
 }
 
-// Encrypted journal entry (stored in database)
-export interface EncryptedJournalEntry {
-  id: string;
-  encryptedContent: EncryptedData;
-  mood: MoodLevel; // Not encrypted - allows mood analytics without decryption
-  createdAt: string; // ISO timestamp
-  updatedAt: string; // ISO timestamp
-}
-
 // Form data for creating/editing entries
 export interface JournalEntryFormData {
   content: string;
@@ -153,33 +141,4 @@ export interface JournalEntryFormData {
   privacyMode: PrivacyMode;
 }
 
-// Entry metadata for list views (no content loaded)
-export interface JournalEntryMeta {
-  id: string;
-  mood: MoodLevel;
-  preview: string; // First ~50 chars, decrypted on demand
-  createdAt: Date;
-}
 
-// Statistics and analytics
-export interface MoodStatistics {
-  averageMood: number;
-  totalEntries: number;
-  moodDistribution: Record<MoodLevel, number>;
-  streak: number; // Days in a row with entries
-  longestStreak: number;
-}
-
-// Date range filter
-export interface DateRange {
-  start: Date;
-  end: Date;
-}
-
-// Search/filter options
-export interface JournalFilter {
-  dateRange?: DateRange;
-  moods?: MoodLevel[];
-  tags?: string[];
-  searchQuery?: string;
-}

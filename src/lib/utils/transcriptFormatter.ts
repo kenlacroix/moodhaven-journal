@@ -12,10 +12,6 @@ export interface WhisperSegment {
   end: number;   // seconds
 }
 
-export interface WhisperOutput {
-  text: string;
-  segments: WhisperSegment[];
-}
 
 // ---------------------------------------------------------------------------
 // Filler word patterns

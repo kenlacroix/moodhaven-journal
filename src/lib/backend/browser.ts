@@ -568,18 +568,3 @@ export async function dbLinkJournalEntryToSession(
   }
 }
 
-// --------------------------------------------------------------------------
-// Data stats
-// --------------------------------------------------------------------------
-
-export async function dbGetDataStats(): Promise<{
-  entryCount: number;
-  totalSizeBytes: number;
-  lastModified: string | null;
-}> {
-  const entries = await dbGetAllEntries();
-  const totalSizeBytes = entries.reduce((s, e) => s + JSON.stringify(e).length, 0);
-  const lastModified =
-    entries.length > 0 ? entries[0].updated_at : null;
-  return { entryCount: entries.length, totalSizeBytes, lastModified };
-}

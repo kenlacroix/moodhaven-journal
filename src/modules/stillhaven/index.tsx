@@ -292,7 +292,7 @@ export function StillView({ onHandoff }: StillViewProps): React.JSX.Element {
       postSample: postSampleFinal,
     });
     setScene('summary');
-  }, [checkOut, checkIn.preActivation, checkIn.protocol, checkIn.environment]);
+  }, [checkOut, checkIn.preActivation, checkIn.protocol]);
 
   const handleRestart = useCallback(() => {
     sessionIdRef.current = null;

@@ -35,7 +35,7 @@ import { cloudProviderStatus } from '../lib/services/cloudProvidersService';
 import { useAppStore } from './appStore';
 
 // Section to scroll to when settings page opens
-export type SettingsScrollTarget = 'speech-to-text' | 'ai' | 'privacy' | 'health' | 'notifications' | 'sync' | null;
+type SettingsScrollTarget = 'speech-to-text' | 'ai' | 'privacy' | 'health' | 'notifications' | 'sync' | null;
 
 interface SettingsState {
   settings: AppSettings;

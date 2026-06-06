@@ -56,29 +56,6 @@ interface DailyStatsRow {
 // ============================================================================
 
 /**
- * Get mood distribution (count per mood level 1-5)
- */
-export async function getMoodDistribution(): Promise<MoodDistribution[]> {
-  const rows = await invoke<MoodDistributionRow[]>('get_mood_distribution');
-
-  // Calculate total for percentages
-  const total = rows.reduce((sum, row) => sum + row.count, 0);
-
-  // Convert to frontend format and fill in missing moods
-  const distribution: MoodDistribution[] = [];
-  for (let mood = 1; mood <= 5; mood++) {
-    const row = rows.find((r) => r.mood === mood);
-    distribution.push({
-      mood: mood as MoodLevel,
-      count: row?.count || 0,
-      percentage: total > 0 ? ((row?.count || 0) / total) * 100 : 0,
-    });
-  }
-
-  return distribution;
-}
-
-/**
  * Get streak statistics
  */
 export async function getStreakStats(): Promise<StreakStats> {
@@ -89,29 +66,6 @@ export async function getStreakStats(): Promise<StreakStats> {
     longestStreak: row.longest_streak,
     lastEntryDate: row.last_entry_date,
   };
-}
-
-/**
- * Get day of week statistics
- */
-export async function getDayOfWeekStats(): Promise<DayOfWeekStats[]> {
-  const rows = await invoke<DayOfWeekStatsRow[]>('get_day_of_week_stats');
-
-  // Fill in missing days with zero values
-  const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-  const stats: DayOfWeekStats[] = [];
-
-  for (let day = 0; day < 7; day++) {
-    const row = rows.find((r) => r.day_of_week === day);
-    stats.push({
-      dayOfWeek: day,
-      dayName: row?.day_name || dayNames[day],
-      averageMood: row?.average_mood || 0,
-      entryCount: row?.entry_count || 0,
-    });
-  }
-
-  return stats;
 }
 
 /**

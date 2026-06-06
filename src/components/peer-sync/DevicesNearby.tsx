@@ -7,7 +7,7 @@ import type { DiscoveredPeer, SyncStatus } from '../../types/peerSync';
 
 // ── Sync status inline badge ──────────────────────────────────────────────────
 
-export function SyncStatusInline({ status }: { status: SyncStatus | undefined }) {
+function SyncStatusInline({ status }: { status: SyncStatus | undefined }) {
   if (!status || status.state === 'idle') return null;
   if (status.state === 'syncing')
     return (

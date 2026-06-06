@@ -39,11 +39,6 @@ export async function getNearbyPeers(): Promise<DiscoveredPeer[]> {
   return invoke<DiscoveredPeer[]>('peer_get_nearby');
 }
 
-/** Check if discovery is currently active */
-export async function isDiscoveryActive(): Promise<boolean> {
-  return invoke<boolean>('peer_discovery_is_active');
-}
-
 // ── Event listeners ────────────────────────────────────────────────────────────
 
 /** Called when a new peer is discovered on the LAN */

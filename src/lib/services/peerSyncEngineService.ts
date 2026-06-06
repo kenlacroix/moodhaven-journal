@@ -48,17 +48,6 @@ export interface PeerRevokedUsEvent {
   deviceName: string;
 }
 
-/**
- * Fired on the server when an unknown (no longer trusted) device attempts to
- * initiate a sync. The server replied NotTrusted and closed the connection.
- */
-export interface SyncUnknownPeerEvent {
-  deviceId: string;
-}
-
-export async function startSyncServer(): Promise<void> {
-  return invoke('peer_start_sync_server');
-}
 
 export async function peerSyncNow(deviceId: string, host: string): Promise<void> {
   return invoke('peer_sync_now', { deviceId, host });
@@ -89,13 +78,6 @@ export function onPeerRevokedUs(cb: (e: PeerRevokedUsEvent) => void): Promise<Un
   return listen<PeerRevokedUsEvent>('peer:peer_revoked_us', (e) => cb(e.payload));
 }
 
-/**
- * Called on the server when an untrusted device attempts a sync.
- * Useful for showing a "someone tried to connect" notification.
- */
-export function onSyncUnknownPeer(cb: (e: SyncUnknownPeerEvent) => void): Promise<UnlistenFn> {
-  return listen<SyncUnknownPeerEvent>('peer:sync_unknown_peer', (e) => cb(e.payload));
-}
 
 // ── Full DB restore (setup-time) ──────────────────────────────────────────────
 

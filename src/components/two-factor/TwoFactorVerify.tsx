@@ -77,7 +77,7 @@ export function TwoFactorVerify({ method, password, onSuccess, onCancel }: TwoFa
     } finally {
       setIsVerifying(false);
     }
-  }, [code, attempts, onSuccess]);
+  }, [code, attempts, onSuccess, password]);
 
   // Handle hardware key verification (native FIDO2, not WebAuthn)
   const handleHardwareKeyVerify = useCallback(async () => {

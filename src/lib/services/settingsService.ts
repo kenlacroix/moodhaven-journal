@@ -156,33 +156,6 @@ export async function saveSettings(settings: AppSettings, password?: string): Pr
 }
 
 /**
- * Save a single setting by path (e.g., 'ai.openai.apiKey')
- */
-export async function saveSetting<T>(
-  settings: AppSettings,
-  path: string,
-  value: T,
-  password?: string
-): Promise<AppSettings> {
-  const keys = path.split('.');
-  const newSettings = { ...settings };
-
-  // Navigate to the nested property and update it
-  let current: Record<string, unknown> = newSettings as unknown as Record<string, unknown>;
-  for (let i = 0; i < keys.length - 1; i++) {
-    const key = keys[i];
-    if (typeof current[key] === 'object' && current[key] !== null) {
-      current[key] = { ...(current[key] as Record<string, unknown>) };
-      current = current[key] as Record<string, unknown>;
-    }
-  }
-  current[keys[keys.length - 1]] = value;
-
-  await saveSettings(newSettings, password);
-  return newSettings;
-}
-
-/**
  * Get the app version from the Rust backend
  */
 export async function getAppVersion(): Promise<string> {
@@ -201,14 +174,6 @@ export async function resetSettings(): Promise<AppSettings> {
   const defaults = createDefaultSettings();
   await saveSettings(defaults);
   return defaults;
-}
-
-/**
- * Validate OpenAI API key format
- */
-export function validateOpenAIKey(key: string): boolean {
-  // OpenAI keys start with 'sk-' and are about 51 characters
-  return /^sk-[a-zA-Z0-9]{48,}$/.test(key);
 }
 
 /**

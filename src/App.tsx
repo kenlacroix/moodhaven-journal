@@ -5,7 +5,7 @@
  * Per UX spec: Writing is the primary action
  */
 
-import { useEffect, useState, useCallback } from 'react';
+import { lazy, Suspense, useEffect, useState, useCallback } from 'react';
 import { useAppBanners } from './hooks/useAppBanners';
 import { BreakoutWriterApp } from './components/breakout/BreakoutWriterApp';
 import { WritingView } from './pages/WritingView';
@@ -32,8 +32,12 @@ import { useWearSignals } from './hooks/useWearSignals';
 import { usePeerSync } from './hooks/usePeerSync';
 import { WristLoopBanner } from './components/stillhaven/WristLoopBanner';
 import type { WristLoopTrigger } from './hooks/useWristLoop';
-import { PeerSyncWireframes } from './pages/PeerSyncWireframes';
 import { useTimeCapsule } from './hooks/useTimeCapsule';
+
+// Dev-only wireframe — lazy-loaded so it never enters the production bundle's initial chunk.
+const PeerSyncWireframes = lazy(() =>
+  import('./pages/PeerSyncWireframes').then((m) => ({ default: m.PeerSyncWireframes }))
+);
 import { TimeCapsuleRevealModal } from './components/timecapsule/TimeCapsuleRevealModal';
 import { SealEntryModal } from './components/timecapsule/SealEntryModal';
 import { logger } from './lib/services/logger';
@@ -47,7 +51,7 @@ const IS_PEERSYNC_WIREFRAMES = new URLSearchParams(window.location.search).get('
 /** Thin router: send special dev-mode URLs to isolated components with no hooks. */
 function App() {
   if (IS_BREAKOUT) return <BreakoutWriterApp />;
-  if (IS_PEERSYNC_WIREFRAMES) return <PeerSyncWireframes />;
+  if (IS_PEERSYNC_WIREFRAMES) return <Suspense fallback={null}><PeerSyncWireframes /></Suspense>;
   return <MainApp />;
 }
 

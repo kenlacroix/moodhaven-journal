@@ -98,7 +98,7 @@ export function DevicesTab() {
         <PairingModal peer={pairingPeer} onClose={() => setPairingPeer(null)} />
       )}
 
-      <div className="space-y-6">
+      <div id="panel-devices" role="tabpanel" className="space-y-6">
         {/* Local Sync toggle */}
         <div className="p-4 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
           <div className="flex items-start justify-between gap-4">

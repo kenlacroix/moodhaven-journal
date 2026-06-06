@@ -316,6 +316,14 @@ jobs:
           touch src-tauri/binaries/whisper-aarch64-linux-android
           # NDK_HOME must be exported from the shell env, not ${{ env.* }}
           export NDK_HOME="${ANDROID_NDK_LATEST_HOME:-$ANDROID_NDK_HOME}"
+          # Set up NDK cross-compilation toolchain for openssl-sys vendored build
+          export TOOLCHAIN=$NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64
+          export CC_aarch64_linux_android=$TOOLCHAIN/bin/aarch64-linux-android21-clang
+          export CXX_aarch64_linux_android=$TOOLCHAIN/bin/aarch64-linux-android21-clang++
+          export AR_aarch64_linux_android=$TOOLCHAIN/bin/llvm-ar
+          export RANLIB_aarch64_linux_android=$TOOLCHAIN/bin/llvm-ranlib
+          export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$TOOLCHAIN/bin/aarch64-linux-android21-clang
+          export OPENSSL_STATIC=1
           npm run tauri android build -- --target aarch64
 
       - name: Upload phone AAB artifact (for release attachment in update-manifest)

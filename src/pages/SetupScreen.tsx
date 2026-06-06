@@ -167,7 +167,7 @@ export function SetupScreen() {
     setError(null);
   };
 
-  const handlePasswordSubmit = useCallback(async () => {
+  const handlePasswordSubmit = useCallback(() => {
     if (!password) {
       setError('Please enter a password');
       return;
@@ -181,28 +181,27 @@ export function SetupScreen() {
       setError('Passwords do not match');
       return;
     }
-
-    if (!isAdvanced) {
-      // Basic path: initialize with safe defaults immediately, skip advanced steps
-      setIsLoading(true);
-      setError(null);
-      try {
-        const success = await initialize(password);
-        if (!success) {
-          setError('Failed to set up. Please try again.');
-          return;
-        }
-        await saveSettings();
-        goNext();
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'An error occurred');
-      } finally {
-        setIsLoading(false);
-      }
-    } else {
-      goNext();
-    }
+    goNext();
   }, [password, confirmPassword]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Basic path: called from CompleteStep "Start Journaling" — initialize then let App.tsx transition
+  const handleBasicComplete = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const success = await initialize(password);
+      if (!success) {
+        setError('Failed to set up. Please try again.');
+        return;
+      }
+      await saveSettings();
+      // App.tsx watches isInitialized; once set to true it transitions away from SetupScreen
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [password, initialize, saveSettings]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleComplete = useCallback(async () => {
     setIsLoading(true);
@@ -314,14 +313,13 @@ export function SetupScreen() {
             {currentStep === 'password' && (
               <PasswordStep
                 onBack={goBack}
-                onSubmit={() => { void handlePasswordSubmit(); }}
+                onSubmit={handlePasswordSubmit}
                 password={password}
                 confirmPassword={confirmPassword}
                 onPasswordChange={setPassword}
                 onConfirmPasswordChange={setConfirmPassword}
                 error={error}
                 setupMode={setupMode}
-                isLoading={isLoading}
               />
             )}
 
@@ -407,7 +405,12 @@ export function SetupScreen() {
             )}
 
             {currentStep === 'complete' && (
-              <CompleteStep enableLanSync={enableLanSync} isAdvanced={isAdvanced} />
+              <CompleteStep
+                enableLanSync={enableLanSync}
+                isAdvanced={isAdvanced}
+                onStart={!isAdvanced ? handleBasicComplete : undefined}
+                isLoading={isLoading}
+              />
             )}
           </div>
         </div>

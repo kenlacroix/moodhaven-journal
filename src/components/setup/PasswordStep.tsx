@@ -7,7 +7,6 @@ interface PasswordStepProps {
   onConfirmPasswordChange: (val: string) => void;
   error: string | null;
   setupMode: 'fresh' | 'sync';
-  isLoading?: boolean;
 }
 
 function getPasswordStrength(password: string) {
@@ -27,7 +26,6 @@ export function PasswordStep({
   onConfirmPasswordChange,
   error,
   setupMode,
-  isLoading = false,
 }: PasswordStepProps) {
   const strength = getPasswordStrength(password);
 
@@ -129,10 +127,10 @@ export function PasswordStep({
         <button
           type="button"
           onClick={onSubmit}
-          disabled={!password || !confirmPassword || isLoading}
+          disabled={!password || !confirmPassword}
           className="btn-primary flex-1 py-3"
         >
-          {isLoading ? 'Setting up…' : 'Continue'}
+          Continue
         </button>
       </div>
     </div>

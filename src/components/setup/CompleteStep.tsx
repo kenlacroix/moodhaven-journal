@@ -1,6 +1,8 @@
 interface CompleteStepProps {
   enableLanSync: boolean;
   isAdvanced?: boolean;
+  onStart?: () => Promise<void>;
+  isLoading?: boolean;
 }
 
 const BASIC_NUDGES = [
@@ -50,7 +52,7 @@ const BASIC_NUDGES = [
   },
 ];
 
-export function CompleteStep({ enableLanSync, isAdvanced = true }: CompleteStepProps) {
+export function CompleteStep({ enableLanSync, isAdvanced = true, onStart, isLoading = false }: CompleteStepProps) {
   return (
     <div className="text-center space-y-6">
       <div className="w-20 h-20 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center mx-auto">
@@ -115,10 +117,11 @@ export function CompleteStep({ enableLanSync, isAdvanced = true }: CompleteStepP
 
       <button
         type="button"
-        onClick={() => window.location.reload()}
+        onClick={onStart ? () => { void onStart(); } : () => window.location.reload()}
+        disabled={isLoading}
         className="btn-primary w-full py-3"
       >
-        Start Journaling
+        {isLoading ? 'Setting up…' : 'Start Journaling'}
       </button>
     </div>
   );

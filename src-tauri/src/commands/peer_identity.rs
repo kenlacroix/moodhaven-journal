@@ -1,6 +1,11 @@
 //! Device identity management for peer-to-peer sync
 //!
 //! Generates and persists a stable Ed25519 keypair on first run.
+//! The private key seed is stored in the OS keyring (DPAPI on Windows,
+//! Keychain on macOS, Secret Service on Linux). If the keyring is unavailable
+//! (e.g. headless Linux without a secrets daemon), falls back to a 0600 file.
+//! Existing `peer_key.bin` files are silently migrated to the keyring on next
+//! app start and the file is deleted after successful migration.
 //! The public key is shared openly; the private key never leaves the device.
 
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
@@ -10,6 +15,9 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::fs;
 use tauri::{AppHandle, Manager};
+
+const KEYRING_SERVICE: &str = "com.moodhaven.app";
+const KEYRING_ACCOUNT: &str = "peer-signing-key";
 
 /// Public device identity (safe to share, returned to frontend)
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -34,13 +42,10 @@ struct PersistedIdentity {
 }
 
 fn detect_device_type() -> &'static str {
-    // On desktop we always return "desktop"
-    // Mobile/watch detection would differ at compile time
     "desktop"
 }
 
 fn default_device_name() -> String {
-    // Use system hostname, fallback to "My Device"
     std::env::var("COMPUTERNAME")
         .or_else(|_| std::env::var("HOSTNAME"))
         .unwrap_or_else(|_| "My Device".to_string())
@@ -49,6 +54,44 @@ fn default_device_name() -> String {
         .unwrap_or("My Device")
         .to_string()
 }
+
+// ── Keyring helpers ───────────────────────────────────────────────────────────
+
+/// Try to load the Ed25519 seed from the OS keyring.
+/// Returns Some(seed) on success, None if not found or keyring unavailable.
+fn try_load_from_keyring() -> Option<[u8; 32]> {
+    let entry = keyring::Entry::new(KEYRING_SERVICE, KEYRING_ACCOUNT).ok()?;
+    let hex_str = entry.get_password().ok()?;
+    let bytes = hex::decode(hex_str.trim()).ok()?;
+    bytes.try_into().ok()
+}
+
+/// Try to store the Ed25519 seed in the OS keyring.
+/// Returns true on success, false if the keyring is unavailable.
+fn try_store_in_keyring(seed: &[u8; 32]) -> bool {
+    let Ok(entry) = keyring::Entry::new(KEYRING_SERVICE, KEYRING_ACCOUNT) else {
+        return false;
+    };
+    entry.set_password(&hex::encode(seed)).is_ok()
+}
+
+/// Write the seed to `peer_key.bin` with 0600 permissions (fallback path).
+fn write_key_file(key_path: &std::path::Path, seed: &[u8; 32]) -> Result<(), String> {
+    fs::write(key_path, seed).map_err(|e| format!("Failed to write peer_key.bin: {e}"))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(key_path)
+            .map_err(|e| e.to_string())?
+            .permissions();
+        perms.set_mode(0o600);
+        fs::set_permissions(key_path, perms)
+            .map_err(|e| format!("Failed to set key permissions: {e}"))?;
+    }
+    Ok(())
+}
+
+// ── Identity lifecycle ────────────────────────────────────────────────────────
 
 /// Get or create this device's identity. Called on first launch and cached.
 pub fn get_or_create_device_identity(app: &AppHandle) -> Result<DeviceIdentity, String> {
@@ -60,12 +103,25 @@ pub fn get_or_create_device_identity(app: &AppHandle) -> Result<DeviceIdentity, 
     let identity_path = app_data_dir.join("peer_identity.json");
     let key_path = app_data_dir.join("peer_key.bin");
 
-    // Return cached identity if it exists and private key is present
-    if identity_path.exists() && key_path.exists() {
+    // Return existing identity if the keypair is accessible (keyring or file)
+    if identity_path.exists() && (key_path.exists() || try_load_from_keyring().is_some()) {
         let json = fs::read_to_string(&identity_path)
             .map_err(|e| format!("Failed to read identity: {e}"))?;
         let persisted: PersistedIdentity =
             serde_json::from_str(&json).map_err(|e| format!("Failed to parse identity: {e}"))?;
+
+        // Migrate peer_key.bin → keyring if the file is still present
+        if key_path.exists() {
+            if let Ok(bytes) = fs::read(&key_path) {
+                if let Ok(seed) = <[u8; 32]>::try_from(bytes.as_slice()) {
+                    if try_store_in_keyring(&seed) {
+                        let _ = fs::remove_file(&key_path);
+                        log::info!("[peer-identity] Migrated peer_key.bin to OS keyring");
+                    }
+                }
+            }
+        }
+
         return Ok(DeviceIdentity {
             device_name: persisted.device_name,
             device_type: persisted.device_type,
@@ -79,7 +135,7 @@ pub fn get_or_create_device_identity(app: &AppHandle) -> Result<DeviceIdentity, 
     let signing_key = SigningKey::generate(&mut OsRng);
     let verifying_key: VerifyingKey = signing_key.verifying_key();
     let public_key_bytes = verifying_key.to_bytes();
-    let private_key_bytes = signing_key.to_bytes();
+    let seed: [u8; 32] = signing_key.to_bytes();
 
     // Derive device ID from public key hash
     let hash = Sha256::digest(public_key_bytes);
@@ -101,26 +157,18 @@ pub fn get_or_create_device_identity(app: &AppHandle) -> Result<DeviceIdentity, 
     // Ensure app data dir exists
     fs::create_dir_all(&app_data_dir).map_err(|e| format!("Failed to create app data dir: {e}"))?;
 
-    // Write identity JSON (public info)
+    // Store private key — keyring preferred, file fallback
+    if !try_store_in_keyring(&seed) {
+        write_key_file(&key_path, &seed)?;
+        log::info!("[peer-identity] Keyring unavailable — stored peer key in peer_key.bin (0600)");
+    } else {
+        log::info!("[peer-identity] Stored peer key in OS keyring");
+    }
+
+    // Write identity JSON (public info only)
     let json = serde_json::to_string_pretty(&identity)
         .map_err(|e| format!("Failed to serialize identity: {e}"))?;
     fs::write(&identity_path, &json).map_err(|e| format!("Failed to write identity: {e}"))?;
-
-    // Write private key bytes (raw 32-byte seed) - restricted permissions
-    fs::write(&key_path, private_key_bytes)
-        .map_err(|e| format!("Failed to write private key: {e}"))?;
-
-    // Set restrictive permissions on private key (Unix only)
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let mut perms = fs::metadata(&key_path)
-            .map_err(|e| format!("{e}"))?
-            .permissions();
-        perms.set_mode(0o600);
-        fs::set_permissions(&key_path, perms)
-            .map_err(|e| format!("Failed to set key permissions: {e}"))?;
-    }
 
     Ok(DeviceIdentity {
         device_name,
@@ -170,8 +218,14 @@ pub fn update_device_name(app: &AppHandle, new_name: String) -> Result<DeviceIde
 
 // ── HELLO challenge helpers ───────────────────────────────────────────────────
 
-/// Load the raw Ed25519 signing key from peer_key.bin.
+/// Load the raw Ed25519 signing key — keyring preferred, peer_key.bin fallback.
 fn load_signing_key(app: &AppHandle) -> Result<ed25519_dalek::SigningKey, String> {
+    // Try OS keyring first
+    if let Some(seed) = try_load_from_keyring() {
+        return Ok(ed25519_dalek::SigningKey::from_bytes(&seed));
+    }
+
+    // File fallback (users who haven't migrated yet, or keyring unavailable)
     let app_data_dir = app
         .path()
         .app_data_dir()

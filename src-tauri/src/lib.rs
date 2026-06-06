@@ -460,14 +460,6 @@ pub fn run() {
             // STT model download state (cancellation tokens)
             app.manage(commands::DownloadState::default());
 
-            // Auto-start sync server so peers can connect to us
-            if let Err(e) = commands::peer_sync_engine::peer_start_sync_server(
-                app.handle().clone(),
-                app.state::<SyncEngineState>(),
-            ) {
-                log::error!("[sync] Auto-start failed: {e}");
-            }
-
             // Sweep leftover preview temp files from previous sessions
             let _ = commands::sweep_preview_temp(app.handle().clone());
 

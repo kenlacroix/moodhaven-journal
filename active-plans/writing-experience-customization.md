@@ -1,6 +1,6 @@
 # Writing Experience Customization
 
-**Status:** Designed (2026-05-27), not yet started
+**Status:** Shipped (2026-06-05) — all 10 build steps complete, 28 unit tests passing
 **Full design doc:** `~/.gstack/projects/kenlacroix-moodhaven-journal/ken-main-design-20260527-141928.md`
 
 ## Summary
@@ -48,9 +48,18 @@ Effort: human ~1 week / CC+gstack ~30–60 min.
 - **Eng review:** ✓ Done 2026-05-27. 7 findings resolved into the design doc. Status: **CLEAR**.
 - **Design review:** ✓ Done 2026-05-27. 7 passes, overall score 6/10 → 9/10. Section labels reworded for brand voice, font/tint/width rendering specified, mobile bottom-sheet pattern added, full interaction state table including font loading, high-contrast mood-color decision made, presets deferred to v1.1 with reserved data slot. Status: **CLEAR**.
 
-## Next steps when picking this up
+## Implementation complete
 
-After `/plan-design-review`, you can begin implementation. Recommended order is the 10-step build sequence above.
+All 10 build steps shipped. Key files:
+- `src/types/writingAppearance.ts` — types + curated palettes (FONT_OPTIONS, SIZE_OPTIONS, LINE_HEIGHT_OPTIONS, PARAGRAPH_SPACING_OPTIONS, TINT_OPTIONS, WIDTH_OPTIONS)
+- `src/types/settings.ts` — WritingAppearance nested under `AppearanceSettings.writing`
+- `src/stores/settingsStore.ts` — `setWritingAppearance(patch)` with textScale clamping
+- `src/styles/globals.css` — @font-face rules + full `[data-writing-prefs]` CSS variable cascade (`--mh-writing-*`)
+- `src/components/writing/AppearanceDrawer.tsx` — modeless right drawer (bottom sheet on mobile), Type/Page/Reading support sections
+- `src/pages/WritingView.tsx` — `data-writing-*` attribute wiring on root div, toggle button (⌘,), discoverability pulse
+- `src/components/editor/RichTextEditor.tsx` — editor reads CSS vars from `[data-writing-prefs]` ancestor
+
+Tests: 28 unit tests across `src/types/writingAppearance.test.ts` (14 tests) and `src/components/writing/AppearanceDrawer.test.tsx` (14 tests) — all passing.
 
 ## GSTACK REVIEW REPORT
 

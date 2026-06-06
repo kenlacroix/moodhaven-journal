@@ -473,7 +473,7 @@ pub async fn import_data(app: AppHandle, data: String) -> Result<i32, String> {
         .and_then(|v| v.as_str())
         .unwrap_or("unknown");
 
-    const ALLOWED_IMPORT_VERSIONS: &[&str] = &["1.0", "1.1", "1.2", "1.3"];
+    const ALLOWED_IMPORT_VERSIONS: &[&str] = &["1.0", "1.1", "1.1.0", "1.2", "1.3"];
     if !ALLOWED_IMPORT_VERSIONS.contains(&version) {
         return Err(format!("Unsupported backup version: {}", version));
     }
@@ -775,9 +775,20 @@ pub async fn write_text_file(
     });
     // Also block absolute system path prefixes that must match from the root.
     let canonical_str = canonical.to_string_lossy().to_lowercase();
+    #[cfg(not(target_os = "windows"))]
     let blocked_by_prefix = ["/etc/", "/usr/", "/bin/", "/sbin/", "/lib"]
         .iter()
         .any(|p| canonical_str.starts_with(p));
+    #[cfg(target_os = "windows")]
+    let blocked_by_prefix = [
+        "c:\\windows\\",
+        "c:\\program files",
+        "c:\\program files (x86)",
+        "c:\\programdata",
+        "c:\\users\\all users",
+    ]
+    .iter()
+    .any(|p| canonical_str.starts_with(p));
     // Block shell config dot-files by name (not directory components).
     let blocked_by_filename = canonical
         .file_name()

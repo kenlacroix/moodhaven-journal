@@ -36,7 +36,7 @@ rusqlite = { version = "0.31", features = ["bundled"] }
 uuid = { version = "1", features = ["v4"] }
 chrono = { version = "0.4", features = ["serde"] }
 anyhow = "1"
-base64 = "0.21"
+base64 = "0.22"
 totp-rs = { version = "5", features = ["qr", "gen_secret"] }
 data-encoding = "2"
 sha2 = "0.10"
@@ -45,7 +45,7 @@ hex = "0.4"
 aes-gcm = "0.10"
 pbkdf2 = { version = "0.12", features = ["simple"] }
 hmac = "0.12"
-image = { version = "0.24", default-features = false, features = ["jpeg", "png", "gif", "webp"] }
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "webp"] }
 
 # FIDO/Hardware Key support (native, not WebAuthn) - optional
 ctap-hid-fido2 = { version = "3", optional = true }

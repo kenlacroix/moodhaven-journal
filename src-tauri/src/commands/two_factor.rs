@@ -18,8 +18,7 @@ use aes_gcm::{aead::Aead, Aes256Gcm, KeyInit, Nonce};
 use base64::Engine as _;
 use hmac::Hmac;
 use pbkdf2::pbkdf2;
-use rand::Rng;
-use rand::RngCore;
+use rand::{Rng, RngCore, rngs::OsRng};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tauri::State;
@@ -168,7 +167,7 @@ fn create_totp(secret: &str) -> Result<TOTP, String> {
 
 /// Generate 10 random backup codes
 fn generate_backup_codes_internal() -> Vec<String> {
-    let mut rng = rand::thread_rng();
+    let mut rng = OsRng;
     (0..10)
         .map(|_| {
             // Generate 8-character alphanumeric codes (easy to type)
@@ -202,7 +201,7 @@ const BACKUP_V2_PREFIX: &str = "pbkdf2:v2:";
 fn hash_backup_code_v2(code: &str) -> String {
     let normalized = code.replace('-', "").to_uppercase();
     let mut salt = [0u8; 16];
-    rand::thread_rng().fill_bytes(&mut salt);
+    OsRng.fill_bytes(&mut salt);
 
     let mut derived = [0u8; 32];
     pbkdf2::<Hmac<Sha256>>(

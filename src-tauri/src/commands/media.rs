@@ -24,7 +24,7 @@ use aes_gcm::{
 };
 use base64::{engine::general_purpose::STANDARD, Engine};
 use pbkdf2::pbkdf2_hmac;
-use rand::RngCore;
+use rand::{RngCore, rngs::OsRng};
 use rusqlite::params;
 use sha2::Sha256;
 use std::path::Path;
@@ -74,7 +74,7 @@ fn derive_key(password: &str, salt: &[u8]) -> [u8; 32] {
 fn aes_encrypt(key: &[u8; 32], plaintext: &[u8]) -> Result<Vec<u8>, String> {
     let cipher = Aes256Gcm::new_from_slice(key).map_err(|e| format!("Cipher init: {}", e))?;
     let mut nonce_bytes = [0u8; NONCE_LEN];
-    rand::thread_rng().fill_bytes(&mut nonce_bytes);
+    OsRng.fill_bytes(&mut nonce_bytes);
     let nonce = Nonce::from_slice(&nonce_bytes);
     let ct = cipher
         .encrypt(nonce, plaintext)
@@ -100,7 +100,7 @@ fn aes_decrypt(key: &[u8; 32], data: &[u8]) -> Result<Vec<u8>, String> {
 /// Build the complete MBMF on-disk bytes from plaintext.
 fn encrypt_to_mbmf(plaintext: &[u8], password: &str) -> Result<Vec<u8>, String> {
     let mut salt = [0u8; SALT_LEN];
-    rand::thread_rng().fill_bytes(&mut salt);
+    OsRng.fill_bytes(&mut salt);
     let key = derive_key(password, &salt);
     let orig_size = plaintext.len() as u64;
 
@@ -503,13 +503,13 @@ pub fn get_media_thumbnail(
 
     let mut jpeg_bytes: Vec<u8> = Vec::new();
     use image::codecs::jpeg::JpegEncoder;
-    use image::ColorType;
+    use image::ExtendedColorType;
     JpegEncoder::new_with_quality(&mut jpeg_bytes, 80)
         .encode(
             thumb.as_raw(),
             thumb.width(),
             thumb.height(),
-            ColorType::Rgb8,
+            ExtendedColorType::Rgb8,
         )
         .map_err(|e| format!("JPEG encode: {}", e))?;
 

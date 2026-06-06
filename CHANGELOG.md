@@ -5,6 +5,18 @@ All notable changes to MoodHaven Journal are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.6.0.4] — 2026-06-06
+
+### Changed
+- **TipTap editor updated to 3.26.0** — rich text editor receives latest stability and extension improvements (from 3.15–3.18).
+- **Tauri SDK updated to 2.11** — `@tauri-apps/api` and `@tauri-apps/cli` updated to 2.11.x with minor SDK improvements.
+- **Security hardening: cryptographic RNG sources** — encryption nonce and salt generation in export, media, and 2FA backup-code commands now use `OsRng` (direct OS entropy) instead of `thread_rng`. Both are cryptographically suitable; `OsRng` is the conventional choice for key material per CSPRNG best practices.
+
+### Fixed
+- **Rust image 0.25 compatibility** — media thumbnail encoding updated for `image 0.25`'s renamed `ExtendedColorType` API. No change in thumbnail quality or behavior.
+
+---
+
 ## [1.6.0.1] — 2026-06-02
 
 ### Fixed

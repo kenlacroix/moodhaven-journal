@@ -72,6 +72,9 @@ export function CollapsibleToolbar({
       <button
         type="button"
         onClick={() => onToggle(!expanded)}
+        aria-expanded={expanded}
+        aria-controls="editor-toolbar-buttons"
+        aria-label={expanded ? 'Collapse formatting toolbar' : 'Expand formatting toolbar'}
         className="w-full flex items-center gap-1.5 px-2 py-1.5 text-xs text-slate-400 dark:text-slate-500 hover:text-slate-500 dark:hover:text-slate-400 transition-colors"
       >
         <svg
@@ -88,10 +91,11 @@ export function CollapsibleToolbar({
 
       {/* Expandable button row — overflow-x-auto so mobile can scroll horizontally */}
       <div
+        id="editor-toolbar-buttons"
         className={`overflow-y-hidden transition-all duration-300 ease-out ${expanded ? 'max-h-16 opacity-100' : 'max-h-0 opacity-0'}`}
       >
         <div className="overflow-x-auto scrollbar-hide">
-        <div className="flex items-center gap-0.5 px-2 pb-2 flex-nowrap">
+        <div role="toolbar" aria-label="Text formatting" className="flex items-center gap-0.5 px-2 pb-2 flex-nowrap">
           {/* Text formatting */}
           <ToolbarBtn
             icon={<TBBoldIcon />}
@@ -222,6 +226,8 @@ export function ToolbarBtn({
         e.preventDefault();
         onClick();
       }}
+      aria-label={label}
+      aria-pressed={isActive}
       className={`
         p-1.5 rounded transition-all duration-150 active:scale-90
         ${isActive
@@ -229,7 +235,6 @@ export function ToolbarBtn({
           : 'text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-600 dark:hover:text-slate-300'
         }
       `}
-      title={label}
     >
       {icon}
     </button>
@@ -288,8 +293,8 @@ export function MicButton({
           onClick();
         }}
         disabled={isProcessing}
+        aria-label={title}
         className={`p-1.5 rounded transition-all duration-150 active:scale-90 ${buttonClass} ${isProcessing ? 'cursor-wait' : ''}`}
-        title={title}
       >
         {isProcessing ? (
           <span className="flex items-center gap-1">
@@ -313,8 +318,8 @@ export function MicButton({
             e.stopPropagation();
             onCancel();
           }}
+          aria-label="Cancel recording"
           className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-300 dark:hover:bg-slate-600 flex items-center justify-center text-xs"
-          title="Cancel recording"
         >
           <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -340,7 +345,7 @@ export function QuickCaptureToggle({
         e.preventDefault();
         onToggle();
       }}
-      title="Quick capture (bypass formatting)"
+      aria-label="Quick capture (bypass formatting)"
       aria-pressed={active}
       className={[
         'p-1.5 rounded transition-all duration-150 active:scale-90 min-w-[44px] min-h-[44px] flex items-center justify-center',

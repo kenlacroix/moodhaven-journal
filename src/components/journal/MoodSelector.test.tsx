@@ -10,6 +10,14 @@ describe('MoodSelector', () => {
     mockOnChange.mockClear();
   });
 
+  describe('accessibility', () => {
+    it('button group has role=group with accessible label', () => {
+      render(<MoodSelector value={null} onChange={mockOnChange} />);
+      const group = screen.getByRole('group', { name: /how are you feeling/i });
+      expect(group).toBeInTheDocument();
+    });
+  });
+
   describe('rendering', () => {
     it('renders 5 mood buttons', () => {
       render(<MoodSelector value={null} onChange={mockOnChange} />);

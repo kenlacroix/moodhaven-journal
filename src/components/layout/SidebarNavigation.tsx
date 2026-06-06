@@ -12,7 +12,7 @@ export function SidebarNavigation({ currentView, collapsed, onNavigate }: Sideba
   const stillhavenEnabled = useSettingsStore((s) => s.settings.wellness?.stillhavenEnabled ?? false);
 
   return (
-    <nav className="px-3 py-2 space-y-1">
+    <nav aria-label="Application views" className="px-3 py-2 space-y-1">
       <SidebarItem
         label="All Entries"
         isActive={currentView === 'timeline'}

@@ -1168,6 +1168,7 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
       data-writing-focus-mode={writingAppearance.focusMode ? 'true' : 'false'}
       data-writing-high-contrast={writingAppearance.highContrast ? 'true' : 'false'}
       data-writing-dyslexia={writingAppearance.dyslexiaProfile ? 'true' : 'false'}
+      data-writing-reduced-motion={writingAppearance.reducedMotion === 'on' ? 'true' : 'false'}
       style={{ ['--mh-writing-text-scale' as string]: String(writingAppearance.textScale) }}
       className={`h-full flex flex-col transition-all duration-500 ${distractionFree ? 'focus-bg' : 'writing-bg'}`}
     >

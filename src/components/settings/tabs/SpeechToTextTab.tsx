@@ -261,7 +261,7 @@ export function SpeechToTextTab({ settings, updateSettings, saveSettings }: Prop
   }, [stt, updateSettings, saveSettings]);
 
   return (
-    <div className="space-y-6">
+    <div id="panel-speech" role="tabpanel" className="space-y-6">
       {/* Header */}
       <div>
         <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100">

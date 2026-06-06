@@ -5,6 +5,13 @@ All notable changes to MoodHaven Journal are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.7.0] — 2026-06-05
+
+### Added
+- **PIN unlock** — set a 4–6 digit numeric PIN as a faster alternative to typing the full password on the lock screen. The PIN wraps the master password using PBKDF2-AES-256-GCM (600,000 iterations) so the zero-knowledge model is preserved. Rate-limited on the Rust side (5 failures → 30 s lockout, persisted across restarts); fully compatible with TOTP/hardware-key 2FA. Configured in Settings → Privacy → PIN Unlock.
+
+---
+
 ## [1.6.0.1] — 2026-06-02
 
 ### Fixed

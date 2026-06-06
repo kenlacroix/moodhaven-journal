@@ -16,6 +16,11 @@ commands.allow = [
   "verify_password",
   "unlock_app",
   "lock_app",
+  # PIN unlock (pin_is_enabled + pin_unlock are pre-auth; pin_setup + pin_disable require unlock)
+  "pin_is_enabled",
+  "pin_setup",
+  "pin_unlock",
+  "pin_disable",
   # Password management
   "check_password_exists",
   "store_password_hash",

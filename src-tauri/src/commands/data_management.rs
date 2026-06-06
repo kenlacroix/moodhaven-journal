@@ -204,6 +204,7 @@ pub async fn factory_reset(app: AppHandle) -> Result<bool, String> {
         "trusted_devices.json",
         "device.json",      // Ed25519 public key metadata (low-sensitivity but stale)
         "pw_lockout.json",  // Password rate-limiter state — reset with the app
+        "pin_lockout.json", // PIN rate-limiter state — reset with the app
         "db_state.json",    // SQLCipher encryption state — must be removed with the DB
         "moodhaven_enc.db", // Encrypted export tmp — survives interrupted migrations
         "moodhaven_old.db", // Windows-only rename backup — may survive interrupted migrations

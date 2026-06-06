@@ -44,7 +44,13 @@ impl PasswordRateLimiter {
     /// Called from `setup()` after the app data dir is known.
     /// Loads any existing lockout from disk so a restart does not reset it.
     pub fn initialize(&self, app_data: &std::path::Path) {
-        let path = app_data.join("pw_lockout.json");
+        self.initialize_with_path(&app_data.join("pw_lockout.json"));
+    }
+
+    /// Like `initialize` but accepts an explicit lockout file path.
+    /// Used by `PinRateLimiter` to keep PIN and password lockout files separate.
+    pub fn initialize_with_path(&self, path: &std::path::Path) {
+        let path = path.to_path_buf();
         // Attempt to load a persisted lockout epoch.
         if let Ok(contents) = std::fs::read_to_string(&path) {
             if let Ok(json) = serde_json::from_str::<serde_json::Value>(&contents) {
@@ -145,6 +151,11 @@ impl Default for PasswordRateLimiter {
         Self::new()
     }
 }
+
+/// Separate rate limiter for PIN unlock attempts.
+/// Wraps `PasswordRateLimiter` so the PIN lockout counter is independent of
+/// the password lockout counter, and persists to `pin_lockout.json`.
+pub struct PinRateLimiter(pub PasswordRateLimiter);
 
 impl AppLockState {
     pub fn new() -> Self {
@@ -434,6 +445,13 @@ pub fn run() {
             }
             app.manage(pw_rate_limiter);
 
+            // Separate rate limiter for PIN unlock — independent counter, independent file.
+            let pin_rate_limiter = PinRateLimiter(PasswordRateLimiter::new());
+            if let Ok(app_data) = app.path().app_data_dir() {
+                pin_rate_limiter.0.initialize_with_path(&app_data.join("pin_lockout.json"));
+            }
+            app.manage(pin_rate_limiter);
+
             // 2FA pending state — enforces that both auth factors are complete
             // before unlock_app succeeds, even if the frontend skips the 2FA step.
             app.manage(TwoFactorPendingState::new());
@@ -505,6 +523,11 @@ pub fn run() {
             // Session lock / unlock (set by frontend after auth, checked by sensitive commands)
             commands::unlock_app,
             commands::lock_app,
+            // PIN unlock (pre-auth: pin_is_enabled + pin_unlock; post-auth: pin_setup + pin_disable)
+            commands::pin_is_enabled,
+            commands::pin_setup,
+            commands::pin_unlock,
+            commands::pin_disable,
             // Password management
             commands::check_password_exists,
             commands::store_password_hash,

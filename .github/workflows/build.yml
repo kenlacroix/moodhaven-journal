@@ -24,9 +24,34 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # ── Validate version format before any build work ──────────────────────────
+  validate-tag:
+    name: Validate version format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+      - name: Check tauri.conf.json and Cargo.toml use 3-part semver
+        run: |
+          TAURI_VERSION=$(python3 -c "import json; print(json.load(open('src-tauri/tauri.conf.json'))['version'])")
+          CARGO_VERSION=$(grep '^version' src-tauri/Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+
+          validate_semver() {
+            local label="$1" ver="$2"
+            if ! echo "$ver" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+              echo "ERROR: $label version '$ver' must be 3-part semver (e.g. '1.6.0')."
+              echo "The 4th component belongs in the git tag only."
+              exit 1
+            fi
+            echo "$label version: $ver (OK)"
+          }
+
+          validate_semver "tauri.conf.json" "$TAURI_VERSION"
+          validate_semver "Cargo.toml" "$CARGO_VERSION"
+
   # ── Build on all platforms ──────────────────────────────────────────────────
   build:
     name: Build (${{ matrix.platform }})
+    needs: validate-tag
     runs-on: ${{ matrix.os }}
     continue-on-error: ${{ matrix.continue_on_error == true }}
     permissions:
@@ -180,6 +205,7 @@ jobs:
   # ── Android: Wear OS companion APK ─────────────────────────────────────────
   build-android:
     name: Build Android (Wear OS companion)
+    needs: validate-tag
     runs-on: ubuntu-latest
     if: github.event_name == 'push'
     permissions:

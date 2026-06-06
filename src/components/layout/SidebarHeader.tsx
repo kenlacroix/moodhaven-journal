@@ -20,7 +20,8 @@ export function SidebarHeader({ currentView, collapsed, onNavigate, onOpenSync }
       <button
         type="button"
         onClick={() => onNavigate('settings')}
-        title="Settings"
+        aria-label="Settings"
+        aria-current={currentView === 'settings' ? 'page' : undefined}
         className={`p-1.5 rounded-lg transition-all duration-200 ${
           currentView === 'settings'
             ? 'text-violet-500 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/20'
@@ -37,7 +38,7 @@ export function SidebarHeader({ currentView, collapsed, onNavigate, onOpenSync }
       <button
         type="button"
         onClick={onOpenSync}
-        title={
+        aria-label={
           savingState === 'saving' ? 'Saving…' :
           savingState === 'saved' ? `Saved${lastAutoSaved ? ' · ' + new Date(lastAutoSaved).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}` :
           lastAutoSaved ? `Last saved ${new Date(lastAutoSaved).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · Click for sync details` :

@@ -35,7 +35,7 @@ export function PrivacyTab({
   setAutoLockTimeout,
   sessionPassword = '',
 }: PrivacyTabProps) {
-  const { isAndroid, isBrowser } = usePlatform();
+  const { isAndroid, isBrowser, isDesktop } = usePlatform();
 
   const {
     show2FASetup,
@@ -59,7 +59,12 @@ export function PrivacyTab({
           setAutoLockTimeout={setAutoLockTimeout}
         />
 
-        <PrivacyBiometric isAndroid={isAndroid} />
+        <PrivacyBiometric
+          isAndroid={isAndroid}
+          isDesktop={isDesktop}
+          settings={settings}
+          sessionPassword={sessionPassword}
+        />
 
         <PrivacyPinUnlock sessionPassword={sessionPassword} />
 

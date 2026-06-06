@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use tauri::AppHandle;
 use tauri::Manager;
+use zeroize::Zeroizing;
 
 pub mod analytics;
 pub mod books;
@@ -144,11 +145,11 @@ impl Database {
     /// runs all pragmas and migrations, then replaces the stored connection.
     /// Called by `verify_password` when the DB is already encrypted.
     pub fn apply_key(&self, key: &[u8; 32]) -> Result<(), String> {
-        let hex_key = hex::encode(key);
+        let hex_key = Zeroizing::new(hex::encode(key));
         let new_conn =
             Connection::open(&self.path).map_err(|e| format!("reopen db for key: {e}"))?;
         new_conn
-            .execute_batch(&format!("PRAGMA hexkey = '{hex_key}';"))
+            .execute_batch(&format!("PRAGMA hexkey = '{}';", *hex_key))
             .map_err(|e| format!("PRAGMA hexkey: {e}"))?;
         new_conn
             .execute_batch("SELECT count(*) FROM sqlite_master;")
@@ -163,7 +164,7 @@ impl Database {
     /// Called by `unlock_app` the first time the user authenticates on an unencrypted DB.
     /// After this returns, db_state.json is updated and the stored connection uses the key.
     pub fn encrypt_in_place(&self, key: &[u8; 32], salt_b64: &str) -> Result<(), String> {
-        let hex_key = hex::encode(key);
+        let hex_key = Zeroizing::new(hex::encode(key));
         let tmp_path = self.path.with_file_name("moodhaven_enc.db");
         let tmp_str = tmp_path.to_str().ok_or("non-UTF8 db path")?;
         // Reject paths with single quotes — would break inline SQL
@@ -180,9 +181,10 @@ impl Database {
             let conn = self.conn.lock().map_err(|e| e.to_string())?;
             let _ = conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);");
             conn.execute_batch(&format!(
-                "ATTACH DATABASE '{tmp_str}' AS encrypted KEY \"x'{hex_key}'\";
+                "ATTACH DATABASE '{tmp_str}' AS encrypted KEY \"x'{}'\";
                  SELECT sqlcipher_export('encrypted');
-                 DETACH DATABASE encrypted;"
+                 DETACH DATABASE encrypted;",
+                *hex_key
             ))
             .map_err(|e| format!("sqlcipher_export: {e}"))?;
         }
@@ -191,7 +193,7 @@ impl Database {
         {
             let verify = Connection::open(&tmp_path).map_err(|e| format!("verify open: {e}"))?;
             verify
-                .execute_batch(&format!("PRAGMA hexkey = '{hex_key}';"))
+                .execute_batch(&format!("PRAGMA hexkey = '{}';", *hex_key))
                 .map_err(|e| format!("verify hexkey: {e}"))?;
             verify
                 .execute_batch("SELECT count(*) FROM sqlite_master;")
@@ -218,29 +220,49 @@ impl Database {
             // Original connection drops here, releasing the file handle
         }
 
-        // 5. Remove WAL/SHM for the original file (should be empty after TRUNCATE checkpoint)
-        let _ = std::fs::remove_file(self.path.with_extension("db-wal"));
-        let _ = std::fs::remove_file(self.path.with_extension("db-shm"));
+        // 5. Remove WAL/SHM for the original file (should be empty after TRUNCATE checkpoint).
+        //    On Windows, SQLite in WAL mode may keep the SHM handle open briefly after the
+        //    Connection is dropped. Retry a few times before giving up.
+        for _ in 0..5 {
+            let wal_gone = std::fs::remove_file(self.path.with_extension("db-wal")).is_ok()
+                || !self.path.with_extension("db-wal").exists();
+            let shm_gone = std::fs::remove_file(self.path.with_extension("db-shm")).is_ok()
+                || !self.path.with_extension("db-shm").exists();
+            if wal_gone && shm_gone {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
 
         // 6. Rename encrypted tmp to final path.
         //    On Windows, rename fails if the destination exists — move the original to a
         //    backup first so we can restore it on failure rather than deleting it outright.
+        //    Retry up to 5 times with 50 ms gaps to handle delayed Windows handle release.
         #[cfg(target_os = "windows")]
         let rename_result: Result<(), String> = {
             let backup = self.path.with_file_name("moodhaven_old.db");
-            match std::fs::rename(&self.path, &backup) {
-                Err(e) => Err(format!("backup original db: {e}")),
-                Ok(()) => match std::fs::rename(&tmp_path, &self.path) {
-                    Ok(()) => {
-                        let _ = std::fs::remove_file(&backup);
-                        Ok(())
-                    }
-                    Err(e) => {
-                        let _ = std::fs::rename(&backup, &self.path); // restore original
-                        Err(format!("rename encrypted db: {e}"))
-                    }
-                },
+            let mut last_err = String::new();
+            let mut success = false;
+            for attempt in 0..5u8 {
+                if attempt > 0 {
+                    std::thread::sleep(std::time::Duration::from_millis(50));
+                }
+                match std::fs::rename(&self.path, &backup) {
+                    Err(e) => { last_err = format!("backup original db: {e}"); }
+                    Ok(()) => match std::fs::rename(&tmp_path, &self.path) {
+                        Ok(()) => {
+                            let _ = std::fs::remove_file(&backup);
+                            success = true;
+                            break;
+                        }
+                        Err(e) => {
+                            let _ = std::fs::rename(&backup, &self.path);
+                            last_err = format!("rename encrypted db: {e}");
+                        }
+                    },
+                }
             }
+            if success { Ok(()) } else { Err(last_err) }
         };
 
         #[cfg(not(target_os = "windows"))]
@@ -275,7 +297,7 @@ impl Database {
             let final_conn = Connection::open(&self.path)
                 .map_err(|e| format!("open final encrypted db: {e}"))?;
             final_conn
-                .execute_batch(&format!("PRAGMA hexkey = '{hex_key}';"))
+                .execute_batch(&format!("PRAGMA hexkey = '{}';", *hex_key))
                 .map_err(|e| format!("final hexkey: {e}"))?;
             final_conn
                 .execute_batch("SELECT count(*) FROM sqlite_master;")

@@ -629,14 +629,14 @@ pub fn peer_generate_pairing_token(
     // Different device IDs → different ports, so two instances on the same host never conflict.
     let pairing_port = pairing_port_for_device(&identity.device_id);
 
-    // Build compact QR payload
+    // Build compact QR payload — PIN intentionally excluded so that QR scanning alone
+    // is not sufficient to complete pairing; the PIN must be entered manually (out-of-band).
     let qr_payload = serde_json::json!({
         "v": 1,
         "did": identity.device_id,
         "dn": identity.device_name,
         "dt": identity.device_type,
         "pk": identity.public_key,
-        "pin": pin,
         "host": local_host,
         "port": pairing_port,
         "exp": expires_at,

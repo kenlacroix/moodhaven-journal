@@ -215,8 +215,11 @@ pub fn get_local_ipv4() -> Option<std::net::Ipv4Addr> {
 /// where multicast is filtered (some corporate Wi-Fi / VPNs).
 ///
 /// Protocol (LAN broadcast, port 4243):
-///   probe → broadcast  {type:"probe", device_id, device_name, device_type, public_key, version}
+///   probe → broadcast  {type:"probe", device_id, device_name, device_type, version}
 ///   pong  → unicast    same fields, type:"pong"  (response to a probe)
+///
+/// Public keys are NOT included — they are exchanged only during the explicit pairing
+/// ceremony to prevent transport-key precomputation by passive LAN observers.
 ///
 /// On receiving either, we inject the sender into the shared peer map and emit
 /// `peer:discovered` if not already present (mDNS takes priority).
@@ -225,7 +228,6 @@ fn run_udp_discovery(
     my_device_id: String,
     my_device_name: String,
     my_device_type: String,
-    my_public_key: String,
     stop_flag: Arc<AtomicBool>,
 ) {
     use std::net::UdpSocket;
@@ -244,18 +246,11 @@ fn run_udp_discovery(
         log::warn!("[peer/udp] set_broadcast failed: {e}");
     }
 
-    let pubkey_hint = if my_public_key.len() >= 8 {
-        &my_public_key[..8]
-    } else {
-        &my_public_key
-    };
     let probe_json = serde_json::json!({
         "type": "probe",
         "device_id": my_device_id,
         "device_name": my_device_name,
         "device_type": my_device_type,
-        "public_key": my_public_key,
-        "pubkey_hint": pubkey_hint,
         "version": APP_VERSION,
     })
     .to_string();
@@ -297,8 +292,6 @@ fn run_udp_discovery(
                         "device_id": my_device_id,
                         "device_name": my_device_name,
                         "device_type": my_device_type,
-                        "public_key": my_public_key,
-                        "pubkey_hint": pubkey_hint,
                         "version": APP_VERSION,
                     })
                     .to_string();
@@ -314,12 +307,7 @@ fn run_udp_discovery(
                     .as_str()
                     .unwrap_or("desktop")
                     .to_string();
-                let peer_pubkey = json["public_key"].as_str().unwrap_or("").to_string();
                 let peer_version = json["version"].as_str().unwrap_or("?").to_string();
-                let peer_hint = json["pubkey_hint"]
-                    .as_str()
-                    .unwrap_or(&peer_pubkey[..peer_pubkey.len().min(8)])
-                    .to_string();
                 let host = src_addr.ip().to_string();
 
                 let peer = DiscoveredPeer {
@@ -329,7 +317,7 @@ fn run_udp_discovery(
                     host,
                     port: sync_port_for_device(&peer_id),
                     version: peer_version,
-                    pubkey_hint: peer_hint,
+                    pubkey_hint: String::new(),
                     is_trusted: crate::commands::peer_pairing::is_device_trusted(&app, &peer_id),
                     is_online: true,
                     last_seen: now_iso(),
@@ -370,7 +358,7 @@ fn run_discovery(
     device_id: String,
     device_name: String,
     device_type: String,
-    public_key: String,
+    _public_key: String,
     stop_rx: std::sync::mpsc::Receiver<()>,
 ) {
     use mdns_sd::{ServiceDaemon, ServiceEvent, ServiceInfo};
@@ -382,14 +370,12 @@ fn run_discovery(
     let udp_device_id = device_id.clone();
     let udp_device_name = device_name.clone();
     let udp_device_type = device_type.clone();
-    let udp_public_key = public_key.clone();
     let udp_handle = std::thread::spawn(move || {
         run_udp_discovery(
             udp_app,
             udp_device_id,
             udp_device_name,
             udp_device_type,
-            udp_public_key,
             udp_stop_clone,
         );
     });
@@ -408,12 +394,8 @@ fn run_discovery(
     let local_ip_str = local_ip.map(|ip| ip.to_string()).unwrap_or_default();
     log::debug!("[peer] Local IP detected: {local_ip_str:?}");
 
-    // Build TXT record properties
-    let pubkey_hint = if public_key.len() >= 8 {
-        &public_key[..8]
-    } else {
-        &public_key
-    };
+    // Build TXT record properties — public key is NOT included; it is exchanged only during
+    // the explicit pairing ceremony to prevent transport-key precomputation.
     let instance_name = sanitize_instance_name(&format!("moodhaven-{}", &device_id[..8]));
 
     let mut properties: HashMap<String, String> = HashMap::new();
@@ -421,7 +403,6 @@ fn run_discovery(
     properties.insert("device_type".to_string(), device_type.clone());
     properties.insert("device_name".to_string(), device_name.clone());
     properties.insert("version".to_string(), APP_VERSION.to_string());
-    properties.insert("pubkey_hint".to_string(), pubkey_hint.to_string());
 
     // Register this device as a service on the LAN.
     // host_name is the DNS hostname (.local); host_ipv4 is the A-record IP.

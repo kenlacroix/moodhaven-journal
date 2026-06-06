@@ -15,18 +15,23 @@ use tauri::{AppHandle, Manager, State};
 
 use crate::db::{self, Database};
 use crate::{AppLockState, DbKeyState, TwoFactorPendingState};
+use crate::commands::peer_sync_engine::SyncEngineState;
 
 /// Mark the session as unlocked.
 /// Enforces that both authentication factors were completed in Rust — a compromised
 /// frontend cannot bypass 2FA by calling this directly after verify_password.
 /// If the database is still unencrypted and a derived key is available in DbKeyState,
 /// triggers the one-time migration to SQLCipher before setting the unlocked flag.
+/// Also starts the TCP peer sync server on first unlock (deferred from app startup
+/// so the server is not listening before the user has authenticated).
 #[tauri::command]
 pub fn unlock_app(
+    app: AppHandle,
     lock: State<'_, AppLockState>,
     twofa: State<'_, TwoFactorPendingState>,
     db: State<'_, Database>,
     db_key: State<'_, DbKeyState>,
+    sync_engine: State<'_, SyncEngineState>,
 ) -> Result<(), String> {
     if !twofa.is_fully_authenticated() {
         return Err("Authentication incomplete: password verification or 2FA not done".to_string());
@@ -48,6 +53,13 @@ pub fn unlock_app(
     }
 
     *lock.0.lock().map_err(|e| e.to_string())? = false;
+
+    // Start the sync server post-unlock so it's not advertising before auth.
+    // peer_start_sync_server is idempotent — safe to call on subsequent unlocks.
+    if let Err(e) = crate::commands::peer_sync_engine::peer_start_sync_server(app, sync_engine) {
+        log::warn!("[sync] Post-unlock sync server start failed: {e}");
+    }
+
     Ok(())
 }
 

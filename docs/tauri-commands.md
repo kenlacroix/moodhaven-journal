@@ -1,6 +1,6 @@
 # Tauri Command Reference
 
-> **Version:** v1.6.0 (feat/cloud-sync-phase1) | **Total commands:** ~156
+> **Version:** v1.7.0 | **Total commands:** ~164
 >
 > This document lists all `#[tauri::command]` functions exposed by MoodHaven Journal's Rust backend.
 > Commands are registered in `src-tauri/src/lib.rs` and permitted in `src-tauri/capabilities/default.json`.
@@ -42,6 +42,8 @@ Parameter names in TypeScript use **camelCase**; Rust receives them as **snake_c
 - [StillHaven](#stillhaven)
 - [Logging](#logging)
 - [Cloud Providers (Phase 1)](#cloud-providers-phase-1)
+- [PIN Unlock](#pin-unlock)
+- [Biometric Session Unlock](#biometric-session-unlock)
 
 ---
 
@@ -2076,4 +2078,124 @@ Force-refresh the access token for a provider using the stored refresh token. Ca
 invoke('cloud_provider_refresh_token', {
   provider: 'dropbox' | 'gdrive',
 }) → Promise<void>
+```
+
+---
+
+## PIN Unlock
+
+**Source:** `src-tauri/src/commands/pin_unlock.rs`
+**IPC wrappers:** `src/lib/services/pinUnlockService.ts`
+
+PIN unlock lets the user set a 4–6 digit numeric PIN as a fast alternative to typing the full password on the lock screen. The PIN encrypts the master password using PBKDF2-AES-256-GCM (600,000 iterations + random salt) so the zero-knowledge model is preserved. Rate-limited: 5 failures → 30 s lockout, persisted across restarts. Compatible with TOTP/hardware-key 2FA.
+
+Configure in **Settings → Privacy → PIN Unlock**.
+
+---
+
+### `pin_is_enabled`
+
+Check whether a PIN has been set up.
+
+```typescript
+invoke('pin_is_enabled') → Promise<boolean>
+```
+
+---
+
+### `pin_setup`
+
+Set up (or replace) a PIN. Requires an unlocked session. The master password is encrypted under a key derived from the PIN and stored in the `settings` table.
+
+```typescript
+invoke('pin_setup', {
+  password: string,   // the current session password (used as plaintext to encrypt)
+  pin: string,        // 4–6 digit numeric string
+}) → Promise<void>
+```
+
+Throws if the session is locked, the PIN is not 4–6 digits, or the password is empty.
+
+---
+
+### `pin_unlock`
+
+Attempt to unlock the app using the PIN. Decrypts the stored password blob and calls `unlock_app` internally on success. Rate-limited — returns an error containing the remaining lockout seconds on the 5th consecutive failure.
+
+```typescript
+invoke('pin_unlock', {
+  pin: string,
+}) → Promise<string>   // the decrypted master password (used by frontend to derive key)
+```
+
+Returns an error of the form `"locked: N"` (where N is seconds remaining) when the rate limiter fires.
+
+---
+
+### `pin_disable`
+
+Remove the stored PIN and reset the rate limiter. Requires an unlocked session.
+
+```typescript
+invoke('pin_disable') → Promise<void>
+```
+
+---
+
+## Biometric Session Unlock
+
+**Source:** `src-tauri/src/commands/biometric.rs`
+**IPC wrappers:** `src/lib/services/biometricService.ts`
+
+Biometric session unlock stores the master password in the OS credential store (keyring/Keychain/Windows Credential Manager) so the user can unlock with a biometric prompt (Face ID, Touch ID, Windows Hello) in subsequent sessions. The password is never written to the app database — it is stored in the OS-managed secure enclave and retrieved only when the user authenticates.
+
+Desktop-only. On platforms without an OS credential store, `biometric_is_available` returns `{ available: false }`.
+
+---
+
+### `biometric_is_available`
+
+Check whether the OS credential store is accessible on this platform.
+
+```typescript
+invoke('biometric_is_available') → Promise<{
+  available: boolean,
+  reason: string | null,   // human-readable error if unavailable
+}>
+```
+
+---
+
+### `biometric_store_session`
+
+Store the master password in the OS credential store. Requires an unlocked session. Called when the user enables biometric unlock in Settings.
+
+```typescript
+invoke('biometric_store_session', {
+  password: string,
+}) → Promise<void>
+```
+
+Throws if the session is locked or the OS credential store is unavailable.
+
+---
+
+### `biometric_retrieve_session`
+
+Retrieve the stored master password from the OS credential store. Called by the lock screen when the user taps the biometric unlock button. The OS will prompt the user for biometric verification before returning the credential.
+
+```typescript
+invoke('biometric_retrieve_session') → Promise<string>   // master password
+```
+
+Returns a descriptive error if no credential is stored or if biometric verification fails.
+
+---
+
+### `biometric_clear_session`
+
+Remove the stored credential from the OS credential store. Called when the user disables biometric unlock or performs a factory reset.
+
+```typescript
+invoke('biometric_clear_session') → Promise<void>
 ```

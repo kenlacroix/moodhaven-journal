@@ -13,7 +13,6 @@ import { TimelineView } from './pages/TimelineView';
 import { OnThisDayView } from './pages/OnThisDayView';
 import { InsightsView } from './pages/InsightsView';
 import { CalendarPage } from './pages/CalendarPage';
-import { SettingsPage } from './pages/SettingsPage';
 import { JournalOverviewPage } from './pages/JournalOverviewPage';
 import { StillView } from './modules/stillhaven';
 import { StillSessionsView } from './modules/stillhaven/components/StillSessionsView';
@@ -37,6 +36,11 @@ import { useTimeCapsule } from './hooks/useTimeCapsule';
 // Dev-only wireframe — lazy-loaded so it never enters the production bundle's initial chunk.
 const PeerSyncWireframes = lazy(() =>
   import('./pages/PeerSyncWireframes').then((m) => ({ default: m.PeerSyncWireframes }))
+);
+// SettingsPage is only shown when the user opens the gear icon — lazy-load to
+// keep the initial bundle smaller and defer the settings/DevicesTab subgraph.
+const SettingsPage = lazy(() =>
+  import('./pages/SettingsPage').then((m) => ({ default: m.SettingsPage }))
 );
 import { TimeCapsuleRevealModal } from './components/timecapsule/TimeCapsuleRevealModal';
 import { SealEntryModal } from './components/timecapsule/SealEntryModal';
@@ -373,7 +377,7 @@ function MainApp() {
 
       {showTutorial && <TutorialWizard onComplete={handleTutorialComplete} />}
       {showSyncModal && <SyncDetailsModal onClose={() => setShowSyncModal(false)} onNavigateToSettings={() => handleNavigateToSettings()} />}
-      {showSettings && <SettingsPage updateHook={updateHook} onClose={() => setShowSettings(false)} />}
+      {showSettings && <Suspense fallback={null}><SettingsPage updateHook={updateHook} onClose={() => setShowSettings(false)} /></Suspense>}
       {pendingCapsule && sessionPassword && (
         <TimeCapsuleRevealModal
           capsule={pendingCapsule}

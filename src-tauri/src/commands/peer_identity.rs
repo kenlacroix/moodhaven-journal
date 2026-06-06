@@ -155,8 +155,7 @@ pub fn get_or_create_device_identity(app: &AppHandle) -> Result<DeviceIdentity, 
     };
 
     // Ensure app data dir exists
-    fs::create_dir_all(&app_data_dir)
-        .map_err(|e| format!("Failed to create app data dir: {e}"))?;
+    fs::create_dir_all(&app_data_dir).map_err(|e| format!("Failed to create app data dir: {e}"))?;
 
     // Store private key — keyring preferred, file fallback
     if !try_store_in_keyring(&seed) {
@@ -169,8 +168,7 @@ pub fn get_or_create_device_identity(app: &AppHandle) -> Result<DeviceIdentity, 
     // Write identity JSON (public info only)
     let json = serde_json::to_string_pretty(&identity)
         .map_err(|e| format!("Failed to serialize identity: {e}"))?;
-    fs::write(&identity_path, &json)
-        .map_err(|e| format!("Failed to write identity: {e}"))?;
+    fs::write(&identity_path, &json).map_err(|e| format!("Failed to write identity: {e}"))?;
 
     Ok(DeviceIdentity {
         device_name,

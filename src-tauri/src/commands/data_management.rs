@@ -13,9 +13,9 @@ use sha2::Sha256;
 use std::fs;
 use tauri::{AppHandle, Manager, State};
 
+use crate::commands::peer_sync_engine::SyncEngineState;
 use crate::db::{self, Database};
 use crate::{AppLockState, DbKeyState, TwoFactorPendingState};
-use crate::commands::peer_sync_engine::SyncEngineState;
 
 /// Mark the session as unlocked.
 /// Enforces that both authentication factors were completed in Rust — a compromised

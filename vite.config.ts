@@ -60,6 +60,30 @@ export default defineConfig({
     minify: !process.env.TAURI_ENV_DEBUG && !isWebBuild ? 'esbuild' : isWebBuild ? 'esbuild' : false,
     // Produce sourcemaps for debug builds
     sourcemap: !!process.env.TAURI_ENV_DEBUG,
+    // Raise threshold — explicit splits below replace guessing
+    chunkSizeWarningLimit: 600,
+    rollupOptions: {
+      output: {
+        manualChunks(id: string) {
+          // TipTap + ProseMirror editor stack (~507 KB raw). Split so it only
+          // loads when WritingView mounts, not on lock screen or timeline.
+          if (
+            id.includes('node_modules/@tiptap/') ||
+            id.includes('node_modules/prosemirror-') ||
+            id.includes('node_modules/lodash-es')
+          ) {
+            return 'editor';
+          }
+          // React + ReactDOM: stable, separate chunk improves long-term caching.
+          if (
+            id.includes('node_modules/react/') ||
+            id.includes('node_modules/react-dom/')
+          ) {
+            return 'react-vendor';
+          }
+        },
+      },
+    },
   },
 
   define: {

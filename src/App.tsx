@@ -11,11 +11,7 @@ import { BreakoutWriterApp } from './components/breakout/BreakoutWriterApp';
 import { WritingView } from './pages/WritingView';
 import { TimelineView } from './pages/TimelineView';
 import { OnThisDayView } from './pages/OnThisDayView';
-import { InsightsView } from './pages/InsightsView';
 import { CalendarPage } from './pages/CalendarPage';
-import { JournalOverviewPage } from './pages/JournalOverviewPage';
-import { StillView } from './modules/stillhaven';
-import { StillSessionsView } from './modules/stillhaven/components/StillSessionsView';
 import { useBooksStore } from './stores/booksStore';
 import { LockScreen } from './pages/LockScreen';
 import { SetupScreen } from './pages/SetupScreen';
@@ -41,6 +37,19 @@ const PeerSyncWireframes = lazy(() =>
 // keep the initial bundle smaller and defer the settings/DevicesTab subgraph.
 const SettingsPage = lazy(() =>
   import('./pages/SettingsPage').then((m) => ({ default: m.SettingsPage }))
+);
+// Secondary views — only mounted when the user navigates to them.
+const InsightsView = lazy(() =>
+  import('./pages/InsightsView').then((m) => ({ default: m.InsightsView }))
+);
+const JournalOverviewPage = lazy(() =>
+  import('./pages/JournalOverviewPage').then((m) => ({ default: m.JournalOverviewPage }))
+);
+const StillView = lazy(() =>
+  import('./modules/stillhaven').then((m) => ({ default: m.StillView }))
+);
+const StillSessionsView = lazy(() =>
+  import('./modules/stillhaven/components/StillSessionsView').then((m) => ({ default: m.StillSessionsView }))
 );
 import { TimeCapsuleRevealModal } from './components/timecapsule/TimeCapsuleRevealModal';
 import { SealEntryModal } from './components/timecapsule/SealEntryModal';
@@ -329,9 +338,11 @@ function MainApp() {
 
           {/* Insights View - AI insights + local analytics merged */}
           {currentView === 'insights' && (
-            <ErrorBoundary>
-              <InsightsView onNavigateToSettings={handleNavigateToSettings} />
-            </ErrorBoundary>
+            <Suspense fallback={null}>
+              <ErrorBoundary>
+                <InsightsView onNavigateToSettings={handleNavigateToSettings} />
+              </ErrorBoundary>
+            </Suspense>
           )}
 
           {/* Calendar View */}
@@ -343,34 +354,40 @@ function MainApp() {
 
           {/* Journal Overview */}
           {currentView === 'journalOverview' && journalOverviewBookId && (
-            <ErrorBoundary>
-              <JournalOverviewPage
-                bookId={journalOverviewBookId}
-                onViewEntries={() => handleNavigate('timeline')}
-                onBack={() => handleNavigate('timeline')}
-              />
-            </ErrorBoundary>
+            <Suspense fallback={null}>
+              <ErrorBoundary>
+                <JournalOverviewPage
+                  bookId={journalOverviewBookId}
+                  onViewEntries={() => handleNavigate('timeline')}
+                  onBack={() => handleNavigate('timeline')}
+                />
+              </ErrorBoundary>
+            </Suspense>
           )}
 
           {/* StillHaven — somatic companion module (feature flag + user opt-in) */}
           {currentView === 'still' && import.meta.env.VITE_FEATURE_STILL && stillhavenEnabled && (
-            <ErrorBoundary>
-              <StillView
-                onHandoff={(html) => {
-                  setHandoffHtml(html);
-                  setSelectedEntryId(null);
-                  setWritingKey((k) => k + 1);
-                  setCurrentView('writing');
-                }}
-              />
-            </ErrorBoundary>
+            <Suspense fallback={null}>
+              <ErrorBoundary>
+                <StillView
+                  onHandoff={(html) => {
+                    setHandoffHtml(html);
+                    setSelectedEntryId(null);
+                    setWritingKey((k) => k + 1);
+                    setCurrentView('writing');
+                  }}
+                />
+              </ErrorBoundary>
+            </Suspense>
           )}
 
           {/* StillHaven — session history + pattern tracking */}
           {currentView === 'stillSessions' && import.meta.env.VITE_FEATURE_STILL && stillhavenEnabled && (
-            <ErrorBoundary>
-              <StillSessionsView onBack={() => setCurrentView('still')} />
-            </ErrorBoundary>
+            <Suspense fallback={null}>
+              <ErrorBoundary>
+                <StillSessionsView onBack={() => setCurrentView('still')} />
+              </ErrorBoundary>
+            </Suspense>
           )}
         </div>
       </Layout>

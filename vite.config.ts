@@ -65,8 +65,8 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id: string) {
-          // TipTap + ProseMirror editor stack (~507 KB raw). Split so it only
-          // loads when WritingView mounts, not on lock screen or timeline.
+          // TipTap + ProseMirror editor stack (~507 KB raw). Separate chunk
+          // enables stable long-term caching independent of app code changes.
           if (
             id.includes('node_modules/@tiptap/') ||
             id.includes('node_modules/prosemirror-') ||

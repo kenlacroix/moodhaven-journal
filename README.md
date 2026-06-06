@@ -32,7 +32,7 @@
 | 🔒 **Privacy-first** | AES-256-GCM + PBKDF2 encryption — only you can read your entries. No accounts, no telemetry, no backdoors. |
 | 🌐 **Truly cross-platform** | Native desktop (Windows, macOS, Linux), installable PWA, Android bridge, and Wear OS companion. |
 | 🧠 **Smart journaling tools** | Mood tracking, time capsules, guided templates, and local analytics to reflect on your mental wellness. |
-| 🔄 **Secure multi-device sync** | WebDAV backup and encrypted LAN peer sync — no centralised server required. |
+| 🔄 **Secure multi-device sync** | WebDAV, Dropbox, and Google Drive backup (all encrypted client-side) plus encrypted LAN peer sync — no centralised server required. |
 | 📱 **Offline-ready** | Works fully offline. The web app is installable; the desktop app needs no internet at all. |
 
 ---
@@ -95,7 +95,7 @@ npm run build:web                        # production build → dist-web/
 | Protect | Sync |
 |:---|:---|
 | AES-256-GCM encryption, PBKDF2 key derivation | LAN peer sync — no cloud server, no accounts |
-| Zero-knowledge: app never sees your plaintext | Encrypted WebDAV backup (Nextcloud, Synology, etc.) |
+| Zero-knowledge: app never sees your plaintext | Encrypted cloud backup: WebDAV, Dropbox, Google Drive |
 | TOTP 2FA and native FIDO2 hardware key support | Encrypted `.moodhaven` export for offline archival |
 | Optional 24-character offline recovery key | Encrypted peer sync across your own devices |
 
@@ -388,6 +388,7 @@ See [CLAUDE.md](CLAUDE.md) for architecture, security guidelines, and convention
 | Architecture overview | [docs/architecture.md](docs/architecture.md) · [Wiki](https://github.com/kenlacroix/moodhaven-journal/wiki/Architecture-Overview) |
 | Tauri command reference | [docs/tauri-commands.md](docs/tauri-commands.md) · [Wiki](https://github.com/kenlacroix/moodhaven-journal/wiki/Tauri-Command-Reference) |
 | Security model | [SECURITY.md](SECURITY.md) · [Wiki](https://github.com/kenlacroix/moodhaven-journal/wiki/Security-Model) |
+| Threat model | [docs/threat-model.md](docs/threat-model.md) |
 | Peer sync protocol | [docs/peer-sync-security.md](docs/peer-sync-security.md) · [Wiki](https://github.com/kenlacroix/moodhaven-journal/wiki/Peer-Sync-Security) |
 | Speech-to-text | [docs/speech-to-text.md](docs/speech-to-text.md) · [Wiki](https://github.com/kenlacroix/moodhaven-journal/wiki/Speech-to-Text) |
 | Watch companion | [docs/watch-companion.md](docs/watch-companion.md) · [Wiki](https://github.com/kenlacroix/moodhaven-journal/wiki/Watch-Companion) |

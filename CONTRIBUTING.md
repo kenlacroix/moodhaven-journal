@@ -107,7 +107,7 @@ cd src-tauri && cargo check    # Rust compiles cleanly
 
 ### UI
 
-- Follow the existing colour palette and spacing. See `CLAUDE.md §3` for design tokens.
+- Follow the existing colour palette and spacing. See the `Design` section in `CLAUDE.md` for mood color tokens and animation durations.
 - Use `transition-all duration-200` for micro-interactions; `duration-300` for page transitions.
 - Respect `prefers-reduced-motion`.
 - All interactive elements must be keyboard-navigable.

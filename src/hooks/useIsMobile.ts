@@ -15,27 +15,3 @@ export function useIsMobile(): boolean {
 
   return isMobile;
 }
-
-export function useIsIOS(): boolean {
-  const [isIOS, setIsIOS] = useState(() => {
-    if (typeof navigator === 'undefined') return false;
-    // Primary: Tauri WebView on iOS sets a recognisable UA
-    if (/iPad|iPhone|iPod/.test(navigator.userAgent)) return true;
-    // Secondary: iPadOS in desktop mode reports as macOS, check pointer type
-    return navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent);
-  });
-
-  useEffect(() => {
-    // Attempt Tauri plugin-os if available (optional dep — not installed by default)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    import('@tauri-apps/plugin-os' as any)
-      .then((mod: { platform: () => Promise<string> }) => {
-        mod.platform()
-          .then((p) => setIsIOS(p === 'ios'))
-          .catch(() => {/* keep UA-based initial value */});
-      })
-      .catch(() => {/* plugin not present — UA value from useState is correct */});
-  }, []);
-
-  return isIOS;
-}

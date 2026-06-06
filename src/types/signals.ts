@@ -37,14 +37,14 @@ export interface MoodTapPayload {
   note?: string;          // optional one-liner (max 140 chars)
 }
 
-export interface CheckInPayload {
+interface CheckInPayload {
   mood: 1 | 2 | 3 | 4 | 5;
   note?: string;
   tags?: string[];
   energy?: 1 | 2 | 3 | 4 | 5;
 }
 
-export interface VoiceMemoPayload {
+interface VoiceMemoPayload {
   attachmentId: string;   // references entry_media.id
   durationMs: number;
   transcript?: string;    // whisper.cpp output (optional, local)
@@ -59,7 +59,7 @@ export interface HealthSnapshotPayload {
   source: 'oura' | 'health_connect' | 'manual';
 }
 
-export interface LocationTagPayload {
+interface LocationTagPayload {
   city?: string;
   country?: string;
   timezone?: string;

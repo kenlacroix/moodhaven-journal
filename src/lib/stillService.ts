@@ -117,7 +117,7 @@ export async function stillGetWellbeingContext(): Promise<WellbeingContext> {
 
 // ── v1.4.0 StillHaven Effect ──────────────────────────────────────────────────
 
-export interface ProtocolEffect {
+interface ProtocolEffect {
   protocol: string;
   session_count: number;
   /** pre − post activation; positive = improvement. */

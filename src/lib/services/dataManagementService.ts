@@ -55,7 +55,7 @@ export async function exportData(password?: string, filter?: ExportFilter): Prom
  * @param data - Base64-encoded backup string
  * @returns Number of entries imported
  */
-export async function importData(data: string): Promise<number> {
+async function importData(data: string): Promise<number> {
   return invoke<number>('import_data', { data });
 }
 

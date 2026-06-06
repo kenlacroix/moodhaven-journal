@@ -44,14 +44,6 @@ export async function generateTotpSecret(password: string): Promise<TotpSetupDat
 }
 
 /**
- * Verify a TOTP code (during setup or for testing).
- * The password is required to decrypt the stored secret.
- */
-export async function verifyTotpCode(code: string, password: string): Promise<boolean> {
-  return invoke('verify_totp_code', { code, password });
-}
-
-/**
  * Enable TOTP after successful verification.
  * Returns backup codes that must be shown to user.
  */

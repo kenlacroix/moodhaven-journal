@@ -33,7 +33,7 @@ export function buildAuthHeader(username: string, password: string): string {
  * Warns when http:// is used — credentials will be sent in plaintext.
  * (Journal content is still AES-256-GCM encrypted before upload regardless of scheme.)
  */
-export function validateWebDAVUrl(url: string): void {
+function validateWebDAVUrl(url: string): void {
   let parsed: URL;
   try {
     parsed = new URL(url.trim());

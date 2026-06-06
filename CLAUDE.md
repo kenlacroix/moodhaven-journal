@@ -141,7 +141,7 @@ cd src-tauri && cargo check
 ## Health Stack
 
 - typecheck: tsc --noEmit
-- lint: eslint src --ext .ts,.tsx
+- lint: npm run lint:ci
 - test: vitest run
 - deadcode: knip
 - rust: cargo check && cargo fmt --check

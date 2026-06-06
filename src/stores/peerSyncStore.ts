@@ -8,7 +8,7 @@
 import { create } from 'zustand';
 import type { DeviceIdentity, DiscoveredPeer, SyncStatus, TrustedDevice } from '../types/peerSync';
 
-export interface PairingRequest {
+interface PairingRequest {
   deviceName: string;
   deviceType: string;
   deviceId: string;

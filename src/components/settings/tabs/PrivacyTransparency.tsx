@@ -4,7 +4,7 @@ import type { AppSettings } from '../../../types/settings';
 import { SettingSection } from '../SettingSection';
 import { logger } from '../../../lib/services/logger';
 
-export function PrivacyStatRow({
+function PrivacyStatRow({
   label,
   value,
   ok,

@@ -101,15 +101,6 @@ export async function linkVoiceMemoToEntry(
   return invoke<void>('link_voice_memo_to_entry', { memoId, entryId });
 }
 
-/** Attach a context summary string (health, location, etc.) to a memo. */
-export async function patchVoiceMemoContext(
-  id: string,
-  context: string,
-  locationWeatherJson?: string,
-): Promise<void> {
-  return invoke<void>('patch_voice_memo_context', { id, context, locationWeatherJson: locationWeatherJson ?? null });
-}
-
 /** Store the locally-inferred mood score (1–5) on the memo row. */
 export async function patchVoiceMemoMood(id: string, inferredMood: number): Promise<void> {
   return invoke<void>('patch_voice_memo_mood', { id, inferredMood });

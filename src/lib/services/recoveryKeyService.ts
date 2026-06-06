@@ -109,16 +109,6 @@ export async function recoverPassword(recoveryKey: string): Promise<string | nul
 }
 
 /**
- * Verify a recovery key by attempting to decrypt the stored password
- * @param recoveryKey - The recovery key to verify
- * @returns True if the key is valid
- */
-export async function verifyRecoveryKey(recoveryKey: string): Promise<boolean> {
-  const password = await recoverPassword(recoveryKey);
-  return password !== null;
-}
-
-/**
  * Check if recovery key is enabled
  */
 export async function isRecoveryKeyEnabled(): Promise<boolean> {
@@ -132,10 +122,3 @@ export async function isRecoveryKeyEnabled(): Promise<boolean> {
   }
 }
 
-/**
- * Remove recovery key (used when resetting the app)
- */
-export async function removeRecoveryKey(): Promise<void> {
-  await invoke('delete_setting', { key: RECOVERY_KEY_ENCRYPTED_PASSWORD_SETTING });
-  await invoke('delete_setting', { key: RECOVERY_KEY_ENABLED_SETTING });
-}

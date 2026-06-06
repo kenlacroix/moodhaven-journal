@@ -20,6 +20,7 @@ import type { JournalEntry } from '../types/journal';
 import { MOOD_OPTIONS } from '../types/journal';
 import { useBooksStore } from '../stores/booksStore';
 import { usePlatform } from '../hooks/usePlatform';
+import { useIsMobile } from '../hooks/useIsMobile';
 import { logger } from '../lib/services/logger';
 import { useVoiceMemoDrafts } from '../hooks/useVoiceMemoDrafts';
 import { VoiceMemoDraftCard } from '../components/voice-memo/VoiceMemoDraftCard';
@@ -99,6 +100,8 @@ export function TimelineView({ onSelectEntry, onNewEntry, onSealEntry, refreshTr
   const sessionPassword = useAppStore((s) => s.sessionPassword);
 
   const { isAndroid } = usePlatform();
+  const isMobileViewport = useIsMobile();
+  const isMobile = isAndroid || isMobileViewport;
   const activeBookId = useBooksStore((s) => s.activeBookId);
   const activeBooksLabel = useBooksStore((s) => {
     if (!s.activeBookId) return null;
@@ -380,9 +383,9 @@ export function TimelineView({ onSelectEntry, onNewEntry, onSealEntry, refreshTr
   }
 
   return (
-    <div className={isAndroid ? 'py-0' : 'max-w-2xl mx-auto px-6 py-8'}>
+    <div className={isMobile ? 'py-0' : 'max-w-2xl mx-auto px-6 py-8'}>
       {/* Header with entry count */}
-      <div className={isAndroid ? 'px-4 pt-4 mb-3' : 'mb-8'}>
+      <div className={isMobile ? 'px-4 pt-4 mb-3' : 'mb-8'}>
         <h1 className="text-2xl font-semibold text-slate-800 dark:text-slate-100">
           {activeBooksLabel ?? 'Journal'}
         </h1>
@@ -397,7 +400,7 @@ export function TimelineView({ onSelectEntry, onNewEntry, onSealEntry, refreshTr
 
       {/* Inline search */}
       {entries.length > 0 && (
-        <div className={`relative mb-4 ${isAndroid ? 'px-4' : ''}`}>
+        <div className={`relative mb-4 ${isMobile ? 'px-4' : ''}`}>
           <svg
             className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-slate-500 pointer-events-none"
             fill="none"
@@ -437,7 +440,7 @@ export function TimelineView({ onSelectEntry, onNewEntry, onSealEntry, refreshTr
 
       {/* Mood filter chips */}
       {entries.length > 0 && (
-        <div className={`flex gap-2 mb-4 ${isAndroid ? 'overflow-x-auto px-4 pb-1 flex-nowrap' : 'flex-wrap'}`}>
+        <div className={`flex gap-2 mb-4 ${isMobile ? 'overflow-x-auto px-4 pb-1 flex-nowrap' : 'flex-wrap'}`}>
           {/* All chip */}
           <button
             type="button"
@@ -487,7 +490,7 @@ export function TimelineView({ onSelectEntry, onNewEntry, onSealEntry, refreshTr
 
       {/* Date range filter chips */}
       {entries.length > 0 && (
-        <div className={`flex gap-2 mb-4 ${isAndroid ? 'overflow-x-auto px-4 pb-1 flex-nowrap' : 'flex-wrap'}`}>
+        <div className={`flex gap-2 mb-4 ${isMobile ? 'overflow-x-auto px-4 pb-1 flex-nowrap' : 'flex-wrap'}`}>
           {([
             ['all', 'All time'],
             ['week', 'This week'],
@@ -521,7 +524,7 @@ export function TimelineView({ onSelectEntry, onNewEntry, onSealEntry, refreshTr
         tags={allTags}
         activeTag={tagFilter}
         onSelect={setTagFilter}
-        isAndroid={isAndroid}
+        isAndroid={isMobile}
       />
 
       {/* Empty state - no entries at all */}
@@ -559,7 +562,7 @@ export function TimelineView({ onSelectEntry, onNewEntry, onSealEntry, refreshTr
 
       {/* Voice memo draft cards (Phase 5) */}
       {drafts.length > 0 && (
-        <div className={`mb-4 space-y-2 ${isAndroid ? 'px-4' : ''}`}>
+        <div className={`mb-4 space-y-2 ${isMobile ? 'px-4' : ''}`}>
           {drafts.map((draft) => (
             <VoiceMemoDraftCard
               key={draft.id}
@@ -573,11 +576,11 @@ export function TimelineView({ onSelectEntry, onNewEntry, onSealEntry, refreshTr
 
       {/* Pinned Entries section */}
       {pinnedEntries.length > 0 && (
-        <div className={isAndroid ? 'mb-4' : 'mb-8'}>
+        <div className={isMobile ? 'mb-4' : 'mb-8'}>
           <button
             type="button"
             onClick={() => setPinnedCollapsed((v) => !v)}
-            className={`flex items-center gap-2 mb-3 w-full text-left group ${isAndroid ? 'px-4' : ''}`}
+            className={`flex items-center gap-2 mb-3 w-full text-left group ${isMobile ? 'px-4' : ''}`}
           >
             <span className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
               📌 Pinned
@@ -684,7 +687,7 @@ export function TimelineView({ onSelectEntry, onNewEntry, onSealEntry, refreshTr
       <VirtualEntryList
         groupedEntries={groupedEntries}
         mediaByEntry={mediaByEntry}
-        isAndroid={isAndroid}
+        isAndroid={isMobile}
         getDateHeader={getDateHeader}
         onSelectEntry={onSelectEntry}
         onDelete={handleDelete}

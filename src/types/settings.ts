@@ -9,14 +9,14 @@ import { createDefaultWritingAppearance } from './writingAppearance';
 export type AIProvider = 'openai' | 'local' | 'none';
 
 // Local AI configuration (for Ollama or similar)
-export interface LocalAIConfig {
+interface LocalAIConfig {
   enabled: boolean;
   endpoint: string; // e.g., 'http://localhost:11434'
   model: string; // e.g., 'llama2', 'mistral'
 }
 
 // OpenAI configuration
-export interface OpenAIConfig {
+interface OpenAIConfig {
   apiKey: string | null;
   model: 'gpt-4o-mini' | 'gpt-4o' | 'gpt-3.5-turbo';
 }
@@ -30,14 +30,14 @@ export interface AIFeatures {
 }
 
 // AI consent tracking
-export interface AIConsent {
+interface AIConsent {
   agreedToTerms: boolean;
   consentDate: string | null; // ISO timestamp
   dataUsageUnderstood: boolean;
 }
 
 // Complete AI settings
-export interface AISettings {
+interface AISettings {
   enabled: boolean;
   provider: AIProvider;
   openai: OpenAIConfig;
@@ -47,7 +47,7 @@ export interface AISettings {
 }
 
 // Journal preferences
-export interface JournalPreferences {
+interface JournalPreferences {
   defaultMood: number | null; // Pre-select a mood or null for none
   showPrompts: boolean;
   autoSave: boolean;
@@ -61,7 +61,7 @@ export interface JournalPreferences {
 }
 
 // Privacy settings
-export interface PrivacySettings {
+interface PrivacySettings {
   autoLockTimeout: number; // minutes, 0 = disabled
   clearClipboardOnLock: boolean;
   hideContentInTaskbar: boolean;
@@ -70,7 +70,7 @@ export interface PrivacySettings {
 }
 
 // Appearance settings
-export interface AppearanceSettings {
+interface AppearanceSettings {
   theme: 'light' | 'dark' | 'system';
   compactMode: boolean;
   animationsEnabled: boolean;
@@ -101,16 +101,6 @@ export interface ReminderSettings {
 // Storage backend options
 export type StorageBackend = 'local' | 'webdav' | 'dropbox' | 'gdrive';
 
-// Cloud provider identifier
-export type CloudProvider = 'dropbox' | 'gdrive';
-
-// Cloud provider connection status
-export interface CloudProviderStatus {
-  provider: CloudProvider;
-  connected: boolean;
-  lastSyncAt: string | null;
-}
-
 // WebDAV connection configuration
 export interface WebDAVConfig {
   url: string;
@@ -119,7 +109,7 @@ export interface WebDAVConfig {
 }
 
 // Storage settings
-export interface StorageSettings {
+interface StorageSettings {
   type: StorageBackend;
   webdav: WebDAVConfig;
   lastSyncDate?: string; // ISO timestamp
@@ -132,7 +122,7 @@ export interface StorageSettings {
 }
 
 // Tutorial settings
-export interface TutorialSettings {
+interface TutorialSettings {
   hasSeenTutorial: boolean;
   /** True after the writing-view drawer toggle has been pulsed once for discoverability. */
   hasSeenWritingDrawerHint: boolean;
@@ -162,7 +152,7 @@ export const STT_MODELS: STTModelInfo[] = [
 export type STTFormattingLayer = 'local' | 'ollama' | 'openai';
 
 // Speech-to-Text formatting settings
-export interface STTFormattingSettings {
+interface STTFormattingSettings {
   layer: STTFormattingLayer;
   cloudConsentGiven: boolean;
   consentDate: string | null;
@@ -188,7 +178,7 @@ export interface OuraSettings {
 }
 
 // Multi-device sync preferences
-export interface SyncSettings {
+interface SyncSettings {
   /** Human-readable name shown to other devices (e.g. "Ken's Desktop") */
   deviceName: string;
   /** When to run the sync engine automatically */
@@ -219,7 +209,7 @@ export interface TimeCapsuleSettings {
 }
 
 // Update manager preferences
-export interface UpdateSettings {
+interface UpdateSettings {
   /** Auto-check for updates on startup (max once per 24 h). Default: true */
   autoCheck: boolean;
   /** ISO timestamp of last successful check */

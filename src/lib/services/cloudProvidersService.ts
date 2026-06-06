@@ -19,14 +19,14 @@ export async function cloudProviderAuthStart(provider: 'dropbox' | 'gdrive'): Pr
   return invoke('cloud_provider_auth_start', { provider });
 }
 
-export async function cloudProviderUploadBlob(
+async function cloudProviderUploadBlob(
   provider: 'dropbox' | 'gdrive',
   blob: string,
 ): Promise<void> {
   return invoke('cloud_provider_upload_blob', { provider, blob });
 }
 
-export async function cloudProviderDownloadBlob(provider: 'dropbox' | 'gdrive'): Promise<string> {
+async function cloudProviderDownloadBlob(provider: 'dropbox' | 'gdrive'): Promise<string> {
   return invoke('cloud_provider_download_blob', { provider });
 }
 
@@ -38,9 +38,6 @@ export async function cloudProviderDisconnect(provider: 'dropbox' | 'gdrive'): P
   return invoke('cloud_provider_disconnect', { provider });
 }
 
-export async function cloudProviderRefreshToken(provider: 'dropbox' | 'gdrive'): Promise<void> {
-  return invoke('cloud_provider_refresh_token', { provider });
-}
 
 export async function syncUpload(
   provider: 'dropbox' | 'gdrive',

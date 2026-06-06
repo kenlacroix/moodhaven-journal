@@ -10,6 +10,7 @@ import { useCalendar } from '../hooks/useCalendar';
 import { CalendarView } from '../components/calendar';
 import { DayTimelineView } from '../components/calendar/DayTimelineView';
 import { usePlatform } from '../hooks/usePlatform';
+import { useIsMobile } from '../hooks/useIsMobile';
 
 interface CalendarPageProps {
   onSelectEntry?: (entryId: string) => void;
@@ -17,6 +18,8 @@ interface CalendarPageProps {
 
 export function CalendarPage({ onSelectEntry }: CalendarPageProps) {
   const { isAndroid } = usePlatform();
+  const isMobileViewport = useIsMobile();
+  const isMobile = isAndroid || isMobileViewport;
   const calendar = useCalendar();
   const [timelineVisible, setTimelineVisible] = useState(false);
 
@@ -58,7 +61,7 @@ export function CalendarPage({ onSelectEntry }: CalendarPageProps) {
   );
 
   // ── Mobile layout: full-screen grid, day view slides over from right ─────────
-  if (isAndroid) {
+  if (isMobile) {
     return (
       <div className="h-full relative overflow-hidden bg-white dark:bg-slate-900">
         {/* Calendar grid — always mounted, hidden behind overlay when day selected */}

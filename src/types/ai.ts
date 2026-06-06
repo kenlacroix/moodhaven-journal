@@ -148,20 +148,6 @@ export interface RecurringPattern {
 // AI SERVICE TYPES
 // ============================================
 
-/** Request to AI for prompts */
-export interface PromptGenerationRequest {
-  metadata: AggregatedMetadata;
-  count: number;
-  categories?: AIPrompt['category'][];
-  excludeRecent?: string[]; // IDs of recently shown prompts
-}
-
-/** Request to AI for insights */
-export interface InsightGenerationRequest {
-  metadata: AggregatedMetadata;
-  focusAreas?: ('mood' | 'patterns' | 'wellness' | 'habits')[];
-}
-
 /** AI service response */
 export interface AIResponse<T> {
   success: boolean;

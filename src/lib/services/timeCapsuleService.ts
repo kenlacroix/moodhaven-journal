@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { EncryptedData } from './crypto';
 
-export type CapsuleType = 'letter' | 'vault' | 'anniversary';
+type CapsuleType = 'letter' | 'vault' | 'anniversary';
 
 /** Shape returned by Rust for capsule-related entry queries */
 export interface CapsuleEntryRow {

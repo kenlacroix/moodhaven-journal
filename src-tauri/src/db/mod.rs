@@ -58,7 +58,11 @@ pub fn read_db_state(db_path: &Path) -> DbStateFile {
 fn write_db_state(db_path: &Path, state: &DbStateFile) -> Result<(), String> {
     let path = db_state_path(db_path);
     let json = serde_json::to_string(state).map_err(|e| format!("serialize db_state: {e}"))?;
-    std::fs::write(&path, json).map_err(|e| format!("write db_state.json: {e}"))?;
+    // Atomic write: write to a tmp file then rename so a crash mid-write never leaves a
+    // partial JSON that causes the recovery path to misclassify the DB state.
+    let tmp = path.with_extension("json.tmp");
+    std::fs::write(&tmp, &json).map_err(|e| format!("write db_state.json.tmp: {e}"))?;
+    std::fs::rename(&tmp, &path).map_err(|e| format!("rename db_state.json: {e}"))?;
     Ok(())
 }
 
@@ -85,20 +89,36 @@ impl Database {
     /// the connection is opened but no pragmas or migrations are run — the caller must
     /// call `apply_key()` after the user authenticates before the connection is usable.
     pub fn new(db_path: PathBuf) -> Result<Self, String> {
-        let state = read_db_state(&db_path);
+        let mut state = read_db_state(&db_path);
 
-        // Recovery: if db_state.json says encrypted=true and moodhaven_enc.db still exists,
-        // the previous migration was interrupted between db_state.json write and the rename.
-        // Complete the rename now to bring the file to a consistent encrypted state.
-        if state.encrypted {
-            let tmp_path = db_path.with_file_name("moodhaven_enc.db");
-            if tmp_path.exists() {
+        // Recovery: if moodhaven_enc.db exists, a previous encrypt_in_place was interrupted.
+        // Two sub-cases:
+        //   (a) db_state.json says encrypted=true  — crash after state write, before rename
+        //   (b) db_state.json missing/encrypted=false — crash before state write (SQLC-004)
+        // In case (b) the plaintext moodhaven.db is still present and would otherwise be
+        // opened normally, silently discarding the encrypted copy forever.
+        let tmp_path = db_path.with_file_name("moodhaven_enc.db");
+        if tmp_path.exists() {
+            if !state.encrypted {
+                log::warn!(
+                    "[sqlcipher] Found moodhaven_enc.db without db_state.json — \
+                     completing interrupted migration (SQLC-004 recovery)"
+                );
+                let _ = write_db_state(
+                    &db_path,
+                    &DbStateFile {
+                        encrypted: true,
+                        salt: None,
+                    },
+                );
+                state.encrypted = true;
+            } else {
                 log::info!("[sqlcipher] Completing interrupted migration on startup");
-                #[cfg(target_os = "windows")]
-                let _ = std::fs::remove_file(&db_path);
-                if let Err(e) = std::fs::rename(&tmp_path, &db_path) {
-                    log::error!("[sqlcipher] Startup recovery rename failed: {e}");
-                }
+            }
+            #[cfg(target_os = "windows")]
+            let _ = std::fs::remove_file(&db_path);
+            if let Err(e) = std::fs::rename(&tmp_path, &db_path) {
+                log::error!("[sqlcipher] Startup recovery rename failed: {e}");
             }
         }
 

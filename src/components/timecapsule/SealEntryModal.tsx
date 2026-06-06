@@ -81,13 +81,14 @@ export function SealEntryModal({ entryId, defaultDays, onSeal, onCancel }: Props
           {/* Type selector */}
           <div className="space-y-2">
             <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Capsule type</p>
-            <div className="grid grid-cols-2 gap-2">
+            <div role="radiogroup" aria-label="Capsule type" className="grid grid-cols-2 gap-2">
               {CAPSULE_OPTIONS.map(({ type, label, description }) => (
                 <button
                   key={type}
                   type="button"
+                  role="radio"
+                  aria-checked={capsuleType === type}
                   onClick={() => setCapsuleType(type)}
-                  aria-pressed={capsuleType === type}
                   className={`text-left px-3 py-3 rounded-xl border-2 transition-colors ${
                     capsuleType === type
                       ? 'border-violet-500 bg-violet-50 dark:bg-violet-900/20'

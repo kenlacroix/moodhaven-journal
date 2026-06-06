@@ -45,7 +45,7 @@ export function HealthTab({
   }
 
   return (
-    <div id="panel-health" role="tabpanel" className="space-y-6">
+    <div id="panel-health" role="tabpanel" aria-labelledby="tab-health" className="space-y-6">
       <SettingSection
         title="Oura Ring"
         description="Connect your Oura Ring to enrich journal writing prompts with today's sleep, readiness, and stress context. Health data stays on your device."

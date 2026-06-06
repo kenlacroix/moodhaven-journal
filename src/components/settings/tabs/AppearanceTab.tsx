@@ -17,7 +17,7 @@ export function AppearanceTab({
   setAnimationsEnabled,
 }: AppearanceTabProps) {
   return (
-    <div id="panel-appearance" role="tabpanel" className="space-y-6">
+    <div id="panel-appearance" role="tabpanel" aria-labelledby="tab-appearance" className="space-y-6">
       <SettingSection
         title="Appearance"
         description="Customize how MoodHaven Journal looks"

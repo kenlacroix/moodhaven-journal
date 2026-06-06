@@ -612,7 +612,7 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
           </p>
         )}
         {syncLockedOut && (
-          <div role="status" className="mt-2 flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400">
+          <div className="mt-2 flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400">
             <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
             </svg>
@@ -808,7 +808,7 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
               <label htmlFor="settings-search" className="sr-only">Search settings</label>
               <input
                 id="settings-search"
-                type="search"
+                type="text"
                 placeholder="Search settings..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -854,6 +854,7 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
               {TABS.map((tab) => (
                 <button
                   key={tab.id}
+                  id={`tab-${tab.id}`}
                   role="tab"
                   aria-selected={activeTab === tab.id}
                   aria-controls={`panel-${tab.id}`}

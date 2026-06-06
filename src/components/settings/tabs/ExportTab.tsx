@@ -15,7 +15,7 @@ export function ExportTab({
   isExporting,
 }: ExportTabProps) {
   return (
-    <div id="panel-export" role="tabpanel" className="space-y-6">
+    <div id="panel-export" role="tabpanel" aria-labelledby="tab-export" className="space-y-6">
       <div>
         <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-1">
           Selective Export

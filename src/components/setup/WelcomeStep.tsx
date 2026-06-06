@@ -1,8 +1,12 @@
+import { useState } from 'react';
+
 interface WelcomeStepProps {
-  onNext: () => void;
+  onNext: (advanced: boolean) => void;
 }
 
 export function WelcomeStep({ onNext }: WelcomeStepProps) {
+  const [advanced, setAdvanced] = useState(false);
+
   return (
     <div className="text-center space-y-6">
       {/* Bloom icon */}
@@ -69,9 +73,31 @@ export function WelcomeStep({ onNext }: WelcomeStepProps) {
         </ul>
       </div>
 
+      {/* Advanced setup toggle */}
+      <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-700/40 rounded-xl text-left">
+        <div>
+          <p className="text-sm font-medium text-slate-700 dark:text-slate-300">Advanced setup</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Configure 2FA, sync, cloud backup and more
+          </p>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={advanced}
+          onClick={() => setAdvanced((v) => !v)}
+          className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 ${advanced ? 'bg-violet-500' : 'bg-slate-200 dark:bg-slate-600'}`}
+        >
+          <span className="sr-only">Enable advanced setup</span>
+          <span
+            className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${advanced ? 'translate-x-6' : 'translate-x-1'}`}
+          />
+        </button>
+      </div>
+
       <button
         type="button"
-        onClick={onNext}
+        onClick={() => onNext(advanced)}
         className="btn-primary w-full py-3"
       >
         Create My Journal

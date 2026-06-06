@@ -136,7 +136,7 @@ export function GeneralTab({
   }, [setHasSeenTutorial, saveSettings]);
 
   return (
-    <div id="panel-general" role="tabpanel" className="space-y-6">
+    <div id="panel-general" role="tabpanel" aria-labelledby="tab-general" className="space-y-6">
       <SettingSection
         title="Journal"
         description="Configure your journaling experience"

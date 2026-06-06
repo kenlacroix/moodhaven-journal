@@ -8,6 +8,7 @@
  * - Keyboard navigable
  */
 
+import { useId } from 'react';
 import { type MoodLevel, MOOD_OPTIONS } from '../../types/journal';
 
 interface MoodSelectorProps {
@@ -21,15 +22,16 @@ export function MoodSelector({
   onChange,
   disabled = false,
 }: MoodSelectorProps) {
+  const labelId = useId();
   return (
     <div className="space-y-3">
-      <p id="mood-selector-label" className="block text-sm font-medium text-slate-600 dark:text-slate-300">
+      <p id={labelId} className="block text-sm font-medium text-slate-600 dark:text-slate-300">
         How are you feeling?
       </p>
 
       <div
         role="group"
-        aria-labelledby="mood-selector-label"
+        aria-labelledby={labelId}
         className="flex items-center justify-center gap-2 sm:gap-4"
       >
         {MOOD_OPTIONS.map((option) => {

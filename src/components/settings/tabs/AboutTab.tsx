@@ -30,7 +30,7 @@ export function AboutTab({
   const { isBrowser, isIOS } = usePlatform();
   const [moduleOverridesOpen, setModuleOverridesOpen] = useState(false);
   return (
-    <div id="panel-about" role="tabpanel" className="space-y-6">
+    <div id="panel-about" role="tabpanel" aria-labelledby="tab-about" className="space-y-6">
 
       {/* Updates section — App Store handles updates on iOS */}
       {!isIOS && (

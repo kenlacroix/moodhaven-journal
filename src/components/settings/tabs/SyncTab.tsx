@@ -119,7 +119,7 @@ export function SyncTab({
     : null;
 
   return (
-    <div id="panel-sync" role="tabpanel" className="space-y-6">
+    <div id="panel-sync" role="tabpanel" aria-labelledby="tab-sync" className="space-y-6">
       <SettingSection
         title="Cloud Sync"
         description="Back up your encrypted journal across devices. All data is encrypted before upload — your cloud provider never sees your journal content."

@@ -21,7 +21,7 @@ export function SidebarHeader({ currentView, collapsed, onNavigate, onOpenSync }
         type="button"
         onClick={() => onNavigate('settings')}
         aria-label="Settings"
-        aria-current={currentView === 'settings' ? 'page' : undefined}
+        aria-pressed={currentView === 'settings'}
         className={`p-1.5 rounded-lg transition-all duration-200 ${
           currentView === 'settings'
             ? 'text-violet-500 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/20'

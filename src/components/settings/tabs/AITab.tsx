@@ -33,7 +33,7 @@ export function AITab({
   setAIConsent,
 }: AITabProps) {
   return (
-    <div id="panel-ai" role="tabpanel" className="space-y-6" ref={aiSectionRef}>
+    <div id="panel-ai" role="tabpanel" aria-labelledby="tab-ai" className="space-y-6" ref={aiSectionRef}>
       <SettingSection
         title="AI Features"
         description="Optional AI-powered insights (your journal content is never sent to external servers)"

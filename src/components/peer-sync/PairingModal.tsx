@@ -10,7 +10,7 @@
  *  onClose   — called after success or cancellation
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import type { DiscoveredPeer, TrustedDevice } from '../../types/peerSync';
 import { SuccessScreen } from './PairingUIComponents';
 import { ShowCodeTab } from './PairingShowCodeTab';
@@ -23,8 +23,10 @@ export function PairingModal({
   peer: DiscoveredPeer;
   onClose: () => void;
 }) {
+  const TABS = ['show', 'enter'] as const;
   const [tab, setTab] = useState<'show' | 'enter'>('show');
   const [paired, setPaired] = useState<TrustedDevice | null>(null);
+  const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
   const handleSuccess = useCallback((device: TrustedDevice) => {
     setPaired(device);
@@ -82,6 +84,18 @@ export function PairingModal({
                 role="tablist"
                 aria-label="Pairing method"
                 className="flex rounded-xl bg-slate-100 dark:bg-slate-800 p-1 mb-5"
+                onKeyDown={(e) => {
+                  const idx = TABS.indexOf(tab);
+                  if (e.key === 'ArrowRight') {
+                    const next = TABS[(idx + 1) % TABS.length];
+                    setTab(next);
+                    tabRefs.current[next]?.focus();
+                  } else if (e.key === 'ArrowLeft') {
+                    const prev = TABS[(idx - 1 + TABS.length) % TABS.length];
+                    setTab(prev);
+                    tabRefs.current[prev]?.focus();
+                  }
+                }}
               >
                 {(
                   [
@@ -91,6 +105,7 @@ export function PairingModal({
                 ).map(({ key, label }) => (
                   <button
                     key={key}
+                    ref={(el) => { tabRefs.current[key] = el; }}
                     role="tab"
                     aria-selected={tab === key}
                     aria-controls={`pairing-tab-panel-${key}`}
@@ -108,14 +123,14 @@ export function PairingModal({
                 ))}
               </div>
 
-              {/* Tab content */}
+              {/* Tab content — always mounted; hidden attribute removes from AT/tab order */}
               <div
                 id="pairing-tab-panel-show"
                 role="tabpanel"
                 aria-labelledby="pairing-tab-show"
                 hidden={tab !== 'show'}
               >
-                {tab === 'show' && <ShowCodeTab onSuccess={handleSuccess} />}
+                <ShowCodeTab onSuccess={handleSuccess} />
               </div>
               <div
                 id="pairing-tab-panel-enter"
@@ -123,7 +138,7 @@ export function PairingModal({
                 aria-labelledby="pairing-tab-enter"
                 hidden={tab !== 'enter'}
               >
-                {tab === 'enter' && <EnterCodeTab peer={peer} onSuccess={handleSuccess} />}
+                <EnterCodeTab peer={peer} onSuccess={handleSuccess} />
               </div>
             </>
           )}

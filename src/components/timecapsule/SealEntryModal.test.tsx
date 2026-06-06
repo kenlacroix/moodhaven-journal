@@ -78,12 +78,12 @@ describe('SealEntryModal', () => {
     expect(heading).toHaveTextContent(/seal as time capsule/i);
   });
 
-  it('capsule type buttons have aria-pressed reflecting selection', () => {
+  it('capsule type radios have aria-checked reflecting selection', () => {
     render(<SealEntryModal {...baseProps} />);
-    const letterBtn = screen.getByRole('button', { name: /letter/i });
-    const vaultBtn = screen.getByRole('button', { name: /vault/i });
-    expect(letterBtn).toHaveAttribute('aria-pressed', 'true');
-    expect(vaultBtn).toHaveAttribute('aria-pressed', 'false');
+    const letterBtn = screen.getByRole('radio', { name: /letter/i });
+    const vaultBtn = screen.getByRole('radio', { name: /vault/i });
+    expect(letterBtn).toHaveAttribute('aria-checked', 'true');
+    expect(vaultBtn).toHaveAttribute('aria-checked', 'false');
   });
 
   it('error message has role=alert when present', async () => {

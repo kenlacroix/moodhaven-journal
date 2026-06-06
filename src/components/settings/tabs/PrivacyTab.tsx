@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import type { AppSettings } from '../../../types/settings';
 import type { TwoFactorStatus } from '../../../types/twoFactor';
 import { usePlatform } from '../../../hooks/usePlatform';
@@ -37,6 +38,12 @@ export function PrivacyTab({
 }: PrivacyTabProps) {
   const { isAndroid, isBrowser, isDesktop } = usePlatform();
 
+  const savedFocusRef = useRef<Element | null>(null);
+  const totpDialogRef = useRef<HTMLDivElement>(null);
+  const webauthnDialogRef = useRef<HTMLDivElement>(null);
+  const backupCodesDialogRef = useRef<HTMLDivElement>(null);
+  const disable2FADialogRef = useRef<HTMLDivElement>(null);
+
   const {
     show2FASetup,
     setShow2FASetup,
@@ -51,9 +58,42 @@ export function PrivacyTab({
     handleDisable2FA,
   } = use2FASetup(refresh2FAStatus);
 
+  // Focus management: move focus into the open dialog, restore on close
+  useEffect(() => {
+    const dialogRef =
+      show2FASetup === 'totp' ? totpDialogRef
+      : show2FASetup === 'webauthn' ? webauthnDialogRef
+      : showBackupCodes ? backupCodesDialogRef
+      : showDisable2FAConfirm ? disable2FADialogRef
+      : null;
+
+    if (!dialogRef) return;
+
+    savedFocusRef.current = document.activeElement;
+    const rafId = requestAnimationFrame(() => {
+      dialogRef.current
+        ?.querySelector<HTMLElement>('button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])')
+        ?.focus();
+    });
+
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (show2FASetup) setShow2FASetup(null);
+      else if (showBackupCodes) setShowBackupCodes(false);
+      else if (showDisable2FAConfirm) setShowDisable2FAConfirm(false);
+    };
+    document.addEventListener('keydown', handleEsc);
+
+    return () => {
+      cancelAnimationFrame(rafId);
+      document.removeEventListener('keydown', handleEsc);
+      (savedFocusRef.current as HTMLElement | null)?.focus?.();
+    };
+  }, [show2FASetup, showBackupCodes, showDisable2FAConfirm]); // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <>
-      <div id="panel-privacy" role="tabpanel" className="space-y-6">
+      <div id="panel-privacy" role="tabpanel" aria-labelledby="tab-privacy" className="space-y-6">
         <PrivacyAutoLock
           settings={settings}
           setAutoLockTimeout={setAutoLockTimeout}
@@ -91,6 +131,7 @@ export function PrivacyTab({
       {/* 2FA Setup Modal - TOTP */}
       {show2FASetup === 'totp' && (
         <div
+          ref={totpDialogRef}
           role="dialog"
           aria-modal="true"
           aria-label="Set up authenticator app"
@@ -109,6 +150,7 @@ export function PrivacyTab({
       {/* 2FA Setup Modal - Hardware Key */}
       {show2FASetup === 'webauthn' && (
         <div
+          ref={webauthnDialogRef}
           role="dialog"
           aria-modal="true"
           aria-label="Set up hardware key"
@@ -126,6 +168,7 @@ export function PrivacyTab({
       {/* Backup Codes Modal */}
       {showBackupCodes && backupCodes && (
         <div
+          ref={backupCodesDialogRef}
           role="dialog"
           aria-modal="true"
           aria-labelledby="backup-codes-modal-title"
@@ -146,6 +189,7 @@ export function PrivacyTab({
       {/* Disable 2FA Confirmation */}
       {showDisable2FAConfirm && (
         <div
+          ref={disable2FADialogRef}
           role="dialog"
           aria-modal="true"
           aria-labelledby="disable-2fa-modal-title"

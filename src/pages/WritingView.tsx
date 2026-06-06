@@ -773,6 +773,8 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
     return (
       <div
         ref={containerRef}
+        data-writing-prefs
+        data-writing-reduced-motion={writingAppearance.reducedMotion === 'on' ? 'true' : 'false'}
         className={`flex flex-col transition-colors duration-500 ${moodBgClass}`}
         style={{ height: '100%' }}
       >

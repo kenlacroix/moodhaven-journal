@@ -64,14 +64,14 @@ export function SealEntryModal({ entryId, defaultDays, onSeal, onCancel }: Props
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="Seal entry as time capsule"
+      aria-labelledby="seal-modal-title"
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
       onClick={(e) => { if (e.currentTarget === e.target) onCancel(); }}
     >
       <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl shadow-2xl overflow-hidden animate-slide-up">
         {/* Header */}
         <div className="px-6 pt-6 pb-4 border-b border-slate-100 dark:border-slate-800">
-          <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100">Seal as time capsule</h2>
+          <h2 id="seal-modal-title" className="text-base font-semibold text-slate-800 dark:text-slate-100">Seal as time capsule</h2>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
             This entry will be hidden until the date you choose.
           </p>
@@ -87,6 +87,7 @@ export function SealEntryModal({ entryId, defaultDays, onSeal, onCancel }: Props
                   key={type}
                   type="button"
                   onClick={() => setCapsuleType(type)}
+                  aria-pressed={capsuleType === type}
                   className={`text-left px-3 py-3 rounded-xl border-2 transition-colors ${
                     capsuleType === type
                       ? 'border-violet-500 bg-violet-50 dark:bg-violet-900/20'
@@ -117,7 +118,7 @@ export function SealEntryModal({ entryId, defaultDays, onSeal, onCancel }: Props
             />
           </div>
 
-          {error && <p className="text-sm text-rose-500">{error}</p>}
+          {error && <p role="alert" className="text-sm text-rose-500">{error}</p>}
         </div>
 
         {/* Footer */}

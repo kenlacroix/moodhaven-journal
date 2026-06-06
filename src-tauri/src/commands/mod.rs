@@ -16,6 +16,7 @@ pub(crate) fn require_unlocked(lock: &State<'_, AppLockState>) -> Result<(), Str
 
 pub mod analytics;
 pub mod books;
+pub mod cloud_providers;
 pub mod data_management;
 pub mod hardware_key;
 pub mod journal;
@@ -39,6 +40,7 @@ pub mod writer_window;
 
 pub use analytics::*;
 pub use books::*;
+pub use cloud_providers::*;
 pub use data_management::*;
 pub use hardware_key::*;
 pub use journal::*;

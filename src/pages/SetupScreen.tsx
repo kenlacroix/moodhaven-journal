@@ -182,6 +182,7 @@ export function SetupScreen() {
         settings: {
           ...s.settings,
           storage: {
+            ...s.settings.storage,
             type: storageType,
             webdav: {
               url: storageType === 'webdav' ? webdavUrl : '',

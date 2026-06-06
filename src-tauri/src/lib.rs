@@ -682,6 +682,13 @@ pub fn run() {
             commands::still_get_wellbeing_context,
             commands::still_get_effect_stats,
             commands::still_link_signal_to_session,
+            // Cloud sync (Dropbox + Google Drive)
+            commands::cloud_provider_auth_start,
+            commands::cloud_provider_upload_blob,
+            commands::cloud_provider_download_blob,
+            commands::cloud_provider_status,
+            commands::cloud_provider_disconnect,
+            commands::cloud_provider_refresh_token,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

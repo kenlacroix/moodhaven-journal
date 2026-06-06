@@ -97,7 +97,17 @@ export interface ReminderSettings {
 }
 
 // Storage backend options
-export type StorageBackend = 'local' | 'webdav';
+export type StorageBackend = 'local' | 'webdav' | 'dropbox' | 'gdrive';
+
+// Cloud provider identifier
+export type CloudProvider = 'dropbox' | 'gdrive';
+
+// Cloud provider connection status
+export interface CloudProviderStatus {
+  provider: CloudProvider;
+  connected: boolean;
+  lastSyncAt: string | null;
+}
 
 // WebDAV connection configuration
 export interface WebDAVConfig {
@@ -112,6 +122,11 @@ export interface StorageSettings {
   webdav: WebDAVConfig;
   lastSyncDate?: string; // ISO timestamp
   lastSyncDirection?: 'upload' | 'download';
+  // Cloud provider connection state (refreshed from backend on settings load)
+  cloudProviders: {
+    dropbox: { connected: boolean; lastSyncAt: string | null };
+    gdrive: { connected: boolean; lastSyncAt: string | null };
+  };
 }
 
 // Tutorial settings
@@ -303,6 +318,10 @@ export function createDefaultSettings(): AppSettings {
         url: '',
         username: '',
         password: '',
+      },
+      cloudProviders: {
+        dropbox: { connected: false, lastSyncAt: null },
+        gdrive: { connected: false, lastSyncAt: null },
       },
     },
     tutorial: {

@@ -50,6 +50,7 @@ export function Sidebar({ currentView, onNavigate, onOpenSync, onNavigateToJourn
 
   return (
     <aside
+      aria-label="Main navigation"
       className={`relative flex-shrink-0 h-screen bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col transition-all duration-300 ${
         collapsed ? 'w-[68px]' : 'w-64'
       }`}

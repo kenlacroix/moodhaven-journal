@@ -105,15 +105,13 @@ unsafe impl Sync for SyncEngineState {}
 ///
 /// Protocol (both sides have already completed HELLO/OK and key exchange):
 ///   Client sent:  RestoreRequest  (encrypted JSON)
-///   Server sends: RestoreChunk    (encrypted JSON envelope) + binary data frame × N
+///   Server sends: RestoreChunk    (encrypted JSON envelope) + encrypted binary frame × N
 ///   Server sends: RestoreEnd      (encrypted JSON)
 ///   Server closes.
 ///
 /// Each logical "chunk" is two TCP frames:
 ///   1. Encrypted JSON: RestoreChunk { seq, total_chunks, offset, total_bytes }
-///   2. Raw binary: the chunk bytes (not encrypted — wire is already AES-GCM per-frame,
-///      but the raw DB content is already encrypted at rest with the user's
-///      password, so this is safe; avoids double-buffering 4 MB in memory)
+///   2. AES-GCM encrypted binary: the chunk bytes (transport key, same as JSON frames)
 ///
 /// The read timeout is extended to 5 minutes during the transfer to handle
 /// slow Wi-Fi or large databases.
@@ -168,8 +166,7 @@ fn do_serve_restore(
             },
         )?;
 
-        // Raw binary data for the chunk (DB content is already encrypted at rest).
-        write_binary_frame(stream, chunk)?;
+        write_frame_enc_binary(stream, key, chunk)?;
 
         log::debug!(
             "[restore] Sent chunk {}/{} ({} bytes)",
@@ -315,8 +312,7 @@ fn do_full_restore_client(app: &AppHandle, peer_device_id: &str, host: &str) -> 
                 offset: _,
                 total_bytes,
             } => {
-                // Read the following raw binary data frame.
-                let chunk_data = read_binary_frame(&mut stream)?;
+                let chunk_data = read_frame_enc_binary(&mut stream, &key)?;
                 file.write_all(&chunk_data)
                     .map_err(|e| format!("write chunk {seq}: {e}"))?;
                 bytes_received += chunk_data.len() as u64;
@@ -1740,9 +1736,9 @@ pub fn peer_apply_and_restart(app: AppHandle) -> Result<(), String> {
         }
         log::info!("[restore] Integrity check passed ({actual})");
     } else {
-        // Checksum file absent — this can happen on older builds that didn't
-        // write one.  Log a warning but proceed rather than blocking the restore.
-        log::warn!("[restore] No checksum file found for pending restore — proceeding unverified");
+        return Err(
+            "Restore aborted: integrity checksum missing. Re-initiate the restore from the source device.".to_string()
+        );
     }
 
     log::info!("[restore] Triggering restart to apply pending DB restore");

@@ -92,6 +92,7 @@ async function passwordCacheToken(password: string): Promise<string> {
   return bufferToBase64(sig.slice(0, 16));
 }
 
+/** Wipe the session key cache on lock so derived keys do not outlive the session. */
 export function clearKeyCache(): void {
   sessionKeyCache.clear();
 }
@@ -270,8 +271,9 @@ export async function verifyPassword(
 }
 
 /**
- * Hash password for storage verification (not for encryption)
- * Uses PBKDF2 to create a verification hash
+ * Hash password for storage verification (not for encryption).
+ * Uses PBKDF2 so the verifier has the same brute-force cost as a derived encryption key.
+ * This hash is stored in SQLite; the plaintext password is never persisted.
  */
 export async function hashPassword(
   password: string,

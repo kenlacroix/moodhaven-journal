@@ -1,6 +1,6 @@
 # MoodHaven Journal — Threat Model
 
-> **Version:** v1.6.0.1 | **Last Updated:** 2026-06-05
+> **Version:** v1.6.0 (feat/cloud-sync-phase1) | **Last Updated:** 2026-06-06
 
 This document describes what MoodHaven Journal protects, against whom, and where the design intentionally draws the line.
 
@@ -28,6 +28,7 @@ This document describes what MoodHaven Journal protects, against whom, and where
 | TOTP seed | **High** | SQLite, AES-256-GCM encrypted (v1.2.1+) |
 | Backup / recovery codes | **High** | SHA-256 hashed in SQLite |
 | API keys / PATs (Oura, OpenAI, WebDAV) | **High** | SQLite, `__enc_v1:` prefix, AES-256-GCM via `secureStorage.ts` |
+| OAuth tokens (Dropbox, Google Drive) | **High** | SQLite `settings` table, plaintext (Phase 1 gap — not yet encrypted) |
 | WebDAV URL | **Medium** | Settings table (plaintext); contains no credentials by itself |
 | Mood levels (1–5) | **Low** | SQLite plaintext — required for analytics |
 | Timestamps, tags, book names | **Low** | SQLite plaintext — required for ordering and search |
@@ -76,6 +77,7 @@ This document describes what MoodHaven Journal protects, against whom, and where
 │                                                                      │
 │  Peer sync: AES-256-GCM on TCP, forward-secret (X25519 ECDH)       │
 │  WebDAV: AES-256-GCM ciphertext over HTTPS                          │
+│  Dropbox / Google Drive: AES-256-GCM ciphertext over HTTPS (Phase 1)│
 │  Oura / update check: Rust-side HTTP; no journal content            │
 │  AI (OpenAI): aggregated metadata only, user's own key              │
 └─────────────────────────────────────────────────────────────────────┘
@@ -93,6 +95,7 @@ This document describes what MoodHaven Journal protects, against whom, and where
 | **Malicious LAN peer** | Knows device IDs from mDNS; may craft HELLO frames | Bypass authentication; inject entries; override local data |
 | **Compromised trusted device** | Full control of a device the user has previously paired | Read journal content; inject arbitrary settings |
 | **Compromised WebDAV server** | Read/write/delete all files stored by the app | Read journal content; tamper with backup |
+| **Compromised cloud provider (Dropbox / GDrive)** | Read/write/delete files in app folder; access valid OAuth tokens | Read journal content (as ciphertext only); revoke access; tamper with backup |
 | **Local file system attacker** | Read access to `moodhaven.db` and surrounding files | Recover journal content without knowing the password |
 | **Malicious whisper.cpp binary** | Supplied by an attacker who has replaced the sidecar | Exfiltrate audio or transcriptions |
 | **Remote AI provider (OpenAI)** | Sees API payloads sent by the app | Learn about user's journal habits |
@@ -228,6 +231,24 @@ This document describes what MoodHaven Journal protects, against whom, and where
 
 ---
 
+### T10 — Compromised cloud provider (Dropbox / Google Drive)
+
+**Threat:** Dropbox or Google Drive is compromised, or the user's OAuth token is stolen. An attacker gains read/write access to the stored backup file and all future uploads.
+
+**Mitigations:**
+- All journal data is AES-256-GCM encrypted client-side before upload via `exportData()`. The provider stores only ciphertext; a compromised provider cannot read journal content.
+- OAuth scope minimality: Dropbox uses `files.content.read/write` scoped to `/Apps/MoodHaven/`; Google Drive uses `drive.appdata` (hidden folder, accessible only to this app). An attacker cannot enumerate other user files.
+- Tokens stored in SQLite `settings` table; local DB access (T5) is required to steal them from disk.
+- Manual sync only (Phase 1): no persistent token use until the user explicitly triggers a sync.
+
+**Residual risk (Phase 1 gaps):**
+- OAuth tokens are not additionally encrypted in the `settings` table (unlike Oura PAT and OpenAI key which use `secureStorage.ts`). A T5 attacker who reads `moodhaven.db` gets a valid token. Phase 2 mitigation: apply `secureStorage.ts` encryption to token rows.
+- Google Drive `client_secret` is compiled into the binary as a constant. An attacker who extracts the binary can find the secret. Mitigated by `drive.appdata` scope restriction, which limits blast radius even with the secret. Phase 2: move to PKCE-only or inject at build time via CI secrets.
+- No backup file integrity verification on download (same gap as T6 / WebDAV). A compromised provider could serve a replayed older backup.
+- OAuth token revocation on disconnect does not call the provider's revocation endpoint — it only clears local rows. A leaked token remains valid until it expires unless the user revokes it via the provider's dashboard.
+
+---
+
 ## 5. Threats — Out of Scope
 
 | Threat | Reason |
@@ -258,6 +279,11 @@ This document describes what MoodHaven Journal protects, against whom, and where
 | Whisper sidecar integrity | Bundled at build time | No post-build hash check |
 | Session key in memory after lock | `clearKeyCache()` called on lock | sessionKeyCache Map GC-dependent |
 | Metadata (mood, tags, timestamps) | Intentionally plaintext | Documented trade-off |
+| Cloud OAuth tokens at rest | Not encrypted (Phase 1 gap) | Phase 2: apply `secureStorage.ts` pattern |
+| Cloud provider data in transit | HTTPS + AES-256-GCM ciphertext | ✅ |
+| Cloud provider scope | Dropbox: `/Apps/MoodHaven/` only; GDrive: `drive.appdata` | ✅ |
+| Google Drive client_secret | Compiled-in constant | Gap — Phase 2: move to build-time CI injection |
+| Cloud disconnect token revocation | Local rows cleared only | Gap — tokens remain valid on provider until expiry |
 
 ---
 

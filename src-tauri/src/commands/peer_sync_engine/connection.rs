@@ -22,7 +22,7 @@ pub fn write_frame(stream: &mut TcpStream, payload: &[u8]) -> Result<(), String>
 
 /// Read exactly the next length-prefixed frame bytes.
 /// Capped at 16 MB for all regular protocol messages (HELLO, MANIFEST, entries, etc.).
-/// Use `read_binary_frame` for the DB restore path which needs up to 256 MB.
+/// Use `read_frame_enc_binary` for the DB restore path which needs up to 256 MB.
 pub fn read_frame_bytes(stream: &mut TcpStream) -> Result<Vec<u8>, String> {
     read_frame_bytes_with_limit(stream, 16 * 1024 * 1024)
 }
@@ -43,23 +43,26 @@ fn read_frame_bytes_with_limit(stream: &mut TcpStream, max: usize) -> Result<Vec
     Ok(buf)
 }
 
-/// Write a raw binary frame (no encryption — only used for DB chunk data
-/// which is already sent after an encrypted envelope confirming chunk metadata).
-pub fn write_binary_frame(stream: &mut TcpStream, data: &[u8]) -> Result<(), String> {
-    let len = data.len() as u32;
-    stream
-        .write_all(&len.to_be_bytes())
-        .map_err(|e| format!("write binary frame length: {e}"))?;
-    stream
-        .write_all(data)
-        .map_err(|e| format!("write binary frame data: {e}"))?;
-    Ok(())
+/// Write an AES-GCM encrypted binary frame for DB restore chunks.
+/// Overhead: 12-byte nonce + 16-byte GCM tag per chunk.
+pub fn write_frame_enc_binary(
+    stream: &mut TcpStream,
+    key: &[u8; 32],
+    data: &[u8],
+) -> Result<(), String> {
+    let encrypted = super::crypto::encrypt_payload(key, data)?;
+    write_frame(stream, &encrypted)
 }
 
-/// Read a raw binary frame (no decryption — pair with write_binary_frame).
-/// Uses a larger 256 MB limit for DB restore chunks.
-pub fn read_binary_frame(stream: &mut TcpStream) -> Result<Vec<u8>, String> {
-    read_frame_bytes_with_limit(stream, 256 * 1024 * 1024)
+/// Read and decrypt an AES-GCM encrypted binary frame for DB restore chunks.
+/// Uses a 256 MB + overhead limit.
+pub fn read_frame_enc_binary(
+    stream: &mut TcpStream,
+    key: &[u8; 32],
+) -> Result<Vec<u8>, String> {
+    // 256 MB plaintext + 28 bytes AES-GCM overhead (12 nonce + 16 tag)
+    let encrypted = read_frame_bytes_with_limit(stream, 256 * 1024 * 1024 + 28)?;
+    super::crypto::decrypt_payload(key, &encrypted)
 }
 
 // ── Message I/O ───────────────────────────────────────────────────────────────

@@ -55,6 +55,9 @@ Platforms: Windows, Linux, macOS.
 | `src/lib/services/logger.ts` | Structured logger wrapper around @tauri-apps/plugin-log |
 | `src/lib/services/crypto.ts` | AES-256-GCM encryption (PBKDF2 key derivation) |
 | `src/lib/services/cloudSyncService.ts` | WebDAV sync orchestration |
+| `src/lib/services/cloudProvidersService.ts` | Dropbox + Google Drive OAuth PKCE IPC wrappers |
+| `src/lib/services/pinUnlockService.ts` | PIN unlock IPC wrappers |
+| `src/lib/services/biometricService.ts` | OS keyring biometric session unlock |
 | `src/lib/services/http.ts` | Conditional fetch: `@tauri-apps/plugin-http` in Tauri, `window.fetch` in browser |
 | `src/lib/services/peerSyncEngineService.ts` | P2P sync IPC wrappers |
 | `src/lib/backend/browser.ts` | IndexedDB backend — all IDB operations for browser mode |
@@ -89,7 +92,8 @@ Platforms: Windows, Linux, macOS.
 | `src/components/settings/tabs/PrivacyTab.tsx` | Privacy tab orchestrator + 2FA modals (~130 lines) |
 | `src/components/settings/tabs/PrivacyTwoFactor.tsx` | Full 2FA section (enabled/disabled states) |
 | `src/components/settings/tabs/PrivacyDataManagement.tsx` | Data stats, export, reset + confirm modal |
-| `src/components/settings/tabs/PrivacyBiometric.tsx` | Biometric unlock (Android only) |
+| `src/components/settings/tabs/PrivacyBiometric.tsx` | Biometric unlock — OS keyring (desktop) + Android |
+| `src/components/settings/tabs/PrivacyPinUnlock.tsx` | PIN unlock setup + disable UI |
 | `src/components/settings/tabs/PrivacyAutoLock.tsx` | Auto-lock timeout + clipboard clear |
 | `src/components/settings/tabs/PrivacyTransparency.tsx` | TransparencySection + PrivacyStatRow |
 | `src/components/voice-memo/VoiceMemoDraftCard.tsx` | Compact Timeline draft card — duration, context chip, mood dots, Review/Discard CTAs |

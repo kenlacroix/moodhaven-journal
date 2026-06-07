@@ -1,6 +1,6 @@
 {
   "name": "moodhaven-journal",
-  "version": "1.7.4",
+  "version": "1.8.0",
   "description": "A calm, secure mood tracking and journaling app",
   "type": "module",
   "scripts": {

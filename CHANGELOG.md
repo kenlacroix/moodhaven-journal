@@ -5,6 +5,13 @@ All notable changes to MoodHaven Journal are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.8.0] — 2026-06-06
+
+### Added
+- **Activity tagging** — tag journal entries with up to 15 predefined activities (Exercise, Social, Work, Reading, Creative, Meditation, Good Sleep, Poor Sleep, Nature, Family, Cooking, Music, Learning, Travel, Gaming) and up to 50 user-defined custom activities. Activities are available in the entry editor and the Timeline filter bar. Per-activity mood averages and entry counts are surfaced in Insights via the new `get_activity_stats` command. Full browser/PWA mode parity via the IndexedDB backend.
+
+---
+
 ## [1.7.0] — 2026-06-06
 
 ### Security

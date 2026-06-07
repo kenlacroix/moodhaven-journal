@@ -143,6 +143,7 @@ cd src-tauri && cargo check
 - Getting started (first-run tutorial): @docs/howto-getting-started.md
 - Time Capsule user guide: @docs/howto-time-capsule.md
 - StillHaven user guide: @docs/howto-stillhaven.md
+- Activity tagging user guide: @docs/howto-activity-tagging.md
 
 ## Health Stack
 

@@ -74,6 +74,7 @@ function MainApp() {
   const [journalOverviewBookId, setJournalOverviewBookId] = useState<string | null>(null);
   const [showTutorial, setShowTutorial] = useState(false);
   const [showDisclaimer, setShowDisclaimer] = useState(false);
+  const [settingsLoadedForSession, setSettingsLoadedForSession] = useState(false);
   const [showSyncModal, setShowSyncModal] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   /**
@@ -140,19 +141,36 @@ function MainApp() {
     init();
   }, [checkInitialization, loadSettings]);
 
-  // Show wellness disclaimer once on first unlock (before tutorial)
+  // Reload settings from DB after each unlock. The startup load above always returns
+  // defaults because get_setting is protected by the session lock guard.
   useEffect(() => {
-    if (isUnlocked && hasSeenDisclaimer === false && !import.meta.env.VITE_DEV_MODE) {
+    if (!isUnlocked) {
+      setSettingsLoadedForSession(false);
+      return;
+    }
+    let cancelled = false;
+    loadSettings().then(() => {
+      if (!cancelled) setSettingsLoadedForSession(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isUnlocked, loadSettings]);
+
+  // Show wellness disclaimer once on first unlock (before tutorial).
+  // Gated on settingsLoadedForSession so we read from the DB, not startup defaults.
+  useEffect(() => {
+    if (isUnlocked && settingsLoadedForSession && hasSeenDisclaimer === false && !import.meta.env.VITE_DEV_MODE) {
       setShowDisclaimer(true);
     }
-  }, [isUnlocked, hasSeenDisclaimer]);
+  }, [isUnlocked, settingsLoadedForSession, hasSeenDisclaimer]);
 
   // Show tutorial on first unlock — only after disclaimer is dismissed
   useEffect(() => {
-    if (isUnlocked && hasSeenTutorial === false && !showDisclaimer && !import.meta.env.VITE_DEV_MODE) {
+    if (isUnlocked && settingsLoadedForSession && hasSeenTutorial === false && !showDisclaimer && !import.meta.env.VITE_DEV_MODE) {
       setShowTutorial(true);
     }
-  }, [isUnlocked, hasSeenTutorial, showDisclaimer]);
+  }, [isUnlocked, settingsLoadedForSession, hasSeenTutorial, showDisclaimer]);
 
   // Helper: run a silent background sync (no UI feedback — fire and forget)
   const runBackgroundSync = useCallback(() => {

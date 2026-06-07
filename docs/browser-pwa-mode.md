@@ -1,6 +1,6 @@
 # Browser / PWA Mode
 
-> **Version:** v1.6.0 | **Last Updated:** 2026-06-06
+> **Version:** v1.8.0 | **Last Updated:** 2026-06-07
 
 MoodHaven Journal runs in two modes: the full **Tauri desktop app** (the primary target) and a **browser / PWA build** that runs without Rust, usable in any modern browser. This document explains what the browser build is, how its shim layer works, and what contributors need to know when working with it.
 
@@ -76,7 +76,7 @@ The HTTP service (`src/lib/services/http.ts`) is an exception — it is shim-awa
 
 ```
 DB_NAME    = 'moodhaven'
-DB_VERSION = 2
+DB_VERSION = 3
 ```
 
 ### Object stores
@@ -89,6 +89,7 @@ DB_VERSION = 2
 | `webdav_state` | `id` | Singleton WebDAV ETag guard (`{ id: 'singleton', filename, etag }`) |
 | `still_sessions` | `id` | StillHaven session records |
 | `still_activation_samples` | `id` | Pre/post activation samples linked to sessions |
+| `activities` | `id` | Predefined and custom activities (v3 migration) |
 
 ### Entry schema (`BrowserEntryRow`)
 

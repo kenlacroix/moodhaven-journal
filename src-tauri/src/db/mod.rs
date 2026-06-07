@@ -3,7 +3,7 @@
 //! Handles SQLite connection, migrations, and CRUD operations
 //! for encrypted journal entries.
 
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OpenFlags};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -142,8 +142,26 @@ impl Database {
             }
         }
 
-        let conn =
-            Connection::open(&db_path).map_err(|e| format!("Failed to open database: {}", e))?;
+        // Decide whether this is a genuine first run (no existing setup → safe to CREATE
+        // a fresh DB) or an existing install (encrypted, or a salt was already written →
+        // the DB MUST already exist). For existing installs we open WITHOUT the CREATE
+        // flag so a missing file surfaces as an error instead of fabricating an empty
+        // decoy that an unkeyed `SELECT count(*)` would wrongly accept as the real DB.
+        let is_existing_setup = state.encrypted || state.salt.is_some();
+        let conn = if is_existing_setup {
+            if !db_path.exists() {
+                return Err(
+                    "database file missing: db_state.json reports an existing setup but \
+                     moodhaven.db is absent — refusing to fabricate an empty database"
+                        .to_string(),
+                );
+            }
+            Connection::open_with_flags(&db_path, OpenFlags::SQLITE_OPEN_READ_WRITE)
+                .map_err(|e| format!("Failed to open database: {}", e))?
+        } else {
+            // Genuine first run / fresh install: create the file and migrate.
+            Connection::open(&db_path).map_err(|e| format!("Failed to open database: {}", e))?
+        };
 
         if !state.encrypted {
             if let Err(migration_err) = Self::run_pragmas_and_migrations(&conn) {
@@ -242,15 +260,31 @@ impl Database {
             Err(e) => {
                 // The tmp could not be opened with the derived key. This is either a wrong
                 // password OR a corrupt/truncated tmp. Distinguish by probing the original:
-                // if moodhaven.db is a readable plaintext DB, the tmp is the corrupt one →
-                // discard it and revert db_state so the user can unlock against the original.
-                let original_is_plaintext = Connection::open(&self.path)
-                    .ok()
-                    .map(|c| {
-                        c.execute_batch("SELECT count(*) FROM sqlite_master;")
-                            .is_ok()
-                    })
-                    .unwrap_or(false);
+                // if moodhaven.db is a readable, POPULATED plaintext DB, the tmp is the
+                // corrupt one → discard it and revert db_state so the user can unlock
+                // against the original.
+                //
+                // Open WITHOUT the CREATE flag: a missing original must NOT be silently
+                // re-created as an empty file (SQLCipher would then read it as an empty
+                // plaintext DB and we would wrongly "revert to the intact original",
+                // destroying the only recoverable copy). An empty/zero-table DB is likewise
+                // NOT a valid original — require a KNOWN real table (`journal_entries`) to be
+                // present so an auto-created or otherwise empty decoy is never accepted as the
+                // user's real plaintext data.
+                let original_is_plaintext =
+                    Connection::open_with_flags(&self.path, OpenFlags::SQLITE_OPEN_READ_WRITE)
+                        .ok()
+                        .map(|c| {
+                            c.query_row(
+                                "SELECT count(*) FROM sqlite_master \
+                                 WHERE type = 'table' AND name = 'journal_entries';",
+                                [],
+                                |r| r.get::<_, i64>(0),
+                            )
+                            .map(|n| n > 0)
+                            .unwrap_or(false)
+                        })
+                        .unwrap_or(false);
                 if original_is_plaintext {
                     log::error!(
                         "[sqlcipher] Pending moodhaven_enc.db failed key verification while the \
@@ -258,11 +292,14 @@ impl Database {
                          tmp and reverting to the intact original (data preserved): {e}"
                     );
                     let _ = std::fs::remove_file(tmp_path);
+                    // Clear ONLY the encrypted flag — preserve the existing salt. Nulling it
+                    // would irreversibly strand a recoverable encrypted DB (F3). We only reach
+                    // here after positively confirming a populated plaintext original above.
                     let _ = write_db_state(
                         &self.path,
                         &DbStateFile {
                             encrypted: false,
-                            salt: None,
+                            salt: read_db_state(&self.path).salt,
                         },
                     );
                     return Err(
@@ -305,6 +342,11 @@ impl Database {
             }
             std::thread::sleep(std::time::Duration::from_millis(50));
         }
+
+        // Drop the encrypted tmp's own WAL/SHM so stale sidecar files don't survive the
+        // rename and corrupt the promoted DB (F4). NotFound is fine — ignore all errors.
+        let _ = std::fs::remove_file(tmp_path.with_extension("db-wal"));
+        let _ = std::fs::remove_file(tmp_path.with_extension("db-shm"));
 
         Self::atomic_promote(&self.path, tmp_path)?;
 
@@ -1308,6 +1350,162 @@ mod sqlcipher_key_tests {
                 .expect("promoted encrypted DB must serve the migrated row");
             assert_eq!(content, "migrated-secret");
         }
+
+        drop(db);
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    // Planted-decoy regression guard (PT10): an attacker (or a botched recovery) leaves a
+    // garbage moodhaven_enc.db plus db_state.json {encrypted:false, salt:<x>} but NO
+    // moodhaven.db. SQLCipher's `Connection::open` would CREATE an empty moodhaven.db and an
+    // unkeyed `SELECT count(*)` would SUCCEED on it (returns 0) — fooling the recovery probe
+    // into accepting the empty decoy as the user's intact plaintext original, discarding the
+    // tmp and reverting to an empty DB (silent data loss). The fix must surface the missing
+    // original as an error and must NOT fabricate-and-accept an empty decoy.
+    #[test]
+    fn startup_does_not_fabricate_and_accept_empty_decoy_when_original_missing() {
+        use super::{read_db_state, write_db_state, Database, DbStateFile};
+
+        let dir = std::env::temp_dir();
+        let pid = std::process::id();
+        let base = dir.join(format!("mh_decoy_{pid}"));
+        let _ = std::fs::remove_dir_all(&base);
+        let _ = std::fs::create_dir_all(&base);
+        let db_path = base.join("moodhaven.db");
+        let tmp_path = base.join("moodhaven_enc.db");
+        let _ = std::fs::remove_file(&db_path);
+        let _ = std::fs::remove_file(&tmp_path);
+        let _ = std::fs::remove_file(base.join("db_state.json"));
+
+        // 1. Garbage encrypted tmp + a salt-bearing db_state, but the original moodhaven.db
+        //    does NOT exist. This is an existing setup (salt present), so Database::new must
+        //    NOT fabricate an empty moodhaven.db — it must surface the missing original as an
+        //    error instead of accepting an auto-created empty decoy.
+        std::fs::write(&tmp_path, b"\x00\x01garbage-not-a-db\xff").unwrap();
+        write_db_state(
+            &db_path,
+            &DbStateFile {
+                encrypted: false,
+                salt: Some("dGVzdC1zYWx0".to_string()), // base64("test-salt")
+            },
+        )
+        .unwrap();
+
+        // 2. Boot. The missing original must be reported as an error, NOT silently created.
+        let err = Database::new(db_path.clone())
+            .err()
+            .expect("Database::new must error when an existing-setup DB file is missing");
+        assert!(
+            err.contains("missing"),
+            "missing original must be surfaced as an error (got: {err})"
+        );
+
+        // 3. No empty moodhaven.db was fabricated, and the salt is preserved so a real
+        //    recovery (restoring the genuine DB) remains possible.
+        assert!(
+            !db_path.exists(),
+            "must NOT fabricate an empty moodhaven.db decoy"
+        );
+        let after = read_db_state(&db_path);
+        assert_eq!(
+            after.salt.as_deref(),
+            Some("dGVzdC1zYWx0"),
+            "salt must be preserved, never stranded"
+        );
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    // Companion guard for the hardened `promote_pending_tmp` probe (PT10): even if execution
+    // reaches apply_key with a garbage tmp and a ZERO-TABLE (or absent) original, the probe
+    // must treat an empty/missing original as NOT a valid plaintext DB — so it must NOT
+    // discard the tmp and revert to an empty decoy. It surfaces an error and leaves the tmp
+    // and salt untouched. Here the original is an empty (zero-table) SQLite file.
+    #[test]
+    fn promote_rejects_empty_zero_table_original_as_decoy() {
+        use super::{read_db_state, write_db_state, Database, DbStateFile};
+
+        let dir = std::env::temp_dir();
+        let pid = std::process::id();
+        let base = dir.join(format!("mh_decoy2_{pid}"));
+        let _ = std::fs::remove_dir_all(&base);
+        let _ = std::fs::create_dir_all(&base);
+        let db_path = base.join("moodhaven.db");
+        let tmp_path = base.join("moodhaven_enc.db");
+
+        // 1. Seed a fresh plaintext DB (full schema) so Database::new opens cleanly, then drop
+        //    all of its content to make it a zero-table "empty decoy" the probe must reject.
+        {
+            let seed = Database::new(db_path.clone()).expect("seed plaintext DB");
+            drop(seed);
+        }
+        // Truncate the original to an empty SQLite file (zero tables in sqlite_master).
+        {
+            let c = Connection::open(&db_path).unwrap();
+            // Drop every user object so sqlite_master is empty.
+            let names: Vec<(String, String)> = {
+                let mut stmt = c
+                    .prepare("SELECT type, name FROM sqlite_master WHERE name NOT LIKE 'sqlite_%'")
+                    .unwrap();
+                let rows = stmt
+                    .query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))
+                    .unwrap();
+                rows.filter_map(|r| r.ok()).collect()
+            };
+            c.execute_batch("PRAGMA foreign_keys = OFF;").unwrap();
+            for (ty, name) in names {
+                let kind = match ty.as_str() {
+                    "table" => "TABLE",
+                    "index" => "INDEX",
+                    "trigger" => "TRIGGER",
+                    "view" => "VIEW",
+                    _ => continue,
+                };
+                let _ = c.execute_batch(&format!("DROP {kind} IF EXISTS \"{name}\";"));
+            }
+            let n: i64 = c
+                .query_row(
+                    "SELECT count(*) FROM sqlite_master WHERE name NOT LIKE 'sqlite_%'",
+                    [],
+                    |r| r.get(0),
+                )
+                .unwrap();
+            assert_eq!(n, 0, "original must be a zero-table empty DB for this test");
+        }
+
+        // 2. Plant a garbage tmp + salt-bearing db_state and route to apply_key directly.
+        std::fs::write(&tmp_path, b"\x00garbage\xff").unwrap();
+        write_db_state(
+            &db_path,
+            &DbStateFile {
+                encrypted: true,
+                salt: Some("dGVzdC1zYWx0".to_string()),
+            },
+        )
+        .unwrap();
+
+        let db = Database::new(db_path.clone()).expect("Database::new opens existing empty DB");
+        let key = [9u8; 32];
+        let err = db
+            .apply_key(&key)
+            .expect_err("garbage tmp + empty original must not succeed");
+
+        // The "data preserved, deleted tmp, revert" path must NOT have fired — an empty
+        // zero-table DB is not a valid original.
+        assert!(
+            !err.contains("your original data was preserved"),
+            "empty zero-table DB must not be accepted as the intact original (got: {err})"
+        );
+        assert!(
+            tmp_path.exists(),
+            "tmp must be left untouched, not discarded into a revert-to-empty"
+        );
+        let after = read_db_state(&db_path);
+        assert_eq!(
+            after.salt.as_deref(),
+            Some("dGVzdC1zYWx0"),
+            "salt must be preserved, never stranded"
+        );
 
         drop(db);
         let _ = std::fs::remove_dir_all(&base);

@@ -364,7 +364,7 @@ pub fn get_full_analytics_bundle(
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| format!("DOW row parsing failed: {}", e))?;
 
-    let trend_data = if trend_days <= 0 {
+    let trend_data: Vec<DailyStats> = if trend_days <= 0 {
         let mut all_stmt = conn
             .prepare(
                 "SELECT date(created_at) AS date, AVG(mood) AS avg_mood, COUNT(*) AS count
@@ -373,7 +373,7 @@ pub fn get_full_analytics_bundle(
                  ORDER BY date",
             )
             .map_err(|e| format!("All-time trend prepare failed: {}", e))?;
-        all_stmt
+        let rows: Result<Vec<DailyStats>, _> = all_stmt
             .query_map([], |row| {
                 Ok(DailyStats {
                     date: row.get(0)?,
@@ -382,8 +382,8 @@ pub fn get_full_analytics_bundle(
                 })
             })
             .map_err(|e| format!("All-time trend query failed: {}", e))?
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| format!("All-time trend row parsing failed: {}", e))?
+            .collect();
+        rows.map_err(|e| format!("All-time trend row parsing failed: {}", e))?
     } else {
         let mut trend_stmt = conn
             .prepare(
@@ -395,7 +395,7 @@ pub fn get_full_analytics_bundle(
             )
             .map_err(|e| format!("Trend prepare failed: {}", e))?;
         let trend_offset = format!("-{} days", trend_days);
-        trend_stmt
+        let rows: Result<Vec<DailyStats>, _> = trend_stmt
             .query_map(params![trend_offset], |row| {
                 Ok(DailyStats {
                     date: row.get(0)?,
@@ -404,8 +404,8 @@ pub fn get_full_analytics_bundle(
                 })
             })
             .map_err(|e| format!("Trend query failed: {}", e))?
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| format!("Trend row parsing failed: {}", e))?
+            .collect();
+        rows.map_err(|e| format!("Trend row parsing failed: {}", e))?
     };
 
     Ok(FullAnalyticsBundle {

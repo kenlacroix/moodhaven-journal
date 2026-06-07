@@ -15,7 +15,9 @@ pub(crate) fn require_unlocked(lock: &State<'_, AppLockState>) -> Result<(), Str
 }
 
 pub mod analytics;
+pub mod biometric;
 pub mod books;
+pub mod cloud_providers;
 pub mod data_management;
 pub mod hardware_key;
 pub mod journal;
@@ -25,6 +27,7 @@ pub mod peer_discovery;
 pub mod peer_identity;
 pub mod peer_pairing;
 pub mod peer_sync_engine;
+pub mod pin_unlock;
 pub mod session_bridge;
 pub mod settings;
 pub mod signals;
@@ -38,7 +41,9 @@ pub mod voice_memos;
 pub mod writer_window;
 
 pub use analytics::*;
+pub use biometric::*;
 pub use books::*;
+pub use cloud_providers::*;
 pub use data_management::*;
 pub use hardware_key::*;
 pub use journal::*;
@@ -48,6 +53,7 @@ pub use peer_discovery::*;
 pub use peer_identity::*;
 pub use peer_pairing::*;
 pub use peer_sync_engine::*;
+pub use pin_unlock::*;
 pub use session_bridge::*;
 pub use settings::*;
 pub use signals::*;

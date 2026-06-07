@@ -12,14 +12,14 @@
 import { encrypt, decrypt } from './crypto';
 import type { EncryptedData } from './crypto';
 
-export interface ManifestEntryMeta {
+interface ManifestEntryMeta {
   /** ISO timestamp matching the entry's updated_at column */
   updatedAt: string;
   /** Device UUID that last wrote this entry to WebDAV */
   deviceId: string;
 }
 
-export interface ManifestMediaMeta {
+interface ManifestMediaMeta {
   /** The journal entry this media is attached to */
   entryId: string;
   /** ISO creation timestamp from the entry_media table */
@@ -28,7 +28,7 @@ export interface ManifestMediaMeta {
   deviceId: string;
 }
 
-export interface SyncTombstone {
+interface SyncTombstone {
   id: string;
   type: 'entry' | 'book' | 'media';
   deletedAt: string; // ISO

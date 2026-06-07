@@ -4,9 +4,9 @@
  * Holds all shared wizard state and renders the appropriate step component.
  * Each step component owns only ephemeral UI state (hover, loading spinners).
  *
- * Steps:
- * Fresh path: welcome → source → password → recovery → security → storage → devices → import → complete
- * Sync path:  welcome → source → password → sync_from_peer → complete
+ * Basic path (default):  welcome → password → complete
+ * Fresh path (advanced): welcome → source → password → recovery → security → storage → devices → import → complete
+ * Sync path  (advanced): welcome → source → password → sync_from_peer → complete
  */
 
 import { useState, useCallback, useEffect, useRef } from 'react';
@@ -39,6 +39,12 @@ interface StepConfig {
   subtitle: string;
 }
 
+const BASIC_STEPS: StepConfig[] = [
+  { id: 'welcome',  title: 'Welcome',  subtitle: 'Get started' },
+  { id: 'password', title: 'Password', subtitle: 'Protect your data' },
+  { id: 'complete', title: 'Ready',    subtitle: 'All set!' },
+];
+
 const FRESH_STEPS: StepConfig[] = [
   { id: 'welcome',       title: 'Welcome',        subtitle: 'Get started' },
   { id: 'source',        title: 'Setup',          subtitle: 'Choose path' },
@@ -61,6 +67,7 @@ const SYNC_STEPS: StepConfig[] = [
 
 export function SetupScreen() {
   const [currentStep, setCurrentStep] = useState<WizardStep>('welcome');
+  const [isAdvanced, setIsAdvanced] = useState(false);
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [storageType, setStorageType] = useState<StorageBackend>('local');
@@ -88,9 +95,14 @@ export function SetupScreen() {
   const trustedDevices = usePeerSyncStore((s) => s.trustedDevices);
   const { isBrowser } = usePlatform();
 
-  const STEPS = (setupMode === 'sync' ? SYNC_STEPS : FRESH_STEPS).filter(
-    (s) => !isBrowser || (s.id !== 'devices' && s.id !== 'sync_from_peer'),
-  );
+  const browserFilter = (s: StepConfig) =>
+    !isBrowser || (s.id !== 'devices' && s.id !== 'sync_from_peer');
+
+  const STEPS = (() => {
+    if (setupMode === 'sync') return SYNC_STEPS.filter(browserFilter);
+    if (isAdvanced) return FRESH_STEPS.filter(browserFilter);
+    return BASIC_STEPS;
+  })();
 
   // Start/stop discovery when entering the devices or sync_from_peer step
   useEffect(() => {
@@ -143,6 +155,12 @@ export function SetupScreen() {
     }
   };
 
+  const handleWelcomeNext = (advanced: boolean) => {
+    setIsAdvanced(advanced);
+    setCurrentStep(advanced ? 'source' : 'password');
+    setError(null);
+  };
+
   const handleChooseSource = (mode: 'fresh' | 'sync') => {
     setSetupMode(mode);
     setCurrentStep('password');
@@ -166,6 +184,25 @@ export function SetupScreen() {
     goNext();
   }, [password, confirmPassword]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Basic path: called from CompleteStep "Start Journaling" — initialize then let App.tsx transition
+  const handleBasicComplete = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const success = await initialize(password);
+      if (!success) {
+        setError('Failed to set up. Please try again.');
+        return;
+      }
+      await saveSettings();
+      // App.tsx watches isInitialized; once set to true it transitions away from SetupScreen
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [password, initialize, saveSettings]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleComplete = useCallback(async () => {
     setIsLoading(true);
     setError(null);
@@ -182,6 +219,7 @@ export function SetupScreen() {
         settings: {
           ...s.settings,
           storage: {
+            ...s.settings.storage,
             type: storageType,
             webdav: {
               url: storageType === 'webdav' ? webdavUrl : '',
@@ -261,7 +299,7 @@ export function SetupScreen() {
 
           <div className="p-8">
             {currentStep === 'welcome' && (
-              <WelcomeStep onNext={() => setCurrentStep('source')} />
+              <WelcomeStep onNext={handleWelcomeNext} />
             )}
 
             {currentStep === 'source' && (
@@ -367,7 +405,12 @@ export function SetupScreen() {
             )}
 
             {currentStep === 'complete' && (
-              <CompleteStep enableLanSync={enableLanSync} />
+              <CompleteStep
+                enableLanSync={enableLanSync}
+                isAdvanced={isAdvanced}
+                onStart={!isAdvanced ? handleBasicComplete : undefined}
+                isLoading={isLoading}
+              />
             )}
           </div>
         </div>

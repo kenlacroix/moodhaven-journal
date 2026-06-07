@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { type Editor } from '@tiptap/react';
 import { type STTState } from '../../hooks/useSpeechToText';
+import { usePlatform } from '../../hooks/usePlatform';
 import {
   TBBoldIcon,
   TBItalicIcon,
@@ -51,7 +52,9 @@ export function CollapsibleToolbar({
   quickCapture = false,
   onToggleQuickCapture,
 }: CollapsibleToolbarProps) {
+  const { isIOS } = usePlatform();
   const [formatState, setFormatState] = useState<Record<string, boolean>>({});
+  const toolbarPanelRef = useRef<HTMLDivElement>(null);
 
   // Track format state on selection/transaction changes
   useEffect(() => {
@@ -64,12 +67,28 @@ export function CollapsibleToolbar({
     };
   }, [editor, getFormatState]);
 
+  // Remove invisible toolbar buttons from the keyboard/AT tab order when collapsed
+  useEffect(() => {
+    const el = toolbarPanelRef.current;
+    if (!el) return;
+    if (expanded) {
+      el.removeAttribute('inert');
+      el.removeAttribute('aria-hidden');
+    } else {
+      el.setAttribute('inert', '');
+      el.setAttribute('aria-hidden', 'true');
+    }
+  }, [expanded]);
+
   return (
     <div className="flex-shrink-0 border-b border-slate-100 dark:border-slate-800">
       {/* Toggle bar */}
       <button
         type="button"
         onClick={() => onToggle(!expanded)}
+        aria-expanded={expanded}
+        aria-controls="editor-toolbar-buttons"
+        aria-label={expanded ? 'Collapse formatting toolbar' : 'Expand formatting toolbar'}
         className="w-full flex items-center gap-1.5 px-2 py-1.5 text-xs text-slate-400 dark:text-slate-500 hover:text-slate-500 dark:hover:text-slate-400 transition-colors"
       >
         <svg
@@ -86,10 +105,11 @@ export function CollapsibleToolbar({
 
       {/* Expandable button row — overflow-x-auto so mobile can scroll horizontally */}
       <div
+        ref={toolbarPanelRef}
         className={`overflow-y-hidden transition-all duration-300 ease-out ${expanded ? 'max-h-16 opacity-100' : 'max-h-0 opacity-0'}`}
       >
         <div className="overflow-x-auto scrollbar-hide">
-        <div className="flex items-center gap-0.5 px-2 pb-2 flex-nowrap">
+        <div id="editor-toolbar-buttons" role="toolbar" aria-label="Text formatting" className="flex items-center gap-0.5 px-2 pb-2 flex-nowrap">
           {/* Text formatting */}
           <ToolbarBtn
             icon={<TBBoldIcon />}
@@ -175,8 +195,8 @@ export function CollapsibleToolbar({
             onClick={onEmojiClick}
           />
 
-          {/* Speech-to-text: quick capture toggle + mic button */}
-          {onMicClick && (
+          {/* Speech-to-text: quick capture toggle + mic button — sidecar unavailable on iOS */}
+          {onMicClick && !isIOS && (
             <>
               <TBDivider />
               {onToggleQuickCapture && (
@@ -201,7 +221,7 @@ export function CollapsibleToolbar({
   );
 }
 
-export function ToolbarBtn({
+function ToolbarBtn({
   icon,
   label,
   isActive,
@@ -220,6 +240,9 @@ export function ToolbarBtn({
         e.preventDefault();
         onClick();
       }}
+      aria-label={label}
+      title={label}
+      aria-pressed={isActive}
       className={`
         p-1.5 rounded transition-all duration-150 active:scale-90
         ${isActive
@@ -227,18 +250,17 @@ export function ToolbarBtn({
           : 'text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-600 dark:hover:text-slate-300'
         }
       `}
-      title={label}
     >
       {icon}
     </button>
   );
 }
 
-export function TBDivider() {
+function TBDivider() {
   return <div className="w-px h-5 bg-slate-200 dark:bg-slate-700 mx-1" />;
 }
 
-export function MicButton({
+function MicButton({
   state,
   error,
   onClick,
@@ -286,8 +308,9 @@ export function MicButton({
           onClick();
         }}
         disabled={isProcessing}
-        className={`p-1.5 rounded transition-all duration-150 active:scale-90 ${buttonClass} ${isProcessing ? 'cursor-wait' : ''}`}
+        aria-label={title}
         title={title}
+        className={`p-1.5 rounded transition-all duration-150 active:scale-90 ${buttonClass} ${isProcessing ? 'cursor-wait' : ''}`}
       >
         {isProcessing ? (
           <span className="flex items-center gap-1">
@@ -311,8 +334,9 @@ export function MicButton({
             e.stopPropagation();
             onCancel();
           }}
-          className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-300 dark:hover:bg-slate-600 flex items-center justify-center text-xs"
+          aria-label="Cancel recording"
           title="Cancel recording"
+          className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-300 dark:hover:bg-slate-600 flex items-center justify-center text-xs"
         >
           <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -323,7 +347,7 @@ export function MicButton({
   );
 }
 
-export function QuickCaptureToggle({
+function QuickCaptureToggle({
   active,
   onToggle,
 }: {
@@ -338,6 +362,7 @@ export function QuickCaptureToggle({
         e.preventDefault();
         onToggle();
       }}
+      aria-label="Quick capture (bypass formatting)"
       title="Quick capture (bypass formatting)"
       aria-pressed={active}
       className={[

@@ -107,16 +107,16 @@ export function TimeCapsuleRevealModal({ capsule, password, onReveal, onWriteRes
       ref={overlayRef}
       role="dialog"
       aria-modal="true"
-      aria-label={capsuleLabel}
+      aria-labelledby="capsule-reveal-title"
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
       onClick={(e) => { if (e.target === overlayRef.current) onDismiss(); }}
     >
       <div className="w-full max-w-lg bg-white dark:bg-slate-900 rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-slide-up">
         {/* Header */}
         <div className="px-6 pt-6 pb-4 border-b border-slate-100 dark:border-slate-800">
-          <p className="text-xs font-semibold uppercase tracking-widest text-violet-500 dark:text-violet-400 mb-1">
+          <h2 id="capsule-reveal-title" className="text-xs font-semibold uppercase tracking-widest text-violet-500 dark:text-violet-400 mb-1">
             {capsuleLabel}
-          </p>
+          </h2>
           <p className="text-sm text-slate-500 dark:text-slate-400">
             Written on {formatDate(capsule.created_at)}
             {capsule.unsealed_at && ` · Revealed ${formatDate(capsule.unsealed_at)}`}
@@ -127,7 +127,7 @@ export function TimeCapsuleRevealModal({ capsule, password, onReveal, onWriteRes
         {/* Content */}
         <div className="px-6 py-4 overflow-y-auto max-h-80 flex-1">
           {error ? (
-            <p className="text-sm text-rose-500">{error}</p>
+            <p role="alert" className="text-sm text-rose-500">{error}</p>
           ) : decryptedContent === null ? (
             <p className="text-sm text-slate-400 animate-pulse">Decrypting…</p>
           ) : (
@@ -142,7 +142,6 @@ export function TimeCapsuleRevealModal({ capsule, password, onReveal, onWriteRes
         {/* Footer */}
         <div className="px-6 pb-6 pt-4 flex items-center justify-end gap-3 border-t border-slate-100 dark:border-slate-800">
           <button
-            ref={firstFocusRef}
             type="button"
             onClick={handleReveal}
             disabled={isRevealing}
@@ -151,6 +150,7 @@ export function TimeCapsuleRevealModal({ capsule, password, onReveal, onWriteRes
             {isRevealing ? 'Saving…' : "I've read this"}
           </button>
           <button
+            ref={firstFocusRef}
             type="button"
             onClick={() => {
               void handleReveal().then(onWriteResponse).catch(() => {

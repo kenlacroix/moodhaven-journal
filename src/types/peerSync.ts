@@ -1,7 +1,7 @@
 // Peer Sync — Type Definitions
 // Layer 1: Device Identity, Layer 2: Discovery, Layer 3: Pairing, Layer 4: Sync
 
-export type DeviceType = 'desktop' | 'phone' | 'tablet' | 'watch';
+type DeviceType = 'desktop' | 'phone' | 'tablet' | 'watch';
 
 export interface DeviceIdentity {
   deviceName: string;
@@ -42,26 +42,8 @@ export interface DiscoveredPeer {
   lastSeen: string;
 }
 
-export type PairingState =
-  | { status: 'idle' }
-  | { status: 'generating' }
-  | { status: 'showing_code'; info: PairingTokenInfo }
-  | { status: 'entering_code' }
-  | { status: 'pairing' }
-  | { status: 'success'; device: TrustedDevice }
-  | { status: 'error'; message: string };
-
 export type SyncStatus =
   | { state: 'idle' }
   | { state: 'syncing'; deviceName: string; progress?: number }
   | { state: 'success'; deviceName: string; count: number; at: string }
   | { state: 'error'; deviceName: string; message: string };
-
-export interface SyncRecord {
-  deviceId: string;
-  deviceName: string;
-  direction: 'send' | 'receive' | 'both';
-  entriesExchanged: number;
-  at: string;
-  durationMs: number;
-}

@@ -5,6 +5,34 @@ All notable changes to MoodHaven Journal are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.7.0] — 2026-06-06
+
+### Security
+- **SQLite at-rest encryption (SQLCipher)** — database is now encrypted with SQLCipher (AES-256-CBC + PBKDF2, 256,000 iterations). Existing databases migrate automatically on first launch after upgrade. Fixes T7 (DB readable at rest) and T8 (password hash exposed in plaintext) from the authorized pentest.
+- **Ed25519 peer key encryption** — the device signing private key (`peer_key.bin`) is now stored in the OS keyring (Windows Credential Manager, macOS Keychain, libsecret on Linux) instead of as a plaintext binary file. Fixes T10 from the pentest.
+- **Security hardening** — TOTP failed-attempt rate limiting (5 failures → 30 s lockout, persisted); WebDAV `http://` URLs now display a plaintext-transport warning; import paths are validated against the app data directory to prevent path traversal; Windows path separator guards added in import/export commands.
+- **Peer sync v2 protocol** — ephemeral X25519 ECDH session key derivation (forward secrecy) replaces the static shared-key derivation. Ed25519 challenge/response authentication replaces implicit trust. Existing pre-v2 peers fall back to v1 automatically.
+
+### Added
+- **Cloud sync: Dropbox + Google Drive** — connect your account in Settings → Sync and push/pull your encrypted backup blob. OAuth 2.0 PKCE flow; tokens stored encrypted in SQLite; WebDAV remains available. No MoodHaven servers involved.
+- **Desktop biometric unlock** — Windows Hello, macOS Touch ID, and Linux polkit now work as a second unlock path after the first password entry in a session. Opt-in in Settings → Privacy → Biometric Unlock.
+- **PIN unlock** — 4–6 digit numeric PIN wraps the master password via PBKDF2-AES-256-GCM (600,000 iterations). Rate-limited (5 failures → 30 s lockout). Configured in Settings → Privacy → PIN Unlock. Compatible with TOTP/hardware-key 2FA.
+- **Streamlined onboarding** — setup wizard condensed to 3 steps (password → optional features → done). Advanced configuration available via toggle on step 2.
+- **Mobile-responsive layout foundation** — viewport-aware shell, `useIsMobile` hook, bottom tab bar on narrow screens. Desktop layout unchanged.
+- **iOS support — Phases 2 + 4** — Tauri iOS target config, `usePlatform` hook, and feature gates that hide iOS-incompatible features (sidecar STT, peer sync UI, writer window, update panel). iOS TestFlight in progress; desktop unaffected.
+
+### Performance
+- **Bundle splitting** — Vite manual chunk config splits TipTap, StillHaven, and chart modules into lazy-loaded chunks; initial JS payload reduced by ~62%.
+- **PBKDF2 concurrency cap** — key derivation during unlock no longer starves the UI render loop.
+- **`bufferToBase64` fix** — large encrypted payloads no longer hit a stack overflow during base64 encoding.
+
+### Fixed
+- Accessibility: `aria-label` added to all editor toolbar icon buttons; `aria-controls` wiring corrected on collapsible panels; keyboard navigation improved in settings tabs and devices panel.
+- Dependency modernization: npm packages and Rust toolchain updated; `cargo audit` clean.
+- Peer sync: `MAX_FUTURE_SECS` (10 s) guard rejects timestamps far in the future, closing the LWW-bypass attack vector identified in the retro.
+
+---
+
 ## [1.6.0.1] — 2026-06-02
 
 ### Fixed

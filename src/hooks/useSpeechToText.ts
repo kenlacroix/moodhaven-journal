@@ -13,7 +13,7 @@ import { useSettingsStore } from '../stores/settingsStore';
 
 export type STTState = RecordingState | 'transcribing' | 'formatting';
 
-export interface FormattedResult {
+interface FormattedResult {
   formatted: string;
   raw: string;
   source: 'ollama' | 'openai';

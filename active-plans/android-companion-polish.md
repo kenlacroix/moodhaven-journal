@@ -1,6 +1,6 @@
 # Android Companion Polish (next release)
 
-> **Status:** Backlog. Not gated to a specific version. Pick up when ready.
+> **Status (2026-06-06):** QA code-review pass complete (PR #119, merged). P0/P1 Android bugs fixed. Design-review pass and E2E voice-memo test still outstanding before version bump.
 > **History:** Originally seeded as `v1.1.0-android.md` on the (since-closed) draft PR #71. v1.1.0 ended up shipping StillHaven instead, so this work moved to "next time we touch Android."
 
 ---
@@ -15,7 +15,12 @@
 
 ## Outstanding QA
 
-- [ ] Run `/qa` on phone app — fix all P0/P1 findings
+- [x] Code-review QA pass on phone app — P0/P1 fixed in PR #119 (2026-06-06)
+  - P0: ChannelCallback GC leak → promoted to instance field, unregistered in onDestroy
+  - P0: InputStream not closed on exception → wrapped in `.use {}`
+  - P1: MoodComplicationService hardcoded "MoodBloom" strings → "MoodHaven"
+  - P2: BiometricPlugin key alias + dialog title rebrand
+- [ ] Live device QA pass on phone app (manual test)
 - [ ] Run `/qa` on wear app — fix all P0/P1 findings
 - [ ] Run `/design-review` on wear app — colors, spacing, motion consistent with desktop (now feasible after Wear Phase A landed)
 - [ ] Final `/design-review` pass after fixes

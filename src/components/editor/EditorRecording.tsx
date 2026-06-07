@@ -10,7 +10,7 @@ const prefersReducedMotion =
   typeof window !== 'undefined' &&
   window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-export function WaveformBars({ active }: { active: boolean }) {
+function WaveformBars({ active }: { active: boolean }) {
   const bars = Array.from({ length: 20 }, (_, i) => i);
 
   if (!active || prefersReducedMotion) {

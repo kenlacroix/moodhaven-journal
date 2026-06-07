@@ -48,6 +48,7 @@ import { MOOD_OPTIONS, PRIVACY_MODE_LABELS, PRIVACY_MODE_DESCRIPTIONS } from '..
 import type { JournalTemplate } from '../lib/utils/journalTemplates';
 import { formatTemplateContent } from '../lib/utils/journalTemplates';
 import { usePlatform } from '../hooks/usePlatform';
+import { useIsMobile } from '../hooks/useIsMobile';
 import { logger } from '../lib/services/logger';
 import { useWearVoiceMemos } from '../hooks/useWearVoiceMemos';
 import type { VoiceMemo } from '../lib/services/voiceMemoService';
@@ -256,6 +257,8 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
   const distractionFree = useSettingsStore((s) => s.distractionFree);
   const writingAppearance = useSettingsStore((s) => s.settings.appearance.writing);
   const { isAndroid, isBrowser } = usePlatform();
+  const isMobileViewport = useIsMobile();
+  const isMobile = isAndroid || isMobileViewport;
   const setDistractionFree = useSettingsStore((s) => s.setDistractionFree);
   const hasSeenWritingDrawerHint = useSettingsStore((s) => s.settings.tutorial.hasSeenWritingDrawerHint);
   const setHasSeenWritingDrawerHint = useSettingsStore((s) => s.setHasSeenWritingDrawerHint);
@@ -768,11 +771,13 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
   // When the soft keyboard opens, visualViewport shrinks the container height and
   // keyboardVisible=true collapses the metadata section, so the editor stays visible
   // just above the keyboard.
-  if (isAndroid) {
+  if (isMobile) {
     const promptText = forYouPrompts[0]?.text ?? generalPrompts[0]?.text ?? null;
     return (
       <div
         ref={containerRef}
+        data-writing-prefs
+        data-writing-reduced-motion={writingAppearance.reducedMotion === 'on' ? 'true' : 'false'}
         className={`flex flex-col transition-colors duration-500 ${moodBgClass}`}
         style={{ height: '100%' }}
       >
@@ -1168,6 +1173,7 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
       data-writing-focus-mode={writingAppearance.focusMode ? 'true' : 'false'}
       data-writing-high-contrast={writingAppearance.highContrast ? 'true' : 'false'}
       data-writing-dyslexia={writingAppearance.dyslexiaProfile ? 'true' : 'false'}
+      data-writing-reduced-motion={writingAppearance.reducedMotion === 'on' ? 'true' : 'false'}
       style={{ ['--mh-writing-text-scale' as string]: String(writingAppearance.textScale) }}
       className={`h-full flex flex-col transition-all duration-500 ${distractionFree ? 'focus-bg' : 'writing-bg'}`}
     >

@@ -50,24 +50,6 @@ export async function getContext(date: string): Promise<OuraHealthContext | null
   return invoke<OuraHealthContext | null>('oura_get_context', { date });
 }
 
-/**
- * Get today's cached context, syncing first if not yet fetched today.
- * `password` is required for syncing (to decrypt PAT). If omitted, returns cached only.
- */
-export async function getTodayContext(
-  autoSync = true,
-  password?: string
-): Promise<OuraHealthContext | null> {
-  const today = new Date().toISOString().slice(0, 10);
-  const cached = await getContext(today);
-  if (cached) return cached;
-  if (!autoSync || !password) return null;
-  try {
-    return await syncToday(password);
-  } catch {
-    return null;
-  }
-}
 
 /** Get last N days of cached health contexts, sorted ascending by date */
 export async function getHistory(days: number): Promise<OuraHealthContext[]> {

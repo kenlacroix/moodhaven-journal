@@ -1,6 +1,6 @@
 # MoodHaven Journal — Architecture Reference
 
-> **Version:** v1.6.0.1 | **Last Updated:** 2026-06-02
+> **Version:** v1.6.0 (feat/cloud-sync-phase1) | **Last Updated:** 2026-06-06
 
 ---
 
@@ -16,6 +16,7 @@
 8. [Peer Sync Architecture](#8-peer-sync-architecture)
 9. [Watch Companion Architecture](#9-watch-companion-architecture)
 10. [Key Data Flows](#10-key-data-flows)
+11. [Cloud Sync Architecture (Phase 1)](#11-cloud-sync-architecture-phase-1)
 
 ---
 
@@ -453,14 +454,16 @@ Full details: [`docs/peer-sync-security.md`](peer-sync-security.md)
 └─────────────────────────────────────────────────────────────┘
 ```
 
-**Sync protocol (simplified):**
+**Sync protocol (v2 summary):**
 1. Device A connects to Device B's TCP port.
-2. Plain `HELLO` exchange (device IDs, not trusted yet — aborted if unknown).
-3. Transport key derived: `SHA-256("moodhaven-sync-v1:" + sorted(pubKeyA, pubKeyB))`.
-4. Encrypted `MANIFEST` exchange — each side lists entry IDs + `updated_at`.
-5. Entries the peer is missing are sent as encrypted delta.
-6. `DONE` / `DONE_ACK` closes the session.
+2. Plain `HELLO` / `Ok` exchange — both sides advertise ephemeral X25519 public keys.
+3. Server issues a 32-byte Ed25519 challenge; client responds with `Auth { signature }` to prove device identity.
+4. Session key derived: `SHA-256("moodhaven-sync-v2:" || X25519_shared || sorted(static_A, static_B))`.
+5. Encrypted `MANIFEST` exchange — each side lists entry IDs + `updated_at`.
+6. Four sync phases (Entries → Books → Signals → Settings), each with its own `Done` / `Ack`.
 7. `peer_sync_state` table updated with `last_sync_at` for each peer.
+
+Full wire protocol details (including v1 static fallback) in [`docs/peer-sync-security.md`](peer-sync-security.md).
 
 ---
 
@@ -545,3 +548,141 @@ Rust: peer_sync_engine.rs
     6. DONE / DONE_ACK
     7. UPDATE peer_sync_state
 ```
+
+---
+
+## 11. Cloud Sync Architecture (Phase 1)
+
+> **Status:** feat/cloud-sync-phase1 — commands implemented; placeholder OAuth credentials. Not yet shipping.
+
+Cloud sync Phase 1 adds Dropbox and Google Drive as optional backup destinations alongside the existing WebDAV path. All data is AES-256-GCM encrypted client-side before leaving the device — providers only ever see opaque blobs.
+
+### Supported Providers
+
+| Provider | Protocol | File location |
+|:---|:---|:---|
+| WebDAV | Direct HTTP (existing) | User-configured URL / `/MoodHaven/` subdirectory |
+| Dropbox | OAuth 2.0 PKCE (RFC 8252) | `/Apps/MoodHaven/moodhaven-backup.moodhaven` |
+| Google Drive | OAuth 2.0 PKCE (RFC 8252) | `appDataFolder` (hidden, app-only; `moodhaven-backup.moodhaven`) |
+
+### OAuth 2.0 PKCE Flow
+
+```
+User clicks "Connect Dropbox / Google Drive"
+    │
+    ▼
+Frontend: cloudProviderAuthStart(provider)
+    │
+    ▼
+Rust: cloud_providers.rs — cloud_provider_auth_start
+    │  1. Generate PKCE code_verifier (random 64 bytes, base64url)
+    │  2. Derive code_challenge = BASE64URL(SHA-256(code_verifier))
+    │  3. Bind ephemeral localhost TCP server on a random port
+    │  4. Open browser: provider authorization URL with
+    │       client_id, redirect_uri=http://localhost:{port}/oauth,
+    │       code_challenge, code_challenge_method=S256, scope
+    ▼
+Browser (user grants permission)
+    │  Provider redirects to http://localhost:{port}/oauth?code=...
+    │
+    ▼
+Rust: localhost TCP server receives authorization code
+    │  5. Exchange code + code_verifier for access_token + refresh_token
+    │     (POST to provider token endpoint, Rust-side HTTP via reqwest)
+    │  6. Store tokens in SQLite settings table:
+    │       cloud_{provider}_access_token
+    │       cloud_{provider}_refresh_token
+    │       cloud_{provider}_expires_at
+    │       cloud_{provider}_connected_at
+    │  7. Close localhost server
+    ▼
+Frontend: token available; Connect button → Sync Now / Disconnect
+```
+
+### Upload Flow
+
+```
+Frontend: syncUpload(provider, password)
+    │
+    ├── exportData(password)         — serialize all entries as JSON
+    │        ↓
+    │   cloud ciphertext            — same AES-256-GCM envelope as .moodhaven export
+    │
+    ▼
+cloudProviderUploadBlob(provider, blob)
+    │
+    ▼
+Rust: cloud_provider_upload_blob
+    │  1. Refresh token if expired (cloud_provider_refresh_token)
+    │  2. Upload blob bytes to provider:
+    │       Dropbox: POST /2/files/upload to /Apps/MoodHaven/moodhaven-backup.moodhaven
+    │       GDrive:  multipart POST to googleapis.com/upload/drive/v3/files
+    │                stored in appDataFolder (hidden, not visible to user)
+    │  3. Store last_sync_at in settings table
+```
+
+### Download Flow
+
+```
+Frontend: syncDownload(provider, password)
+    │
+    ▼
+cloudProviderDownloadBlob(provider)
+    │
+    ▼
+Rust: cloud_provider_download_blob
+    │  1. Refresh token if expired
+    │  2. Download blob bytes:
+    │       Dropbox: POST /2/files/download path=/Apps/MoodHaven/moodhaven-backup.moodhaven
+    │       GDrive:  GET files/{id}/export (find file by name in appDataFolder first)
+    │
+    ▼
+Frontend: encryptedImport(blob, password)
+    │  Decrypt and merge into local SQLite (same import path as manual restore)
+```
+
+### Security Properties
+
+- **Data in transit:** HTTPS (reqwest TLS) to provider APIs; never HTTP.
+- **Data at rest on provider:** AES-256-GCM ciphertext only — same envelope as the manual `.moodhaven` export. Providers cannot read journal content.
+- **Token storage:** OAuth tokens stored in the SQLite `settings` table. The access token row is not additionally encrypted (see gap below).
+- **Scope minimality:**
+  - Dropbox: `files.content.write` + `files.content.read` scoped to `/Apps/MoodHaven/`.
+  - Google Drive: `drive.appdata` — hidden folder accessible only to this app.
+- **PKCE (RFC 8252):** No client secret transmitted in the authorization request for Dropbox (public client). Google Drive uses a client secret stored as a compile-time constant (see gap below).
+
+### Gaps (Phase 1)
+
+| Gap | Impact | Tracking |
+|:---|:---|:---|
+| OAuth client credentials are compile-time placeholders (`DROPBOX_APP_KEY_PLACEHOLDER`, `GOOGLE_CLIENT_ID_PLACEHOLDER`) | Auth will fail until real credentials are registered and compiled in | Must be resolved before shipping |
+| Google Drive client_secret stored as a compile-time constant in the binary | Anyone who extracts the binary can find the secret; mitigated by `drive.appdata` scope restriction | Phase 2: move to PKCE-only or env-injected at build time |
+| OAuth access token stored unencrypted in SQLite `settings` table | Local attacker with DB access could use the token until it expires | Phase 2: encrypt with `secureStorage.ts` pattern |
+| Manual sync only (no auto-sync) | User must tap "Sync Now" explicitly | By design for Phase 1; scheduled sync is Phase 2 |
+| No backup rotation | Each sync overwrites the single `moodhaven-backup.moodhaven` file | Phase 2: versioned filenames or provider versioning |
+
+### Key Files
+
+| File | Purpose |
+|:---|:---|
+| `src-tauri/src/commands/cloud_providers.rs` | All 6 Tauri commands (auth, upload, download, status, disconnect, refresh) |
+| `src/lib/services/cloudProvidersService.ts` | TypeScript IPC wrappers + `syncUpload`/`syncDownload` helpers |
+| `src/components/settings/tabs/SyncTab.tsx` | Settings UI — provider picker, Connect/Disconnect, Sync Now |
+| `src/types/settings.ts` | `CloudProvider`, `StorageBackend`, `CloudProviderStatus` types |
+| `src/stores/settingsStore.ts` | `cloudProviders` state (connection status per provider) |
+
+---
+
+## Further Reading
+
+| Document | Purpose |
+|:---|:---|
+| [`docs/peer-sync-security.md`](peer-sync-security.md) | Detailed security model for local peer sync (threat model, key derivation, wire format) |
+| [`docs/speech-to-text.md`](speech-to-text.md) | STT architecture, model options, sidecar build instructions |
+| [`docs/watch-companion.md`](watch-companion.md) | Wear OS companion app, audio transfer protocol, voice memo draft pipeline |
+| [`docs/browser-pwa-mode.md`](browser-pwa-mode.md) | Browser / PWA build: IndexedDB backend, invoke shim, feature parity table |
+| [`docs/howto-getting-started.md`](howto-getting-started.md) | First-run setup tutorial for new users |
+| [`docs/howto-time-capsule.md`](howto-time-capsule.md) | Time capsule feature: sealing, reveal flow, anniversary reveals |
+| [`docs/howto-stillhaven.md`](howto-stillhaven.md) | StillHaven bilateral stimulation: sessions, protocols, journal handoff |
+| [`docs/tauri-commands.md`](tauri-commands.md) | Full reference for all ~164 Tauri commands |
+| [`docs/threat-model.md`](threat-model.md) | Security threat model and mitigations |

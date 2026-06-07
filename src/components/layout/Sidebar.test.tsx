@@ -38,6 +38,28 @@ const defaultProps = {
   updateHook: mockUpdateHook,
 };
 
+describe('Sidebar — accessibility', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    vi.clearAllMocks();
+  });
+
+  it('aside has aria-label for landmark identification', () => {
+    render(<Sidebar {...defaultProps} />);
+    expect(screen.getByRole('complementary', { name: /main navigation/i })).toBeInTheDocument();
+  });
+
+  it('collapse toggle button has descriptive aria-label', () => {
+    render(<Sidebar {...defaultProps} />);
+    expect(screen.getByLabelText('Collapse sidebar')).toBeInTheDocument();
+  });
+
+  it('settings button has aria-label', () => {
+    render(<Sidebar {...defaultProps} />);
+    expect(screen.getByRole('button', { name: /settings/i })).toBeInTheDocument();
+  });
+});
+
 describe('Sidebar — support link', () => {
   beforeEach(() => {
     localStorage.clear();

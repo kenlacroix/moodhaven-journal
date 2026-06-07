@@ -27,18 +27,20 @@ export function AboutTab({
   handleLogLevelChange,
   setModuleLogLevel,
 }: AboutTabProps) {
-  const { isBrowser } = usePlatform();
+  const { isBrowser, isIOS } = usePlatform();
   const [moduleOverridesOpen, setModuleOverridesOpen] = useState(false);
   return (
-    <div id="panel-about" role="tabpanel" className="space-y-6">
+    <div id="panel-about" role="tabpanel" aria-labelledby="tab-about" className="space-y-6">
 
-      {/* Updates section */}
-      <SettingSection
-        title="Updates"
-        description="Keep MoodHaven Journal up to date"
-      >
-        <UpdatePanel hook={updateHook} currentVersion={appVersion} />
-      </SettingSection>
+      {/* Updates section — App Store handles updates on iOS */}
+      {!isIOS && (
+        <SettingSection
+          title="Updates"
+          description="Keep MoodHaven Journal up to date"
+        >
+          <UpdatePanel hook={updateHook} currentVersion={appVersion} />
+        </SettingSection>
+      )}
 
       <SettingSection
         title="About MoodHaven Journal"
@@ -66,7 +68,7 @@ export function AboutTab({
             </p>
           </div>
 
-          {!isBrowser && (
+          {!isBrowser && !isIOS && (
             <>
               <div className="py-3 border-b border-slate-100 dark:border-slate-700 space-y-2">
                 <div className="flex items-center justify-between">
@@ -165,12 +167,22 @@ export function AboutTab({
 
           <div className="pt-4">
             <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
-              MoodHaven Journal is a privacy-focused mood tracking and journaling application.
-              All your data is stored locally on your device and encrypted using
-              industry-standard AES-256-GCM encryption.
+              MoodHaven Journal is built and maintained by a solo indie developer. The security
+              model relies on established cryptographic primitives — AES-256-GCM, PBKDF2,
+              Ed25519 — not proprietary systems. The codebase has not been independently
+              audited; you're welcome to{' '}
+              <a
+                href="https://github.com/kenlacroix/moodhaven-journal"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline text-violet-600 dark:text-violet-400"
+              >
+                review it on GitHub
+              </a>
+              .
             </p>
             <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed mt-2">
-              MoodHaven Journal is built by one person. If it brings value to your life, a coffee goes a long way.
+              If it brings value to your life, a coffee goes a long way.
             </p>
           </div>
 

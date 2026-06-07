@@ -18,11 +18,6 @@ import { invoke } from '@tauri-apps/api/core';
 // Types
 // ============================================================================
 
-export interface HardwareKeyStatus {
-  enabled: boolean;
-  device_name: string | null;
-  registered_at: string | null;
-}
 
 export interface HardwareKeyDevice {
   name: string;
@@ -53,18 +48,6 @@ export async function getHardwareKeyFeatureInfo(): Promise<HardwareKeyFeatureInf
   return invoke<HardwareKeyFeatureInfo>('hardware_key_feature_available');
 }
 
-/**
- * Check if hardware key feature is available
- */
-export async function isHardwareKeyFeatureAvailable(): Promise<boolean> {
-  try {
-    const info = await getHardwareKeyFeatureInfo();
-    return info.available;
-  } catch {
-    return false;
-  }
-}
-
 // ============================================================================
 // Device Detection
 // ============================================================================
@@ -75,36 +58,6 @@ export async function isHardwareKeyFeatureAvailable(): Promise<boolean> {
  */
 export async function detectHardwareKeys(): Promise<HardwareKeyDevice[]> {
   return invoke<HardwareKeyDevice[]>('hardware_key_detect');
-}
-
-/**
- * Check if any hardware key is connected
- */
-export async function isHardwareKeyConnected(): Promise<boolean> {
-  try {
-    const devices = await detectHardwareKeys();
-    return devices.length > 0;
-  } catch {
-    return false;
-  }
-}
-
-// ============================================================================
-// Status
-// ============================================================================
-
-/**
- * Get current hardware key status
- */
-export async function getHardwareKeyStatus(): Promise<HardwareKeyStatus> {
-  return invoke<HardwareKeyStatus>('hardware_key_status');
-}
-
-/**
- * Check if hardware key verification is required for unlock
- */
-export async function isHardwareKeyRequired(): Promise<boolean> {
-  return invoke<boolean>('hardware_key_required');
 }
 
 // ============================================================================
@@ -143,18 +96,6 @@ export async function registerHardwareKey(): Promise<HardwareKeyRegistration> {
  */
 export async function verifyHardwareKey(): Promise<string> {
   return invoke<string>('hardware_key_verify');
-}
-
-// ============================================================================
-// Management
-// ============================================================================
-
-/**
- * Disable hardware key requirement
- * User must verify with the key one last time to disable
- */
-export async function disableHardwareKey(): Promise<boolean> {
-  return invoke<boolean>('hardware_key_disable');
 }
 
 // ============================================================================

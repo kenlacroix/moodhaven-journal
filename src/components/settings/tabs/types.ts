@@ -1,6 +1,4 @@
-import type { RefObject } from 'react';
 import type { AppSettings } from '../../../types/settings';
-import type { TwoFactorStatus } from '../../../types/twoFactor';
 
 export interface SettingsTabBaseProps {
   settings: AppSettings;
@@ -11,4 +9,3 @@ export interface SettingsTabBaseProps {
   onClose: () => void;
 }
 
-export type { TwoFactorStatus, RefObject };

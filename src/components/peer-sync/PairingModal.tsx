@@ -10,7 +10,7 @@
  *  onClose   — called after success or cancellation
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import type { DiscoveredPeer, TrustedDevice } from '../../types/peerSync';
 import { SuccessScreen } from './PairingUIComponents';
 import { ShowCodeTab } from './PairingShowCodeTab';
@@ -23,8 +23,10 @@ export function PairingModal({
   peer: DiscoveredPeer;
   onClose: () => void;
 }) {
+  const TABS = ['show', 'enter'] as const;
   const [tab, setTab] = useState<'show' | 'enter'>('show');
   const [paired, setPaired] = useState<TrustedDevice | null>(null);
+  const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
   const handleSuccess = useCallback((device: TrustedDevice) => {
     setPaired(device);
@@ -46,13 +48,13 @@ export function PairingModal({
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       role="dialog"
       aria-modal="true"
-      aria-label="Pair device"
+      aria-labelledby="pairing-modal-title"
     >
       <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-800">
           <div>
-            <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100">
+            <h2 id="pairing-modal-title" className="text-base font-semibold text-slate-800 dark:text-slate-100">
               Pair with {peer.deviceName}
             </h2>
             <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5 capitalize">
@@ -60,9 +62,10 @@ export function PairingModal({
             </p>
           </div>
           <button
+            type="button"
             onClick={onClose}
             className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-            aria-label="Close"
+            aria-label="Close pairing dialog"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -77,7 +80,23 @@ export function PairingModal({
           ) : (
             <>
               {/* Tab switcher */}
-              <div className="flex rounded-xl bg-slate-100 dark:bg-slate-800 p-1 mb-5">
+              <div
+                role="tablist"
+                aria-label="Pairing method"
+                className="flex rounded-xl bg-slate-100 dark:bg-slate-800 p-1 mb-5"
+                onKeyDown={(e) => {
+                  const idx = TABS.indexOf(tab);
+                  if (e.key === 'ArrowRight') {
+                    const next = TABS[(idx + 1) % TABS.length];
+                    setTab(next);
+                    tabRefs.current[next]?.focus();
+                  } else if (e.key === 'ArrowLeft') {
+                    const prev = TABS[(idx - 1 + TABS.length) % TABS.length];
+                    setTab(prev);
+                    tabRefs.current[prev]?.focus();
+                  }
+                }}
+              >
                 {(
                   [
                     { key: 'show', label: 'Show My Code' },
@@ -86,6 +105,12 @@ export function PairingModal({
                 ).map(({ key, label }) => (
                   <button
                     key={key}
+                    ref={(el) => { tabRefs.current[key] = el; }}
+                    role="tab"
+                    aria-selected={tab === key}
+                    aria-controls={`pairing-tab-panel-${key}`}
+                    id={`pairing-tab-${key}`}
+                    tabIndex={tab === key ? 0 : -1}
                     onClick={() => setTab(key)}
                     className={`flex-1 py-1.5 text-sm font-medium rounded-lg transition-all ${
                       tab === key
@@ -98,12 +123,23 @@ export function PairingModal({
                 ))}
               </div>
 
-              {/* Tab content */}
-              {tab === 'show' ? (
+              {/* Tab content — always mounted; hidden attribute removes from AT/tab order */}
+              <div
+                id="pairing-tab-panel-show"
+                role="tabpanel"
+                aria-labelledby="pairing-tab-show"
+                hidden={tab !== 'show'}
+              >
                 <ShowCodeTab onSuccess={handleSuccess} />
-              ) : (
+              </div>
+              <div
+                id="pairing-tab-panel-enter"
+                role="tabpanel"
+                aria-labelledby="pairing-tab-enter"
+                hidden={tab !== 'enter'}
+              >
                 <EnterCodeTab peer={peer} onSuccess={handleSuccess} />
-              )}
+              </div>
             </>
           )}
         </div>

@@ -29,42 +29,5 @@ export interface BackupCodes {
   generated_at: string;  // ISO timestamp
 }
 
-/** WebAuthn credential stored in backend */
-export interface WebAuthnCredential {
-  id: string;            // Base64 credential ID
-  public_key: string;    // Base64 public key
-  created_at: string;    // ISO timestamp
-}
-
-/** WebAuthn registration options for navigator.credentials.create() */
-export interface WebAuthnRegistrationOptions {
-  challenge: Uint8Array;
-  rp: {
-    name: string;
-    id: string;
-  };
-  user: {
-    id: Uint8Array;
-    name: string;
-    displayName: string;
-  };
-  pubKeyCredParams: PublicKeyCredentialParameters[];
-  timeout: number;
-  authenticatorSelection?: AuthenticatorSelectionCriteria;
-  attestation?: AttestationConveyancePreference;
-}
-
-/** WebAuthn assertion options for navigator.credentials.get() */
-export interface WebAuthnAssertionOptions {
-  challenge: Uint8Array;
-  rpId: string;
-  allowCredentials: {
-    id: Uint8Array;
-    type: 'public-key';
-  }[];
-  timeout: number;
-  userVerification?: UserVerificationRequirement;
-}
-
 /** 2FA verification mode on lock screen */
 export type TwoFactorVerifyMode = 'totp' | 'webauthn' | 'backup';

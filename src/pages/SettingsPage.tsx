@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { usePlatform } from '../hooks/usePlatform';
+import { useIsMobile } from '../hooks/useIsMobile';
 import { useSettingsStore } from '../stores/settingsStore';
 import {
   getDataStats,
@@ -173,6 +174,8 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
   const setScrollToSection = useSettingsStore((s) => s.setScrollToSection);
 
   const { isAndroid } = usePlatform();
+  const isMobileViewport = useIsMobile();
+  const isMobile = isAndroid || isMobileViewport;
   const [activeTab, setActiveTab] = useState<SettingsTab>('general');
   const [mobileScreen, setMobileScreen] = useState<'list' | 'detail'>('list');
   const [searchQuery, setSearchQuery] = useState('');
@@ -572,15 +575,22 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
   );
 
   const renderPasswordModal = () => showPasswordModal && (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="export-password-modal-title"
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm"
+    >
       <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-6 max-w-md mx-4">
-        <h3 className="text-lg font-semibold text-slate-800 dark:text-white mb-2">
+        <h3 id="export-password-modal-title" className="text-lg font-semibold text-slate-800 dark:text-white mb-2">
           Export Backup
         </h3>
         <p className="text-sm text-slate-600 dark:text-slate-300 mb-4">
           Enter your master password to encrypt the backup file.
         </p>
+        <label htmlFor="export-password-input" className="sr-only">Master password</label>
         <input
+          id="export-password-input"
           type="password"
           value={syncPassword}
           onChange={(e) => { setSyncPassword(e.target.value); setSyncPasswordError(null); }}
@@ -591,6 +601,7 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
           }}
           placeholder="Master password"
           disabled={syncLockedOut}
+          aria-describedby={syncPasswordError ? 'export-password-error' : undefined}
           className={`w-full px-3 py-2 rounded-lg border bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500 transition-colors ${
             syncPasswordError
               ? 'border-rose-400 dark:border-rose-500'
@@ -599,13 +610,13 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
           autoFocus
         />
         {syncPasswordError && (
-          <p className="mt-2 text-sm text-rose-600 dark:text-rose-400">
+          <p id="export-password-error" role="alert" className="mt-2 text-sm text-rose-600 dark:text-rose-400">
             {syncPasswordError}
           </p>
         )}
         {syncLockedOut && (
           <div className="mt-2 flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400">
-            <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
             </svg>
             <span>Locked for {formatCountdown(syncLockoutRemaining)}</span>
@@ -642,7 +653,7 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
     );
   }
 
-  if (isAndroid) {
+  if (isMobile) {
     const activeTabConfig = TABS.find(t => t.id === activeTab);
     return (
       <>
@@ -797,7 +808,9 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
               </div>
+              <label htmlFor="settings-search" className="sr-only">Search settings</label>
               <input
+                id="settings-search"
                 type="text"
                 placeholder="Search settings..."
                 value={searchQuery}
@@ -808,9 +821,10 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
                 <button
                   type="button"
                   onClick={() => setSearchQuery('')}
+                  aria-label="Clear search"
                   className="absolute inset-y-0 right-0 pr-2 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
                 >
-                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>
@@ -835,6 +849,7 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
           <div className="flex flex-1 min-h-0">
             {/* Left sidebar navigation */}
             <nav
+              aria-label="Settings sections"
               className="w-52 bg-slate-50 dark:bg-slate-800/30 border-r border-slate-200 dark:border-slate-800 flex-shrink-0 overflow-y-auto py-2"
               role="tablist"
               onKeyDown={handleKeyDown}
@@ -842,6 +857,7 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
               {TABS.map((tab) => (
                 <button
                   key={tab.id}
+                  id={`tab-${tab.id}`}
                   role="tab"
                   aria-selected={activeTab === tab.id}
                   aria-controls={`panel-${tab.id}`}

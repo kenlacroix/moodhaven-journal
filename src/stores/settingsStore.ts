@@ -31,10 +31,11 @@ import {
   getAppVersion,
   resetSettings as resetSettingsService,
 } from '../lib/services/settingsService';
+import { cloudProviderStatus } from '../lib/services/cloudProvidersService';
 import { useAppStore } from './appStore';
 
 // Section to scroll to when settings page opens
-export type SettingsScrollTarget = 'speech-to-text' | 'ai' | 'privacy' | 'health' | 'notifications' | 'sync' | null;
+type SettingsScrollTarget = 'speech-to-text' | 'ai' | 'privacy' | 'health' | 'notifications' | 'sync' | null;
 
 interface SettingsState {
   settings: AppSettings;
@@ -123,6 +124,13 @@ interface SettingsState {
 
   // Wellness
   setWellnessSettings: (updates: Partial<WellnessSettings>) => void;
+
+  // Cloud providers
+  setCloudProviderStatus: (
+    provider: 'dropbox' | 'gdrive',
+    status: { connected: boolean; lastSyncAt: string | null },
+  ) => void;
+  refreshCloudProviderStatus: () => Promise<void>;
 
   // Per-module log levels
   setModuleLogLevel: (module: LogModule, level: LogLevel | null) => void;
@@ -743,6 +751,37 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       },
       hasUnsavedChanges: true,
     }));
+  },
+
+  setCloudProviderStatus: (provider, status) =>
+    set((s) => ({
+      settings: {
+        ...s.settings,
+        storage: {
+          ...s.settings.storage,
+          cloudProviders: {
+            ...s.settings.storage.cloudProviders,
+            [provider]: status,
+          },
+        },
+      },
+      hasUnsavedChanges: true,
+    })),
+
+  refreshCloudProviderStatus: async () => {
+    try {
+      const statuses = await cloudProviderStatus();
+      for (const s of statuses) {
+        if (s.provider === 'dropbox' || s.provider === 'gdrive') {
+          get().setCloudProviderStatus(s.provider, {
+            connected: s.connected,
+            lastSyncAt: s.lastSyncAt,
+          });
+        }
+      }
+    } catch {
+      // ignore — status refresh is best-effort
+    }
   },
 
   setModuleLogLevel: (module, level) => {

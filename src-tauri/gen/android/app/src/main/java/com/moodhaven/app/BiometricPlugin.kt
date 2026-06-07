@@ -22,7 +22,7 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
 private const val TAG = "BiometricPlugin"
-private const val KEY_ALIAS = "MoodBloomBiometricKey"
+private const val KEY_ALIAS = "MoodHavenBiometricKey"
 private const val PREFS_NAME = "moodbloom_biometric"
 private const val PREF_ENCRYPTED_PW = "encrypted_password"
 private const val PREF_IV = "iv"
@@ -175,7 +175,7 @@ class BiometricPlugin(private val activity: Activity) : Plugin(activity) {
             try {
                 val cipher = buildDecryptCipher(iv)
                 val promptInfo = BiometricPrompt.PromptInfo.Builder()
-                    .setTitle("Unlock MoodBloom")
+                    .setTitle("Unlock MoodHaven")
                     .setSubtitle("Confirm your identity to access your journal")
                     .setNegativeButtonText("Use Password")
                     .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)

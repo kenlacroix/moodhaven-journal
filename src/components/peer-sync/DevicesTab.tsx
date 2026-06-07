@@ -24,7 +24,7 @@ import type { DiscoveredPeer } from '../../types/peerSync';
 import { logger } from '../../lib/services/logger';
 
 export function DevicesTab() {
-  const { isBrowser } = usePlatform();
+  const { isBrowser, isIOS } = usePlatform();
   const { identity, identityLoading, isDiscovering, nearbyPeers, setDiscovering, clearPeers } =
     usePeerSyncStore();
 
@@ -54,6 +54,28 @@ export function DevicesTab() {
       setTogglingDiscovery(false);
     }
   }, [isDiscovering, setDiscovering, clearPeers]);
+
+  if (isIOS) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 gap-4 text-center px-4">
+        <div className="w-14 h-14 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+          <svg className="w-7 h-7 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z" />
+          </svg>
+        </div>
+        <div>
+          <p className="font-medium text-slate-800 dark:text-slate-100">Peer sync is not available on iOS</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-xs">
+            LAN peer sync uses mDNS and native TCP — unreliable in the iOS foreground.
+            Use Dropbox or Google Drive to sync your journal on iPhone.
+          </p>
+        </div>
+        <p className="text-xs text-slate-400 dark:text-slate-500">
+          Sync your journal in Settings → Cloud Sync
+        </p>
+      </div>
+    );
+  }
 
   if (isBrowser) {
     return (
@@ -98,7 +120,7 @@ export function DevicesTab() {
         <PairingModal peer={pairingPeer} onClose={() => setPairingPeer(null)} />
       )}
 
-      <div className="space-y-6">
+      <div id="panel-devices" role="tabpanel" aria-labelledby="tab-devices" className="space-y-6">
         {/* Local Sync toggle */}
         <div className="p-4 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
           <div className="flex items-start justify-between gap-4">

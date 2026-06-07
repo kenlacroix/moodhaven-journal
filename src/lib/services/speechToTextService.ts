@@ -15,7 +15,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import type { STTModel } from '../../types/settings';
-import type { WhisperOutput } from '../utils/transcriptFormatter';
 import { forModule } from './logger';
 
 const log = forModule('stt');
@@ -195,45 +194,3 @@ export async function checkSidecarAvailable(): Promise<boolean> {
   }
 }
 
-/**
- * Get the models directory path
- */
-export async function getModelsDirectory(): Promise<string> {
-  return invoke<string>('stt_get_models_dir');
-}
-
-/**
- * Transcribe audio with timestamps using the `stt_transcribe_timestamped` Tauri command.
- * Returns a WhisperOutput containing the full text and per-segment timestamps.
- *
- * Falls back gracefully to an empty segments array if the sidecar cannot produce JSON.
- */
-export async function transcribeAudioTimestamped(
-  audioBuffer: ArrayBuffer,
-  model: STTModel
-): Promise<WhisperOutput> {
-  try {
-    const bytes = new Uint8Array(audioBuffer);
-    const base64 = uint8ArrayToBase64(bytes);
-
-    const result = await invoke<{ text: string; segments: Array<{ text: string; start: number; end: number }> }>(
-      'stt_transcribe_timestamped',
-      {
-        audioBase64: base64,
-        modelName: MODEL_FILENAMES[model],
-      }
-    );
-
-    return {
-      text: result.text.trim(),
-      segments: result.segments.map((s) => ({
-        text: s.text,
-        start: s.start,
-        end: s.end,
-      })),
-    };
-  } catch (error) {
-    log.error('Timestamped transcription failed:', { error: String(error) });
-    throw new Error(`Timestamped transcription failed: ${error}`);
-  }
-}

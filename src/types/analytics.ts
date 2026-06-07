@@ -62,11 +62,3 @@ export interface AnalyticsData {
   dayOfWeekStats: DayOfWeekStats[];
   trendData: TrendDataPoint[];
 }
-
-// Calendar state
-export interface CalendarState {
-  year: number;
-  month: number; // 1-12
-  selectedDate: string | null; // YYYY-MM-DD
-  monthData: Map<string, CalendarDayData>;
-}

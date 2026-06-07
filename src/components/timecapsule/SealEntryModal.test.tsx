@@ -68,4 +68,30 @@ describe('SealEntryModal', () => {
     render(<SealEntryModal {...baseProps} />);
     expect(screen.getByRole('dialog')).toHaveAttribute('aria-modal', 'true');
   });
+
+  it('dialog is labelled by its heading', () => {
+    render(<SealEntryModal {...baseProps} />);
+    const dialog = screen.getByRole('dialog');
+    const labelId = dialog.getAttribute('aria-labelledby');
+    expect(labelId).toBeTruthy();
+    const heading = document.getElementById(labelId!);
+    expect(heading).toHaveTextContent(/seal as time capsule/i);
+  });
+
+  it('capsule type radios have aria-checked reflecting selection', () => {
+    render(<SealEntryModal {...baseProps} />);
+    const letterBtn = screen.getByRole('radio', { name: /letter/i });
+    const vaultBtn = screen.getByRole('radio', { name: /vault/i });
+    expect(letterBtn).toHaveAttribute('aria-checked', 'true');
+    expect(vaultBtn).toHaveAttribute('aria-checked', 'false');
+  });
+
+  it('error message has role=alert when present', async () => {
+    mockSealEntry.mockRejectedValue(new Error('Test error'));
+    render(<SealEntryModal {...baseProps} />);
+    await userEvent.click(screen.getByRole('button', { name: /seal entry/i }));
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toBeInTheDocument();
+    });
+  });
 });

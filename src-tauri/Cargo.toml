@@ -1,6 +1,6 @@
 [package]
 name = "moodhaven-journal"
-version = "1.6.0"
+version = "1.7.4"
 description = "A calm, secure mood tracking and journaling app"
 authors = ["Moodbloom"]
 license = "MIT"
@@ -36,7 +36,7 @@ rusqlite = { version = "0.31", features = ["bundled-sqlcipher-vendored-openssl"]
 uuid = { version = "1", features = ["v4"] }
 chrono = { version = "0.4", features = ["serde"] }
 anyhow = "1"
-base64 = "0.21"
+base64 = "0.22"
 totp-rs = { version = "5", features = ["qr", "gen_secret"] }
 data-encoding = "2"
 sha2 = "0.10"
@@ -45,7 +45,7 @@ hex = "0.4"
 aes-gcm = "0.10"
 pbkdf2 = { version = "0.12", features = ["simple"] }
 hmac = "0.12"
-image = { version = "0.24", default-features = false, features = ["jpeg", "png", "gif", "webp"] }
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "webp"] }
 
 # FIDO/Hardware Key support (native, not WebAuthn) - optional
 ctap-hid-fido2 = { version = "3", optional = true }
@@ -59,6 +59,7 @@ bytes = "1"
 tokio = { version = "1", features = ["time"] }
 ed25519-dalek = { version = "2", features = ["rand_core"] }
 x25519-dalek = { version = "2", features = ["static_secrets"] }
+keyring = { version = "2", features = [] }
 mdns-sd = "0.11"
 flume = "0.11"
 if-addrs = "0.13"

@@ -30,8 +30,10 @@ export function buildAuthHeader(username: string, password: string): string {
 /**
  * Validate that a WebDAV URL uses an allowed scheme (http or https only).
  * Rejects file://, ftp://, javascript:, and other non-HTTP schemes.
+ * Warns when http:// is used — credentials will be sent in plaintext.
+ * (Journal content is still AES-256-GCM encrypted before upload regardless of scheme.)
  */
-export function validateWebDAVUrl(url: string): void {
+function validateWebDAVUrl(url: string): void {
   let parsed: URL;
   try {
     parsed = new URL(url.trim());
@@ -40,6 +42,14 @@ export function validateWebDAVUrl(url: string): void {
   }
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
     throw new Error('WebDAV URL must use http or https');
+  }
+  if (parsed.protocol === 'http:') {
+    console.warn(
+      '[WebDAV] Warning: plaintext http:// endpoint configured. ' +
+        'WebDAV credentials will be transmitted unencrypted. ' +
+        'Use https:// for a secure connection. ' +
+        'Note: journal backup content is encrypted regardless of transport.'
+    );
   }
 }
 

@@ -11,12 +11,16 @@ import { get2FAStatus } from '../lib/services/twoFactorService';
 import { verifyUserPassword } from '../lib/services/journalService';
 import { factoryReset, exitApp } from '../lib/services/dataManagementService';
 import { recoverPassword, isRecoveryKeyEnabled } from '../lib/services/recoveryKeyService';
+import { pinIsEnabled, pinUnlock } from '../lib/services/pinUnlockService';
 import {
   biometricIsAvailable,
   biometricIsEnrolled,
   biometricAuthenticate,
   biometricEnroll,
+  desktopBiometricRetrieveSession,
 } from '../lib/services/biometricService';
+import { useSettingsStore } from '../stores/settingsStore';
+import { usePlatform } from '../hooks/usePlatform';
 import { TwoFactorVerify } from '../components/two-factor';
 import type { TwoFactorStatus } from '../types/twoFactor';
 import {
@@ -32,7 +36,7 @@ import {
 } from '../lib/services/rateLimitService';
 import { logger } from '../lib/services/logger';
 
-type LockScreenStep = 'password' | '2fa' | 'erase-confirm' | 'recovery-key' | 'biometric-enroll-offer';
+type LockScreenStep = 'password' | '2fa' | 'erase-confirm' | 'recovery-key' | 'biometric-enroll-offer' | 'pin';
 
 /** Format remaining ms as mm:ss for the countdown display. */
 function formatCountdown(ms: number): string {
@@ -62,6 +66,18 @@ export function LockScreen() {
   // Holds the verified password while offering biometric enrollment
   const pendingPasswordRef = useRef<string | null>(null);
 
+  // PIN unlock state
+  const [pinEnabled, setPinEnabled] = useState(false);
+  const [pinInput, setPinInput] = useState('');
+  const [pinError, setPinError] = useState<string | null>(null);
+  const [pinLoading, setPinLoading] = useState(false);
+  // Rust-side PIN lockout countdown (seconds remaining)
+  const [pinLockoutSecs, setPinLockoutSecs] = useState(0);
+  const pinTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Desktop OS-keyring biometric state
+  const [desktopBiometricLoading, setDesktopBiometricLoading] = useState(false);
+  const [desktopBiometricError, setDesktopBiometricError] = useState<string | null>(null);
+
   // Rate limiting state
   const [rateLimitState, setRateLimitState] = useState<RateLimitState>({
     failedAttempts: 0,
@@ -73,6 +89,9 @@ export function LockScreen() {
 
   const unlock = useAppStore((state) => state.unlock);
   const finalizeUnlock = useAppStore((state) => state.finalizeUnlock);
+  const { isDesktop } = usePlatform();
+  const biometricEnabledSetting =
+    useSettingsStore((s) => s.settings.privacy.biometricEnabled) ?? false;
 
   const lockedOut = lockoutRemaining > 0;
 
@@ -91,6 +110,8 @@ export function LockScreen() {
         setBiometricEnrolled(enrolled);
       }
     ).catch(() => {});
+    // Check PIN availability
+    pinIsEnabled().then(setPinEnabled).catch(() => {});
   }, []);
 
   // Countdown timer — ticks every second while locked out
@@ -122,6 +143,33 @@ export function LockScreen() {
       }
     };
   }, [lockIsActive, rateLimitState]);
+
+  // PIN lockout countdown — ticks every second while pinLockoutSecs > 0
+  useEffect(() => {
+    if (pinTimerRef.current) {
+      clearInterval(pinTimerRef.current);
+      pinTimerRef.current = null;
+    }
+    if (pinLockoutSecs > 0) {
+      pinTimerRef.current = setInterval(() => {
+        setPinLockoutSecs((prev) => {
+          if (prev <= 1) {
+            clearInterval(pinTimerRef.current!);
+            pinTimerRef.current = null;
+            setPinError(null);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => {
+      if (pinTimerRef.current) {
+        clearInterval(pinTimerRef.current);
+        pinTimerRef.current = null;
+      }
+    };
+  }, [pinLockoutSecs]);
 
   // Helper: handle a failed auth attempt (shared by password and recovery key)
   const handleFailedAttempt = useCallback(
@@ -270,6 +318,59 @@ export function LockScreen() {
     }
   }, [eraseConfirmText]);
 
+  // Handle PIN unlock submission
+  const handlePinSubmit = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!pinInput || pinLockoutSecs > 0) return;
+
+      setPinLoading(true);
+      setPinError(null);
+
+      try {
+        const decryptedPassword = await pinUnlock(pinInput);
+
+        // Successful PIN — follow same path as password unlock
+        if (twoFactorStatus?.enabled) {
+          const isValid = await verifyUserPassword(decryptedPassword);
+          if (isValid) {
+            setVerifiedPassword(decryptedPassword);
+            setStep('2fa');
+          } else {
+            setPinError('PIN decrypted but password is no longer valid. Please unlock with your password.');
+            setPinInput('');
+          }
+        } else {
+          const success = await unlock(decryptedPassword);
+          if (success) {
+            await resetRateLimit().catch((err) => logger.warn('resetRateLimit failed', { error: String(err) }));
+            setRateLimitState({ failedAttempts: 0, lockoutUntil: null, lastFailedAt: null });
+            setLockoutRemaining(0);
+          } else {
+            setPinError('Failed to unlock. Please try again.');
+            setPinInput('');
+          }
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        const lockedMatch = /^locked:(\d+)$/.exec(msg);
+        if (lockedMatch) {
+          const secs = parseInt(lockedMatch[1], 10);
+          setPinLockoutSecs(secs);
+          setPinError(`Too many failed attempts. Try again in ${secs}s.`);
+        } else if (msg === 'Incorrect PIN') {
+          setPinError('Incorrect PIN.');
+        } else {
+          setPinError('An error occurred. Please try again.');
+        }
+        setPinInput('');
+      } finally {
+        setPinLoading(false);
+      }
+    },
+    [pinInput, pinLockoutSecs, twoFactorStatus, unlock, setRateLimitState]
+  );
+
   // Cancel erase flow
   const handleEraseCancel = useCallback(() => {
     setStep('password');
@@ -392,6 +493,28 @@ export function LockScreen() {
     }
   }, [unlock, setRateLimitState]);
 
+  // Desktop OS-keyring unlock — retrieves password from the OS credential store
+  const handleDesktopBiometricUnlock = useCallback(async () => {
+    setDesktopBiometricLoading(true);
+    setDesktopBiometricError(null);
+    try {
+      const retrieved = await desktopBiometricRetrieveSession();
+      const success = await unlock(retrieved);
+      if (!success) {
+        setDesktopBiometricError('Unlock failed. Please use your password.');
+      }
+    } catch (e) {
+      const msg = String(e);
+      if (msg.includes('No biometric session stored')) {
+        setDesktopBiometricError('No credential stored. Please unlock with your password first.');
+      } else {
+        setDesktopBiometricError('OS keyring error. Please use your password.');
+      }
+    } finally {
+      setDesktopBiometricLoading(false);
+    }
+  }, [unlock]);
+
   // Derived UI helpers
   const freeAttemptsLeft = getRemainingFreeAttempts(rateLimitState);
   const showAttemptsWarning =
@@ -414,13 +537,15 @@ export function LockScreen() {
             <p className="text-slate-500 dark:text-slate-400 mt-1">
               {step === 'password'
                 ? 'Enter your password to unlock'
+                : step === 'pin'
+                ? 'Enter your PIN to unlock'
                 : 'Complete two-factor authentication'}
             </p>
           </div>
 
           {/* Lockout Banner — shown on password and recovery-key steps */}
           {lockedOut && (step === 'password' || step === 'recovery-key') && (
-            <div className="mb-6 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl">
+            <div role="alert" className="mb-6 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl">
               <div className="flex items-center gap-3">
                 <svg className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
@@ -510,6 +635,31 @@ export function LockScreen() {
                 </div>
               )}
 
+              {/* Desktop OS-keyring unlock button */}
+              {isDesktop && biometricEnabledSetting && (
+                <div className="flex flex-col items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleDesktopBiometricUnlock}
+                    disabled={desktopBiometricLoading || lockedOut}
+                    className="w-full py-2.5 rounded-xl border border-violet-200 dark:border-violet-700 bg-violet-50 dark:bg-violet-900/20 text-sm font-medium text-violet-700 dark:text-violet-300 hover:bg-violet-100 dark:hover:bg-violet-900/40 active:scale-[0.99] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                    aria-label="Unlock with OS keyring"
+                  >
+                    {desktopBiometricLoading ? (
+                      <span className="w-4 h-4 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 5.25a3 3 0 013 3m3 0a6 6 0 01-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1121.75 8.25z" />
+                      </svg>
+                    )}
+                    Use saved password
+                  </button>
+                  {desktopBiometricError && (
+                    <p className="text-xs text-rose-500 dark:text-rose-400 text-center">{desktopBiometricError}</p>
+                  )}
+                </div>
+              )}
+
               {/* 2FA indicator */}
               {twoFactorStatus?.enabled && (
                 <p className="text-xs text-center text-slate-400 dark:text-slate-500">
@@ -519,6 +669,15 @@ export function LockScreen() {
 
               {/* Forgot password options — never gated by lockout */}
               <div className="text-center pt-2 space-y-2">
+                {pinEnabled && (
+                  <button
+                    type="button"
+                    onClick={() => { setStep('pin'); setPinInput(''); setPinError(null); }}
+                    className="text-sm text-violet-500 dark:text-violet-400 hover:text-violet-600 dark:hover:text-violet-300 transition-colors block w-full"
+                  >
+                    Use PIN
+                  </button>
+                )}
                 {hasRecoveryKey && (
                   <button
                     type="button"
@@ -621,6 +780,83 @@ export function LockScreen() {
               <p className="text-xs text-center text-slate-400 dark:text-slate-500">
                 Enter the recovery key you saved during setup
               </p>
+            </form>
+          )}
+
+          {/* PIN Step */}
+          {step === 'pin' && (
+            <form onSubmit={handlePinSubmit} className="space-y-6">
+              <div className="text-center">
+                <div className="w-14 h-14 rounded-full bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-7 h-7 text-violet-600 dark:text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                  </svg>
+                </div>
+                <h2 className="text-xl font-bold text-slate-800 dark:text-white mb-1">
+                  Enter PIN
+                </h2>
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                  Use your PIN to unlock
+                </p>
+              </div>
+
+              {pinLockoutSecs > 0 && (
+                <div role="status" aria-live="polite" className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl">
+                  <p className="text-sm font-medium text-amber-800 dark:text-amber-200 text-center">
+                    Too many attempts. Try again in{' '}
+                    <span className="font-mono" aria-live="off">{pinLockoutSecs}s</span>
+                  </p>
+                </div>
+              )}
+
+              <div>
+                <label htmlFor="pin-unlock" className="label">
+                  PIN
+                </label>
+                <input
+                  id="pin-unlock"
+                  type="password"
+                  inputMode="numeric"
+                  maxLength={6}
+                  value={pinInput}
+                  onChange={(e) => setPinInput(e.target.value.replace(/\D/g, ''))}
+                  placeholder="••••"
+                  autoFocus
+                  disabled={pinLoading || pinLockoutSecs > 0}
+                  aria-disabled={pinLockoutSecs > 0}
+                  aria-describedby="pin-error"
+                  className="input font-mono text-center tracking-[0.5em]"
+                />
+              </div>
+
+              {pinError && pinLockoutSecs === 0 && (
+                <p id="pin-error" role="alert" className="text-sm text-rose-500 dark:text-rose-400">{pinError}</p>
+              )}
+
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => { setStep('password'); setPinInput(''); setPinError(null); }}
+                  disabled={pinLoading}
+                  className="btn-secondary flex-1 py-3"
+                >
+                  Back
+                </button>
+                <button
+                  type="submit"
+                  disabled={pinLoading || pinInput.length < 4 || pinLockoutSecs > 0}
+                  className="btn-primary flex-1 py-3"
+                >
+                  {pinLoading ? (
+                    <>
+                      <span aria-hidden="true" className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      Verifying...
+                    </>
+                  ) : (
+                    'Unlock'
+                  )}
+                </button>
+              </div>
             </form>
           )}
 

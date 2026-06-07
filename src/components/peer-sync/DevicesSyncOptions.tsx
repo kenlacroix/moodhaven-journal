@@ -1,4 +1,4 @@
-export const INTERVAL_OPTIONS = [
+const INTERVAL_OPTIONS = [
   { label: '10 s', value: 10 },
   { label: '30 s', value: 30 },
   { label: '1 min', value: 60 },

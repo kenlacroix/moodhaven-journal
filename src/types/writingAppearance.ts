@@ -57,21 +57,21 @@ export const SIZE_OPTIONS = [
   { value: 'lg', label: 'Large', rem: 1.25 },
   { value: 'xl', label: 'Extra large', rem: 1.5 },
 ] as const;
-export type SizeChoice = typeof SIZE_OPTIONS[number]['value'];
+type SizeChoice = typeof SIZE_OPTIONS[number]['value'];
 
 export const LINE_HEIGHT_OPTIONS = [
   { value: 'tight', label: 'Tight', ratio: 1.4 },
   { value: 'relaxed', label: 'Relaxed', ratio: 1.7 },
   { value: 'airy', label: 'Airy', ratio: 2.0 },
 ] as const;
-export type LineHeightChoice = typeof LINE_HEIGHT_OPTIONS[number]['value'];
+type LineHeightChoice = typeof LINE_HEIGHT_OPTIONS[number]['value'];
 
 export const PARAGRAPH_SPACING_OPTIONS = [
   { value: 'compact', label: 'Compact', em: 0.5 },
   { value: 'standard', label: 'Standard', em: 1.0 },
   { value: 'generous', label: 'Generous', em: 1.5 },
 ] as const;
-export type ParagraphSpacingChoice = typeof PARAGRAPH_SPACING_OPTIONS[number]['value'];
+type ParagraphSpacingChoice = typeof PARAGRAPH_SPACING_OPTIONS[number]['value'];
 
 export const TINT_OPTIONS = [
   { value: 'cream', label: 'Cream', hex: '#F3F0EA' }, // brand cream from DESIGN.md
@@ -88,9 +88,9 @@ export const WIDTH_OPTIONS = [
   { value: 'wide', label: 'Wide', px: 800 },
   { value: 'full', label: 'Full', px: 1200 },
 ] as const;
-export type WidthChoice = typeof WIDTH_OPTIONS[number]['value'];
+type WidthChoice = typeof WIDTH_OPTIONS[number]['value'];
 
-export type ReducedMotionPreference = 'auto' | 'on' | 'off';
+type ReducedMotionPreference = 'auto' | 'on' | 'off';
 
 // ──────────────────────────────────────────────────────────────────────────
 // Shape

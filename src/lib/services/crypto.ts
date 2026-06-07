@@ -35,11 +35,14 @@ export interface CryptoResult<T> {
  */
 function bufferToBase64(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
-  let binary = '';
-  for (let i = 0; i < bytes.byteLength; i++) {
-    binary += String.fromCharCode(bytes[i]);
+  // Process in 32 KB chunks to avoid call-stack overflow on large buffers
+  // while keeping overhead low for typical small ciphertext sizes.
+  const CHUNK = 0x8000;
+  let result = '';
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    result += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK) as unknown as number[]);
   }
-  return btoa(binary);
+  return btoa(result);
 }
 
 /**
@@ -89,6 +92,7 @@ async function passwordCacheToken(password: string): Promise<string> {
   return bufferToBase64(sig.slice(0, 16));
 }
 
+/** Wipe the session key cache on lock so derived keys do not outlive the session. */
 export function clearKeyCache(): void {
   sessionKeyCache.clear();
 }
@@ -267,8 +271,9 @@ export async function verifyPassword(
 }
 
 /**
- * Hash password for storage verification (not for encryption)
- * Uses PBKDF2 to create a verification hash
+ * Hash password for storage verification (not for encryption).
+ * Uses PBKDF2 so the verifier has the same brute-force cost as a derived encryption key.
+ * This hash is stored in SQLite; the plaintext password is never persisted.
  */
 export async function hashPassword(
   password: string,

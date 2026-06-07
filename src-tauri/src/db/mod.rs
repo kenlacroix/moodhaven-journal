@@ -122,10 +122,11 @@ impl Database {
             }
             if state.encrypted {
                 #[cfg(target_os = "windows")]
-                let _ = std::fs::remove_file(&db_path);
-                if let Err(e) = std::fs::rename(&tmp_path, &db_path) {
-                    log::error!("[sqlcipher] Startup recovery rename failed: {e}");
+                if let Err(e) = std::fs::remove_file(&db_path) {
+                    log::warn!("[sqlcipher] Windows pre-rename remove failed: {e}");
                 }
+                std::fs::rename(&tmp_path, &db_path)
+                    .map_err(|e| format!("[sqlcipher] Startup recovery rename failed: {e}"))?;
             }
         }
 

@@ -67,7 +67,7 @@ MoodHaven Journal is a **local-first desktop application** built on Tauri v2 (Ru
 | 2FA | totp-rs + native CTAP2/HID | TOTP + hardware keys |
 | Charts | Custom SVG | No charting library |
 | Logging | tauri-plugin-log + `src/lib/services/logger.ts` | Rotating file (prod), stderr (dev); `set_log_level` at runtime |
-| Testing | Vitest + Testing Library | 1,283 tests |
+| Testing | Vitest + Testing Library | 1,434 tests |
 | Build | Vite 8 + Tauri CLI | |
 
 ---
@@ -258,6 +258,24 @@ media_attachments (
   file_path    TEXT NOT NULL,           -- encrypted file in app_data_dir/media/
   thumbnail_path TEXT,
   created_at   TEXT NOT NULL
+)
+```
+
+### Activities
+
+```sql
+activities (
+  id           TEXT PRIMARY KEY,
+  name         TEXT UNIQUE NOT NULL,      -- normalised lowercase, 1–50 chars
+  emoji        TEXT NOT NULL,
+  is_custom    INTEGER NOT NULL DEFAULT 0, -- 0=predefined, 1=user-created
+  sort_order   INTEGER NOT NULL DEFAULT 0
+)
+
+entry_activities (
+  entry_id     TEXT REFERENCES journal_entries(id) ON DELETE CASCADE,
+  activity_id  TEXT REFERENCES activities(id) ON DELETE CASCADE,
+  PRIMARY KEY (entry_id, activity_id)
 )
 ```
 

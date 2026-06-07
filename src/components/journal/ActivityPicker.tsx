@@ -105,7 +105,7 @@ export function ActivityPicker({
                   aria-pressed={active}
                   className={`inline-flex items-center gap-1 pl-2.5 pr-1.5 py-1 rounded-l-full text-sm whitespace-nowrap transition-all duration-150 ${
                     active
-                      ? 'bg-violet-500 text-white ring-2 ring-l-violet-300 dark:ring-violet-700'
+                      ? 'bg-violet-500 text-white ring-2 ring-violet-300 dark:ring-violet-700'
                       : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
                   }`}
                 >

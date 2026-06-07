@@ -19,6 +19,7 @@
 //! `TrustedDevice` records (not sensitive; public keys only).
 
 use crate::commands::peer_identity::get_or_create_device_identity;
+use crate::AppLockState;
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use std::io::{BufRead, BufReader, Read, Write};
@@ -29,6 +30,8 @@ use std::sync::{
 };
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, State};
+
+use super::require_unlocked;
 
 const TOKEN_TTL_SECS: i64 = 300; // 5 minutes
 /// Lock out the pairing session after this many consecutive wrong PINs.
@@ -591,7 +594,9 @@ fn run_pairing_server(
 pub fn peer_generate_pairing_token(
     app: AppHandle,
     state: State<'_, PairingServerState>,
+    lock: State<'_, AppLockState>,
 ) -> Result<PairingTokenInfo, String> {
+    require_unlocked(&lock)?;
     // Reject if a lockout from a previous session is still active
     check_pairing_lockout(&app)?;
 
@@ -687,10 +692,12 @@ pub fn peer_generate_pairing_token(
 #[tauri::command]
 pub async fn peer_accept_pairing(
     app: AppHandle,
+    lock: State<'_, AppLockState>,
     target_host: String,
     peer_device_id: String,
     pin: String,
 ) -> Result<TrustedDevice, String> {
+    require_unlocked(&lock)?;
     let identity = get_or_create_device_identity(&app)?;
     // Derive the initiator's pairing port from their device_id (same formula as the server side)
     let pairing_port = pairing_port_for_device(&peer_device_id);
@@ -769,13 +776,22 @@ pub async fn peer_accept_pairing(
 
 /// Get all trusted (paired) devices.
 #[tauri::command]
-pub fn peer_get_trusted(app: AppHandle) -> Result<Vec<TrustedDevice>, String> {
+pub fn peer_get_trusted(
+    app: AppHandle,
+    lock: State<'_, AppLockState>,
+) -> Result<Vec<TrustedDevice>, String> {
+    require_unlocked(&lock)?;
     load_trusted_devices(&app)
 }
 
 /// Remove a paired device by device_id.
 #[tauri::command]
-pub fn peer_revoke_device(app: AppHandle, device_id: String) -> Result<(), String> {
+pub fn peer_revoke_device(
+    app: AppHandle,
+    lock: State<'_, AppLockState>,
+    device_id: String,
+) -> Result<(), String> {
+    require_unlocked(&lock)?;
     remove_trusted_device(&app, &device_id)
 }
 
@@ -783,7 +799,11 @@ pub fn peer_revoke_device(app: AppHandle, device_id: String) -> Result<(), Strin
 /// Does NOT join the thread — the cancel is fire-and-forget from the frontend's perspective.
 /// The next call to `peer_generate_pairing_token` will join before rebinding.
 #[tauri::command]
-pub fn peer_cancel_pairing(state: State<'_, PairingServerState>) -> Result<(), String> {
+pub fn peer_cancel_pairing(
+    state: State<'_, PairingServerState>,
+    lock: State<'_, AppLockState>,
+) -> Result<(), String> {
+    require_unlocked(&lock)?;
     if let Ok(mut g) = state.stop_tx.lock() {
         if let Some(tx) = g.take() {
             let _ = tx.send(());
@@ -799,6 +819,10 @@ pub fn peer_cancel_pairing(state: State<'_, PairingServerState>) -> Result<(), S
 
 /// Whether the pairing HTTP server is currently active.
 #[tauri::command]
-pub fn peer_pairing_is_active(state: State<'_, PairingServerState>) -> bool {
-    state.is_serving.load(Ordering::SeqCst)
+pub fn peer_pairing_is_active(
+    state: State<'_, PairingServerState>,
+    lock: State<'_, AppLockState>,
+) -> Result<bool, String> {
+    require_unlocked(&lock)?;
+    Ok(state.is_serving.load(Ordering::SeqCst))
 }

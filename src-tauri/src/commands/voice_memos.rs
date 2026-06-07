@@ -20,6 +20,8 @@ use crate::db::{self, Database, VoiceMemoRow};
 use crate::AppLockState;
 use rusqlite::params;
 use tauri::{AppHandle, Manager, State};
+
+use super::require_unlocked;
 use tauri_plugin_shell::ShellExt;
 use uuid::Uuid;
 
@@ -53,6 +55,11 @@ fn incoming_dir(app: &AppHandle) -> Result<std::path::PathBuf, String> {
 /// - `incoming_file`  — filename only (e.g. `"abc123.m4a"`), not a full path.
 ///   The full source path is `app_data_dir/voice_memos_incoming/<incoming_file>`.
 /// - `file_path` stored in DB is the relative path `voice_memos/<id>.m4a`.
+///
+/// Intentionally NOT gated by `require_unlocked`: the Wear OS bridge delivers
+/// memos while the desktop app is locked. This path never decrypts journal
+/// content; `timestamp`/`duration_ms`/`health_json` are unauthenticated
+/// metadata from the watch and are stored as-is.
 #[tauri::command]
 pub fn store_voice_memo(
     app: AppHandle,
@@ -66,6 +73,10 @@ pub fn store_voice_memo(
     if id.is_empty() {
         return Err("store_voice_memo: id must not be empty".to_string());
     }
+    // `id` is interpolated into the destination filename, so it must be free of
+    // path separators / traversal — the watch bridge is untrusted input and this
+    // command is intentionally pre-auth (runs while the app is locked).
+    validate_incoming_filename(&id).map_err(|e| format!("store_voice_memo: invalid id: {e}"))?;
     validate_incoming_filename(&incoming_file).map_err(|e| format!("store_voice_memo: {e}"))?;
 
     let src = incoming_dir(&app)?.join(&incoming_file);
@@ -73,6 +84,11 @@ pub fn store_voice_memo(
     let dest_filename = format!("{}.m4a", id);
     let dest = dest_dir.join(&dest_filename);
     let rel_path = format!("voice_memos/{}", dest_filename);
+
+    // Defense in depth: ensure the resolved destination stays inside voice_memos/.
+    if dest.parent() != Some(dest_dir.as_path()) {
+        return Err("store_voice_memo: id escapes voice_memos directory".to_string());
+    }
 
     if !src.exists() {
         return Err(format!(
@@ -109,20 +125,33 @@ pub fn store_voice_memo(
 #[tauri::command]
 pub fn list_voice_memos(
     db: State<Database>,
+    lock: State<'_, AppLockState>,
     limit: Option<i32>,
 ) -> Result<Vec<VoiceMemoRow>, String> {
+    require_unlocked(&lock)?;
     db::list_voice_memos(&db, limit)
 }
 
 /// Get a single voice memo by id.
 #[tauri::command]
-pub fn get_voice_memo(db: State<Database>, id: String) -> Result<Option<VoiceMemoRow>, String> {
+pub fn get_voice_memo(
+    db: State<Database>,
+    lock: State<'_, AppLockState>,
+    id: String,
+) -> Result<Option<VoiceMemoRow>, String> {
+    require_unlocked(&lock)?;
     db::get_voice_memo(&db, &id)
 }
 
 /// Delete a voice memo record and its audio file.
 #[tauri::command]
-pub fn delete_voice_memo(app: AppHandle, db: State<Database>, id: String) -> Result<(), String> {
+pub fn delete_voice_memo(
+    app: AppHandle,
+    db: State<Database>,
+    lock: State<'_, AppLockState>,
+    id: String,
+) -> Result<(), String> {
+    require_unlocked(&lock)?;
     // Look up file path before deleting the row
     let row = db::get_voice_memo(&db, &id)?;
 
@@ -147,9 +176,11 @@ pub fn delete_voice_memo(app: AppHandle, db: State<Database>, id: String) -> Res
 #[tauri::command]
 pub fn patch_voice_memo_transcription(
     db: State<Database>,
+    lock: State<'_, AppLockState>,
     id: String,
     transcription: String,
 ) -> Result<(), String> {
+    require_unlocked(&lock)?;
     db::patch_voice_memo_transcription(&db, &id, &transcription)
 }
 
@@ -169,9 +200,11 @@ pub fn patch_voice_memo_transcription(
 pub async fn transcribe_voice_memo(
     app: AppHandle,
     db: State<'_, Database>,
+    lock: State<'_, AppLockState>,
     id: String,
     model: String,
 ) -> Result<String, String> {
+    require_unlocked(&lock)?;
     // 1. Look up the stored file path
     let row = db::get_voice_memo(&db, &id)?
         .ok_or_else(|| format!("transcribe_voice_memo: memo not found: {}", id))?;
@@ -237,9 +270,11 @@ pub async fn transcribe_voice_memo(
 #[tauri::command]
 pub fn link_voice_memo_to_entry(
     db: State<Database>,
+    lock: State<'_, AppLockState>,
     memo_id: String,
     entry_id: String,
 ) -> Result<(), String> {
+    require_unlocked(&lock)?;
     db::link_voice_memo_to_entry(&db, &memo_id, &entry_id)
 }
 

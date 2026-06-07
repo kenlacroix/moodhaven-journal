@@ -25,6 +25,8 @@ Local peer sync allows two MoodHaven Journal desktop instances on the same LAN t
 | LWW bypass via far-future timestamp | Peer timestamps rejected if > 10 seconds ahead of local clock (`MAX_FUTURE_SECS`) |
 | Password mismatch between devices | Entry blobs stored correctly; frontend decryption fails gracefully — no data corruption |
 | Man-in-the-middle during pairing | PIN must be read off Device A and typed on Device B (out-of-band verification) |
+| Trusted peer pulls the whole DB without consent | Full-DB restore gated behind a user-armed, one-shot, 5-minute window that is cleared on lock (see Layer 4 → Full-DB Restore Consent Gate) |
+| Sync driven while session is locked | `peer_sync_now`, `peer_full_restore`, `peer_get_sync_states`, and the sync helpers (`upsert_entry_from_sync`, `get_entry_timestamps`) require an unlocked session server-side (v1.8.0) |
 
 ---
 
@@ -164,16 +166,9 @@ session_key = SHA-256(
 
 The X25519 shared secret is mixed with both static Ed25519 public keys so that device identity is bound into the session key. Compromising the ephemeral secret of one session does not expose any other session.
 
-**v1 (fallback — no forward secrecy):**
+**v1 (removed as of v1.8.0):**
 
-Used automatically if the connecting peer does not send `eph_pub` (pre-v2 client). Included for backwards compatibility only; should be removed once all peers are on v2.
-
-```
-session_key = SHA-256(
-    "moodhaven-sync-v1:" ||
-    sort_lexicographic([static_pub_A, static_pub_B])
-)
-```
+The v1 static-key fallback (no forward secrecy) has been removed. Peers that omit `eph_pub` in HELLO are rejected immediately with an upgrade message. All active clients must use v2.
 
 ### Authentication Handshake
 
@@ -260,6 +255,32 @@ Client                                  Server
 - Media attachments (planned future phase)
 - Per-device preferences: `theme`, all `appearance.*` except `compactMode` and `animationsEnabled`
 
+### Full-DB Restore Consent Gate (v1.8.0)
+
+Incremental sync (above) only exchanges entries newer than the manifest diff. A **full-DB restore** is a separate path used when setting up a brand-new device: the new device sends a `RestoreRequest` as its first encrypted message and the source device streams its *entire* SQLCipher database file back in 4 MiB chunks.
+
+Before v1.8.0, any **trusted** peer could trigger this and pull the whole database. Trust established for routine sync is not the same as authorization to exfiltrate everything, so a lost-but-still-trusted or compromised peer could silently download all journal data.
+
+v1.8.0 adds an explicit, out-of-band **arm gate** (`RestoreArmState`):
+
+- The source device serves a restore **only if** the user has explicitly armed it, via Settings → Devices → "Set up a new device". This sets `peer_arm_restore`.
+- The arm window is:
+  - **One-shot** — consumed by the first restore (`consume_if_armed()` clears the flag), so each arming permits exactly one restore.
+  - **Time-limited** — 5-minute TTL (`RESTORE_ARM_TTL = 300s`); stale windows are treated as disarmed.
+  - **Cleared on lock** — `lock_app` disarms restore, so an armed-then-locked device cannot serve a restore while locked.
+- A `RestoreRequest` received while unarmed is rejected with an error message pointing the user to the "Set up a new device" control, and the connection is closed. The rejection is logged with the requesting device ID.
+- The requesting peer must still pass the normal Ed25519 challenge/signature authentication before reaching the restore path — the arm gate is *in addition to* device trust, not a replacement for it.
+
+Commands: `peer_arm_restore`, `peer_disarm_restore`, `peer_restore_is_armed` (all require an unlocked session). The pending restore is written to `moodhaven_restore.pending` with a `.sha256` integrity check and applied on the next restart.
+
+> **Known gap (in progress):** the restore streams the SQLCipher database file but does not yet transfer the source device's `db_state.json` salt alongside it. A restored device can therefore be unable to derive the DB key on first unlock until this is addressed.
+
+### Accepted-Socket Blocking Mode (v1.8.0)
+
+The sync server's listener runs in non-blocking mode so its accept loop can poll a stop channel. On Windows, accepted sockets **inherited** the listener's non-blocking flag, so every post-handshake read returned `WouldBlock` the instant data was not already buffered — dropping legitimate peers mid-sync and making cross-device sync from a Windows host unreliable.
+
+v1.8.0 forces each accepted stream back into **blocking** mode immediately after `accept()`; the connection handler relies on `read_timeout` for liveness instead. This is a reliability fix, not a confidentiality change — but unreliable sync pushes users toward less-private workarounds, so it is in scope for this document.
+
 ---
 
 ## Password Mismatch Behaviour
@@ -290,10 +311,11 @@ Manual sync is also available via the Devices tab in Settings.
 
 When auditing the sync implementation, focus on:
 
-- `src-tauri/src/commands/peer_sync_engine/crypto.rs` — key derivation (v1 + v2), AES-GCM frame encrypt/decrypt
+- `src-tauri/src/commands/peer_sync_engine/crypto.rs` — key derivation (v2 ECDH only; v1 removed in v1.8.0), AES-GCM frame encrypt/decrypt
 - `src-tauri/src/commands/peer_sync_engine/connection.rs` — TCP server, handshake, authentication flow
 - `src-tauri/src/commands/peer_sync_engine/conflict.rs` — LWW upserts, timestamp validation, settings allowlist and merge
 - `src-tauri/src/commands/peer_sync_engine/protocol.rs` — wire message types, port formula
+- `src-tauri/src/commands/peer_sync_engine/mod.rs` — `RestoreArmState` (full-DB restore consent gate), restore stream handler, accepted-socket blocking mode, `peer_arm_restore`/`peer_disarm_restore`/`peer_restore_is_armed`
 - `src-tauri/src/commands/peer_pairing.rs` — PIN generation, key exchange, trust storage
 - `src-tauri/src/commands/peer_identity.rs` — key generation, persistence
 - `src-tauri/src/commands/peer_discovery.rs` — mDNS broadcast content

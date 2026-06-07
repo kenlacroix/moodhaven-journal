@@ -61,6 +61,8 @@ pub fn verify_password(
     db_key_state: State<'_, DbKeyState>,
     password: String,
 ) -> Result<bool, String> {
+    // Wrap immediately so the plaintext is wiped on every exit path (incl. early returns).
+    let password = Zeroizing::new(password);
     if password.is_empty() {
         return Err("empty password".to_string());
     }

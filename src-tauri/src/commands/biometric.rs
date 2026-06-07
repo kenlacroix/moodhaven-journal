@@ -25,8 +25,8 @@
 use crate::AppLockState;
 use serde::Serialize;
 
-const KEYRING_SERVICE: &str = "com.moodhaven.app";
-const KEYRING_ACCOUNT: &str = "desktop_biometric_session";
+use super::KEYRING_SERVICE;
+pub(crate) const KEYRING_ACCOUNT: &str = "desktop_biometric_session";
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -64,6 +64,7 @@ pub fn biometric_store_session(
     lock: tauri::State<'_, AppLockState>,
     password: String,
 ) -> Result<(), String> {
+    let password = zeroize::Zeroizing::new(password);
     if lock.is_locked() {
         return Err("Session is locked".to_string());
     }

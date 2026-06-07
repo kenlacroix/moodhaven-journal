@@ -5,6 +5,8 @@
 use crate::AppLockState;
 use tauri::State;
 
+pub const KEYRING_SERVICE: &str = "com.moodhaven.app";
+
 /// Shared lock guard used by all command modules.
 pub(crate) fn require_unlocked(lock: &State<'_, AppLockState>) -> Result<(), String> {
     if lock.is_locked() {
@@ -67,3 +69,33 @@ pub use two_factor::*;
 pub use updater::*;
 pub use voice_memos::*;
 pub use writer_window::*;
+
+#[cfg(test)]
+mod tests {
+    use crate::AppLockState;
+
+    #[test]
+    fn new_lock_state_starts_locked() {
+        let s = AppLockState::new();
+        assert!(
+            s.is_locked(),
+            "app must start locked until password is verified"
+        );
+    }
+
+    #[test]
+    fn lock_state_reports_unlocked_after_unlock() {
+        let s = AppLockState::new();
+        *s.0.lock().unwrap() = false;
+        assert!(!s.is_locked());
+    }
+
+    #[test]
+    fn lock_state_can_be_re_locked() {
+        let s = AppLockState::new();
+        *s.0.lock().unwrap() = false;
+        assert!(!s.is_locked());
+        *s.0.lock().unwrap() = true;
+        assert!(s.is_locked());
+    }
+}

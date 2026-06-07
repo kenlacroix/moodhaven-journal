@@ -48,9 +48,6 @@
 //! using their device private key, proving possession before any data is exchanged.
 //! `session_key = SHA-256("moodhaven-sync-v2:" || ecdh_shared || sorted(pub_A, pub_B))`
 //!
-//! **v1 (fallback, no forward secrecy):** Used when the peer omits `eph_pub`.
-//! `session_key = SHA-256("moodhaven-sync-v1:" || sorted(pub_A, pub_B))`
-//!
 //! Frame format: [4-byte big-endian length][12-byte nonce][AES-256-GCM ciphertext]
 
 mod conflict;
@@ -72,13 +69,15 @@ use std::sync::{
     mpsc, Mutex,
 };
 use std::thread::{self, JoinHandle};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager, State};
 use x25519_dalek::{EphemeralSecret, PublicKey as X25519PublicKey};
 
 use crate::commands::peer_identity::get_or_create_device_identity;
 use crate::commands::peer_pairing::{load_trusted_devices, remove_trusted_device};
+use crate::commands::require_unlocked;
 use crate::db::{Database, JournalEntryRow};
+use crate::AppLockState;
 
 // ── Managed state ─────────────────────────────────────────────────────────────
 
@@ -107,6 +106,97 @@ impl SyncEngineState {
 unsafe impl Send for SyncEngineState {}
 unsafe impl Sync for SyncEngineState {}
 
+/// How long a "restore armed" window stays open before it auto-expires.
+const RESTORE_ARM_TTL: Duration = Duration::from_secs(300); // 5 minutes
+
+/// Consent gate for full-DB restore serving.
+///
+/// A trusted peer can complete the Ed25519 handshake using a previously-paired
+/// key, so trust alone is not sufficient authorization to hand over the entire
+/// database. The serving device's user must explicitly arm restore (Settings →
+/// Devices → "Set up a new device") within a short window before any
+/// `RestoreRequest` is honored. The flag is single-use and time-limited, so a
+/// lost/compromised-but-still-trusted peer cannot silently pull the full DB.
+#[derive(Default)]
+pub struct RestoreArmState {
+    armed_at: Mutex<Option<Instant>>,
+}
+
+impl RestoreArmState {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Returns true and consumes the arm window if it is currently armed and fresh.
+    /// One-shot: a successful check disarms so each arming permits a single restore.
+    fn consume_if_armed(&self) -> bool {
+        let mut slot = match self.armed_at.lock() {
+            Ok(s) => s,
+            Err(_) => return false,
+        };
+        match *slot {
+            Some(t) if t.elapsed() <= RESTORE_ARM_TTL => {
+                *slot = None;
+                true
+            }
+            _ => {
+                *slot = None; // clear stale
+                false
+            }
+        }
+    }
+
+    fn is_armed(&self) -> bool {
+        self.armed_at
+            .lock()
+            .ok()
+            .and_then(|s| *s)
+            .map(|t| t.elapsed() <= RESTORE_ARM_TTL)
+            .unwrap_or(false)
+    }
+
+    /// Clear any armed window. Called on lock so an armed-then-locked device does
+    /// not keep serving full-DB restores while the session is locked.
+    pub fn clear(&self) {
+        if let Ok(mut slot) = self.armed_at.lock() {
+            *slot = None;
+        }
+    }
+}
+
+/// Arm the device to serve one full-DB restore to a new device within the next
+/// 5 minutes. Requires an unlocked session.
+#[tauri::command]
+pub fn peer_arm_restore(
+    lock: State<'_, AppLockState>,
+    arm: State<'_, RestoreArmState>,
+) -> Result<(), String> {
+    require_unlocked(&lock)?;
+    *arm.armed_at.lock().map_err(|e| e.to_string())? = Some(Instant::now());
+    log::info!(
+        "[restore] Full-DB restore armed for {}s",
+        RESTORE_ARM_TTL.as_secs()
+    );
+    Ok(())
+}
+
+/// Cancel a pending restore-armed window. Requires an unlocked session.
+#[tauri::command]
+pub fn peer_disarm_restore(
+    lock: State<'_, AppLockState>,
+    arm: State<'_, RestoreArmState>,
+) -> Result<(), String> {
+    require_unlocked(&lock)?;
+    *arm.armed_at.lock().map_err(|e| e.to_string())? = None;
+    Ok(())
+}
+
+/// Report whether restore is currently armed (for UI state).
+#[tauri::command]
+pub fn peer_restore_is_armed(arm: State<'_, RestoreArmState>) -> Result<bool, String> {
+    Ok(arm.is_armed())
+}
+
 // ── Full-restore server handler ───────────────────────────────────────────────
 
 /// Stream the local SQLite DB file to the requesting client in 4 MB chunks.
@@ -125,6 +215,69 @@ unsafe impl Sync for SyncEngineState {}
 /// slow Wi-Fi or large databases.
 const RESTORE_CHUNK_BYTES: usize = 4 * 1024 * 1024; // 4 MiB
 
+/// Returned to callers when a peer omits `eph_pub` in the handshake.
+/// The v1 static-key fallback was removed in v1.8.0 (no forward secrecy).
+const V1_FALLBACK_REMOVED_MSG: &str =
+    "Server did not send eph_pub — v1 static-key fallback has been removed. Peer must be upgraded to v2.";
+
+/// Expected decoded length (bytes) of the PBKDF2 password salt. The frontend
+/// generates it as `SALT_LENGTH = 16` (128 bits) in `crypto.ts`; the same length
+/// is used for the at-rest db_state.json salt. A restore that advertises any other
+/// length is rejected so a compromised source cannot poison db_state.json.
+const RESTORE_SALT_LEN: usize = 16;
+
+/// Validate the `encrypted`/`salt` pair received in `RestoreEnd` before it is
+/// written to the restored device's authoritative db_state.json.
+///
+/// A trusted-but-compromised source controls these fields, so they must be
+/// checked at receipt:
+/// - `encrypted == false` ⇒ `salt` MUST be `None`.
+/// - `encrypted == true`  ⇒ `salt` MUST be `Some`, decode as standard base64,
+///   and decode to exactly `RESTORE_SALT_LEN` bytes.
+///
+/// Rejecting `encrypted:true` + `salt:None` outright avoids reproducing the
+/// "encryption record missing" permanent lockout this path is meant to prevent.
+pub(crate) fn validate_restore_salt(encrypted: bool, salt: &Option<String>) -> Result<(), String> {
+    use base64::Engine as _;
+    match (encrypted, salt) {
+        (false, None) => Ok(()),
+        (false, Some(_)) => {
+            Err("Restore rejected: unencrypted source must not supply a salt".to_string())
+        }
+        (true, None) => Err(
+            "Restore rejected: encrypted source supplied no salt (would cause permanent lockout)"
+                .to_string(),
+        ),
+        (true, Some(s)) => {
+            let decoded = base64::engine::general_purpose::STANDARD
+                .decode(s)
+                .map_err(|_| "Restore rejected: salt is not valid base64".to_string())?;
+            if decoded.len() != RESTORE_SALT_LEN {
+                return Err(format!(
+                    "Restore rejected: salt decodes to {} bytes, expected {RESTORE_SALT_LEN}",
+                    decoded.len()
+                ));
+            }
+            Ok(())
+        }
+    }
+}
+
+/// Compute the integrity digest that binds the restored DB bytes to the
+/// db_state.json salt so a verified DB can never be paired with a poison salt.
+///
+/// digest = hex(SHA-256(db_bytes || dbstate_json))
+///
+/// The writer (`do_full_restore_client`) and BOTH verifiers (the lib.rs startup
+/// promotion block and `peer_apply_and_restart`) must compute this identically.
+pub fn restore_integrity_digest(db_bytes: &[u8], dbstate_json: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+    let mut hasher = Sha256::new();
+    hasher.update(db_bytes);
+    hasher.update(dbstate_json);
+    hex::encode(hasher.finalize())
+}
+
 fn do_serve_restore(
     app: &AppHandle,
     stream: &mut TcpStream,
@@ -142,6 +295,12 @@ fn do_serve_restore(
         std::fs::read(&db_path).map_err(|e| format!("Failed to read DB for restore: {e}"))?;
     let total_bytes = db_bytes.len() as u64;
     let total_chunks = db_bytes.len().div_ceil(RESTORE_CHUNK_BYTES);
+
+    // Read the source's encryption state so the restored device can write a
+    // matching db_state.json. Without the salt the restored device cannot derive
+    // the SQLCipher key and could never unlock. The salt is not secret (it is
+    // already public in db_state.json on every device that shares this password).
+    let source_state = crate::db::read_db_state(&db_path);
 
     log::info!(
         "[restore] Serving DB ({} bytes, {} chunks) to {}",
@@ -184,13 +343,16 @@ fn do_serve_restore(
         );
     }
 
-    // Signal completion.
+    // Signal completion, including the source's encryption state + salt so the
+    // restored device can derive the same SQLCipher key.
     write_msg_enc(
         stream,
         key,
         &Msg::RestoreEnd {
             total_bytes,
             chunks: total_chunks as u64,
+            encrypted: source_state.encrypted,
+            salt: source_state.salt.clone(),
         },
     )?;
 
@@ -290,7 +452,9 @@ fn do_full_restore_client(app: &AppHandle, peer_device_id: &str, host: &str) -> 
             &my_identity.public_key,
             &peer_device.public_key,
         )?,
-        None => derive_sync_key_static(&my_identity.public_key, &peer_device.public_key),
+        None => {
+            return Err(V1_FALLBACK_REMOVED_MSG.to_string());
+        }
     };
 
     log::info!("[restore] Connected to {server_name}, requesting full DB");
@@ -306,11 +470,26 @@ fn do_full_restore_client(app: &AppHandle, peer_device_id: &str, host: &str) -> 
         .map_err(|e| format!("app_data_dir: {e}"))?;
     let pending_path = app_data.join("moodhaven_restore.pending");
     let tmp_path = app_data.join("moodhaven_restore.tmp");
+    let checksum_path = app_data.join("moodhaven_restore.pending.sha256");
+    let dbstate_path = app_data.join("moodhaven_restore.pending.dbstate");
+
+    // Finding 3 (LOW): delete any pre-existing restore companions so a new restore
+    // can never inherit a previous run's checksum or dbstate. These files are
+    // co-located by filename only, so a stale companion would otherwise be applied
+    // against the wrong DB.
+    let _ = std::fs::remove_file(&pending_path);
+    let _ = std::fs::remove_file(&tmp_path);
+    let _ = std::fs::remove_file(&checksum_path);
+    let _ = std::fs::remove_file(&dbstate_path);
 
     let mut file = std::fs::File::create(&tmp_path).map_err(|e| format!("create tmp file: {e}"))?;
 
     let mut bytes_received: u64 = 0;
     let mut chunks_received: u64 = 0;
+    // Source encryption state, captured from RestoreEnd. Persisted alongside the
+    // pending DB so peer_apply_and_restart can write db_state.json after promotion.
+    let restore_encrypted;
+    let restore_salt: Option<String>;
 
     loop {
         match read_msg_enc(&mut stream, &key)? {
@@ -352,11 +531,25 @@ fn do_full_restore_client(app: &AppHandle, peer_device_id: &str, host: &str) -> 
             Msg::RestoreEnd {
                 total_bytes,
                 chunks,
+                encrypted,
+                salt,
             } => {
+                // Finding 1 (HIGH): a trusted-but-compromised source controls these
+                // fields. Validate before persisting anything; on violation, clean up
+                // the tmp file (no companions written yet) and abort the restore.
+                if let Err(e) = validate_restore_salt(encrypted, &salt) {
+                    drop(file);
+                    let _ = std::fs::remove_file(&tmp_path);
+                    log::warn!("[restore] {e}");
+                    return Err(e);
+                }
+                restore_encrypted = encrypted;
+                restore_salt = salt;
                 log::info!(
-                    "[restore] Transfer complete: {} bytes in {} chunks",
+                    "[restore] Transfer complete: {} bytes in {} chunks (encrypted={})",
                     total_bytes,
-                    chunks
+                    chunks,
+                    restore_encrypted
                 );
                 break;
             }
@@ -373,18 +566,31 @@ fn do_full_restore_client(app: &AppHandle, peer_device_id: &str, host: &str) -> 
         .map_err(|e| format!("flush restore file: {e}"))?;
     drop(file);
 
-    // Compute SHA-256 of the received file and write a companion checksum so
-    // peer_apply_and_restart can verify it hasn't been tampered with on disk.
-    {
-        use sha2::{Digest, Sha256};
-        let data =
-            std::fs::read(&tmp_path).map_err(|e| format!("read restore tmp for hash: {e}"))?;
-        let digest = hex::encode(Sha256::digest(&data));
-        let checksum_path = app_data.join("moodhaven_restore.pending.sha256");
-        std::fs::write(&checksum_path, &digest)
-            .map_err(|e| format!("write restore checksum: {e}"))?;
-        log::info!("[restore] SHA-256 of pending DB: {digest}");
-    }
+    // Serialize the source's encryption state. Persisted alongside the pending DB
+    // so peer_apply_and_restart can write a matching db_state.json after promoting
+    // the DB. Without this, the restored device has the encrypted DB but no salt
+    // and can never derive the key. The salt has already been validated above.
+    let dbstate = crate::db::DbStateFile {
+        encrypted: restore_encrypted,
+        salt: restore_salt,
+    };
+    let dbstate_json =
+        serde_json::to_vec(&dbstate).map_err(|e| format!("serialize restore dbstate: {e}"))?;
+
+    // Finding 2 (MEDIUM): bind the dbstate salt into the integrity checksum. The
+    // digest covers `db_bytes || dbstate_json` so a verified DB can never be paired
+    // with a poison salt by a local attacker or on-disk tamper. Both verifiers
+    // recompute this exact value before applying the restore.
+    let db_bytes =
+        std::fs::read(&tmp_path).map_err(|e| format!("read restore tmp for hash: {e}"))?;
+    let digest = restore_integrity_digest(&db_bytes, &dbstate_json);
+    drop(db_bytes);
+
+    // Write the dbstate companion, then the checksum that binds it.
+    std::fs::write(&dbstate_path, &dbstate_json)
+        .map_err(|e| format!("write restore dbstate: {e}"))?;
+    std::fs::write(&checksum_path, &digest).map_err(|e| format!("write restore checksum: {e}"))?;
+    log::info!("[restore] SHA-256 of pending DB + dbstate: {digest}");
 
     // Atomically move tmp → pending.
     std::fs::rename(&tmp_path, &pending_path).map_err(|e| format!("rename restore file: {e}"))?;
@@ -507,14 +713,25 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
     }
     log::info!("[sync] Server: {client_device_id} authenticated via Ed25519 HELLO challenge");
 
-    // Derive session key: ECDH if client supports v2, else legacy static key
+    // Derive session key: v2 X25519 ECDH required; reject peers that omit eph_pub.
     let key = match client_eph_pub {
         Some(ref hex) => {
             derive_sync_key_ecdh(my_eph_secret, hex, &my_identity.public_key, &client_pubkey)?
         }
         None => {
-            log::warn!("[sync] Server: peer sent no eph_pub — using legacy static key");
-            derive_sync_key_static(&my_identity.public_key, &client_pubkey)
+            log::warn!(
+                "[sync] Server: peer sent no eph_pub — v1 static-key fallback removed, closing"
+            );
+            let _ = write_msg(
+                &mut stream,
+                &Msg::Err {
+                    msg: "v1 static-key protocol is no longer supported. Upgrade your MoodHaven client.".to_string(),
+                },
+            );
+            let _ = stream.shutdown(std::net::Shutdown::Both);
+            return Err(format!(
+                "[sync] Rejected {client_device_id}: no eph_pub (v1 fallback removed)"
+            ));
         }
     };
 
@@ -533,6 +750,30 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
 
     // ── Full-restore path ─────────────────────────────────────────────────────
     if matches!(first_msg, Msg::RestoreRequest) {
+        // Trust alone is not authorization to hand over the whole DB. The serving
+        // user must have explicitly armed restore within the last RESTORE_ARM_TTL.
+        let armed = app
+            .try_state::<RestoreArmState>()
+            .map(|s| s.consume_if_armed())
+            .unwrap_or(false);
+        if !armed {
+            log::warn!(
+                "[restore] Rejected RestoreRequest from {client_device_id}: device not armed for restore"
+            );
+            let _ = write_msg_enc(
+                &mut stream,
+                &key,
+                &Msg::Err {
+                    msg: "Restore not authorized. On the source device, choose \
+                          Settings → Devices → Set up a new device to allow restore."
+                        .to_string(),
+                },
+            );
+            let _ = stream.shutdown(std::net::Shutdown::Both);
+            return Err(format!(
+                "[restore] Rejected unarmed RestoreRequest from {client_device_id}"
+            ));
+        }
         return do_serve_restore(app, &mut stream, &key, &client_device_id, &client_name);
     }
 
@@ -989,6 +1230,13 @@ fn run_sync_server_loop(app: AppHandle, listener: TcpListener, stop_rx: mpsc::Re
         match listener.accept() {
             Ok((stream, addr)) => {
                 log::debug!("[sync] Incoming connection from {addr}");
+                // The accepted socket inherits the listener's non-blocking mode on
+                // Windows, so every read returns WouldBlock the instant data isn't
+                // already buffered — dropping legitimate peers mid-handshake. Force
+                // blocking; the handler relies on read_timeout for liveness.
+                if let Err(e) = stream.set_nonblocking(false) {
+                    log::warn!("[sync] Failed to set accepted stream blocking: {e}");
+                }
                 let app_clone = app.clone();
                 thread::spawn(move || handle_sync_connection(app_clone, stream));
             }
@@ -1094,14 +1342,13 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
         log::debug!("[sync] Client: sent Ed25519 AUTH response");
     }
 
-    // Derive session key: ECDH if server supports v2, else legacy static key
+    // Derive session key: v2 X25519 ECDH required; reject servers that omit eph_pub.
     let key = match server_eph_pub {
         Some(ref hex) => {
             derive_sync_key_ecdh(my_eph_secret, hex, &my_identity.public_key, &peer_pubkey)?
         }
         None => {
-            log::warn!("[sync] Client: server sent no eph_pub — using legacy static key");
-            derive_sync_key_static(&my_identity.public_key, &peer_pubkey)
+            return Err(V1_FALLBACK_REMOVED_MSG.to_string());
         }
     };
 
@@ -1638,7 +1885,13 @@ pub fn peer_start_sync_server(
 /// Initiate a sync with a trusted peer (client side).
 /// Verifies the peer is trusted, then spawns a background thread.
 #[tauri::command]
-pub fn peer_sync_now(app: AppHandle, device_id: String, host: String) -> Result<(), String> {
+pub fn peer_sync_now(
+    app: AppHandle,
+    lock: State<'_, AppLockState>,
+    device_id: String,
+    host: String,
+) -> Result<(), String> {
+    require_unlocked(&lock)?;
     // Verify trusted
     let trusted = load_trusted_devices(&app)?;
     if !trusted.iter().any(|d| d.device_id == device_id) {
@@ -1658,7 +1911,11 @@ pub struct PeerSyncStateRecord {
 }
 
 #[tauri::command]
-pub fn peer_get_sync_states(app: AppHandle) -> Result<Vec<PeerSyncStateRecord>, String> {
+pub fn peer_get_sync_states(
+    app: AppHandle,
+    lock: State<'_, AppLockState>,
+) -> Result<Vec<PeerSyncStateRecord>, String> {
+    require_unlocked(&lock)?;
     let db = app
         .try_state::<Database>()
         .ok_or_else(|| "No DB state".to_string())?;
@@ -1690,7 +1947,13 @@ pub fn peer_get_sync_states(app: AppHandle) -> Result<Vec<PeerSyncStateRecord>, 
 /// Completion is signalled via `peer:restore_ready`.
 /// On completion the frontend should call `peer_apply_and_restart`.
 #[tauri::command]
-pub fn peer_full_restore(app: AppHandle, device_id: String, host: String) -> Result<(), String> {
+pub fn peer_full_restore(
+    app: AppHandle,
+    lock: State<'_, AppLockState>,
+    device_id: String,
+    host: String,
+) -> Result<(), String> {
+    require_unlocked(&lock)?;
     // Verify trusted
     let trusted = load_trusted_devices(&app)?;
     if !trusted.iter().any(|d| d.device_id == device_id) {
@@ -1720,24 +1983,38 @@ pub fn peer_apply_and_restart(app: AppHandle) -> Result<(), String> {
     let parent = db_path.parent().ok_or("no parent dir")?;
     let pending = parent.join("moodhaven_restore.pending");
     let checksum_path = parent.join("moodhaven_restore.pending.sha256");
+    let dbstate_path = parent.join("moodhaven_restore.pending.dbstate");
 
     if !pending.exists() {
         return Err("No pending restore file found".to_string());
     }
 
-    // Verify SHA-256 integrity before applying.
+    // Verify integrity before applying. Finding 2 (MEDIUM): the checksum binds the
+    // DB bytes to the dbstate salt, so the salt is verified before it can ever be
+    // written to db_state.json.
     if checksum_path.exists() {
-        use sha2::{Digest, Sha256};
         let expected = std::fs::read_to_string(&checksum_path)
             .map_err(|e| format!("read restore checksum: {e}"))?;
         let expected = expected.trim();
         let data =
             std::fs::read(&pending).map_err(|e| format!("read pending restore for verify: {e}"))?;
-        let actual = hex::encode(Sha256::digest(&data));
-        if actual != expected {
-            // Remove both files to avoid leaving a corrupt pending restore.
+        // The dbstate companion is part of the integrity envelope; its absence means
+        // the checksum can't be reproduced. Treat as tamper.
+        let dbstate_json = std::fs::read(&dbstate_path)
+            .map_err(|e| format!("read restore dbstate for verify: {e}"))?;
+        let actual = restore_integrity_digest(&data, &dbstate_json);
+        // Re-validate the salt independently of the bound checksum (defence in depth).
+        let salt_check = serde_json::from_slice::<crate::db::DbStateFile>(&dbstate_json)
+            .map_err(|e| format!("parse restore dbstate: {e}"))
+            .and_then(|st| validate_restore_salt(st.encrypted, &st.salt));
+        if actual != expected || salt_check.is_err() {
+            // Remove the pending files to avoid leaving a corrupt restore.
             let _ = std::fs::remove_file(&pending);
             let _ = std::fs::remove_file(&checksum_path);
+            let _ = std::fs::remove_file(&dbstate_path);
+            if let Err(e) = salt_check {
+                return Err(format!("Restore aborted: {e}"));
+            }
             return Err(format!(
                 "Restore file integrity check failed (expected {expected}, got {actual}) — aborted"
             ));
@@ -1820,25 +2097,6 @@ mod tests {
             session_id: None,
             word_count: None,
         }
-    }
-
-    // ── Key derivation ────────────────────────────────────────────────────────
-
-    #[test]
-    fn key_derivation_static_symmetric() {
-        let key_ab = derive_sync_key_static("pubkey_a", "pubkey_b");
-        let key_ba = derive_sync_key_static("pubkey_b", "pubkey_a");
-        assert_eq!(key_ab, key_ba, "static key must be symmetric");
-    }
-
-    #[test]
-    fn key_derivation_different_peers_differ() {
-        let key_ab = derive_sync_key_static("pubkey_a", "pubkey_b");
-        let key_ac = derive_sync_key_static("pubkey_a", "pubkey_c");
-        assert_ne!(
-            key_ab, key_ac,
-            "different peer keys must yield different transport keys"
-        );
     }
 
     // ── LWW upsert logic ──────────────────────────────────────────────────────
@@ -1927,5 +2185,66 @@ mod tests {
             )
             .unwrap();
         assert_eq!(count, 0, "rollback must leave no partial data");
+    }
+
+    // ── Restore salt validation (PT10 Finding 1) ──────────────────────────────
+
+    #[test]
+    fn restore_salt_unencrypted_none_ok() {
+        // Honest unencrypted source: encrypted=false + salt=None must pass.
+        assert!(validate_restore_salt(false, &None).is_ok());
+    }
+
+    #[test]
+    fn restore_salt_encrypted_valid_16_byte_ok() {
+        // The real on-disk salt decodes to 16 bytes — must pass.
+        let salt = Some("M2sEcsHxYyVyJl3UGquc9w==".to_string());
+        assert!(validate_restore_salt(true, &salt).is_ok());
+    }
+
+    #[test]
+    fn restore_salt_unencrypted_with_salt_rejected() {
+        let salt = Some("M2sEcsHxYyVyJl3UGquc9w==".to_string());
+        assert!(validate_restore_salt(false, &salt).is_err());
+    }
+
+    #[test]
+    fn restore_salt_encrypted_none_rejected() {
+        // Reproduces the "encryption record missing" lockout — must be rejected.
+        assert!(validate_restore_salt(true, &None).is_err());
+    }
+
+    #[test]
+    fn restore_salt_encrypted_bad_base64_rejected() {
+        let salt = Some("!!!not base64!!!".to_string());
+        assert!(validate_restore_salt(true, &salt).is_err());
+    }
+
+    #[test]
+    fn restore_salt_encrypted_wrong_length_rejected() {
+        use base64::Engine as _;
+        // 8 bytes instead of 16 — wrong length must be rejected.
+        let short = base64::engine::general_purpose::STANDARD.encode([0u8; 8]);
+        assert!(validate_restore_salt(true, &Some(short)).is_err());
+        // 32 bytes — also wrong length.
+        let long = base64::engine::general_purpose::STANDARD.encode([0u8; 32]);
+        assert!(validate_restore_salt(true, &Some(long)).is_err());
+    }
+
+    // ── Integrity digest binds DB + dbstate (PT10 Finding 2) ──────────────────
+
+    #[test]
+    fn restore_digest_changes_with_dbstate() {
+        let db = b"fake-sqlite-bytes";
+        let state_a = br#"{"encrypted":true,"salt":"M2sEcsHxYyVyJl3UGquc9w=="}"#;
+        let state_b = br#"{"encrypted":true,"salt":"AAAAAAAAAAAAAAAAAAAAAA=="}"#;
+        let d1 = restore_integrity_digest(db, state_a);
+        let d2 = restore_integrity_digest(db, state_b);
+        assert_ne!(
+            d1, d2,
+            "swapping the dbstate salt must change the bound digest"
+        );
+        // Deterministic for identical inputs.
+        assert_eq!(d1, restore_integrity_digest(db, state_a));
     }
 }

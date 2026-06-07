@@ -55,10 +55,11 @@ pub fn write_frame_enc_binary(
 }
 
 /// Read and decrypt an AES-GCM encrypted binary frame for DB restore chunks.
-/// Uses a 256 MB + overhead limit.
+/// Capped at one restore chunk (4 MiB) + AES-GCM overhead — a malicious restore
+/// server cannot force the client to allocate more than a single chunk per frame.
 pub fn read_frame_enc_binary(stream: &mut TcpStream, key: &[u8; 32]) -> Result<Vec<u8>, String> {
-    // 256 MB plaintext + 28 bytes AES-GCM overhead (12 nonce + 16 tag)
-    let encrypted = read_frame_bytes_with_limit(stream, 256 * 1024 * 1024 + 28)?;
+    // 4 MiB chunk plaintext + 28 bytes AES-GCM overhead (12 nonce + 16 tag)
+    let encrypted = read_frame_bytes_with_limit(stream, 4 * 1024 * 1024 + 28)?;
     super::crypto::decrypt_payload(key, &encrypted)
 }
 

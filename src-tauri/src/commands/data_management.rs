@@ -9,6 +9,7 @@ use aes_gcm::{
 use base64::{engine::general_purpose, Engine as _};
 use pbkdf2::pbkdf2_hmac;
 use rand::RngCore;
+use rusqlite::Connection;
 use sha2::Sha256;
 use std::fs;
 use tauri::{AppHandle, Manager, State};
@@ -48,9 +49,18 @@ pub fn unlock_app(
                 .map(|s| s.password_salt)
                 .unwrap_or_default();
             if !salt_b64.is_empty() {
-                db.encrypt_in_place(&key, &salt_b64)?;
-                log::info!("[sqlcipher] Database encrypted successfully");
+                match db.encrypt_in_place(&key, &salt_b64) {
+                    Ok(()) => log::info!("[sqlcipher] Database encrypted successfully"),
+                    Err(e) => {
+                        log::error!("[sqlcipher] encrypt_in_place FAILED: {e}");
+                        return Err(e);
+                    }
+                }
+            } else {
+                log::error!("[sqlcipher] migration skipped: password_salt is empty");
             }
+        } else {
+            log::warn!("[sqlcipher] migration skipped: no derived key in DbKeyState at unlock");
         }
     }
 
@@ -71,10 +81,16 @@ pub fn lock_app(
     lock: State<'_, AppLockState>,
     twofa: State<'_, TwoFactorPendingState>,
     db_key: State<'_, DbKeyState>,
+    session_bridge: State<'_, crate::commands::session_bridge::SessionBridge>,
+    restore_arm: State<'_, crate::commands::peer_sync_engine::RestoreArmState>,
 ) -> Result<(), String> {
     *lock.0.lock().map_err(|e| e.to_string())? = true;
     twofa.reset();
     db_key.clear();
+    // Disarm any pending full-DB restore so an armed-then-locked device won't serve one.
+    restore_arm.clear();
+    // Wipe any unconsumed writer-window password so plaintext never survives a lock.
+    session_bridge.clear();
     Ok(())
 }
 
@@ -170,7 +186,12 @@ pub fn exit_app(db_key: State<'_, DbKeyState>) {
 /// Intentionally does NOT require unlock — this is the "forgot password / erase
 /// everything" escape hatch and must work from the lock screen.
 #[tauri::command]
-pub async fn factory_reset(app: AppHandle) -> Result<bool, String> {
+pub async fn factory_reset(app: AppHandle, db: State<'_, Database>) -> Result<bool, String> {
+    // Wipe any in-memory session-bridge password before erasing on-disk data.
+    if let Some(bridge) = app.try_state::<crate::commands::session_bridge::SessionBridge>() {
+        bridge.clear();
+    }
+
     // Get database path
     let db_path = db::get_db_path(&app)?;
 
@@ -180,12 +201,47 @@ pub async fn factory_reset(app: AppHandle) -> Result<bool, String> {
         .app_data_dir()
         .map_err(|e| format!("Failed to get app data dir: {}", e))?;
 
-    // Close database connection by dropping the state
-    // Note: This requires the app to be restarted after reset
+    // Release the live SQLite handle BEFORE touching the file. On Windows the OS
+    // denies rename/delete of a file the process holds open (os error 5/32), which
+    // previously made factory_reset fail outright ("failed to reset"). Swap the
+    // stored connection for an in-memory placeholder so the original Connection
+    // drops and releases the OS file handle — mirrors encrypt_in_place's pattern.
+    if let Ok(mut conn) = db.conn.lock() {
+        let _ = conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);");
+        if let Ok(placeholder) = Connection::open_in_memory() {
+            *conn = placeholder; // original connection drops here, releasing the handle
+        }
+    }
 
-    // Delete database file
+    // Remove a file, retrying briefly (Windows may keep the handle for a moment
+    // after the Connection drops), then falling back to a rename-to-.old that the
+    // startup orphan sweep finishes once the OS finally releases the handle.
+    let remove_with_fallback =
+        |target: &std::path::Path, orphan: &std::path::Path| -> Result<(), String> {
+            for attempt in 0..5u8 {
+                if !target.exists() || fs::remove_file(target).is_ok() {
+                    return Ok(());
+                }
+                if attempt == 4 {
+                    return fs::rename(target, orphan)
+                        .map_err(|e| format!("Failed to remove database: {e}"));
+                }
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
+            Ok(())
+        };
+
+    // Delete the database file. With the handle released above, plain removal
+    // succeeds on all platforms; the .old rename is retained only as a last resort.
     if db_path.exists() {
-        fs::remove_file(&db_path).map_err(|e| format!("Failed to delete database: {}", e))?;
+        remove_with_fallback(&db_path, &db_path.with_extension("db.old"))?;
+    }
+    for suffix in ["-wal", "-shm"] {
+        let side = app_data.join(format!("moodhaven.db{suffix}"));
+        if side.exists() {
+            let orphan = app_data.join(format!("moodhaven.db{suffix}.old"));
+            let _ = remove_with_fallback(&side, &orphan); // sidecars are non-fatal
+        }
     }
 
     // Delete settings file if it exists
@@ -218,6 +274,11 @@ pub async fn factory_reset(app: AppHandle) -> Result<bool, String> {
         "media",             // Encrypted media attachments
         "moodhaven_restore.pending", // Staged full-restore DB file — must not re-apply after reset
         "moodhaven_restore.pending.sha256", // Integrity check file for the above
+        "moodhaven_restore.pending.dbstate", // db_state salt companion for the staged restore
+        "moodhaven.db.old",  // Windows rename-on-reset orphan — cleaned up on next fresh start
+        "moodhaven.db-wal.old", // Renamed WAL sidecar (Windows reset) — swept at startup
+        "moodhaven.db-shm.old", // Renamed SHM sidecar (Windows reset) — swept at startup
+        "cloud_token_key.bin", // OAuth token encryption key fallback (keyring-unavailable path)
     ];
     for file in files_to_delete {
         let path = app_data.join(file);
@@ -241,6 +302,19 @@ pub async fn factory_reset(app: AppHandle) -> Result<bool, String> {
         let log_file = log_dir.join("moodhaven.log");
         if log_file.exists() {
             fs::remove_file(&log_file).ok();
+        }
+    }
+
+    // Best-effort: clear OS keyring entries so the reset truly returns to
+    // first-run state. The cloud token encryption key and the biometric
+    // session credential would otherwise survive (stale secrets — the data
+    // they protect is gone, but a reset should not leave them behind).
+    for account in [
+        crate::commands::cloud_providers::TOKEN_KEYRING_ACCOUNT,
+        crate::commands::biometric::KEYRING_ACCOUNT,
+    ] {
+        if let Ok(entry) = keyring::Entry::new(crate::commands::KEYRING_SERVICE, account) {
+            let _ = entry.delete_password();
         }
     }
 
@@ -855,7 +929,11 @@ pub async fn write_text_file(
 
 /// Get database statistics for export info
 #[tauri::command]
-pub async fn get_data_stats(app: AppHandle) -> Result<serde_json::Value, String> {
+pub async fn get_data_stats(
+    app: AppHandle,
+    lock: State<'_, AppLockState>,
+) -> Result<serde_json::Value, String> {
+    require_unlocked(&lock)?;
     let db = app.state::<Database>();
 
     let (avg_mood, total_entries) = db::get_overall_stats(&db)?;

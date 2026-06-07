@@ -36,6 +36,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Version consistency check
+        run: bash scripts/check-versions.sh
+
       - name: npm audit (high/critical only)
         run: npm audit --audit-level=high
 

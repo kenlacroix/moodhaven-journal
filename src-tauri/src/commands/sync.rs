@@ -4,8 +4,11 @@
 //! upsert command for applying entries received from a remote device.
 
 use crate::db::Database;
+use crate::AppLockState;
 use serde::{Deserialize, Serialize};
 use tauri::State;
+
+use super::require_unlocked;
 
 // ── Sync field validation ─────────────────────────────────────────────────────
 
@@ -66,7 +69,11 @@ pub struct SyncEntryMeta {
 /// Return `(id, updated_at)` for every entry — no content loaded.
 /// Used to build the local half of the manifest diff without decrypting anything.
 #[tauri::command]
-pub fn get_entry_timestamps(db: State<Database>) -> Result<Vec<SyncEntryMeta>, String> {
+pub fn get_entry_timestamps(
+    db: State<Database>,
+    lock: State<'_, AppLockState>,
+) -> Result<Vec<SyncEntryMeta>, String> {
+    require_unlocked(&lock)?;
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let mut stmt = conn
         .prepare("SELECT id, updated_at FROM journal_entries ORDER BY updated_at DESC")
@@ -95,7 +102,12 @@ pub fn get_entry_timestamps(db: State<Database>) -> Result<Vec<SyncEntryMeta>, S
 /// `entry_json` must be a JSON-serialised `JournalEntryRow` (same shape
 /// that `get_journal_entry` / `get_all_journal_entries` returns).
 #[tauri::command]
-pub fn upsert_entry_from_sync(db: State<Database>, entry_json: String) -> Result<(), String> {
+pub fn upsert_entry_from_sync(
+    db: State<Database>,
+    lock: State<'_, AppLockState>,
+    entry_json: String,
+) -> Result<(), String> {
+    require_unlocked(&lock)?;
     // Deserialize as a generic Value so we can pick out fields without
     // reproducing the full JournalEntryRow struct in this module.
     let v: serde_json::Value =

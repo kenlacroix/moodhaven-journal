@@ -15,6 +15,45 @@ Versions follow [Semantic Versioning](https://semver.org/).
 - **Mood analytics: best/worst day pattern** — callout chips identifying your statistically best and worst days of the week (requires 3+ active days, Δ≥0.2 to suppress noise).
 - **Activity correlation chart** — diverging bar chart showing which activities correlate with better or worse mood. Displayed in Insights view when you have 5+ tagged entries.
 
+### Security
+
+This release folds in the findings from authorized pentest rounds PT6–PT9. The most significant is the encryption-at-rest fix described first.
+
+**Encryption at rest now actually engages (PT8 — verified)**
+- **SQLCipher at-rest encryption was inert and is now fixed.** Until this release the database was *never actually encrypted on disk on any build or OS*, despite the v1.7.0 changelog announcing SQLCipher at-rest encryption. The encryption migration wrote the DB with a raw 256-bit key (`ATTACH ... KEY "x'<hex>'"`, no KDF), but every read path opened it with `PRAGMA hexkey`, which decodes the hex and then runs it through PBKDF2 — deriving a *different* key. The first-unlock verify therefore always failed ("file is not a database"), the migration silently fell back, and every install kept running on the **plaintext** `moodhaven.db`. The three read-path pragmas now use `PRAGMA key = "x'<hex>'"` to match the encryption form. Backward-compatible: existing files were always raw-keyed, so they open correctly with no re-encryption. A regression test over the encrypt → reopen round-trip (which did not previously exist, which is why this shipped) now guards it. **Verified end-to-end on the green Windows installed build** (`db_state` flips to encrypted, on-disk bytes are ciphertext rather than `SQLite format 3`, clean unlock).
+
+**Session lock guards (PT6 / PT7 / PT9 — applied + reproduction-proven)**
+- **Lock-guard class extended across the IPC surface** — activities, voice memos, peer pairing, cloud sync, peer sync data commands (sync now, full restore, sync status), and the low-level sync helpers (`upsert_entry_from_sync`, `get_entry_timestamps`) now refuse to run until you unlock, closing a locked-session journal-row write and an entry-metadata leak. `get_data_stats` and `regenerate_backup_codes` were also callable from a locked/compromised WebView through the still-keyed DB connection and now require unlock. The browser/PWA build enforces the same gates: the shim's lock-gated command list was expanded from 7 activity commands to the full sensitive data surface (default-deny). (Watch voice-memo delivery still works while locked, by design.)
+- **Setup wizard exempt from session lock** — on a fresh install (no password stored yet) the app starts unlocked so first-run device pairing and sync-from-peer restore work; once a password exists, or if the database can't be read, the app starts locked as before.
+
+**Full-DB restore now requires explicit consent (PT7 — applied + reproduction-proven)**
+- **Trust is no longer authorization to hand over the whole database.** Previously any *trusted* peer could send a `RestoreRequest` and pull the entire SQLCipher DB with no approval on the serving device. The serving user must now explicitly arm a one-shot, 5-minute restore window (Settings → Devices → "Set up a new device"); unarmed restore requests are rejected. The arm window is single-use, expires after 5 minutes, and is **cleared on lock** so an armed-then-locked device cannot serve a restore while locked. New commands: `peer_arm_restore`, `peer_disarm_restore`, `peer_restore_is_armed`.
+
+**Key-material and password zeroization (PT7 — applied + reproduction-proven)**
+- The `format!`-built `PRAGMA`/`ATTACH` SQL strings containing the plaintext SQLCipher key (built on every unlock/migration) are now `Zeroizing`. Raw password parameters in `verify_password`, `pin_setup`, and `biometric_store_session` are wrapped in `Zeroizing` so they are wiped on all exit paths; `pin_unlock` derives into a `Zeroizing<[u8; 32]>` rather than returning a bare stack array. The session bridge wraps the password before its lock check (closing a leaky early-return), gains a 60-second TTL, and is cleared on `lock_app` and `factory_reset`.
+
+**Path traversal (PT7 — applied + reproduction-proven)**
+- `store_voice_memo` validates the untrusted `id` (pre-auth watch input) before using it as a filename, with a containment assertion; `write_media_from_sync` validates the untrusted `media_id` from a peer before using it as a filename.
+
+**Sync reliability and DoS hardening (PT6 / PT7 / PT9 — applied + reproduction-proven)**
+- **Peer sync v1 fallback removed** — devices that can't do forward-secret v2 key exchange are rejected with an upgrade message instead of silently falling back to a weaker static key.
+- **Accepted sync sockets no longer inherit non-blocking mode** — on Windows the accepted connection inherited the listener's non-blocking flag, so post-handshake reads returned `WouldBlock` and dropped legitimate peers mid-sync; the accepted stream is now forced blocking and relies on `read_timeout` for liveness. This made cross-device sync from a Windows host unreliable.
+- **Restore frame cap tightened** from 256 MB to a single 4 MiB chunk (plus GCM overhead).
+
+**Reset and ACL (PT6 — applied + reproduction-proven; Windows reset verified)**
+- **Factory reset hardened on Windows** — the open SQLite handle is released before file operations, then the database file (and its WAL/SHM sidecars) is renamed and swept on next launch, so a reset no longer leaves recoverable data behind. The frontend now surfaces the real reset error instead of a hardcoded "Failed to reset". Reset also clears the app's OS keyring entries.
+- **Command ACL tightened** — `get_year_heatmap` added to the allowlist; the unused `sweep_preview_temp` IPC entry removed.
+- **OAuth tokens encrypted at rest** — Dropbox and Google Drive tokens are now AES-256-GCM encrypted in the database under a per-device key held in the OS keyring (file fallback with 0600 permissions when no keyring is available). Tokens written by older builds are transparently re-encrypted. Covered by 7 new unit tests.
+
+### Known gaps (in progress)
+- **Recovery key promote-without-verify** — promoting a recovery key to unlock does not yet re-verify the derived key against the stored hash before granting access. Fix in progress.
+- **Restore salt not transferred** — the full-DB restore streams the SQLCipher database file but does not yet transfer the receiving device's `db_state.json` salt alongside it, which can leave a restored device unable to derive the key on first unlock. Fix in progress.
+
+### Fixed
+- **StillHaven sessions survive crash-reconnect** — completing or abandoning a session that no longer exists is a safe no-op (logged) instead of an error; negative durations are rejected at both create and complete.
+- **Wellness disclaimer no longer re-appears** after a failed settings save.
+- **Cloud sync responsiveness** — keyring lookups moved off the database lock; a startup race in the token key file fallback now converges instead of erroring.
+
 ---
 
 ## [1.7.5] — 2026-06-07

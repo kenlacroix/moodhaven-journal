@@ -1,6 +1,6 @@
 # Tauri Command Reference
 
-> **Version:** v1.8.0 | **Total commands:** ~165
+> **Version:** v1.8.0 | **Total commands:** ~168
 >
 > This document lists all `#[tauri::command]` functions exposed by MoodHaven Journal's Rust backend.
 > Commands are registered in `src-tauri/src/lib.rs` and permitted in `src-tauri/capabilities/default.json`.
@@ -13,7 +13,9 @@ const result = await invoke('command_name', { param: value });
 
 Parameter names in TypeScript use **camelCase**; Rust receives them as **snake_case** (Tauri handles conversion).
 
-**Lock guards (v0.9.0+):** Many commands require the session to be unlocked. Calling them before `unlock_app` returns `"Session is locked"`. Affected sections: Analytics, Settings (`get_setting`, `set_setting`, `get_all_settings`), Oura Ring, Time Capsule. `factory_reset` explicitly does **not** require unlock (it is the "forgot password" escape hatch).
+**Lock guards (v0.9.0+):** Many commands require the session to be unlocked. Calling them before `unlock_app` returns `"Session is locked"`. Affected sections: Analytics, Settings (`get_setting`, `set_setting`, `get_all_settings`), Oura Ring, Time Capsule, Activities, Voice Memos, Peer Pairing, and Cloud Providers (lock-gating extended to these in v1.8.0). v1.8.0 also added lock guards to `get_data_stats`, `regenerate_backup_codes`, the multi-device sync helpers (`upsert_entry_from_sync`, `get_entry_timestamps`), and the peer sync data/restore commands (`peer_sync_now`, `peer_full_restore`, `peer_get_sync_states`, `peer_arm_restore`, `peer_disarm_restore`) — these were previously reachable from a locked or compromised WebView. The browser/PWA shim enforces the same default-deny gate. `factory_reset` explicitly does **not** require unlock (it is the "forgot password" escape hatch).
+
+**ACL note (v1.8.0):** `get_year_heatmap` is in the IPC allowlist (`capabilities/default.json`). `sweep_preview_temp` is no longer in the allowlist — it remains a `#[tauri::command]` but is only invoked internally at startup, not over IPC.
 
 ---
 
@@ -568,7 +570,7 @@ invoke('import_data', {
 
 ### `get_data_stats`
 
-Get basic statistics about stored data.
+Get basic statistics about stored data. Requires an unlocked session (v1.8.0 — previously callable from a locked/compromised WebView via the still-keyed DB connection).
 
 ```typescript
 invoke('get_data_stats') → Promise<{
@@ -690,7 +692,7 @@ invoke('get_backup_codes_count') → Promise<number>
 
 ### `regenerate_backup_codes`
 
-Generate a new set of backup codes (invalidates old ones).
+Generate a new set of backup codes (invalidates old ones). Requires an unlocked session (v1.8.0).
 
 ```typescript
 invoke('regenerate_backup_codes') → Promise<{ codes: string[] }>
@@ -1603,7 +1605,7 @@ invoke('peer_get_sync_states') → Promise<Array<{
 
 ### `peer_full_restore`
 
-Perform a full database restore from a trusted peer device (used during new device setup). Connects to the peer, downloads all entries, and writes a pending restore file.
+Perform a full database restore from a trusted peer device (used during new device setup). Connects to the peer, downloads all entries, and writes a pending restore file. Requires an unlocked session (v1.8.0). The **source** device must have armed restore (see `peer_arm_restore`) or it will reject the request.
 
 ```typescript
 invoke('peer_full_restore', {
@@ -1624,17 +1626,47 @@ invoke('peer_apply_and_restart') → Promise<void>
 
 ---
 
+### `peer_arm_restore`
+
+Arm this (source) device to serve **one** full-DB restore to a new device within the next 5 minutes (v1.8.0). Trust alone is not authorization to hand over the whole database — the serving user must explicitly arm restore via Settings → Devices → "Set up a new device". The window is one-shot (consumed by the first restore), expires after 5 minutes, and is cleared on `lock_app`. Requires an unlocked session.
+
+```typescript
+invoke('peer_arm_restore') → Promise<void>
+```
+
+---
+
+### `peer_disarm_restore`
+
+Cancel a pending restore-armed window (e.g. the user dismisses the "Set up a new device" screen). Requires an unlocked session.
+
+```typescript
+invoke('peer_disarm_restore') → Promise<void>
+```
+
+---
+
+### `peer_restore_is_armed`
+
+Report whether restore is currently armed (used for UI state). Returns `false` once the 5-minute window has elapsed or the window has been consumed.
+
+```typescript
+invoke('peer_restore_is_armed') → Promise<boolean>
+```
+
+---
+
 ## Multi-Device Sync Helpers
 
 **Source:** `src-tauri/src/commands/sync.rs`
 
-Low-level helpers used by the sync engine internally.
+Low-level helpers used by the sync engine internally. Both require an unlocked session (v1.8.0) — previously they had no lock guard, exposing a locked-session journal-row write (`upsert_entry_from_sync`) and an entry-metadata leak (`get_entry_timestamps`).
 
 ---
 
 ### `get_entry_timestamps`
 
-Get lightweight entry metadata for manifest diffing (ID + `updated_at` only).
+Get lightweight entry metadata for manifest diffing (ID + `updated_at` only). Requires an unlocked session (v1.8.0).
 
 ```typescript
 invoke('get_entry_timestamps') → Promise<Array<{ id: string; updatedAt: string }>>
@@ -1644,7 +1676,7 @@ invoke('get_entry_timestamps') → Promise<Array<{ id: string; updatedAt: string
 
 ### `upsert_entry_from_sync`
 
-Insert or update an entry received from a remote peer (LWW: only applies if received `updated_at` is newer).
+Insert or update an entry received from a remote peer (LWW: only applies if received `updated_at` is newer). Requires an unlocked session (v1.8.0).
 
 ```typescript
 invoke('upsert_entry_from_sync', { entryJson: string }) → Promise<void>

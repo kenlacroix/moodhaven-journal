@@ -180,7 +180,7 @@ Key routing rules:
 - MCP registered: yes (user scope)
 - Artifacts sync: full → https://github.com/kenlacroix/gstack-artifacts-ken (private)
 - Current repo policy: read-write (kenlacroix/moodhaven-journal)
-- Note: OpenAI embedding key needs updating — OPENAI_API_KEY in env returns 401. Vector search degraded until fixed; text search works.
+- OPENAI_API_KEY verified working (2026-06-07) — vector search operational.
 
 ## GBrain Search Guidance (configured by /sync-gbrain)
 <!-- gstack-gbrain-search-guidance:start -->

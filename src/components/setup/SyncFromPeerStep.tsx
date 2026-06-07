@@ -94,6 +94,14 @@ export function SyncFromPeerStep({
         </div>
       )}
 
+      {/* Restore-arm note — the source device must allow restore first */}
+      {!isTransferring && !restoreReady && (
+        <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-xs text-slate-600 dark:text-slate-400">
+          On your source device, open <strong>Settings → Devices → Set up a new device</strong> and tap
+          <strong> Allow restore</strong> first. The restore button below only works while that 5-minute window is open.
+        </div>
+      )}
+
       {/* Peer list — hidden while transferring or done */}
       {!isTransferring && !restoreReady && (
         <div className="space-y-2 min-h-[80px]">

@@ -216,6 +216,15 @@ pub enum Msg {
     RestoreEnd {
         total_bytes: u64,
         chunks: u64,
+        /// Whether the source DB is SQLCipher-encrypted. Copied from the source's
+        /// db_state.json so the restored device can write its own matching state.
+        #[serde(default)]
+        encrypted: bool,
+        /// Base64 PBKDF2 salt from the source's db_state.json. Required to derive
+        /// the SQLCipher key on the restored device (same password ⇒ same key).
+        /// Absent when the source DB is unencrypted.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        salt: Option<String>,
     },
     Err {
         msg: String,

@@ -161,6 +161,15 @@ impl AppLockState {
     pub fn new() -> Self {
         AppLockState(Mutex::new(true))
     }
+    /// Lock state for a fresh install: unlocked when no password hash is stored.
+    /// The setup wizard runs before `unlock_app` is ever callable and needs
+    /// pairing/sync commands (pre-password there is no journal data to protect).
+    /// Any DB read error means "assume initialized" — start locked (default-deny;
+    /// an encrypted DB without its key errors here, which is exactly that case).
+    pub fn new_for_db(db: &db::Database) -> Self {
+        let uninitialized = matches!(db::get_password_hash(db), Ok(None));
+        AppLockState(Mutex::new(!uninitialized))
+    }
     pub fn is_locked(&self) -> bool {
         *self.0.lock().unwrap_or_else(|e| e.into_inner())
     }
@@ -353,29 +362,58 @@ pub fn run() {
             if let Some(parent) = db_path.parent() {
                 let pending = parent.join("moodhaven_restore.pending");
                 let checksum_path = parent.join("moodhaven_restore.pending.sha256");
+                let dbstate_src = parent.join("moodhaven_restore.pending.dbstate");
                 if pending.exists() {
+                    // The integrity checksum binds the DB bytes to the dbstate salt
+                    // (digest = SHA-256(db_bytes || dbstate_json)), so the salt is
+                    // verified before it can ever be written to db_state.json. A
+                    // tampered DB, a tampered/poison salt, or a missing companion all
+                    // fail verification and the pending restore is discarded.
+                    let mut verified_state: Option<crate::db::DbStateFile> = None;
                     let integrity_ok = if checksum_path.exists() {
-                        use sha2::{Digest, Sha256};
                         let expected = std::fs::read_to_string(&checksum_path)
                             .unwrap_or_default();
                         let expected = expected.trim().to_string();
                         let data = std::fs::read(&pending).unwrap_or_default();
-                        let actual = hex::encode(Sha256::digest(&data));
-                        if actual == expected {
+                        let dbstate_json = std::fs::read(&dbstate_src).unwrap_or_default();
+                        let actual = commands::peer_sync_engine::restore_integrity_digest(
+                            &data,
+                            &dbstate_json,
+                        );
+                        // Independently re-validate the salt (defence in depth).
+                        let parsed =
+                            serde_json::from_slice::<crate::db::DbStateFile>(&dbstate_json);
+                        let salt_ok = parsed
+                            .as_ref()
+                            .map(|st| {
+                                commands::peer_sync_engine::validate_restore_salt(
+                                    st.encrypted,
+                                    &st.salt,
+                                )
+                                .is_ok()
+                            })
+                            .unwrap_or(false);
+                        if actual == expected && salt_ok {
                             log::info!("[restore] Integrity check passed ({actual})");
+                            verified_state = parsed.ok();
                             true
                         } else {
                             log::error!(
-                                "[restore] Integrity check FAILED (expected {expected}, got {actual}) — discarding"
+                                "[restore] Integrity check FAILED (expected {expected}, got {actual}, salt_ok={salt_ok}) — discarding"
                             );
                             let _ = std::fs::remove_file(&pending);
                             let _ = std::fs::remove_file(&checksum_path);
+                            let _ = std::fs::remove_file(&dbstate_src);
                             false
                         }
                     } else {
-                        // No checksum — legacy or in-flight; allow but warn.
-                        log::warn!("[restore] No checksum file for pending restore — proceeding unverified");
-                        true
+                        // No checksum file at all — refuse to apply an unverified restore.
+                        log::error!(
+                            "[restore] No checksum file for pending restore — discarding (cannot verify salt binding)"
+                        );
+                        let _ = std::fs::remove_file(&pending);
+                        let _ = std::fs::remove_file(&dbstate_src);
+                        false
                     };
 
                     if integrity_ok {
@@ -386,8 +424,37 @@ pub fn run() {
                         );
                         if let Err(e) = std::fs::rename(&pending, &db_path) {
                             log::error!("[restore] WARNING: failed to apply pending DB: {e}");
+                        } else {
+                            // Write db_state.json to match the source's encryption state.
+                            // Without the source salt, verify_password can never derive the
+                            // SQLCipher key on this device and the restore is a dead end.
+                            // The salt is not secret (already public in each device's
+                            // db_state.json) and is required because key = PBKDF2(password, salt).
+                            // It has been verified by the bound checksum above.
+                            let state = verified_state.unwrap_or_default();
+                            if let Some(state_parent) = db_path.parent() {
+                                let state_path = state_parent.join("db_state.json");
+                                match serde_json::to_string(&state) {
+                                    Ok(json) => {
+                                        if let Err(e) = std::fs::write(&state_path, json) {
+                                            log::error!(
+                                                "[restore] WARNING: failed to write db_state.json: {e}"
+                                            );
+                                        } else {
+                                            log::info!(
+                                                "[restore] Wrote db_state.json (encrypted={})",
+                                                state.encrypted
+                                            );
+                                        }
+                                    }
+                                    Err(e) => log::error!(
+                                        "[restore] WARNING: failed to serialize db_state: {e}"
+                                    ),
+                                }
+                            }
                         }
                         let _ = std::fs::remove_file(&checksum_path);
+                        let _ = std::fs::remove_file(&dbstate_src);
                     }
                 }
             }
@@ -434,8 +501,10 @@ pub fn run() {
                 log::set_max_level(filter);
             }
 
-            // Session lock state — starts locked, set to unlocked after auth
-            app.manage(AppLockState::new());
+            // Session lock state — starts locked once a password exists, set to
+            // unlocked after auth. Fresh installs (no stored password hash) start
+            // unlocked so the setup wizard can pair devices / restore from a peer.
+            app.manage(AppLockState::new_for_db(&app.state::<Database>()));
 
             // Backend rate limiter for verify_password — persisted to disk so
             // a process restart does not reset an active lockout.
@@ -475,11 +544,30 @@ pub fn run() {
             // Peer-to-peer sync engine state
             app.manage(SyncEngineState::new());
 
+            // Full-DB restore consent gate (armed explicitly by the serving user)
+            app.manage(commands::peer_sync_engine::RestoreArmState::new());
+
             // STT model download state (cancellation tokens)
             app.manage(commands::DownloadState::default());
 
             // Sweep leftover preview temp files from previous sessions
             let _ = commands::sweep_preview_temp(app.handle().clone());
+
+            // Remove Windows factory-reset orphans (moodhaven.db.old + the
+            // renamed WAL/SHM sidecars) left behind when open DB handles
+            // blocked deletion during reset.
+            if let Ok(data_dir) = app.path().app_data_dir() {
+                for orphan_name in [
+                    "moodhaven.db.old",
+                    "moodhaven.db-wal.old",
+                    "moodhaven.db-shm.old",
+                ] {
+                    let orphan = data_dir.join(orphan_name);
+                    if orphan.exists() {
+                        let _ = std::fs::remove_file(&orphan);
+                    }
+                }
+            }
 
             // Open devtools in debug mode
             #[cfg(debug_assertions)]
@@ -694,6 +782,9 @@ pub fn run() {
             // Full DB restore (setup-time, new device ← existing device)
             commands::peer_full_restore,
             commands::peer_apply_and_restart,
+            commands::peer_arm_restore,
+            commands::peer_disarm_restore,
+            commands::peer_restore_is_armed,
             // Time capsule (seal / reveal / mood delta)
             commands::seal_entry,
             commands::get_due_capsules,
@@ -727,6 +818,53 @@ pub fn run() {
 mod tests {
     use super::*;
     use std::time::{Duration, Instant};
+
+    fn db_with_user_settings() -> Database {
+        let conn = rusqlite::Connection::open_in_memory().expect("in-memory DB");
+        conn.execute_batch(
+            "CREATE TABLE user_settings (
+                id INTEGER PRIMARY KEY,
+                password_hash TEXT NOT NULL,
+                password_salt TEXT NOT NULL,
+                updated_at TEXT
+            );",
+        )
+        .expect("schema");
+        Database {
+            conn: Mutex::new(conn),
+            path: std::path::PathBuf::from(":memory:"),
+        }
+    }
+
+    #[test]
+    fn lock_state_starts_unlocked_on_fresh_install() {
+        // No password hash stored → setup wizard must be able to run
+        // pairing/sync commands, so the app starts unlocked.
+        let db = db_with_user_settings();
+        let s = AppLockState::new_for_db(&db);
+        assert!(!s.is_locked());
+    }
+
+    #[test]
+    fn lock_state_starts_locked_once_password_exists() {
+        let db = db_with_user_settings();
+        db::set_password_hash(&db, "hash", "salt").expect("store hash");
+        let s = AppLockState::new_for_db(&db);
+        assert!(s.is_locked());
+    }
+
+    #[test]
+    fn lock_state_starts_locked_when_db_unreadable() {
+        // Missing user_settings table → query errors → default-deny (locked).
+        // This is the encrypted-DB-without-key startup case.
+        let conn = rusqlite::Connection::open_in_memory().expect("in-memory DB");
+        let db = Database {
+            conn: Mutex::new(conn),
+            path: std::path::PathBuf::from(":memory:"),
+        };
+        let s = AppLockState::new_for_db(&db);
+        assert!(s.is_locked());
+    }
 
     #[test]
     fn check_allows_when_no_failures() {

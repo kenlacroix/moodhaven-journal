@@ -200,7 +200,11 @@ function MainApp() {
   const handleDisclaimerAccept = useCallback(async () => {
     setShowDisclaimer(false);
     useSettingsStore.getState().setWellnessSettings({ hasSeenDisclaimer: true });
-    await useSettingsStore.getState().saveSettings();
+    try {
+      await useSettingsStore.getState().saveSettings();
+    } catch {
+      // Save failure — disclaimer stays dismissed this session.
+    }
   }, []);
 
   const handleTutorialComplete = useCallback(async () => {

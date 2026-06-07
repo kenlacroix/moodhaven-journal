@@ -20,6 +20,7 @@ import { ThisDeviceCard } from './DevicesThisDevice';
 import { NearbyPeerRow, EmptyNearby } from './DevicesNearby';
 import { ScanningDots } from './DeviceIconSet';
 import { DevicesSyncOptions } from './DevicesSyncOptions';
+import { DevicesRestoreArm } from './DevicesRestoreArm';
 import type { DiscoveredPeer } from '../../types/peerSync';
 import { logger } from '../../lib/services/logger';
 
@@ -217,6 +218,9 @@ export function DevicesTab() {
           </h3>
           <TrustedDevicesList />
         </div>
+
+        {/* Restore a new device from this one */}
+        <DevicesRestoreArm />
 
         {/* Privacy note */}
         <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">

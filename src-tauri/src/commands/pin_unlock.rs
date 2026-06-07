@@ -104,9 +104,11 @@ fn db_delete(conn: &rusqlite::Connection, key: &str) -> Result<(), String> {
 // Crypto helpers
 // ---------------------------------------------------------------------------
 
-fn derive_key(pin: &str, salt: &[u8]) -> Result<[u8; KEY_SIZE], String> {
-    let mut key = [0u8; KEY_SIZE];
-    pbkdf2::<Hmac<Sha256>>(pin.as_bytes(), salt, PBKDF2_ITERATIONS, &mut key)
+fn derive_key(pin: &str, salt: &[u8]) -> Result<Zeroizing<[u8; KEY_SIZE]>, String> {
+    // Derive directly into a Zeroizing buffer and return it by move — `[u8; 32]`
+    // is Copy, so returning a bare array would leave an un-wiped copy on the stack.
+    let mut key = Zeroizing::new([0u8; KEY_SIZE]);
+    pbkdf2::<Hmac<Sha256>>(pin.as_bytes(), salt, PBKDF2_ITERATIONS, &mut *key)
         .map_err(|e| format!("pbkdf2: {e}"))?;
     Ok(key)
 }
@@ -141,6 +143,7 @@ pub fn pin_setup(
     password: String,
     pin: String,
 ) -> Result<(), String> {
+    let password = Zeroizing::new(password);
     require_unlocked(&lock)?;
     validate_pin(&pin)?;
 
@@ -153,7 +156,7 @@ pub fn pin_setup(
     rand::rngs::OsRng.fill_bytes(&mut salt);
     rand::rngs::OsRng.fill_bytes(&mut nonce_bytes);
 
-    let key_bytes = Zeroizing::new(derive_key(&pin, &salt)?);
+    let key_bytes = derive_key(&pin, &salt)?;
     let cipher = Aes256Gcm::new_from_slice(&*key_bytes).map_err(|e| format!("aes init: {e}"))?;
     let nonce = Nonce::from_slice(&nonce_bytes);
 
@@ -208,7 +211,7 @@ pub fn pin_unlock(
         return Err("invalid nonce length".to_string());
     }
 
-    let key_bytes = Zeroizing::new(derive_key(&pin, &salt)?);
+    let key_bytes = derive_key(&pin, &salt)?;
     let cipher = Aes256Gcm::new_from_slice(&*key_bytes).map_err(|e| format!("aes init: {e}"))?;
     let nonce = Nonce::from_slice(&nonce_bytes);
 

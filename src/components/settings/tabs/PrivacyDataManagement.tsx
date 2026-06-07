@@ -19,17 +19,26 @@ export function PrivacyDataManagement({
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [resetConfirmText, setResetConfirmText] = useState('');
   const [isResetting, setIsResetting] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
 
   const handleReset = useCallback(async () => {
     if (resetConfirmText !== 'RESET') return;
     setIsResetting(true);
+    setResetError(null);
     try {
       await factoryReset();
-      await exitApp();
     } catch (error) {
-      logger.error('Reset failed:', { error: String(error) });
+      const msg = error instanceof Error ? error.message : String(error);
+      logger.error('Reset failed', { error: msg });
+      setResetError(msg);
       setIsResetting(false);
+      return;
     }
+    // Wipe succeeded — exit to restart into first-run. A failure here is not a
+    // reset failure (data is already gone), so don't surface it as one.
+    await exitApp().catch((err) =>
+      logger.warn('exit_app after reset failed', { error: String(err) }),
+    );
   }, [resetConfirmText]);
 
   return (
@@ -127,6 +136,12 @@ export function PrivacyDataManagement({
               />
             </div>
 
+            {resetError && (
+              <p className="text-sm text-rose-600 dark:text-rose-400 mb-3">
+                Reset failed: {resetError}
+              </p>
+            )}
+
             <div className="flex gap-3">
               <button
                 type="button"
@@ -134,6 +149,7 @@ export function PrivacyDataManagement({
                 onClick={() => {
                   setShowResetConfirm(false);
                   setResetConfirmText('');
+                  setResetError(null);
                 }}
               >
                 Cancel

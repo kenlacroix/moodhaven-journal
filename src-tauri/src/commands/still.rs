@@ -41,6 +41,9 @@ pub fn still_create_session(
     if !valid_bilateral_modes.contains(&bilateral_mode.as_str()) {
         return Err(format!("Unknown bilateral_mode: {bilateral_mode}"));
     }
+    if duration_seconds < 0 {
+        return Err("duration_seconds must be non-negative".to_string());
+    }
     db::still_create_session(
         &db,
         &id,
@@ -93,6 +96,9 @@ pub fn still_complete_session(
     duration_seconds: i64,
 ) -> Result<(), String> {
     require_unlocked(&lock)?;
+    if duration_seconds < 0 {
+        return Err("duration_seconds must be non-negative".to_string());
+    }
     db::still_complete_session(&db, &id, &completed_at, duration_seconds)
 }
 

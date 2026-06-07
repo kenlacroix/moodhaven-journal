@@ -1,27 +1,5 @@
 import { useState, useEffect } from 'react';
 
-export function useQRCode(payload: string | null): string | null {
-  const [dataUrl, setDataUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!payload) { setDataUrl(null); return; }
-    import('qrcode')
-      .then((QRCode) =>
-        QRCode.toDataURL(payload, {
-          width: 200,
-          margin: 2,
-          color: { dark: '#4c1d95', light: '#faf5ff' },
-        })
-      )
-      .then(setDataUrl)
-      .catch((err) => {
-        console.error('[PairingHooks] QR code generation failed:', err);
-      });
-  }, [payload]);
-
-  return dataUrl;
-}
-
 export function useCountdown(expiresAt: number | null): number {
   const [secondsLeft, setSecondsLeft] = useState(0);
 

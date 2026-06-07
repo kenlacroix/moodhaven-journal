@@ -215,7 +215,15 @@ async fn fetch_checksum(
         return String::new();
     };
 
-    // Format: "<sha256hex>  <filename>\n" (sha256sum output)
+    parse_checksum_for_asset(&text, asset_name)
+}
+
+/// Parse `sha256sum`-format checksum text and return the hex digest for
+/// `asset_name`, or an empty string if the file isn't listed.
+///
+/// Format per line: `"<sha256hex>  <filename>\n"` (two spaces separate the
+/// digest from the filename, matching `sha256sum` output).
+fn parse_checksum_for_asset(text: &str, asset_name: &str) -> String {
     for line in text.lines() {
         let parts: Vec<&str> = line.splitn(2, "  ").collect();
         if parts.len() == 2 && parts[1].trim() == asset_name {
@@ -561,4 +569,169 @@ fn install_macos_dmg(dmg: &std::path::Path) -> Result<(), String> {
     Ok(())
     // On macOS we do NOT auto-exit — the user drags the .app themselves.
     // A restart prompt in the UI is sufficient.
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sha2::{Digest, Sha256};
+
+    fn write_temp(bytes: &[u8]) -> std::path::PathBuf {
+        let mut path = std::env::temp_dir();
+        let unique = format!(
+            "moodhaven_updater_test_{}_{:?}.bin",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        );
+        path.push(unique);
+        let mut f = std::fs::File::create(&path).unwrap();
+        f.write_all(bytes).unwrap();
+        path
+    }
+
+    // ── verify_sha256 ─────────────────────────────────────────────────────────
+
+    #[test]
+    fn verify_sha256_correct_checksum_passes() {
+        let data = b"moodhaven update payload";
+        let expected = hex::encode(Sha256::digest(data));
+        let path = write_temp(data);
+
+        let result = verify_sha256(&path, &expected);
+        let _ = std::fs::remove_file(&path);
+
+        assert_eq!(result, Ok(true));
+    }
+
+    #[test]
+    fn verify_sha256_accepts_uppercase_expected_digest() {
+        let data = b"case insensitive digest";
+        let expected = hex::encode(Sha256::digest(data)).to_uppercase();
+        let path = write_temp(data);
+
+        let result = verify_sha256(&path, &expected);
+        let _ = std::fs::remove_file(&path);
+
+        assert_eq!(result, Ok(true));
+    }
+
+    #[test]
+    fn verify_sha256_tampered_byte_is_rejected() {
+        let data = b"original payload";
+        // Compute the digest of the real file, then flip a byte on disk so the
+        // stored digest no longer matches — emulates a tampered download.
+        let expected = hex::encode(Sha256::digest(data));
+        let mut tampered = data.to_vec();
+        tampered[0] ^= 0xFF;
+        let path = write_temp(&tampered);
+
+        let result = verify_sha256(&path, &expected);
+        let _ = std::fs::remove_file(&path);
+
+        assert!(result.is_err(), "tampered file must not verify");
+        assert!(result.unwrap_err().contains("Checksum mismatch"));
+    }
+
+    #[test]
+    fn verify_sha256_wrong_checksum_string_is_rejected() {
+        let data = b"some bytes";
+        let path = write_temp(data);
+
+        // A syntactically valid but incorrect 64-char hex digest.
+        let wrong = "0".repeat(64);
+        let result = verify_sha256(&path, &wrong);
+        let _ = std::fs::remove_file(&path);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn verify_sha256_empty_checksum_returns_unverified_not_failed() {
+        let data = b"no checksum available";
+        let path = write_temp(data);
+
+        // Empty expected → Ok(false): "unverified", not an error. The caller
+        // (download_and_install_update) is responsible for treating this as a
+        // hard failure; verify_sha256 itself must not error.
+        let result = verify_sha256(&path, "");
+        let _ = std::fs::remove_file(&path);
+
+        assert_eq!(result, Ok(false));
+    }
+
+    #[test]
+    fn verify_sha256_missing_file_is_io_error() {
+        let mut path = std::env::temp_dir();
+        path.push("moodhaven_updater_test_does_not_exist.bin");
+        let result = verify_sha256(&path, &"a".repeat(64));
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Read error"));
+    }
+
+    // ── parse_checksum_for_asset (checksums.txt line parsing) ─────────────────
+
+    #[test]
+    fn parse_checksum_matches_asset_line() {
+        let text = "\
+aaaa1111  other-asset.AppImage
+bbbb2222  moodhaven-journal_1.2.3_amd64.AppImage
+cccc3333  checksums.txt
+";
+        assert_eq!(
+            parse_checksum_for_asset(text, "moodhaven-journal_1.2.3_amd64.AppImage"),
+            "bbbb2222"
+        );
+    }
+
+    #[test]
+    fn parse_checksum_returns_empty_when_asset_absent() {
+        let text = "aaaa1111  some-other-file.exe\n";
+        assert_eq!(parse_checksum_for_asset(text, "missing.AppImage"), "");
+    }
+
+    #[test]
+    fn parse_checksum_empty_text_returns_empty() {
+        assert_eq!(parse_checksum_for_asset("", "anything"), "");
+    }
+
+    #[test]
+    fn parse_checksum_ignores_malformed_lines() {
+        // Lines without the two-space separator must not match or panic.
+        let text = "\
+not-a-valid-line
+deadbeef single-space asset.exe
+abc123  target.exe
+";
+        assert_eq!(parse_checksum_for_asset(text, "target.exe"), "abc123");
+        // The single-space line does not split into [digest, name] on "  ".
+        assert_eq!(parse_checksum_for_asset(text, "asset.exe"), "");
+    }
+
+    #[test]
+    fn parse_checksum_trims_trailing_whitespace_on_filename() {
+        // sha256sum may emit trailing whitespace / CRLF — filename is trimmed.
+        let text = "feedface  app.dmg  \r\n";
+        assert_eq!(parse_checksum_for_asset(text, "app.dmg"), "feedface");
+    }
+
+    // ── parse_version / is_newer (version gate guarding the download) ─────────
+
+    #[test]
+    fn parse_version_handles_v_prefix_and_missing_parts() {
+        assert_eq!(parse_version("v1.2.3"), (1, 2, 3));
+        assert_eq!(parse_version("1.2.3"), (1, 2, 3));
+        assert_eq!(parse_version("v2"), (2, 0, 0));
+        assert_eq!(parse_version("garbage"), (0, 0, 0));
+    }
+
+    #[test]
+    fn is_newer_only_accepts_strictly_greater() {
+        assert!(is_newer("v1.2.4", "1.2.3"));
+        assert!(is_newer("2.0.0", "1.9.9"));
+        assert!(!is_newer("1.2.3", "1.2.3"));
+        assert!(!is_newer("1.2.2", "1.2.3"));
+    }
 }

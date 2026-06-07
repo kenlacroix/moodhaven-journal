@@ -14,6 +14,7 @@ import type {
   DayOfWeekStats,
   TrendDataPoint,
   AnalyticsData,
+  HeatmapDay,
 } from '../../types/analytics';
 import type { MoodLevel } from '../../types/journal';
 
@@ -97,6 +98,18 @@ export async function getMonthlyMoodData(
  * Get mood trend data for a period
  */
 export async function getMoodTrend(days: number): Promise<TrendDataPoint[]> {
+  if (days <= 0) {
+    // All-time: use get_full_analytics_bundle with trend_days=0
+    const bundle = await invoke<{ trend_data: DailyStatsRow[] }>('get_full_analytics_bundle', {
+      trendDays: 0,
+    });
+    return bundle.trend_data.map((row) => ({
+      date: row.date,
+      averageMood: row.average_mood,
+      entryCount: row.entry_count,
+    }));
+  }
+
   const endDate = new Date();
   const startDate = getDaysAgo(days);
 
@@ -191,4 +204,22 @@ export async function getFullAnalytics(trendDays: number = 30): Promise<Analytic
  */
 export async function getInsightsMetadata(): Promise<InsightsMetadata> {
   return invoke<InsightsMetadata>('get_insights_metadata');
+}
+
+interface HeatmapDayRow {
+  date: string;
+  average_mood: number;
+  entry_count: number;
+}
+
+/**
+ * Get per-day mood data for the trailing 365 days (year heatmap)
+ */
+export async function getYearHeatmap(): Promise<HeatmapDay[]> {
+  const rows = await invoke<HeatmapDayRow[]>('get_year_heatmap');
+  return rows.map((row) => ({
+    date: row.date,
+    averageMood: row.average_mood,
+    entryCount: row.entry_count,
+  }));
 }

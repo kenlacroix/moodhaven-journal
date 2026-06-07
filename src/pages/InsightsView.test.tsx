@@ -19,6 +19,8 @@ vi.mock('../components/analytics', () => ({
   EmotionalTrends: () => <div data-testid="emotional-trends" />,
   SentimentOverview: () => <div data-testid="sentiment-overview" />,
   JournalingHabits: () => <div data-testid="journaling-habits" />,
+  MoodYearHeatmap: () => <div data-testid="mood-year-heatmap" />,
+  StreakCalendar: () => <div data-testid="streak-calendar" />,
 }));
 
 import { render, screen, fireEvent } from '@testing-library/react';
@@ -67,6 +69,8 @@ function defaultAnalytics(): ReturnType<typeof useAnalytics> {
     trendData: [],
     isLoading: false,
     isTrendLoading: false,
+    heatmapData: [],
+    isHeatmapLoading: false,
     error: null,
     refresh: vi.fn(),
   };

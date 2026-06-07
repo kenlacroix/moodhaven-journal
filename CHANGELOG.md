@@ -5,6 +5,45 @@ All notable changes to MoodHaven Journal are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.8.0] — 2026-06-07
+
+### Added
+- **Mood analytics — Year Heatmap** — a full 53-week calendar heatmap of your mood colored by the existing mood palette, surfaced in the Insights → Deep Dive section. Supports an "All Time" period alongside the existing 7/30/90-day windows.
+- **Mood analytics — StreakCalendar** — a compact 12-week dot grid showing recent journaling activity and mood at a glance; reuses heatmap data with no additional queries.
+- **Mood analytics — Day-of-week pattern** — best and worst day callout chips derived from all-time day-of-week averages, shown in the Deep Dive section.
+
+---
+
+## [1.7.4] — 2026-06-06
+
+### Security
+- **PT5 findings** — write_text_file path blocklist extended to cover Windows `Startup` and `System32` attack paths (C1); factory_reset now deletes WAL/SHM sidecar files and the media preview cache (C3); PBKDF2-derived key material in `two_factor.rs`, `data_management.rs`, and `media.rs` wrapped in `Zeroizing` for stack overwrite on drop (A5).
+
+---
+
+## [1.7.3] — 2026-06-06
+
+### Security
+- **PT4 findings** — `verify_password` PBKDF2 key and base64 hash string wrapped in `Zeroizing` (MEM-001); `DbKeyState::get()` key copy zeroized before `encrypt_in_place` (MEM-002); three stale ACL entries removed from `app-commands.toml` (ACL-002).
+- **SQLC-004 recovery** — orphaned `moodhaven_enc.db` detected unconditionally at startup; `db_state.json` written atomically (tmp→rename) on all code paths.
+
+---
+
+## [1.7.2] — 2026-06-06
+
+### Security
+- **PT1–PT3 findings** — `encrypt_in_place` WAL/SHM retry loop + Windows rename retry (SQLC-001); PBKDF2 key wrapped in `Zeroizing<String>` (SQLC-003); public key removed from UDP probe broadcasts (RECON-003); `pubkey_hint` removed from mDNS TXT (RECON-002); PIN removed from QR payload (PAIRING-C06); `get_entries_on_this_day` added to ACL (ACL-001).
+
+---
+
+## [1.7.1] — 2026-06-06
+
+### Changed
+- **Mobile layout gates** — responsive layout extended to cover iOS and narrow browser viewports; dead-code sweep removes unused exports, types, and components.
+- **Android NDK CI** — NDK cross-compilation toolchain added to CI release build pipeline.
+
+---
+
 ## [1.7.0] — 2026-06-06
 
 ### Security

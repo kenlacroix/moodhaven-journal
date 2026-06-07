@@ -1,6 +1,6 @@
 # Tauri Command Reference
 
-> **Version:** v1.7.0 | **Total commands:** ~164
+> **Version:** v1.8.0 | **Total commands:** ~165
 >
 > This document lists all `#[tauri::command]` functions exposed by MoodHaven Journal's Rust backend.
 > Commands are registered in `src-tauri/src/lib.rs` and permitted in `src-tauri/capabilities/default.json`.
@@ -445,7 +445,7 @@ Fetch all analytics data in a single DB call (replaces 5 parallel IPC calls). Re
 
 ```typescript
 invoke('get_full_analytics_bundle', {
-  trendDays: number,   // number of days for trend data window
+  trendDays: number,   // days for trend window; pass 0 for all-time
 }) → Promise<{
   averageMood: number,
   totalEntries: number,
@@ -469,6 +469,20 @@ invoke('get_insights_metadata') → Promise<{
   topTags: string[],
   lastEntryDate: string | null,
 }>
+```
+
+---
+
+### `get_year_heatmap`
+
+Get per-day mood data for the entire journal history, used to render the year heatmap in Insights. Requires unlock.
+
+```typescript
+invoke('get_year_heatmap') → Promise<Array<{
+  date: string,          // YYYY-MM-DD
+  averageMood: number,   // 1–5 average
+  entryCount: number,
+}>>
 ```
 
 ---

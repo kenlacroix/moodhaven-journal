@@ -1095,3 +1095,79 @@ pub async fn cloud_provider_refresh_token(
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_key() -> Zeroizing<[u8; 32]> {
+        Zeroizing::new([7u8; 32])
+    }
+
+    #[test]
+    fn encrypt_decrypt_round_trip() {
+        let key = test_key();
+        let encrypted = encrypt_token(&key, "sl.u.AFn-secret-access-token").unwrap();
+        assert!(
+            encrypted.starts_with(TOKEN_MARKER),
+            "blob must carry marker"
+        );
+        assert_ne!(encrypted, "sl.u.AFn-secret-access-token");
+        let decrypted = decrypt_token(&key, &encrypted).unwrap();
+        assert_eq!(decrypted, "sl.u.AFn-secret-access-token");
+    }
+
+    #[test]
+    fn encrypt_produces_unique_blobs_per_call() {
+        let key = test_key();
+        let a = encrypt_token(&key, "same-token").unwrap();
+        let b = encrypt_token(&key, "same-token").unwrap();
+        assert_ne!(a, b, "random nonce must make ciphertexts differ");
+    }
+
+    #[test]
+    fn decrypt_with_wrong_key_fails() {
+        let key = test_key();
+        let encrypted = encrypt_token(&key, "secret").unwrap();
+        let wrong_key = Zeroizing::new([8u8; 32]);
+        let err = decrypt_token(&wrong_key, &encrypted).unwrap_err();
+        assert!(err.contains("decryption failed"), "got: {err}");
+    }
+
+    #[test]
+    fn decrypt_tampered_blob_fails() {
+        let key = test_key();
+        let encrypted = encrypt_token(&key, "secret").unwrap();
+        // Flip the last ciphertext character (stay in the base64url alphabet)
+        let mut tampered = encrypted.clone();
+        let last = tampered.pop().unwrap();
+        tampered.push(if last == 'A' { 'B' } else { 'A' });
+        assert!(decrypt_token(&key, &tampered).is_err());
+    }
+
+    #[test]
+    fn decrypt_short_blob_is_rejected() {
+        let key = test_key();
+        // 8 bytes < 12-byte nonce minimum
+        let short = format!("{}{}", TOKEN_MARKER, URL_SAFE_NO_PAD.encode([0u8; 8]));
+        let err = decrypt_token(&key, &short).unwrap_err();
+        assert!(err.contains("too short"), "got: {err}");
+    }
+
+    #[test]
+    fn decrypt_invalid_base64_is_rejected() {
+        let key = test_key();
+        let bad = format!("{}not!valid!base64!", TOKEN_MARKER);
+        let err = decrypt_token(&key, &bad).unwrap_err();
+        assert!(err.contains("base64"), "got: {err}");
+    }
+
+    #[test]
+    fn legacy_plaintext_passes_through_unchanged() {
+        let key = test_key();
+        // Pre-v1 builds stored tokens without the marker — must be returned as-is
+        let legacy = "legacy-plaintext-refresh-token";
+        let out = decrypt_token(&key, legacy).unwrap();
+        assert_eq!(out, legacy);
+    }
+}

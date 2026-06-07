@@ -5,6 +5,15 @@ All notable changes to MoodHaven Journal are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.8.0] — 2026-06-07
+
+### Added
+- **Mood analytics — Year Heatmap** — a full 53-week calendar heatmap of your mood colored by the existing mood palette, surfaced in the Insights → Deep Dive section. Supports an "All Time" period alongside the existing 7/30/90-day windows.
+- **Mood analytics — StreakCalendar** — a compact 12-week dot grid showing recent journaling activity and mood at a glance; reuses heatmap data with no additional queries.
+- **Mood analytics — Day-of-week pattern** — best and worst day callout chips derived from all-time day-of-week averages, shown in the Deep Dive section.
+
+---
+
 ## [1.7.0] — 2026-06-06
 
 ### Security

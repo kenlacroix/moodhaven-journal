@@ -124,11 +124,17 @@ pub fn still_complete_session(
 ) -> Result<(), String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
-    conn.execute(
-        "UPDATE still_sessions SET completed_at = ?1, duration_seconds = ?2 WHERE id = ?3",
-        params![completed_at, duration_seconds, id],
-    )
-    .map_err(|e| format!("Failed to complete session: {}", e))?;
+    let n = conn
+        .execute(
+            "UPDATE still_sessions SET completed_at = ?1, duration_seconds = ?2 WHERE id = ?3",
+            params![completed_at, duration_seconds, id],
+        )
+        .map_err(|e| format!("Failed to complete session: {}", e))?;
+    if n == 0 {
+        // Idempotent no-op by design (crash-reconnect safe), but log it —
+        // a zero-row complete usually means front/back session desync.
+        log::warn!("[still] complete_session: no session with id {id} — no-op");
+    }
 
     Ok(())
 }
@@ -136,11 +142,15 @@ pub fn still_complete_session(
 pub fn still_abandon_session(db: &Database, id: &str, abandoned_at: &str) -> Result<(), String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
-    conn.execute(
-        "UPDATE still_sessions SET abandoned_at = ?1 WHERE id = ?2",
-        params![abandoned_at, id],
-    )
-    .map_err(|e| format!("Failed to abandon session: {}", e))?;
+    let n = conn
+        .execute(
+            "UPDATE still_sessions SET abandoned_at = ?1 WHERE id = ?2",
+            params![abandoned_at, id],
+        )
+        .map_err(|e| format!("Failed to abandon session: {}", e))?;
+    if n == 0 {
+        log::warn!("[still] abandon_session: no session with id {id} — no-op");
+    }
 
     Ok(())
 }

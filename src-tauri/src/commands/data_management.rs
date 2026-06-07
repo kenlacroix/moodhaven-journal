@@ -195,6 +195,16 @@ pub async fn factory_reset(app: AppHandle) -> Result<bool, String> {
             if let Err(rename_err) = fs::rename(&db_path, &orphan) {
                 return Err(format!("Failed to remove database: {}", rename_err));
             }
+            // WAL/SHM share the open-handle problem — the remove_file pass
+            // below silently fails on them. Rename them to .old too so the
+            // startup orphan sweep removes them once handles close; a fresh
+            // DB must never see a stale WAL under the same filename.
+            for suffix in ["-wal", "-shm"] {
+                let side = app_data.join(format!("moodhaven.db{}", suffix));
+                if side.exists() {
+                    let _ = fs::rename(&side, app_data.join(format!("moodhaven.db{}.old", suffix)));
+                }
+            }
         }
         #[cfg(not(target_os = "windows"))]
         {
@@ -233,6 +243,8 @@ pub async fn factory_reset(app: AppHandle) -> Result<bool, String> {
         "moodhaven_restore.pending", // Staged full-restore DB file — must not re-apply after reset
         "moodhaven_restore.pending.sha256", // Integrity check file for the above
         "moodhaven.db.old",  // Windows rename-on-reset orphan — cleaned up on next fresh start
+        "moodhaven.db-wal.old", // Renamed WAL sidecar (Windows reset) — swept at startup
+        "moodhaven.db-shm.old", // Renamed SHM sidecar (Windows reset) — swept at startup
         "cloud_token_key.bin", // OAuth token encryption key fallback (keyring-unavailable path)
     ];
     for file in files_to_delete {

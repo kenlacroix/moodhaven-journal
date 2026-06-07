@@ -184,13 +184,26 @@ fn load_or_create_token_key(app: &AppHandle) -> Result<Zeroizing<[u8; 32]>, Stri
         #[cfg(unix)]
         {
             use std::os::unix::fs::OpenOptionsExt;
-            std::fs::OpenOptions::new()
+            match std::fs::OpenOptions::new()
                 .write(true)
                 .create_new(true)
                 .mode(0o600)
                 .open(&key_path)
-                .and_then(|mut f| std::io::Write::write_all(&mut f, key.as_ref()))
-                .map_err(|e| e.to_string())?;
+            {
+                Ok(mut f) => {
+                    std::io::Write::write_all(&mut f, key.as_ref()).map_err(|e| e.to_string())?
+                }
+                // Lost a create race to a concurrent command — converge on
+                // the on-disk key instead of failing with a raw IO error.
+                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+                    let bytes = std::fs::read(&key_path).map_err(|e| e.to_string())?;
+                    let arr: [u8; 32] = bytes
+                        .try_into()
+                        .map_err(|_| "cloud_token_key.bin must be 32 bytes".to_string())?;
+                    return Ok(Zeroizing::new(arr));
+                }
+                Err(e) => return Err(e.to_string()),
+            }
         }
         #[cfg(not(unix))]
         {

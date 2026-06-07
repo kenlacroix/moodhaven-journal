@@ -20,6 +20,7 @@ vi.mock('../components/analytics', () => ({
   SentimentOverview: () => <div data-testid="sentiment-overview" />,
   JournalingHabits: () => <div data-testid="journaling-habits" />,
   MoodYearHeatmap: () => <div data-testid="mood-year-heatmap" />,
+  StreakCalendar: () => <div data-testid="streak-calendar" />,
 }));
 
 import { render, screen, fireEvent } from '@testing-library/react';

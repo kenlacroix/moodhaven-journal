@@ -552,6 +552,13 @@ pub fn run() {
             commands::link_journal_entry_to_session,
             commands::sync_entry_tags,
             commands::get_book_tags,
+            // Activities
+            commands::list_activities,
+            commands::create_activity,
+            commands::delete_activity,
+            commands::sync_entry_activities,
+            commands::get_entry_activities,
+            commands::get_activity_stats,
             // Statistics
             commands::get_mood_statistics,
             commands::get_overall_statistics,

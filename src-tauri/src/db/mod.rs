@@ -11,6 +11,7 @@ use tauri::AppHandle;
 use tauri::Manager;
 use zeroize::Zeroizing;
 
+pub mod activities;
 pub mod analytics;
 pub mod books;
 pub mod journal;
@@ -18,6 +19,7 @@ pub mod signals;
 pub mod still;
 pub mod voice_memos;
 
+pub use activities::*;
 pub use analytics::*;
 pub use books::*;
 pub use journal::*;
@@ -721,6 +723,51 @@ impl Database {
             "CREATE INDEX IF NOT EXISTS idx_entries_book_id ON journal_entries(book_id)",
             [],
         );
+
+        // activities + entry_activities (v1.8.0)
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS activities (
+                id         TEXT PRIMARY KEY,
+                name       TEXT NOT NULL UNIQUE,
+                emoji      TEXT NOT NULL DEFAULT '✨',
+                is_custom  INTEGER NOT NULL DEFAULT 0,
+                sort_order INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL
+                    DEFAULT (strftime('%Y-%m-%dT%H:%M:%S','now','localtime'))
+            );
+            CREATE TABLE IF NOT EXISTS entry_activities (
+                entry_id    TEXT NOT NULL REFERENCES journal_entries(id) ON DELETE CASCADE,
+                activity_id TEXT NOT NULL REFERENCES activities(id) ON DELETE CASCADE,
+                PRIMARY KEY (entry_id, activity_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_entry_activities_entry
+                ON entry_activities(entry_id);
+            CREATE INDEX IF NOT EXISTS idx_entry_activities_activity
+                ON entry_activities(activity_id);",
+        )
+        .map_err(|e| format!("Failed to create activities tables: {}", e))?;
+
+        // Seed predefined activities (idempotent: INSERT OR IGNORE)
+        conn.execute_batch(
+            "INSERT OR IGNORE INTO activities (id, name, emoji, is_custom, sort_order)
+             VALUES
+               ('act_exercise',   'Exercise',   '🏃', 0,  0),
+               ('act_social',     'Social',     '👥', 0,  1),
+               ('act_work',       'Work',       '💼', 0,  2),
+               ('act_reading',    'Reading',    '📚', 0,  3),
+               ('act_creative',   'Creative',   '🎨', 0,  4),
+               ('act_meditation', 'Meditation', '🧘', 0,  5),
+               ('act_good_sleep', 'Good Sleep', '😴', 0,  6),
+               ('act_poor_sleep', 'Poor Sleep', '😵', 0,  7),
+               ('act_nature',     'Nature',     '🌿', 0,  8),
+               ('act_family',     'Family',     '🏠', 0,  9),
+               ('act_cooking',    'Cooking',    '🍳', 0, 10),
+               ('act_music',      'Music',      '🎵', 0, 11),
+               ('act_learning',   'Learning',   '📖', 0, 12),
+               ('act_travel',     'Travel',     '✈️', 0, 13),
+               ('act_gaming',     'Gaming',     '🎮', 0, 14);",
+        )
+        .map_err(|e| format!("Failed to seed predefined activities: {}", e))?;
 
         Ok(())
     }

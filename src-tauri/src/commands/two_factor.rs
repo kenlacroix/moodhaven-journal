@@ -507,7 +507,13 @@ pub fn enable_totp(
 
 /// Generate new backup codes (replaces existing)
 #[tauri::command]
-pub fn regenerate_backup_codes(db: State<Database>) -> Result<BackupCodes, String> {
+pub fn regenerate_backup_codes(
+    db: State<Database>,
+    lock: State<'_, crate::AppLockState>,
+) -> Result<BackupCodes, String> {
+    if lock.is_locked() {
+        return Err("Session is locked".to_string());
+    }
     let row = get_2fa_row(&db)?.ok_or_else(|| "2FA not enabled".to_string())?;
 
     if !row.enabled {

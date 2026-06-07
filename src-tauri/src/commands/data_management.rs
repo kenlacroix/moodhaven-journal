@@ -82,10 +82,13 @@ pub fn lock_app(
     twofa: State<'_, TwoFactorPendingState>,
     db_key: State<'_, DbKeyState>,
     session_bridge: State<'_, crate::commands::session_bridge::SessionBridge>,
+    restore_arm: State<'_, crate::commands::peer_sync_engine::RestoreArmState>,
 ) -> Result<(), String> {
     *lock.0.lock().map_err(|e| e.to_string())? = true;
     twofa.reset();
     db_key.clear();
+    // Disarm any pending full-DB restore so an armed-then-locked device won't serve one.
+    restore_arm.clear();
     // Wipe any unconsumed writer-window password so plaintext never survives a lock.
     session_bridge.clear();
     Ok(())
@@ -925,7 +928,11 @@ pub async fn write_text_file(
 
 /// Get database statistics for export info
 #[tauri::command]
-pub async fn get_data_stats(app: AppHandle) -> Result<serde_json::Value, String> {
+pub async fn get_data_stats(
+    app: AppHandle,
+    lock: State<'_, AppLockState>,
+) -> Result<serde_json::Value, String> {
+    require_unlocked(&lock)?;
     let db = app.state::<Database>();
 
     let (avg_mood, total_entries) = db::get_overall_stats(&db)?;

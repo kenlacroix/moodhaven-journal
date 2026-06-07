@@ -154,6 +154,14 @@ impl RestoreArmState {
             .map(|t| t.elapsed() <= RESTORE_ARM_TTL)
             .unwrap_or(false)
     }
+
+    /// Clear any armed window. Called on lock so an armed-then-locked device does
+    /// not keep serving full-DB restores while the session is locked.
+    pub fn clear(&self) {
+        if let Ok(mut slot) = self.armed_at.lock() {
+            *slot = None;
+        }
+    }
 }
 
 /// Arm the device to serve one full-DB restore to a new device within the next
@@ -1113,6 +1121,13 @@ fn run_sync_server_loop(app: AppHandle, listener: TcpListener, stop_rx: mpsc::Re
         match listener.accept() {
             Ok((stream, addr)) => {
                 log::debug!("[sync] Incoming connection from {addr}");
+                // The accepted socket inherits the listener's non-blocking mode on
+                // Windows, so every read returns WouldBlock the instant data isn't
+                // already buffered — dropping legitimate peers mid-handshake. Force
+                // blocking; the handler relies on read_timeout for liveness.
+                if let Err(e) = stream.set_nonblocking(false) {
+                    log::warn!("[sync] Failed to set accepted stream blocking: {e}");
+                }
                 let app_clone = app.clone();
                 thread::spawn(move || handle_sync_connection(app_clone, stream));
             }

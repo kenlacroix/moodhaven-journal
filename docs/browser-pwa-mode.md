@@ -112,6 +112,8 @@ interface BrowserEntryRow {
   status: string | null;
   session_id?: string;
   word_count?: number;
+  // stored as runtime extension by dbSyncEntryActivities — not in the TS interface
+  activityIds?: string[];
 }
 ```
 

@@ -33,7 +33,7 @@
 
 **TimelineView:** activity filter chip row; clicking a chip filters entries by that activity.
 
-**Browser/IDB:** `activity_ids` stored as array in `BrowserEntryRow`; full `list_activities`, `create_activity`, `delete_activity`, `sync_entry_activities`, `get_entry_activities`, `get_activity_stats` dispatch cases in `browser-invoke.ts`.
+**Browser/IDB:** Activities stored in a separate `activities` IDB object store (v3 migration). Entry-activity links stored as `activityIds?: string[]` on the entry row at runtime (spread extension, not declared in `BrowserEntryRow` interface). Full `list_activities`, `create_activity`, `delete_activity`, `sync_entry_activities`, `get_entry_activities`, `get_activity_stats` dispatch cases in `browser-invoke.ts`.
 
 ---
 

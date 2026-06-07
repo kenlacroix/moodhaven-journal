@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
 import { format } from "date-fns";
-import { BookOpen, ArrowRight } from "lucide-react";
+import { BookOpen, ArrowRight, Rss } from "lucide-react";
 import { getAllPosts } from "@/lib/posts";
 import NewsletterSignup from "@/components/NewsletterSignup";
 
@@ -54,7 +54,16 @@ export default async function BlogIndex() {
         {/* Header */}
         <div className="mb-12">
           <p className="text-xs font-semibold text-neutral-400 uppercase tracking-widest mb-3">Writing</p>
-          <h1 className="text-3xl md:text-4xl font-bold text-neutral-900 mb-3">Blog</h1>
+          <div className="flex items-center gap-3 mb-3">
+            <h1 className="text-3xl md:text-4xl font-bold text-neutral-900">Blog</h1>
+            <a
+              href="/rss.xml"
+              aria-label="RSS feed"
+              className="text-neutral-400 hover:text-primary-600 transition-colors mt-1"
+            >
+              <Rss className="w-4 h-4" aria-hidden="true" />
+            </a>
+          </div>
           <p className="text-neutral-500 text-base max-w-lg">
             Thoughts on privacy-first software, local-first design, and what we&apos;re building.
           </p>

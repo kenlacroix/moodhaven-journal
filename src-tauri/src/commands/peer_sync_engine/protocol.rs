@@ -162,7 +162,7 @@ pub enum Msg {
     },
     // ── Entry phase ──
     Entry {
-        row: JournalEntryRow,
+        row: Box<JournalEntryRow>,
     },
     Done {
         sent: usize,

@@ -900,6 +900,47 @@ mod tests {
         );
     }
 
+    /// Password-mismatch invariant: when a peer encrypts an entry under a
+    /// different password, the sync engine still moves opaque ciphertext.
+    /// db_upsert_entry must store the blob verbatim (it never decrypts) so the
+    /// receiving device persists it without corruption. Frontend decryption
+    /// fails gracefully later — that is out of scope here; what we assert is
+    /// that the engine does not crash, error, or mangle the ciphertext.
+    #[test]
+    fn password_mismatch_blob_is_stored_verbatim_without_corruption() {
+        let conn = make_entry_conn();
+
+        // A blob "encrypted under a different password" — the engine treats
+        // encrypted_content as an opaque envelope and never inspects it.
+        let mut entry = stub_entry("e-mismatch", "2026-03-01T10:00:00Z");
+        let foreign = EncryptedContent {
+            ciphertext: "Zm9yZWlnbi1jaXBoZXJ0ZXh0".into(),
+            iv: "Zm9yZWlnbi1pdg==".into(),
+            salt: "Zm9yZWlnbi1zYWx0".into(),
+            version: 1,
+        };
+        entry.encrypted_content = Some(foreign.clone());
+
+        let changed = db_upsert_entry(&conn, &entry).expect("upsert must not error on foreign key");
+        assert!(changed, "a new foreign-key entry must be inserted");
+
+        // The stored envelope must be byte-for-byte what the peer sent.
+        let stored_json: String = conn
+            .query_row(
+                "SELECT encrypted_content FROM journal_entries WHERE id = 'e-mismatch'",
+                [],
+                |r| r.get(0),
+            )
+            .expect("entry row must exist");
+        let stored: EncryptedContent =
+            serde_json::from_str(&stored_json).expect("stored envelope must round-trip as JSON");
+
+        assert_eq!(stored.ciphertext, foreign.ciphertext);
+        assert_eq!(stored.iv, foreign.iv);
+        assert_eq!(stored.salt, foreign.salt);
+        assert_eq!(stored.version, foreign.version);
+    }
+
     // ── db_upsert_book ────────────────────────────────────────────────────────
 
     #[test]

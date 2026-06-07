@@ -71,10 +71,13 @@ pub fn lock_app(
     lock: State<'_, AppLockState>,
     twofa: State<'_, TwoFactorPendingState>,
     db_key: State<'_, DbKeyState>,
+    session_bridge: State<'_, crate::commands::session_bridge::SessionBridge>,
 ) -> Result<(), String> {
     *lock.0.lock().map_err(|e| e.to_string())? = true;
     twofa.reset();
     db_key.clear();
+    // Wipe any unconsumed writer-window password so plaintext never survives a lock.
+    session_bridge.clear();
     Ok(())
 }
 
@@ -171,6 +174,11 @@ pub fn exit_app(db_key: State<'_, DbKeyState>) {
 /// everything" escape hatch and must work from the lock screen.
 #[tauri::command]
 pub async fn factory_reset(app: AppHandle) -> Result<bool, String> {
+    // Wipe any in-memory session-bridge password before erasing on-disk data.
+    if let Some(bridge) = app.try_state::<crate::commands::session_bridge::SessionBridge>() {
+        bridge.clear();
+    }
+
     // Get database path
     let db_path = db::get_db_path(&app)?;
 

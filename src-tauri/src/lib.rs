@@ -486,6 +486,9 @@ pub fn run() {
             // Peer-to-peer sync engine state
             app.manage(SyncEngineState::new());
 
+            // Full-DB restore consent gate (armed explicitly by the serving user)
+            app.manage(commands::peer_sync_engine::RestoreArmState::new());
+
             // STT model download state (cancellation tokens)
             app.manage(commands::DownloadState::default());
 
@@ -721,6 +724,9 @@ pub fn run() {
             // Full DB restore (setup-time, new device ← existing device)
             commands::peer_full_restore,
             commands::peer_apply_and_restart,
+            commands::peer_arm_restore,
+            commands::peer_disarm_restore,
+            commands::peer_restore_is_armed,
             // Time capsule (seal / reveal / mood delta)
             commands::seal_entry,
             commands::get_due_capsules,

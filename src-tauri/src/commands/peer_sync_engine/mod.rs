@@ -69,7 +69,7 @@ use std::sync::{
     mpsc, Mutex,
 };
 use std::thread::{self, JoinHandle};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager, State};
 use x25519_dalek::{EphemeralSecret, PublicKey as X25519PublicKey};
 
@@ -105,6 +105,89 @@ impl SyncEngineState {
 
 unsafe impl Send for SyncEngineState {}
 unsafe impl Sync for SyncEngineState {}
+
+/// How long a "restore armed" window stays open before it auto-expires.
+const RESTORE_ARM_TTL: Duration = Duration::from_secs(300); // 5 minutes
+
+/// Consent gate for full-DB restore serving.
+///
+/// A trusted peer can complete the Ed25519 handshake using a previously-paired
+/// key, so trust alone is not sufficient authorization to hand over the entire
+/// database. The serving device's user must explicitly arm restore (Settings →
+/// Devices → "Set up a new device") within a short window before any
+/// `RestoreRequest` is honored. The flag is single-use and time-limited, so a
+/// lost/compromised-but-still-trusted peer cannot silently pull the full DB.
+#[derive(Default)]
+pub struct RestoreArmState {
+    armed_at: Mutex<Option<Instant>>,
+}
+
+impl RestoreArmState {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Returns true and consumes the arm window if it is currently armed and fresh.
+    /// One-shot: a successful check disarms so each arming permits a single restore.
+    fn consume_if_armed(&self) -> bool {
+        let mut slot = match self.armed_at.lock() {
+            Ok(s) => s,
+            Err(_) => return false,
+        };
+        match *slot {
+            Some(t) if t.elapsed() <= RESTORE_ARM_TTL => {
+                *slot = None;
+                true
+            }
+            _ => {
+                *slot = None; // clear stale
+                false
+            }
+        }
+    }
+
+    fn is_armed(&self) -> bool {
+        self.armed_at
+            .lock()
+            .ok()
+            .and_then(|s| *s)
+            .map(|t| t.elapsed() <= RESTORE_ARM_TTL)
+            .unwrap_or(false)
+    }
+}
+
+/// Arm the device to serve one full-DB restore to a new device within the next
+/// 5 minutes. Requires an unlocked session.
+#[tauri::command]
+pub fn peer_arm_restore(
+    lock: State<'_, AppLockState>,
+    arm: State<'_, RestoreArmState>,
+) -> Result<(), String> {
+    require_unlocked(&lock)?;
+    *arm.armed_at.lock().map_err(|e| e.to_string())? = Some(Instant::now());
+    log::info!(
+        "[restore] Full-DB restore armed for {}s",
+        RESTORE_ARM_TTL.as_secs()
+    );
+    Ok(())
+}
+
+/// Cancel a pending restore-armed window. Requires an unlocked session.
+#[tauri::command]
+pub fn peer_disarm_restore(
+    lock: State<'_, AppLockState>,
+    arm: State<'_, RestoreArmState>,
+) -> Result<(), String> {
+    require_unlocked(&lock)?;
+    *arm.armed_at.lock().map_err(|e| e.to_string())? = None;
+    Ok(())
+}
+
+/// Report whether restore is currently armed (for UI state).
+#[tauri::command]
+pub fn peer_restore_is_armed(arm: State<'_, RestoreArmState>) -> Result<bool, String> {
+    Ok(arm.is_armed())
+}
 
 // ── Full-restore server handler ───────────────────────────────────────────────
 
@@ -550,6 +633,30 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
 
     // ── Full-restore path ─────────────────────────────────────────────────────
     if matches!(first_msg, Msg::RestoreRequest) {
+        // Trust alone is not authorization to hand over the whole DB. The serving
+        // user must have explicitly armed restore within the last RESTORE_ARM_TTL.
+        let armed = app
+            .try_state::<RestoreArmState>()
+            .map(|s| s.consume_if_armed())
+            .unwrap_or(false);
+        if !armed {
+            log::warn!(
+                "[restore] Rejected RestoreRequest from {client_device_id}: device not armed for restore"
+            );
+            let _ = write_msg_enc(
+                &mut stream,
+                &key,
+                &Msg::Err {
+                    msg: "Restore not authorized. On the source device, choose \
+                          Settings → Devices → Set up a new device to allow restore."
+                        .to_string(),
+                },
+            );
+            let _ = stream.shutdown(std::net::Shutdown::Both);
+            return Err(format!(
+                "[restore] Rejected unarmed RestoreRequest from {client_device_id}"
+            ));
+        }
         return do_serve_restore(app, &mut stream, &key, &client_device_id, &client_name);
     }
 

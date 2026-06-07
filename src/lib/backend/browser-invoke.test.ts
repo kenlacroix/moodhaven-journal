@@ -29,6 +29,9 @@ async function clearAllStores() {
 
 beforeEach(async () => {
   await clearAllStores();
+  // Default to an unlocked session so data-command tests run normally. The
+  // dedicated lock-gate describe block manages its own lock state explicitly.
+  await invoke('unlock_app');
 });
 
 // ---------------------------------------------------------------------------
@@ -253,6 +256,37 @@ describe('session lock gate (activity commands)', () => {
   it('allows list_activities after unlock_app', async () => {
     await invoke('unlock_app');
     await expect(invoke('list_activities')).resolves.toBeDefined();
+    await invoke('lock_app');
+  });
+});
+
+describe('session lock gate (data commands — PT7 default-deny parity)', () => {
+  // Representative sensitive commands across each gated category. While locked,
+  // browser mode must reject them identically to the Rust require_unlocked guards.
+  const gatedWhileLocked: Array<[string, Record<string, unknown>?]> = [
+    ['get_all_journal_entries'],
+    ['get_setting', { key: 'app_settings' }],
+    ['set_setting', { key: 'x', value: 'y' }],
+    ['get_all_settings'],
+    ['list_books'],
+    ['get_data_stats'],
+    ['get_full_analytics_bundle', { trendDays: 30 }],
+    ['get_entry_timestamps'],
+    ['upsert_entry_from_sync', { entryJson: '{}' }],
+    ['get_due_capsules', { includeAnniversary: false }],
+    ['still_list_sessions'],
+  ];
+
+  for (const [cmd, args] of gatedWhileLocked) {
+    it(`rejects ${cmd} while locked`, async () => {
+      await invoke('lock_app');
+      await expect(invoke(cmd, args)).rejects.toThrow('Session is locked');
+    });
+  }
+
+  it('allows a gated data command after unlock_app', async () => {
+    await invoke('unlock_app');
+    await expect(invoke('get_all_journal_entries')).resolves.toBeDefined();
     await invoke('lock_app');
   });
 });

@@ -176,8 +176,11 @@ impl Database {
         let hex_key = Zeroizing::new(hex::encode(key));
         let new_conn =
             Connection::open(&self.path).map_err(|e| format!("reopen db for key: {e}"))?;
+        // The format!-built SQL contains the full plaintext SQLCipher key — wrap it in
+        // Zeroizing so the derived String is wiped on drop, not left on the heap.
+        let pragma = Zeroizing::new(format!("PRAGMA hexkey = '{}';", *hex_key));
         new_conn
-            .execute_batch(&format!("PRAGMA hexkey = '{}';", *hex_key))
+            .execute_batch(&pragma)
             .map_err(|e| format!("PRAGMA hexkey: {e}"))?;
         new_conn
             .execute_batch("SELECT count(*) FROM sqlite_master;")
@@ -219,20 +222,22 @@ impl Database {
         {
             let conn = self.conn.lock().map_err(|e| e.to_string())?;
             let _ = conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);");
-            conn.execute_batch(&format!(
+            let attach_sql = Zeroizing::new(format!(
                 "ATTACH DATABASE '{tmp_str}' AS encrypted KEY \"x'{}'\";
                  SELECT sqlcipher_export('encrypted');
                  DETACH DATABASE encrypted;",
                 *hex_key
-            ))
-            .map_err(|e| format!("sqlcipher_export: {e}"))?;
+            ));
+            conn.execute_batch(&attach_sql)
+                .map_err(|e| format!("sqlcipher_export: {e}"))?;
         }
 
         // 2. Verify the exported file opens with the key
         {
             let verify = Connection::open(&tmp_path).map_err(|e| format!("verify open: {e}"))?;
+            let verify_pragma = Zeroizing::new(format!("PRAGMA hexkey = '{}';", *hex_key));
             verify
-                .execute_batch(&format!("PRAGMA hexkey = '{}';", *hex_key))
+                .execute_batch(&verify_pragma)
                 .map_err(|e| format!("verify hexkey: {e}"))?;
             verify
                 .execute_batch("SELECT count(*) FROM sqlite_master;")
@@ -341,8 +346,9 @@ impl Database {
             let mut conn = self.conn.lock().map_err(|e| e.to_string())?;
             let final_conn = Connection::open(&self.path)
                 .map_err(|e| format!("open final encrypted db: {e}"))?;
+            let final_pragma = Zeroizing::new(format!("PRAGMA hexkey = '{}';", *hex_key));
             final_conn
-                .execute_batch(&format!("PRAGMA hexkey = '{}';", *hex_key))
+                .execute_batch(&final_pragma)
                 .map_err(|e| format!("final hexkey: {e}"))?;
             final_conn
                 .execute_batch("SELECT count(*) FROM sqlite_master;")

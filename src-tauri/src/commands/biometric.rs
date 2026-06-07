@@ -64,6 +64,7 @@ pub fn biometric_store_session(
     lock: tauri::State<'_, AppLockState>,
     password: String,
 ) -> Result<(), String> {
+    let password = zeroize::Zeroizing::new(password);
     if lock.is_locked() {
         return Err("Session is locked".to_string());
     }

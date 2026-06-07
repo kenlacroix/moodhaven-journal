@@ -60,11 +60,82 @@ const APP_VERSION = import.meta.env.VITE_APP_VERSION ?? '0.0.0';
 // Mirrors the Tauri session lock state so browser-mode commands can gate on it.
 let _browserSessionUnlocked = false;
 
-// Commands gated by require_unlocked on the Rust side (PT6) that have real
-// IDB-backed implementations here. Kept in sync so browser mode rejects them
-// identically before unlock. Voice memo commands are no-op stubs in browser
-// mode and need no gate.
+// Commands gated by require_unlocked on the Rust side that have real IDB-backed
+// implementations here. Kept in sync so browser mode rejects them identically
+// before unlock — mirrors the backend's explicit per-command guards.
+//
+// IMPORTANT: when you add a browser handler for a command that reads or writes
+// journal data, settings, books, analytics, media, time capsule, StillHaven, or
+// sync data, ADD IT HERE. Anything not listed is served regardless of lock state,
+// so an unlisted data command is a locked-session bypass (PT7 finding).
+//
+// Auth/setup/lifecycle commands (check_password_exists, store/get_password_hash,
+// verify_password, unlock_app, lock_app, factory_reset, exit_app, get_app_version,
+// import_data, 2FA) are intentionally NOT gated — they must work on the lock
+// screen / first-run, exactly as on the desktop backend. Desktop-only commands
+// (peer_*, stt_*, hardware_key_*, voice memos) are no-op/throw stubs that never
+// touch real data, so they need no gate.
 const LOCK_GATED_COMMANDS = new Set([
+  // Journal entries
+  'create_journal_entry',
+  'get_journal_entry',
+  'get_all_journal_entries',
+  'get_journal_entries_by_date',
+  'get_entries_on_this_day',
+  'update_journal_entry',
+  'delete_journal_entry',
+  'patch_entry_location_weather',
+  'patch_entry_pinned',
+  'patch_entry_status',
+  'sync_entry_tags',
+  'get_book_tags',
+  // Statistics / analytics
+  'get_mood_statistics',
+  'get_overall_statistics',
+  'get_mood_distribution',
+  'get_streak_stats',
+  'get_day_of_week_stats',
+  'get_monthly_mood_data',
+  'get_full_analytics_bundle',
+  'get_year_heatmap',
+  'get_insights_metadata',
+  // Settings
+  'get_setting',
+  'set_setting',
+  'delete_setting',
+  'get_all_settings',
+  // Books
+  'list_books',
+  'create_book',
+  'update_book',
+  'delete_book',
+  // Data management (data-bearing; export/stats require unlock on desktop)
+  'export_data',
+  'get_data_stats',
+  // Media (browser-backed reads)
+  'list_all_media',
+  'list_entry_media',
+  // Multi-device sync helpers (PT7: were unguarded on desktop too)
+  'get_entry_timestamps',
+  'upsert_entry_from_sync',
+  // Time capsule
+  'seal_entry',
+  'unseal_entry',
+  'get_due_capsules',
+  'get_mood_delta',
+  // StillHaven
+  'still_create_session',
+  'still_record_activation',
+  'still_complete_session',
+  'still_abandon_session',
+  'still_list_sessions',
+  'still_get_session_with_samples',
+  'still_get_session_brief',
+  'still_get_journal_brief_for_session',
+  'still_get_wellbeing_context',
+  'still_link_signal_to_session',
+  'link_journal_entry_to_session',
+  // Activities
   'list_activities',
   'create_activity',
   'delete_activity',
@@ -439,7 +510,11 @@ async function dispatch(command: string, p: Params): Promise<any> {
     case 'peer_full_restore':
     case 'peer_apply_and_restart':
     case 'peer_rename_device':
+    case 'peer_arm_restore':
+    case 'peer_disarm_restore':
       throw new Error('Peer sync requires the desktop app');
+    case 'peer_restore_is_armed':
+      return false;
 
     case 'hardware_key_feature_available':
       return { available: false, reason: 'Hardware keys require the desktop app' };

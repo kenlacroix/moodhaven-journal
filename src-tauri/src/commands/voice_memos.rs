@@ -73,6 +73,10 @@ pub fn store_voice_memo(
     if id.is_empty() {
         return Err("store_voice_memo: id must not be empty".to_string());
     }
+    // `id` is interpolated into the destination filename, so it must be free of
+    // path separators / traversal — the watch bridge is untrusted input and this
+    // command is intentionally pre-auth (runs while the app is locked).
+    validate_incoming_filename(&id).map_err(|e| format!("store_voice_memo: invalid id: {e}"))?;
     validate_incoming_filename(&incoming_file).map_err(|e| format!("store_voice_memo: {e}"))?;
 
     let src = incoming_dir(&app)?.join(&incoming_file);
@@ -80,6 +84,11 @@ pub fn store_voice_memo(
     let dest_filename = format!("{}.m4a", id);
     let dest = dest_dir.join(&dest_filename);
     let rel_path = format!("voice_memos/{}", dest_filename);
+
+    // Defense in depth: ensure the resolved destination stays inside voice_memos/.
+    if dest.parent() != Some(dest_dir.as_path()) {
+        return Err("store_voice_memo: id escapes voice_memos directory".to_string());
+    }
 
     if !src.exists() {
         return Err(format!(

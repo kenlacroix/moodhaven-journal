@@ -647,6 +647,11 @@ pub fn write_media_from_sync(
     data_base64: String,
 ) -> Result<(), String> {
     require_unlocked(&lock)?;
+    // `media_id` comes from an untrusted peer's media manifest and is interpolated
+    // into the on-disk filename — validate it as a safe path component (same rules
+    // as entry_id) to block traversal writes outside the media directory.
+    validate_entry_id(&media_id)
+        .map_err(|e| format!("write_media_from_sync: invalid media_id: {e}"))?;
     // Idempotency: skip if this media ID already exists locally
     {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;

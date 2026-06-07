@@ -109,6 +109,25 @@ export async function peerApplyAndRestart(): Promise<void> {
   return invoke('peer_apply_and_restart');
 }
 
+/**
+ * Arm this (source) device to serve one full-DB restore to a new device within
+ * the next 5 minutes. Required before any peer can pull the full database —
+ * trust alone is not authorization. Requires an unlocked session.
+ */
+export async function peerArmRestore(): Promise<void> {
+  return invoke('peer_arm_restore');
+}
+
+/** Cancel a pending restore-armed window. */
+export async function peerDisarmRestore(): Promise<void> {
+  return invoke('peer_disarm_restore');
+}
+
+/** Whether this device is currently armed to serve a restore. */
+export async function peerRestoreIsArmed(): Promise<boolean> {
+  return invoke('peer_restore_is_armed');
+}
+
 export function onRestoreProgress(cb: (e: RestoreProgressEvent) => void): Promise<UnlistenFn> {
   return listen<RestoreProgressEvent>('peer:restore_progress', (e) => cb(e.payload));
 }

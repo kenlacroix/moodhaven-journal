@@ -130,9 +130,7 @@ pub fn still_complete_session(
             params![completed_at, duration_seconds, id],
         )
         .map_err(|e| format!("Failed to complete session: {}", e))?;
-    if n == 0 {
-        return Err(format!("Session not found: {id}"));
-    }
+    let _ = n;
 
     Ok(())
 }
@@ -146,9 +144,7 @@ pub fn still_abandon_session(db: &Database, id: &str, abandoned_at: &str) -> Res
             params![abandoned_at, id],
         )
         .map_err(|e| format!("Failed to abandon session: {}", e))?;
-    if n == 0 {
-        return Err(format!("Session not found: {id}"));
-    }
+    let _ = n;
 
     Ok(())
 }
@@ -857,17 +853,17 @@ mod tests {
     // ── still_complete_session / still_abandon_session — nonexistent id ────────
 
     #[test]
-    fn complete_session_nonexistent_id_errors() {
+    fn complete_session_nonexistent_id_is_noop() {
         let db = test_db();
         let result = still_complete_session(&db, "nope", "2026-01-01T11:00:00", 600);
-        assert!(result.is_err(), "expected Err for nonexistent session id");
+        assert!(result.is_ok(), "missing session id must be a no-op (crash-reconnect safe)");
     }
 
     #[test]
-    fn abandon_session_nonexistent_id_errors() {
+    fn abandon_session_nonexistent_id_is_noop() {
         let db = test_db();
         let result = still_abandon_session(&db, "nope", "2026-01-01T10:05:00");
-        assert!(result.is_err(), "expected Err for nonexistent session id");
+        assert!(result.is_ok(), "missing session id must be a no-op (crash-reconnect safe)");
     }
 
     // ── get_session_brief — partial activation ───────────────────────────────

@@ -137,7 +137,7 @@ The database lives at `{app_data_dir}/moodhaven.db`. Schema is created/migrated 
 ```sql
 journal_entries (
   id           TEXT PRIMARY KEY,
-  content      TEXT NOT NULL,          -- AES-256-GCM ciphertext (JSON: {iv, data, salt})
+  encrypted_content TEXT NOT NULL,     -- AES-256-GCM ciphertext (JSON: {iv, data, salt})
   mood         INTEGER NOT NULL,       -- 1–5 (stored plaintext for analytics)
   privacy_mode INTEGER DEFAULT 0,      -- 0=Open 1=Mindful 2=Private
   location_weather TEXT,               -- JSON: {city, temp, weatherCode, unit}

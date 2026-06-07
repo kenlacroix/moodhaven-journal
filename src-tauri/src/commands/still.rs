@@ -93,6 +93,9 @@ pub fn still_complete_session(
     duration_seconds: i64,
 ) -> Result<(), String> {
     require_unlocked(&lock)?;
+    if duration_seconds < 0 {
+        return Err("duration_seconds must be non-negative".to_string());
+    }
     db::still_complete_session(&db, &id, &completed_at, duration_seconds)
 }
 

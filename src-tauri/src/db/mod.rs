@@ -169,19 +169,22 @@ impl Database {
     }
 
     /// Apply a SQLCipher key to the database connection after the user authenticates.
-    /// Opens a fresh connection with PRAGMA hexkey set, verifies the key is correct,
+    /// Opens a fresh connection with the raw key set via `PRAGMA key = "x'...'"`
+    /// (the same form used to encrypt), verifies the key is correct,
     /// runs all pragmas and migrations, then replaces the stored connection.
     /// Called by `verify_password` when the DB is already encrypted.
     pub fn apply_key(&self, key: &[u8; 32]) -> Result<(), String> {
         let hex_key = Zeroizing::new(hex::encode(key));
         let new_conn =
             Connection::open(&self.path).map_err(|e| format!("reopen db for key: {e}"))?;
-        // The format!-built SQL contains the full plaintext SQLCipher key — wrap it in
-        // Zeroizing so the derived String is wiped on drop, not left on the heap.
-        let pragma = Zeroizing::new(format!("PRAGMA hexkey = '{}';", *hex_key));
+        // SQLCipher: apply the raw key with the SAME x'...' literal form used to ENCRYPT
+        // (encrypt_in_place's `ATTACH ... KEY "x'...'"`). `PRAGMA hexkey` instead runs the
+        // bytes through SQLCipher's KDF, deriving a DIFFERENT key → "file is not a database"
+        // on every read. The format!-built SQL holds the plaintext key, so wrap in Zeroizing.
+        let pragma = Zeroizing::new(format!("PRAGMA key = \"x'{}'\";", *hex_key));
         new_conn
             .execute_batch(&pragma)
-            .map_err(|e| format!("PRAGMA hexkey: {e}"))?;
+            .map_err(|e| format!("PRAGMA key: {e}"))?;
         new_conn
             .execute_batch("SELECT count(*) FROM sqlite_master;")
             .map_err(|_| "wrong key".to_string())?;
@@ -235,10 +238,10 @@ impl Database {
         // 2. Verify the exported file opens with the key
         {
             let verify = Connection::open(&tmp_path).map_err(|e| format!("verify open: {e}"))?;
-            let verify_pragma = Zeroizing::new(format!("PRAGMA hexkey = '{}';", *hex_key));
+            let verify_pragma = Zeroizing::new(format!("PRAGMA key = \"x'{}'\";", *hex_key));
             verify
                 .execute_batch(&verify_pragma)
-                .map_err(|e| format!("verify hexkey: {e}"))?;
+                .map_err(|e| format!("verify key: {e}"))?;
             verify
                 .execute_batch("SELECT count(*) FROM sqlite_master;")
                 .map_err(|_| "encrypted db unreadable after export".to_string())?;
@@ -346,10 +349,10 @@ impl Database {
             let mut conn = self.conn.lock().map_err(|e| e.to_string())?;
             let final_conn = Connection::open(&self.path)
                 .map_err(|e| format!("open final encrypted db: {e}"))?;
-            let final_pragma = Zeroizing::new(format!("PRAGMA hexkey = '{}';", *hex_key));
+            let final_pragma = Zeroizing::new(format!("PRAGMA key = \"x'{}'\";", *hex_key));
             final_conn
                 .execute_batch(&final_pragma)
-                .map_err(|e| format!("final hexkey: {e}"))?;
+                .map_err(|e| format!("final key: {e}"))?;
             final_conn
                 .execute_batch("SELECT count(*) FROM sqlite_master;")
                 .map_err(|_| "final encrypted db unreadable".to_string())?;
@@ -893,5 +896,75 @@ pub fn is_2fa_enabled(db: &Database) -> Result<bool, String> {
         Ok(v) => Ok(v == 1),
         Err(rusqlite::Error::QueryReturnedNoRows) => Ok(false),
         Err(e) => Err(format!("is_2fa_enabled: {e}")),
+    }
+}
+
+#[cfg(test)]
+mod sqlcipher_key_tests {
+    use rusqlite::Connection;
+
+    // Regression guard for the SQLCipher key-application bug: the DB is encrypted
+    // with a RAW key via `ATTACH ... KEY "x'<hex>'"`, so it MUST be read back with
+    // the same raw form `PRAGMA key = "x'<hex>'"`. `PRAGMA hexkey` instead decodes
+    // the hex and runs PBKDF2 over the bytes, deriving a DIFFERENT key — which
+    // silently broke encryption-at-rest (the migration verify always failed, so the
+    // DB stayed plaintext). This test fails if a read path ever diverges from the
+    // encryption form again.
+    #[test]
+    fn raw_key_export_roundtrip_opens_with_pragma_key() {
+        let hex_key: String = (0u8..32)
+            .map(|b| format!("{:02x}", b.wrapping_mul(7)))
+            .collect();
+        let dir = std::env::temp_dir();
+        let pid = std::process::id();
+        let plain = dir.join(format!("mh_sqlc_plain_{pid}.db"));
+        let enc = dir.join(format!("mh_sqlc_enc_{pid}.db"));
+        let _ = std::fs::remove_file(&plain);
+        let _ = std::fs::remove_file(&enc);
+
+        // 1. Plaintext DB with a known row → sqlcipher_export with a raw key (the app's encryption path).
+        {
+            let c = Connection::open(&plain).unwrap();
+            c.execute_batch(
+                "CREATE TABLE t (id INTEGER PRIMARY KEY, v TEXT); INSERT INTO t VALUES (1, 'secret');",
+            )
+            .unwrap();
+            let enc_str = enc.to_str().unwrap();
+            c.execute_batch(&format!(
+                "ATTACH DATABASE '{enc_str}' AS encrypted KEY \"x'{hex_key}'\";
+                 SELECT sqlcipher_export('encrypted');
+                 DETACH DATABASE encrypted;"
+            ))
+            .unwrap();
+        }
+
+        // 2. Reopen with the SAME raw form the app uses (apply_key / verify / final-open) — must succeed.
+        {
+            let c = Connection::open(&enc).unwrap();
+            c.execute_batch(&format!("PRAGMA key = \"x'{hex_key}'\";"))
+                .unwrap();
+            let n: i64 = c
+                .query_row("SELECT count(*) FROM t", [], |r| r.get(0))
+                .expect("raw `PRAGMA key` must open a raw-keyed SQLCipher DB");
+            assert_eq!(
+                n, 1,
+                "exported row must be readable with the matching raw key"
+            );
+        }
+
+        // 3. The buggy read path (`PRAGMA hexkey`) must NOT open the same file — documents the mismatch.
+        {
+            let c = Connection::open(&enc).unwrap();
+            c.execute_batch(&format!("PRAGMA hexkey = '{hex_key}';"))
+                .unwrap();
+            let res = c.query_row("SELECT count(*) FROM t", [], |r| r.get::<_, i64>(0));
+            assert!(
+                res.is_err(),
+                "`PRAGMA hexkey` derives a different key and must not open a raw-keyed DB"
+            );
+        }
+
+        let _ = std::fs::remove_file(&plain);
+        let _ = std::fs::remove_file(&enc);
     }
 }

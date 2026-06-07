@@ -89,44 +89,56 @@ impl Database {
 
         // Recovery: if moodhaven_enc.db exists, a previous migration was interrupted.
         // Determine how far it got based on the salt pre-write and encrypted flag.
+        //
+        // CRITICAL (data-loss fix): the encrypted tmp is produced by sqlcipher_export,
+        // which pre-writes the salt to db_state.json BEFORE the export runs. If the
+        // process is killed (crash / SIGKILL / power loss) mid-export, moodhaven_enc.db
+        // is left TRUNCATED while the original plaintext moodhaven.db is still intact.
+        // Promoting (renaming) the tmp over the original here — with no key to verify it —
+        // would clobber good data with a corrupt file and lock the user out permanently.
+        //
+        // Therefore Database::new NEVER renames the tmp over the original. The atomic
+        // promotion is deferred to apply_key(), which runs only after the user
+        // authenticates and holds the derived key, so the tmp can actually be opened and
+        // verified before it replaces the original. See `pending_promotion` handling there.
         let tmp_path = db_path.with_file_name("moodhaven_enc.db");
         if tmp_path.exists() {
-            if !state.encrypted {
-                if state.salt.is_some() {
-                    // Salt was pre-written before export (v1.7.5+): migration was in progress.
-                    // Update db_state.json to encrypted:true and complete the rename below.
-                    log::warn!(
-                        "[sqlcipher] Found moodhaven_enc.db with pre-written salt — \
-                         completing interrupted migration (SQLC-004)"
-                    );
-                    let _ = write_db_state(
-                        &db_path,
-                        &DbStateFile {
-                            encrypted: true,
-                            salt: state.salt.clone(),
-                        },
-                    );
-                    state.encrypted = true;
-                } else {
-                    // No salt: crash occurred before the pre-write (pre-v1.7.5 path) or
-                    // the revert path was hit. The encrypted tmp cannot be keyed without the
-                    // salt — discard it and fall through to open the original plaintext DB.
-                    log::warn!(
-                        "[sqlcipher] Found moodhaven_enc.db without salt — \
-                         discarding orphaned file (SQLC-004)"
-                    );
-                    let _ = std::fs::remove_file(&tmp_path);
-                }
-            } else {
-                log::info!("[sqlcipher] Completing interrupted migration on startup");
-            }
             if state.encrypted {
-                #[cfg(target_os = "windows")]
-                if let Err(e) = std::fs::remove_file(&db_path) {
-                    log::warn!("[sqlcipher] Windows pre-rename remove failed: {e}");
-                }
-                std::fs::rename(&tmp_path, &db_path)
-                    .map_err(|e| format!("[sqlcipher] Startup recovery rename failed: {e}"))?;
+                // db_state already says encrypted:true. This happens when the crash landed
+                // AFTER the export's encrypted:true write (step 3) but before the rename, or
+                // when a previous startup already flipped the flag. The tmp is the live DB
+                // but it has NOT been key-verified — defer promotion to apply_key().
+                log::info!(
+                    "[sqlcipher] Found moodhaven_enc.db with encrypted db_state — \
+                     deferring key-verified promotion to apply_key (startup recovery)"
+                );
+            } else if state.salt.is_some() {
+                // Salt pre-written before export (v1.7.5+) but db_state still encrypted:false:
+                // the crash may have happened mid-export, so the tmp could be truncated. Flip
+                // db_state to encrypted:true so verify_password derives the key and routes to
+                // apply_key, which key-verifies the tmp before promoting it. The original
+                // plaintext moodhaven.db is left fully intact in case the tmp is corrupt.
+                log::warn!(
+                    "[sqlcipher] Found moodhaven_enc.db with pre-written salt — \
+                     deferring key-verified promotion to apply_key, original preserved (SQLC-004)"
+                );
+                let _ = write_db_state(
+                    &db_path,
+                    &DbStateFile {
+                        encrypted: true,
+                        salt: state.salt.clone(),
+                    },
+                );
+                state.encrypted = true;
+            } else {
+                // No salt: crash occurred before the pre-write (pre-v1.7.5 path) or
+                // the revert path was hit. The encrypted tmp cannot be keyed without the
+                // salt — discard it and fall through to open the original plaintext DB.
+                log::warn!(
+                    "[sqlcipher] Found moodhaven_enc.db without salt — \
+                     discarding orphaned file (SQLC-004)"
+                );
+                let _ = std::fs::remove_file(&tmp_path);
             }
         }
 
@@ -168,30 +180,197 @@ impl Database {
         })
     }
 
+    /// Open a SQLCipher database file with a raw key and confirm it is readable.
+    ///
+    /// Uses the SAME raw `x'...'` literal form used to ENCRYPT (encrypt_in_place's
+    /// `ATTACH ... KEY "x'...'"`). `PRAGMA hexkey` instead runs the bytes through
+    /// SQLCipher's KDF, deriving a DIFFERENT key → "file is not a database" on every
+    /// read. The format!-built SQL holds the plaintext key, so wrap it in Zeroizing.
+    ///
+    /// Returns the opened connection on success, or an error if the key is wrong or the
+    /// file is corrupt/truncated (the `SELECT count(*)` read will fail in either case).
+    fn open_keyed(path: &Path, hex_key: &str) -> Result<Connection, String> {
+        let conn = Connection::open(path).map_err(|e| format!("open keyed db: {e}"))?;
+        let pragma = Zeroizing::new(format!("PRAGMA key = \"x'{hex_key}'\";"));
+        conn.execute_batch(&pragma)
+            .map_err(|e| format!("PRAGMA key: {e}"))?;
+        conn.execute_batch("SELECT count(*) FROM sqlite_master;")
+            .map_err(|_| "wrong key or corrupt database".to_string())?;
+        Ok(conn)
+    }
+
     /// Apply a SQLCipher key to the database connection after the user authenticates.
-    /// Opens a fresh connection with the raw key set via `PRAGMA key = "x'...'"`
-    /// (the same form used to encrypt), verifies the key is correct,
-    /// runs all pragmas and migrations, then replaces the stored connection.
-    /// Called by `verify_password` when the DB is already encrypted.
+    ///
+    /// Two cases:
+    ///
+    /// 1. **Deferred promotion** — a pending `moodhaven_enc.db` exists (an interrupted
+    ///    migration that `Database::new` intentionally did NOT promote, to avoid clobbering
+    ///    the intact original with a possibly-truncated tmp). We now hold the derived key,
+    ///    so we can actually open the tmp and verify it. ONLY if it opens cleanly do we
+    ///    atomically promote it (rename over `moodhaven.db`, write `db_state {encrypted:true}`)
+    ///    and adopt its connection. If the tmp is corrupt/truncated, the original plaintext
+    ///    `moodhaven.db` is left untouched, the bad tmp is discarded, `db_state` is reverted
+    ///    to `{encrypted:false}`, and a clear error is returned — the next unlock attempt then
+    ///    falls back to the intact plaintext DB with no data loss.
+    ///
+    /// 2. **Normal** — no pending tmp: open `moodhaven.db` with the key as before.
+    ///
+    /// In both cases the keyed connection has all pragmas + migrations applied, then
+    /// replaces the stored connection. Called by `verify_password` on an encrypted DB.
     pub fn apply_key(&self, key: &[u8; 32]) -> Result<(), String> {
         let hex_key = Zeroizing::new(hex::encode(key));
-        let new_conn =
-            Connection::open(&self.path).map_err(|e| format!("reopen db for key: {e}"))?;
-        // SQLCipher: apply the raw key with the SAME x'...' literal form used to ENCRYPT
-        // (encrypt_in_place's `ATTACH ... KEY "x'...'"`). `PRAGMA hexkey` instead runs the
-        // bytes through SQLCipher's KDF, deriving a DIFFERENT key → "file is not a database"
-        // on every read. The format!-built SQL holds the plaintext key, so wrap in Zeroizing.
-        let pragma = Zeroizing::new(format!("PRAGMA key = \"x'{}'\";", *hex_key));
-        new_conn
-            .execute_batch(&pragma)
-            .map_err(|e| format!("PRAGMA key: {e}"))?;
-        new_conn
-            .execute_batch("SELECT count(*) FROM sqlite_master;")
-            .map_err(|_| "wrong key".to_string())?;
+        let tmp_path = self.path.with_file_name("moodhaven_enc.db");
+
+        if tmp_path.exists() {
+            return self.promote_pending_tmp(&tmp_path, &hex_key);
+        }
+
+        let new_conn = Self::open_keyed(&self.path, &hex_key)?;
         Self::run_pragmas_and_migrations(&new_conn)?;
         let mut conn = self.conn.lock().map_err(|e| e.to_string())?;
         *conn = new_conn;
         Ok(())
+    }
+
+    /// Promote a pending, interrupted-migration `moodhaven_enc.db` ONLY after key-verifying it.
+    /// On verify failure the original `moodhaven.db` is preserved and the tmp discarded.
+    fn promote_pending_tmp(&self, tmp_path: &Path, hex_key: &str) -> Result<(), String> {
+        // Key-verify the tmp BEFORE touching the original. If the export was interrupted the
+        // tmp is truncated and this open fails — leaving the original plaintext DB intact.
+        let keyed = match Self::open_keyed(tmp_path, hex_key) {
+            Ok(conn) => conn,
+            Err(e) => {
+                // The tmp could not be opened with the derived key. This is either a wrong
+                // password OR a corrupt/truncated tmp. Distinguish by probing the original:
+                // if moodhaven.db is a readable plaintext DB, the tmp is the corrupt one →
+                // discard it and revert db_state so the user can unlock against the original.
+                let original_is_plaintext = Connection::open(&self.path)
+                    .ok()
+                    .map(|c| {
+                        c.execute_batch("SELECT count(*) FROM sqlite_master;")
+                            .is_ok()
+                    })
+                    .unwrap_or(false);
+                if original_is_plaintext {
+                    log::error!(
+                        "[sqlcipher] Pending moodhaven_enc.db failed key verification while the \
+                         original moodhaven.db is a readable plaintext DB — discarding the corrupt \
+                         tmp and reverting to the intact original (data preserved): {e}"
+                    );
+                    let _ = std::fs::remove_file(tmp_path);
+                    let _ = write_db_state(
+                        &self.path,
+                        &DbStateFile {
+                            encrypted: false,
+                            salt: None,
+                        },
+                    );
+                    return Err(
+                        "Interrupted encryption left a corrupt file; your original data was \
+                         preserved. Please unlock again."
+                            .to_string(),
+                    );
+                }
+                // Original is not a plaintext DB (already encrypted, or absent). Could not
+                // verify the tmp — most likely a wrong password. Leave both files untouched
+                // so a correct password on retry can still promote the tmp.
+                return Err(e);
+            }
+        };
+
+        // Tmp opened cleanly with the key → safe to promote atomically. Drop the verify
+        // connection first so the file handle is released before the rename (Windows).
+        Self::run_pragmas_and_migrations(&keyed)?;
+        drop(keyed);
+
+        // Release the passive connection Database::new opened on the original moodhaven.db
+        // (replace with an in-memory placeholder) so the file handle is freed before we
+        // rename over it — required on Windows, harmless on POSIX.
+        {
+            let mut conn = self.conn.lock().map_err(|e| e.to_string())?;
+            let placeholder =
+                Connection::open_in_memory().map_err(|e| format!("placeholder: {e}"))?;
+            *conn = placeholder;
+        }
+
+        // Drop the original plaintext DB's stale WAL/SHM so they don't bleed into the
+        // promoted encrypted file. Retry briefly for delayed Windows handle release.
+        for _ in 0..5 {
+            let wal_gone = std::fs::remove_file(self.path.with_extension("db-wal")).is_ok()
+                || !self.path.with_extension("db-wal").exists();
+            let shm_gone = std::fs::remove_file(self.path.with_extension("db-shm")).is_ok()
+                || !self.path.with_extension("db-shm").exists();
+            if wal_gone && shm_gone {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+
+        Self::atomic_promote(&self.path, tmp_path)?;
+
+        // db_state is now authoritative: the encrypted file is live at moodhaven.db.
+        write_db_state(
+            &self.path,
+            &DbStateFile {
+                encrypted: true,
+                salt: read_db_state(&self.path).salt,
+            },
+        )?;
+
+        // Open the final keyed connection on the promoted file and adopt it.
+        let final_conn = Self::open_keyed(&self.path, hex_key)?;
+        Self::run_pragmas_and_migrations(&final_conn)?;
+        let mut conn = self.conn.lock().map_err(|e| e.to_string())?;
+        *conn = final_conn;
+        log::info!("[sqlcipher] Promoted interrupted-migration tmp after key verification");
+        Ok(())
+    }
+
+    /// Atomically replace `dst` (the original moodhaven.db) with `src` (moodhaven_enc.db).
+    /// Mirrors encrypt_in_place's rename strategy: on Windows the destination must be moved
+    /// aside first (rename fails if the destination exists), and Windows may keep the file
+    /// handle open briefly after a Connection drops, so both steps retry.
+    fn atomic_promote(dst: &Path, src: &Path) -> Result<(), String> {
+        #[cfg(target_os = "windows")]
+        {
+            let backup = dst.with_file_name("moodhaven_old.db");
+            let mut last_err = String::new();
+            for attempt in 0..5u8 {
+                if attempt > 0 {
+                    std::thread::sleep(std::time::Duration::from_millis(50));
+                }
+                // If the original is gone (crash mid-rename), promote the tmp directly.
+                if !dst.exists() {
+                    match std::fs::rename(src, dst) {
+                        Ok(()) => return Ok(()),
+                        Err(e) => {
+                            last_err = format!("rename encrypted db: {e}");
+                            continue;
+                        }
+                    }
+                }
+                match std::fs::rename(dst, &backup) {
+                    Err(e) => last_err = format!("backup original db: {e}"),
+                    Ok(()) => match std::fs::rename(src, dst) {
+                        Ok(()) => {
+                            let _ = std::fs::remove_file(&backup);
+                            return Ok(());
+                        }
+                        Err(e) => {
+                            let _ = std::fs::rename(&backup, dst);
+                            last_err = format!("rename encrypted db: {e}");
+                        }
+                    },
+                }
+            }
+            Err(last_err)
+        }
+
+        #[cfg(not(target_os = "windows"))]
+        {
+            // rename(2) atomically replaces the destination on POSIX.
+            std::fs::rename(src, dst).map_err(|e| format!("rename encrypted db: {e}"))
+        }
     }
 
     /// Encrypt the database in-place using sqlcipher_export.
@@ -966,5 +1145,171 @@ mod sqlcipher_key_tests {
 
         let _ = std::fs::remove_file(&plain);
         let _ = std::fs::remove_file(&enc);
+    }
+
+    // Data-loss regression guard (HIGH severity): a crash mid-`sqlcipher_export` leaves a
+    // TRUNCATED moodhaven_enc.db next to the still-intact plaintext moodhaven.db, with
+    // db_state.json carrying the pre-written salt but encrypted:false. The old recovery
+    // path in Database::new blindly renamed the corrupt tmp over the good DB → permanent
+    // lockout / total data loss. The fix defers promotion to apply_key (which has the key
+    // and can verify the tmp first), so Database::new MUST NOT destroy the original here.
+    #[test]
+    fn startup_recovery_preserves_original_when_tmp_is_corrupt() {
+        use super::{read_db_state, write_db_state, Database, DbStateFile};
+
+        let dir = std::env::temp_dir();
+        let pid = std::process::id();
+        let base = dir.join(format!("mh_crashrec_{pid}"));
+        let _ = std::fs::create_dir_all(&base);
+        let db_path = base.join("moodhaven.db");
+        let tmp_path = base.join("moodhaven_enc.db");
+        let state_path = base.join("db_state.json");
+        let _ = std::fs::remove_file(&db_path);
+        let _ = std::fs::remove_file(&tmp_path);
+        let _ = std::fs::remove_file(&state_path);
+
+        // 1. A real, intact plaintext journal DB with a known secret row.
+        {
+            let c = Connection::open(&db_path).unwrap();
+            c.execute_batch(
+                "CREATE TABLE journal_entries (id TEXT PRIMARY KEY, content TEXT);
+                 INSERT INTO journal_entries VALUES ('e1', 'precious-original-data');",
+            )
+            .unwrap();
+        }
+
+        // 2. Simulate the interrupted migration: a TRUNCATED/garbage moodhaven_enc.db
+        //    (not a valid SQLite/SQLCipher file) plus db_state.json with the pre-written
+        //    salt but encrypted:false — exactly the state encrypt_in_place leaves behind
+        //    if it is killed after the salt write but before the export completes.
+        std::fs::write(&tmp_path, b"\x00\x01corrupt-truncated-not-a-db\xff\xfe").unwrap();
+        write_db_state(
+            &db_path,
+            &DbStateFile {
+                encrypted: false,
+                salt: Some("dGVzdC1zYWx0".to_string()), // base64("test-salt")
+            },
+        )
+        .unwrap();
+
+        // 3. Boot. Recovery must NOT promote the corrupt tmp over the good DB.
+        let db = Database::new(db_path.clone()).expect("Database::new must not fail on recovery");
+        drop(db); // release any handle before re-opening the file below
+
+        // 4. The original plaintext moodhaven.db must still be intact and readable WITHOUT
+        //    a key — proving the corrupt tmp was never renamed over it (no data loss).
+        {
+            let c = Connection::open(&db_path).unwrap();
+            let content: String = c
+                .query_row(
+                    "SELECT content FROM journal_entries WHERE id = 'e1'",
+                    [],
+                    |r| r.get(0),
+                )
+                .expect("original plaintext DB must survive startup recovery");
+            assert_eq!(
+                content, "precious-original-data",
+                "startup recovery must not clobber the intact original with the corrupt tmp"
+            );
+        }
+
+        // 5. db_state.json is flipped to encrypted:true so verify_password routes through
+        //    apply_key (which key-verifies the tmp before any promotion); the salt is kept.
+        let state = read_db_state(&db_path);
+        assert!(
+            state.encrypted,
+            "recovery should mark encrypted:true to defer key-verified promotion to apply_key"
+        );
+        assert_eq!(state.salt.as_deref(), Some("dGVzdC1zYWx0"));
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    // Positive path: when the interrupted-migration tmp is actually VALID (export
+    // completed before the crash), apply_key with the correct key must promote it —
+    // rename it over moodhaven.db, mark db_state encrypted:true, and serve its rows.
+    #[test]
+    fn apply_key_promotes_valid_pending_tmp_after_verification() {
+        use super::{read_db_state, write_db_state, Database, DbStateFile};
+
+        let hex_key: String = (0u8..32)
+            .map(|b| format!("{:02x}", b.wrapping_mul(11).wrapping_add(3)))
+            .collect();
+        let key: [u8; 32] = {
+            let mut k = [0u8; 32];
+            for (i, byte) in k.iter_mut().enumerate() {
+                *byte = u8::from_str_radix(&hex_key[i * 2..i * 2 + 2], 16).unwrap();
+            }
+            k
+        };
+
+        let dir = std::env::temp_dir();
+        let pid = std::process::id();
+        let base = dir.join(format!("mh_promote_{pid}"));
+        let _ = std::fs::create_dir_all(&base);
+        let db_path = base.join("moodhaven.db");
+        let tmp_path = base.join("moodhaven_enc.db");
+        let _ = std::fs::remove_file(&db_path);
+        let _ = std::fs::remove_file(&tmp_path);
+        let _ = std::fs::remove_file(base.join("db_state.json"));
+
+        // 1. Build a real plaintext DB via Database::new (full schema + migrations) with a
+        //    known row, then produce a VALID encrypted tmp via sqlcipher_export — exactly the
+        //    state encrypt_in_place leaves behind if killed after export but before rename.
+        {
+            let seed = Database::new(db_path.clone()).expect("seed plaintext DB");
+            {
+                let conn = seed.conn.lock().unwrap();
+                conn.execute(
+                    "INSERT INTO journal_entries (id, encrypted_content, mood, created_at, updated_at)
+                     VALUES ('e1', 'migrated-secret', 3, datetime('now'), datetime('now'))",
+                    [],
+                )
+                .unwrap();
+                let tmp_str = tmp_path.to_str().unwrap();
+                conn.execute_batch(&format!(
+                    "ATTACH DATABASE '{tmp_str}' AS encrypted KEY \"x'{hex_key}'\";
+                     SELECT sqlcipher_export('encrypted');
+                     DETACH DATABASE encrypted;"
+                ))
+                .unwrap();
+            }
+            drop(seed);
+        }
+        write_db_state(
+            &db_path,
+            &DbStateFile {
+                encrypted: false,
+                salt: Some("dGVzdC1zYWx0".to_string()),
+            },
+        )
+        .unwrap();
+
+        // 2. Boot (defers promotion) then apply the correct key (as verify_password would).
+        let db = Database::new(db_path.clone()).expect("Database::new must not fail");
+        db.apply_key(&key)
+            .expect("valid tmp must promote under the correct key");
+
+        // 3. The tmp is gone (promoted), db_state is encrypted:true, and the keyed
+        //    connection serves the migrated row.
+        assert!(
+            !tmp_path.exists(),
+            "valid tmp must be promoted (renamed away)"
+        );
+        assert!(read_db_state(&db_path).encrypted);
+        {
+            let conn = db.conn.lock().unwrap();
+            let content: String = conn
+                .query_row(
+                    "SELECT encrypted_content FROM journal_entries WHERE id = 'e1'",
+                    [],
+                    |r| r.get(0),
+                )
+                .expect("promoted encrypted DB must serve the migrated row");
+            assert_eq!(content, "migrated-secret");
+        }
+
+        drop(db);
+        let _ = std::fs::remove_dir_all(&base);
     }
 }

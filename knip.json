@@ -1,36 +1,17 @@
 {
   "$schema": "https://unpkg.com/knip@latest/schema.json",
   "entry": [
-    "src/main.tsx",
     "src/App.tsx",
-    "src/test/setup.ts",
     "src/**/*.test.{ts,tsx}"
   ],
   "project": [
     "src/**/*.{ts,tsx}"
   ],
   "ignore": [
-    "src/lib/backend/browser-stubs.ts",
-    "staging/**",
-    "scripts/**",
-    "node_modules/**",
-    "src-tauri/**"
+    "src/lib/backend/browser-stubs.ts"
   ],
   "ignoreDependencies": [
-    "vite",
-    "vitest",
-    "@vitejs/plugin-react",
-    "tailwindcss",
-    "autoprefixer",
-    "postcss",
     "@tauri-apps/*",
-    "typescript",
-    "@types/dompurify",
-    "@testing-library/dom",
-    "esbuild",
-    "eslint",
-    "playwright",
-    "@tiptap/core",
-    "@vitest/coverage-v8"
+    "@types/dompurify"
   ]
 }

@@ -2,6 +2,7 @@
 import type { Metadata } from "next";
 import { getLatestRelease } from "@/lib/getLatestRelease";
 import HomeClient from "@/components/HomeClient";
+import StatsStrip from "@/components/StatsStrip";
 
 // Fetch the latest release on every request — GitHub is the source of truth.
 export const runtime = "edge";
@@ -24,5 +25,5 @@ export const metadata: Metadata = {
 
 export default async function Home() {
   const release = await getLatestRelease();
-  return <HomeClient latestRelease={release} />;
+  return <HomeClient latestRelease={release} statsStrip={<StatsStrip />} />;
 }

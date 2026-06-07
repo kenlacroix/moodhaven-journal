@@ -13,13 +13,15 @@ import NewsletterSignup from "./NewsletterSignup";
 import HowItWorks from "./HowItWorks";
 import ComparisonTable from "./ComparisonTable";
 import HeroParticles from "./HeroParticles";
+import HowIBuiltThis from "./HowIBuiltThis";
 import type { LatestRelease } from "@/lib/getLatestRelease";
 
 interface HomeClientProps {
   latestRelease?: LatestRelease | null;
+  statsStrip?: React.ReactNode;
 }
 
-export default function HomeClient({ latestRelease }: HomeClientProps) {
+export default function HomeClient({ latestRelease, statsStrip }: HomeClientProps) {
   return (
     <div className="w-full">
       {/* Hero Section */}
@@ -27,7 +29,7 @@ export default function HomeClient({ latestRelease }: HomeClientProps) {
         {/* Violet gradient background — on-brand, no external photo */}
         <div className="absolute inset-0 bg-gradient-to-br from-primary-900 via-primary-800 to-primary-700 z-0" />
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(139,92,246,0.3)_0%,_transparent_60%)] z-0 pointer-events-none" />
-        {/* Subtle raindrop particle layer — pointer-events-none, purely decorative */}
+        {/* Floating particle layer — mouse-repel, pointer-events-none, purely decorative */}
         <HeroParticles />
 
         <div className="relative z-10 max-w-6xl mx-auto px-4">
@@ -49,6 +51,16 @@ export default function HomeClient({ latestRelease }: HomeClientProps) {
               <h1 className="text-3xl md:text-5xl font-bold tracking-tight">
                 Your Private Journal That Stays Yours
               </h1>
+              <p className="text-sm text-primary-300 mt-2 mb-1">
+                Built by{' '}
+                <a
+                  href="/about"
+                  className="text-primary-100 hover:text-white underline underline-offset-2 transition-colors duration-150"
+                >
+                  Ken LaCroix
+                </a>
+                {' '}· open source · MIT licensed
+              </p>
               <p className="text-lg md:text-xl text-primary-200 mt-4 max-w-lg mx-auto lg:mx-0">
                 Local-first journaling with mood tracking and AI insights — all on your device. No accounts, no cloud, no compromises.
               </p>
@@ -108,12 +120,18 @@ export default function HomeClient({ latestRelease }: HomeClientProps) {
         </div>
       </section>
 
+      {/* Live stats strip — dark monospace bar passed as server component from page.tsx */}
+      {statsStrip}
+
       <AppPreview />
       <PrivacyCallout />
       <HowItWorks />
+      <HowIBuiltThis />
       <FeaturesGrid />
       <FeatureTabs />
-      <PrivacyProof />
+      <div className="bg-primary-950">
+        <PrivacyProof />
+      </div>
       <ComparisonTable />
       <NewsletterSignup />
       <CommunityCallout />

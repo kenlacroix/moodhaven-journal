@@ -651,11 +651,24 @@ pub fn get_year_heatmap(db: &Database) -> Result<Vec<HeatmapDay>, String> {
             })
         })
         .map_err(|e| format!("Heatmap view query failed: {}", e))?
-        .filter_map(|r| r.ok())
-        .collect();
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("Heatmap view row parsing failed: {}", e))?;
 
     if !rows.is_empty() {
         return Ok(rows);
+    }
+
+    // View is empty — check if there are any entries at all before the costlier fallback query
+    let entry_count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM journal_entries WHERE date(created_at) >= date('now', '-365 days')",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+
+    if entry_count == 0 {
+        return Ok(vec![]);
     }
 
     let mut fallback = conn
@@ -677,8 +690,8 @@ pub fn get_year_heatmap(db: &Database) -> Result<Vec<HeatmapDay>, String> {
             })
         })
         .map_err(|e| format!("Heatmap fallback query failed: {}", e))?
-        .filter_map(|r| r.ok())
-        .collect();
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("Heatmap fallback row parsing failed: {}", e))?;
     Ok(result)
 }
 

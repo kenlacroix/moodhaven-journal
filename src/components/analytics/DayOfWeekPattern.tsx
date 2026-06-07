@@ -97,10 +97,11 @@ export function DayOfWeekPattern({ data, isLoading = false }: DayOfWeekPatternPr
       {/* Best / worst callout */}
       {hasData && (() => {
         const active = data.filter((d) => d.entryCount > 0);
-        if (active.length < 2) return null;
+        if (active.length < 3) return null;
         const best = active.reduce((a, b) => a.averageMood >= b.averageMood ? a : b);
         const worst = active.reduce((a, b) => a.averageMood <= b.averageMood ? a : b);
         if (best.dayOfWeek === worst.dayOfWeek) return null;
+        if (best.averageMood - worst.averageMood < 0.2) return null;
         return (
           <div className="mt-4 pt-3 border-t border-slate-200 dark:border-slate-700 flex justify-around text-center">
             <div>

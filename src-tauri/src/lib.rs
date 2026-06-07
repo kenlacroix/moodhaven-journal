@@ -364,28 +364,56 @@ pub fn run() {
                 let checksum_path = parent.join("moodhaven_restore.pending.sha256");
                 let dbstate_src = parent.join("moodhaven_restore.pending.dbstate");
                 if pending.exists() {
+                    // The integrity checksum binds the DB bytes to the dbstate salt
+                    // (digest = SHA-256(db_bytes || dbstate_json)), so the salt is
+                    // verified before it can ever be written to db_state.json. A
+                    // tampered DB, a tampered/poison salt, or a missing companion all
+                    // fail verification and the pending restore is discarded.
+                    let mut verified_state: Option<crate::db::DbStateFile> = None;
                     let integrity_ok = if checksum_path.exists() {
-                        use sha2::{Digest, Sha256};
                         let expected = std::fs::read_to_string(&checksum_path)
                             .unwrap_or_default();
                         let expected = expected.trim().to_string();
                         let data = std::fs::read(&pending).unwrap_or_default();
-                        let actual = hex::encode(Sha256::digest(&data));
-                        if actual == expected {
+                        let dbstate_json = std::fs::read(&dbstate_src).unwrap_or_default();
+                        let actual = commands::peer_sync_engine::restore_integrity_digest(
+                            &data,
+                            &dbstate_json,
+                        );
+                        // Independently re-validate the salt (defence in depth).
+                        let parsed =
+                            serde_json::from_slice::<crate::db::DbStateFile>(&dbstate_json);
+                        let salt_ok = parsed
+                            .as_ref()
+                            .map(|st| {
+                                commands::peer_sync_engine::validate_restore_salt(
+                                    st.encrypted,
+                                    &st.salt,
+                                )
+                                .is_ok()
+                            })
+                            .unwrap_or(false);
+                        if actual == expected && salt_ok {
                             log::info!("[restore] Integrity check passed ({actual})");
+                            verified_state = parsed.ok();
                             true
                         } else {
                             log::error!(
-                                "[restore] Integrity check FAILED (expected {expected}, got {actual}) — discarding"
+                                "[restore] Integrity check FAILED (expected {expected}, got {actual}, salt_ok={salt_ok}) — discarding"
                             );
                             let _ = std::fs::remove_file(&pending);
                             let _ = std::fs::remove_file(&checksum_path);
+                            let _ = std::fs::remove_file(&dbstate_src);
                             false
                         }
                     } else {
-                        // No checksum — legacy or in-flight; allow but warn.
-                        log::warn!("[restore] No checksum file for pending restore — proceeding unverified");
-                        true
+                        // No checksum file at all — refuse to apply an unverified restore.
+                        log::error!(
+                            "[restore] No checksum file for pending restore — discarding (cannot verify salt binding)"
+                        );
+                        let _ = std::fs::remove_file(&pending);
+                        let _ = std::fs::remove_file(&dbstate_src);
+                        false
                     };
 
                     if integrity_ok {
@@ -402,12 +430,8 @@ pub fn run() {
                             // SQLCipher key on this device and the restore is a dead end.
                             // The salt is not secret (already public in each device's
                             // db_state.json) and is required because key = PBKDF2(password, salt).
-                            let state = std::fs::read_to_string(&dbstate_src)
-                                .ok()
-                                .and_then(|s| {
-                                    serde_json::from_str::<crate::db::DbStateFile>(&s).ok()
-                                })
-                                .unwrap_or_default();
+                            // It has been verified by the bound checksum above.
+                            let state = verified_state.unwrap_or_default();
                             if let Some(state_parent) = db_path.parent() {
                                 let state_path = state_parent.join("db_state.json");
                                 match serde_json::to_string(&state) {

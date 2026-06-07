@@ -220,6 +220,64 @@ const RESTORE_CHUNK_BYTES: usize = 4 * 1024 * 1024; // 4 MiB
 const V1_FALLBACK_REMOVED_MSG: &str =
     "Server did not send eph_pub — v1 static-key fallback has been removed. Peer must be upgraded to v2.";
 
+/// Expected decoded length (bytes) of the PBKDF2 password salt. The frontend
+/// generates it as `SALT_LENGTH = 16` (128 bits) in `crypto.ts`; the same length
+/// is used for the at-rest db_state.json salt. A restore that advertises any other
+/// length is rejected so a compromised source cannot poison db_state.json.
+const RESTORE_SALT_LEN: usize = 16;
+
+/// Validate the `encrypted`/`salt` pair received in `RestoreEnd` before it is
+/// written to the restored device's authoritative db_state.json.
+///
+/// A trusted-but-compromised source controls these fields, so they must be
+/// checked at receipt:
+/// - `encrypted == false` ⇒ `salt` MUST be `None`.
+/// - `encrypted == true`  ⇒ `salt` MUST be `Some`, decode as standard base64,
+///   and decode to exactly `RESTORE_SALT_LEN` bytes.
+///
+/// Rejecting `encrypted:true` + `salt:None` outright avoids reproducing the
+/// "encryption record missing" permanent lockout this path is meant to prevent.
+pub(crate) fn validate_restore_salt(encrypted: bool, salt: &Option<String>) -> Result<(), String> {
+    use base64::Engine as _;
+    match (encrypted, salt) {
+        (false, None) => Ok(()),
+        (false, Some(_)) => {
+            Err("Restore rejected: unencrypted source must not supply a salt".to_string())
+        }
+        (true, None) => Err(
+            "Restore rejected: encrypted source supplied no salt (would cause permanent lockout)"
+                .to_string(),
+        ),
+        (true, Some(s)) => {
+            let decoded = base64::engine::general_purpose::STANDARD
+                .decode(s)
+                .map_err(|_| "Restore rejected: salt is not valid base64".to_string())?;
+            if decoded.len() != RESTORE_SALT_LEN {
+                return Err(format!(
+                    "Restore rejected: salt decodes to {} bytes, expected {RESTORE_SALT_LEN}",
+                    decoded.len()
+                ));
+            }
+            Ok(())
+        }
+    }
+}
+
+/// Compute the integrity digest that binds the restored DB bytes to the
+/// db_state.json salt so a verified DB can never be paired with a poison salt.
+///
+/// digest = hex(SHA-256(db_bytes || dbstate_json))
+///
+/// The writer (`do_full_restore_client`) and BOTH verifiers (the lib.rs startup
+/// promotion block and `peer_apply_and_restart`) must compute this identically.
+pub fn restore_integrity_digest(db_bytes: &[u8], dbstate_json: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+    let mut hasher = Sha256::new();
+    hasher.update(db_bytes);
+    hasher.update(dbstate_json);
+    hex::encode(hasher.finalize())
+}
+
 fn do_serve_restore(
     app: &AppHandle,
     stream: &mut TcpStream,
@@ -412,6 +470,17 @@ fn do_full_restore_client(app: &AppHandle, peer_device_id: &str, host: &str) -> 
         .map_err(|e| format!("app_data_dir: {e}"))?;
     let pending_path = app_data.join("moodhaven_restore.pending");
     let tmp_path = app_data.join("moodhaven_restore.tmp");
+    let checksum_path = app_data.join("moodhaven_restore.pending.sha256");
+    let dbstate_path = app_data.join("moodhaven_restore.pending.dbstate");
+
+    // Finding 3 (LOW): delete any pre-existing restore companions so a new restore
+    // can never inherit a previous run's checksum or dbstate. These files are
+    // co-located by filename only, so a stale companion would otherwise be applied
+    // against the wrong DB.
+    let _ = std::fs::remove_file(&pending_path);
+    let _ = std::fs::remove_file(&tmp_path);
+    let _ = std::fs::remove_file(&checksum_path);
+    let _ = std::fs::remove_file(&dbstate_path);
 
     let mut file = std::fs::File::create(&tmp_path).map_err(|e| format!("create tmp file: {e}"))?;
 
@@ -465,6 +534,15 @@ fn do_full_restore_client(app: &AppHandle, peer_device_id: &str, host: &str) -> 
                 encrypted,
                 salt,
             } => {
+                // Finding 1 (HIGH): a trusted-but-compromised source controls these
+                // fields. Validate before persisting anything; on violation, clean up
+                // the tmp file (no companions written yet) and abort the restore.
+                if let Err(e) = validate_restore_salt(encrypted, &salt) {
+                    drop(file);
+                    let _ = std::fs::remove_file(&tmp_path);
+                    log::warn!("[restore] {e}");
+                    return Err(e);
+                }
                 restore_encrypted = encrypted;
                 restore_salt = salt;
                 log::info!(
@@ -488,32 +566,31 @@ fn do_full_restore_client(app: &AppHandle, peer_device_id: &str, host: &str) -> 
         .map_err(|e| format!("flush restore file: {e}"))?;
     drop(file);
 
-    // Compute SHA-256 of the received file and write a companion checksum so
-    // peer_apply_and_restart can verify it hasn't been tampered with on disk.
-    {
-        use sha2::{Digest, Sha256};
-        let data =
-            std::fs::read(&tmp_path).map_err(|e| format!("read restore tmp for hash: {e}"))?;
-        let digest = hex::encode(Sha256::digest(&data));
-        let checksum_path = app_data.join("moodhaven_restore.pending.sha256");
-        std::fs::write(&checksum_path, &digest)
-            .map_err(|e| format!("write restore checksum: {e}"))?;
-        log::info!("[restore] SHA-256 of pending DB: {digest}");
-    }
+    // Serialize the source's encryption state. Persisted alongside the pending DB
+    // so peer_apply_and_restart can write a matching db_state.json after promoting
+    // the DB. Without this, the restored device has the encrypted DB but no salt
+    // and can never derive the key. The salt has already been validated above.
+    let dbstate = crate::db::DbStateFile {
+        encrypted: restore_encrypted,
+        salt: restore_salt,
+    };
+    let dbstate_json =
+        serde_json::to_vec(&dbstate).map_err(|e| format!("serialize restore dbstate: {e}"))?;
 
-    // Persist the source's encryption state so peer_apply_and_restart can write a
-    // matching db_state.json after promoting the DB. Without this, the restored
-    // device has the encrypted DB but no salt and can never derive the key.
-    {
-        let dbstate = crate::db::DbStateFile {
-            encrypted: restore_encrypted,
-            salt: restore_salt,
-        };
-        let json = serde_json::to_string(&dbstate)
-            .map_err(|e| format!("serialize restore dbstate: {e}"))?;
-        let dbstate_path = app_data.join("moodhaven_restore.pending.dbstate");
-        std::fs::write(&dbstate_path, json).map_err(|e| format!("write restore dbstate: {e}"))?;
-    }
+    // Finding 2 (MEDIUM): bind the dbstate salt into the integrity checksum. The
+    // digest covers `db_bytes || dbstate_json` so a verified DB can never be paired
+    // with a poison salt by a local attacker or on-disk tamper. Both verifiers
+    // recompute this exact value before applying the restore.
+    let db_bytes =
+        std::fs::read(&tmp_path).map_err(|e| format!("read restore tmp for hash: {e}"))?;
+    let digest = restore_integrity_digest(&db_bytes, &dbstate_json);
+    drop(db_bytes);
+
+    // Write the dbstate companion, then the checksum that binds it.
+    std::fs::write(&dbstate_path, &dbstate_json)
+        .map_err(|e| format!("write restore dbstate: {e}"))?;
+    std::fs::write(&checksum_path, &digest).map_err(|e| format!("write restore checksum: {e}"))?;
+    log::info!("[restore] SHA-256 of pending DB + dbstate: {digest}");
 
     // Atomically move tmp → pending.
     std::fs::rename(&tmp_path, &pending_path).map_err(|e| format!("rename restore file: {e}"))?;
@@ -1912,20 +1989,32 @@ pub fn peer_apply_and_restart(app: AppHandle) -> Result<(), String> {
         return Err("No pending restore file found".to_string());
     }
 
-    // Verify SHA-256 integrity before applying.
+    // Verify integrity before applying. Finding 2 (MEDIUM): the checksum binds the
+    // DB bytes to the dbstate salt, so the salt is verified before it can ever be
+    // written to db_state.json.
     if checksum_path.exists() {
-        use sha2::{Digest, Sha256};
         let expected = std::fs::read_to_string(&checksum_path)
             .map_err(|e| format!("read restore checksum: {e}"))?;
         let expected = expected.trim();
         let data =
             std::fs::read(&pending).map_err(|e| format!("read pending restore for verify: {e}"))?;
-        let actual = hex::encode(Sha256::digest(&data));
-        if actual != expected {
+        // The dbstate companion is part of the integrity envelope; its absence means
+        // the checksum can't be reproduced. Treat as tamper.
+        let dbstate_json = std::fs::read(&dbstate_path)
+            .map_err(|e| format!("read restore dbstate for verify: {e}"))?;
+        let actual = restore_integrity_digest(&data, &dbstate_json);
+        // Re-validate the salt independently of the bound checksum (defence in depth).
+        let salt_check = serde_json::from_slice::<crate::db::DbStateFile>(&dbstate_json)
+            .map_err(|e| format!("parse restore dbstate: {e}"))
+            .and_then(|st| validate_restore_salt(st.encrypted, &st.salt));
+        if actual != expected || salt_check.is_err() {
             // Remove the pending files to avoid leaving a corrupt restore.
             let _ = std::fs::remove_file(&pending);
             let _ = std::fs::remove_file(&checksum_path);
             let _ = std::fs::remove_file(&dbstate_path);
+            if let Err(e) = salt_check {
+                return Err(format!("Restore aborted: {e}"));
+            }
             return Err(format!(
                 "Restore file integrity check failed (expected {expected}, got {actual}) — aborted"
             ));
@@ -2096,5 +2185,66 @@ mod tests {
             )
             .unwrap();
         assert_eq!(count, 0, "rollback must leave no partial data");
+    }
+
+    // ── Restore salt validation (PT10 Finding 1) ──────────────────────────────
+
+    #[test]
+    fn restore_salt_unencrypted_none_ok() {
+        // Honest unencrypted source: encrypted=false + salt=None must pass.
+        assert!(validate_restore_salt(false, &None).is_ok());
+    }
+
+    #[test]
+    fn restore_salt_encrypted_valid_16_byte_ok() {
+        // The real on-disk salt decodes to 16 bytes — must pass.
+        let salt = Some("M2sEcsHxYyVyJl3UGquc9w==".to_string());
+        assert!(validate_restore_salt(true, &salt).is_ok());
+    }
+
+    #[test]
+    fn restore_salt_unencrypted_with_salt_rejected() {
+        let salt = Some("M2sEcsHxYyVyJl3UGquc9w==".to_string());
+        assert!(validate_restore_salt(false, &salt).is_err());
+    }
+
+    #[test]
+    fn restore_salt_encrypted_none_rejected() {
+        // Reproduces the "encryption record missing" lockout — must be rejected.
+        assert!(validate_restore_salt(true, &None).is_err());
+    }
+
+    #[test]
+    fn restore_salt_encrypted_bad_base64_rejected() {
+        let salt = Some("!!!not base64!!!".to_string());
+        assert!(validate_restore_salt(true, &salt).is_err());
+    }
+
+    #[test]
+    fn restore_salt_encrypted_wrong_length_rejected() {
+        use base64::Engine as _;
+        // 8 bytes instead of 16 — wrong length must be rejected.
+        let short = base64::engine::general_purpose::STANDARD.encode([0u8; 8]);
+        assert!(validate_restore_salt(true, &Some(short)).is_err());
+        // 32 bytes — also wrong length.
+        let long = base64::engine::general_purpose::STANDARD.encode([0u8; 32]);
+        assert!(validate_restore_salt(true, &Some(long)).is_err());
+    }
+
+    // ── Integrity digest binds DB + dbstate (PT10 Finding 2) ──────────────────
+
+    #[test]
+    fn restore_digest_changes_with_dbstate() {
+        let db = b"fake-sqlite-bytes";
+        let state_a = br#"{"encrypted":true,"salt":"M2sEcsHxYyVyJl3UGquc9w=="}"#;
+        let state_b = br#"{"encrypted":true,"salt":"AAAAAAAAAAAAAAAAAAAAAA=="}"#;
+        let d1 = restore_integrity_digest(db, state_a);
+        let d2 = restore_integrity_digest(db, state_b);
+        assert_ne!(
+            d1, d2,
+            "swapping the dbstate salt must change the bound digest"
+        );
+        // Deterministic for identical inputs.
+        assert_eq!(d1, restore_integrity_digest(db, state_a));
     }
 }

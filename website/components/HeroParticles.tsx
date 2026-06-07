@@ -5,14 +5,17 @@ export default function HeroParticles() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    let width = canvas.width = window.innerWidth;
-    let height = canvas.height = 400;
+    let width = (canvas.width = window.innerWidth);
+    let height = (canvas.height = 400);
+    let raf: number;
 
     class Raindrop {
       x: number;
@@ -55,20 +58,27 @@ export default function HeroParticles() {
         drop.update();
         drop.draw(ctx);
       });
-      requestAnimationFrame(animate);
+      raf = requestAnimationFrame(animate);
     };
 
     animate();
 
-    window.addEventListener("resize", () => {
+    const onResize = () => {
       width = canvas.width = window.innerWidth;
       height = canvas.height = 400;
-    });
+    };
+    window.addEventListener("resize", onResize);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("resize", onResize);
+    };
   }, []);
 
   return (
     <canvas
       ref={canvasRef}
+      aria-hidden="true"
       className="absolute top-0 left-0 w-full h-full z-10 pointer-events-none"
     />
   );

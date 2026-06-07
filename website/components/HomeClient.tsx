@@ -12,6 +12,7 @@ import FeatureTabs from "./FeatureTabs";
 import NewsletterSignup from "./NewsletterSignup";
 import HowItWorks from "./HowItWorks";
 import ComparisonTable from "./ComparisonTable";
+import HeroParticles from "./HeroParticles";
 import type { LatestRelease } from "@/lib/getLatestRelease";
 
 interface HomeClientProps {
@@ -26,6 +27,8 @@ export default function HomeClient({ latestRelease }: HomeClientProps) {
         {/* Violet gradient background — on-brand, no external photo */}
         <div className="absolute inset-0 bg-gradient-to-br from-primary-900 via-primary-800 to-primary-700 z-0" />
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(139,92,246,0.3)_0%,_transparent_60%)] z-0 pointer-events-none" />
+        {/* Subtle raindrop particle layer — pointer-events-none, purely decorative */}
+        <HeroParticles />
 
         <div className="relative z-10 max-w-6xl mx-auto px-4">
           <div className="flex flex-col lg:flex-row items-center gap-12">

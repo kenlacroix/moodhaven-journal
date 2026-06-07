@@ -189,11 +189,25 @@ export default function ChangelogPage() {
             </a>
           </div>
         ) : (
+          <>
+            {/* Version jump-list */}
+            <nav aria-label="Jump to version" className="mb-8 flex flex-wrap gap-1.5">
+              {releases.map((release) => (
+                <a
+                  key={release.version}
+                  href={`#v${release.version}`}
+                  className="text-xs font-mono px-2.5 py-1 rounded-full bg-white ring-1 ring-neutral-200 text-neutral-600 hover:text-primary-700 hover:ring-primary-300 transition-colors duration-150"
+                >
+                  v{release.version}
+                </a>
+              ))}
+            </nav>
           <div className="space-y-10">
             {releases.map((release) => (
               <article
                 key={release.version}
-                className="bg-white/90 rounded-xl ring-1 ring-neutral-100 overflow-hidden"
+                id={`v${release.version}`}
+                className="bg-white/90 rounded-xl ring-1 ring-neutral-100 overflow-hidden scroll-mt-20"
               >
                 {/* Release header */}
                 <div className="flex items-baseline justify-between gap-4 px-6 py-4 border-b border-neutral-100">
@@ -251,6 +265,7 @@ export default function ChangelogPage() {
               </article>
             ))}
           </div>
+          </>
         )}
       </div>
     </main>

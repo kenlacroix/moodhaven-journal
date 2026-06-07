@@ -205,6 +205,27 @@ export default function DownloadClient({ release }: { release: LatestRelease | n
           </div>
         </AnimatedReveal>
 
+        {/* Update notice — encryption at rest (1.8.0) */}
+        <AnimatedReveal delay={0.05} className="mt-8">
+          <div className="rounded-xl bg-primary-50 ring-1 ring-primary-200 p-5 text-left">
+            <p className="text-sm font-semibold text-neutral-900 mb-1">
+              Update to 1.8.0
+            </p>
+            <p className="text-sm text-neutral-600 leading-relaxed">
+              Database encryption at rest is now active on disk — we verified it on the
+              shipped build. In versions before 1.8.0 that layer didn&apos;t engage: your entry
+              text stayed encrypted, but some metadata (mood, dates, tags) was readable if
+              someone had the database file.{" "}
+              <Link
+                href="/blog/how-i-tried-to-break-my-own-encrypted-journal"
+                className="font-medium text-primary-700 underline hover:text-primary-900"
+              >
+                Read the details →
+              </Link>
+            </p>
+          </div>
+        </AnimatedReveal>
+
         {/* Primary CTA */}
         <AnimatedReveal delay={0.1} className="mt-10">
           {os === "unknown" ? (

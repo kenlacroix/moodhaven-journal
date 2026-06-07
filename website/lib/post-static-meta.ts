@@ -7,6 +7,11 @@ export interface PostStaticMeta {
 }
 
 export const POST_STATIC_META: Record<string, PostStaticMeta> = {
+  "how-i-tried-to-break-my-own-encrypted-journal": {
+    title: "How I Tried to Break My Own Encrypted Journal — Ten Times",
+    excerpt:
+      "I attacked my own private journaling app the way a security firm would — ten rounds, on tools I built from scratch — and found a flagship encryption feature that had never actually turned on.",
+  },
   "why-i-built-moodhaven": {
     title: "Why I Built MoodHaven",
     excerpt:

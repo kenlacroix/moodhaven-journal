@@ -13,7 +13,7 @@ Here's how MoodHaven keeps your journal private, both on your device and (option
 
 Every journal entry is encrypted on your device **before it is ever stored**.
 
-We use **AES-256-GCM** — a gold standard for authenticated encryption. Your entries aren't just password-protected — they're encrypted at the data level. Even if someone accessed your device's storage, they would see only ciphertext.
+We use **AES-256-GCM** — a strong, authenticated encryption standard. Your entries aren't just password-protected — the text of every entry is encrypted at the data level, so someone who reached your device's storage would see only ciphertext where your writing lives. A small set of fields is kept in plaintext on purpose so the app can show mood trends and tag views without decrypting everything: mood scores, dates, tag names, and optional location. As of **1.8.0** the database file itself is also encrypted at rest, so those fields are protected on disk too. (In earlier versions that database-level layer didn't engage — see the note below.)
 
 Your encryption key is never stored anywhere. It's derived fresh from your password each time you unlock the app.
 
@@ -37,9 +37,13 @@ If you choose to sync, only **encrypted blobs** are transferred. MoodHaven never
 
 You control where the ciphertext lives. MoodHaven just moves it.
 
+## A correction worth making
+
+Versions of MoodHaven before **1.8.0** advertised database-level encryption at rest that didn't actually engage — a key-format bug meant the database file stayed unencrypted on disk. Entry text was never affected (that's the per-entry AES-256-GCM layer above, which always worked), but the plaintext metadata fields were readable to anyone with the database file. It was never reachable over a network. We found this through our own security testing, fixed it in 1.8.0, and verified the fix on the shipped build. If you're on an older version, update — and delete any old database backups, which remain unencrypted. You can read the full story in [How I Tried to Break My Own Encrypted Journal](/blog/how-i-tried-to-break-my-own-encrypted-journal).
+
 ## Why This Matters
 
-Most apps talk about privacy. MoodHaven is built with privacy in every line of code.
+Most apps talk about privacy. MoodHaven is built around it — and when we get something wrong, we say so and fix it in the open.
 
 There are no backdoors. There are no analytics. There is no secret server. The [source code is public](https://github.com/kenlacroix/moodhaven-journal) — you can verify every claim in this post by reading it.
 

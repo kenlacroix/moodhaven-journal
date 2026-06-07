@@ -49,9 +49,18 @@ pub fn unlock_app(
                 .map(|s| s.password_salt)
                 .unwrap_or_default();
             if !salt_b64.is_empty() {
-                db.encrypt_in_place(&key, &salt_b64)?;
-                log::info!("[sqlcipher] Database encrypted successfully");
+                match db.encrypt_in_place(&key, &salt_b64) {
+                    Ok(()) => log::info!("[sqlcipher] Database encrypted successfully"),
+                    Err(e) => {
+                        log::error!("[sqlcipher] encrypt_in_place FAILED: {e}");
+                        return Err(e);
+                    }
+                }
+            } else {
+                log::error!("[sqlcipher] migration skipped: password_salt is empty");
             }
+        } else {
+            log::warn!("[sqlcipher] migration skipped: no derived key in DbKeyState at unlock");
         }
     }
 

@@ -27,12 +27,8 @@
 
 **Priority:** P2 — deferred from fix/retro-findings-2026-05-31 to keep that PR test-only scoped.
 
-### STILL-001: Frontend tolerance for "Session not found" error
-- `still_complete_session` / `still_abandon_session` now return `Err` for missing IDs (fixed in v1.3.2.0).
-- The Tauri command propagates this as a rejected Promise on the frontend.
-- Watch companion reconnect flow may call `still_complete_session` on a session that was never created (crash recovery case).
-- Fix: wrap `stillCompleteSession` / `stillAbandonSession` calls in `try/catch`; treat "Session not found" as a no-op, not an error modal.
-- Files: `src/modules/stillhaven/`, `src/stores/stillStore.ts`
+### ~~STILL-001: Frontend tolerance for "Session not found" error~~ ✅ RESOLVED v1.8.0 (2026-06-07)
+- Resolved backend-side instead of frontend try/catch: `still_complete_session` / `still_abandon_session` are now idempotent no-ops for missing IDs (crash-reconnect safe), with a `log::warn` on the zero-row path for desync visibility.
 
 ### STILL-002: Oura cache key timezone mismatch in `get_wellbeing_context`
 - `last_still_session_days_ago` uses `julianday('now')` (UTC) but `completed_at` is stored as local-time ISO 8601.
@@ -40,10 +36,8 @@
 - Fix: store `completed_at` as UTC, or use `julianday('now', 'localtime')` in the query.
 - Files: `src-tauri/src/db/still.rs:369`, `src-tauri/src/commands/still.rs`
 
-### STILL-003: `duration_seconds` accepts negative values
-- No validation in `still_complete_session` command — a UI bug or crash could write `-1` to `still_sessions.duration_seconds`.
-- Fix: add `if duration_seconds < 0 { return Err(...) }` in the command layer.
-- File: `src-tauri/src/commands/still.rs`
+### ~~STILL-003: `duration_seconds` accepts negative values~~ ✅ RESOLVED v1.8.0 (2026-06-07)
+- Negative `duration_seconds` rejected in both `still_create_session` and `still_complete_session`.
 
 ---
 
@@ -83,6 +77,11 @@
 ---
 
 ## Security Hardening (fix/security-hardening — v0.7.3)
+
+### PT6-WIN-001: Smoke-test Windows factory reset (v1.8.0)
+- **Priority:** P1 — verify with the next Windows build on green (192.168.1.26).
+- The `#[cfg(target_os = "windows")]` reset path (DB + WAL/SHM rename → `.old`, startup orphan sweep) has no CI coverage (Linux runners).
+- Verify: factory reset completes, relaunch removes `moodhaven.db.old` / `moodhaven.db-wal.old` / `moodhaven.db-shm.old`, app returns to first-run state.
 
 ### → F-001: API credentials stored plaintext in SQLite → fix/security-hardening
 - OpenAI key, WebDAV password, Oura PAT encrypted with AES-256-GCM using session password before storage

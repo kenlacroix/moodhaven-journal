@@ -15,6 +15,18 @@ Versions follow [Semantic Versioning](https://semver.org/).
 - **Mood analytics: best/worst day pattern** — callout chips identifying your statistically best and worst days of the week (requires 3+ active days, Δ≥0.2 to suppress noise).
 - **Activity correlation chart** — diverging bar chart showing which activities correlate with better or worse mood. Displayed in Insights view when you have 5+ tagged entries.
 
+### Security
+- **OAuth tokens encrypted at rest** — Dropbox and Google Drive tokens are now AES-256-GCM encrypted in the database under a per-device key held in the OS keyring (file fallback with 0600 permissions when no keyring is available). Tokens written by older builds are transparently re-encrypted. Covered by 7 new unit tests.
+- **Session lock guards extended** — activities, voice memos, peer pairing, and cloud sync commands now refuse to run until you unlock. The browser/PWA build enforces the same gates. (Watch voice-memo delivery still works while locked, by design.)
+- **Peer sync v1 fallback removed** — devices that can't do forward-secret v2 key exchange are rejected with an upgrade message instead of silently falling back to a weaker static key.
+- **Factory reset hardened on Windows** — the open database file (and its WAL/SHM sidecars) is renamed and swept on next launch, so a reset no longer leaves recoverable data behind. Reset also clears the app's OS keyring entries.
+- **Command ACL tightened** — `get_year_heatmap` added to the allowlist; the unused `sweep_preview_temp` IPC entry removed.
+
+### Fixed
+- **StillHaven sessions survive crash-reconnect** — completing or abandoning a session that no longer exists is a safe no-op (logged) instead of an error; negative durations are rejected at both create and complete.
+- **Wellness disclaimer no longer re-appears** after a failed settings save.
+- **Cloud sync responsiveness** — keyring lookups moved off the database lock; a startup race in the token key file fallback now converges instead of erroring.
+
 ---
 
 ## [1.7.5] — 2026-06-07

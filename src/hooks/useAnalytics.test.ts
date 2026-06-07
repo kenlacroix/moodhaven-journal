@@ -1,6 +1,7 @@
 vi.mock('../lib/services/analyticsService', () => ({
   getFullAnalytics: vi.fn(),
   getMoodTrend: vi.fn(),
+  getYearHeatmap: vi.fn(),
 }));
 
 vi.mock('../lib/services/logger', () => ({
@@ -9,12 +10,13 @@ vi.mock('../lib/services/logger', () => ({
 
 import { renderHook, waitFor, act } from '@testing-library/react';
 import { useAnalytics } from './useAnalytics';
-import { getFullAnalytics, getMoodTrend } from '../lib/services/analyticsService';
+import { getFullAnalytics, getMoodTrend, getYearHeatmap } from '../lib/services/analyticsService';
 import { logger } from '../lib/services/logger';
 import { ANALYTICS_PERIODS } from '../types/analytics';
 
 const mockGetFullAnalytics = vi.mocked(getFullAnalytics);
 const mockGetMoodTrend = vi.mocked(getMoodTrend);
+const mockGetYearHeatmap = vi.mocked(getYearHeatmap);
 const mockLoggerError = vi.mocked(logger.error);
 
 const analyticsData = {
@@ -35,6 +37,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockGetFullAnalytics.mockResolvedValue(analyticsData);
   mockGetMoodTrend.mockResolvedValue(trendPoints);
+  mockGetYearHeatmap.mockResolvedValue([]);
 });
 
 describe('useAnalytics', () => {
@@ -223,5 +226,35 @@ describe('useAnalytics', () => {
 
     expect(result.current.error).toBeNull();
     expect(result.current.data).toEqual(analyticsData);
+  });
+
+  it('starts with isHeatmapLoading=true before heatmap arrives', () => {
+    mockGetYearHeatmap.mockReturnValue(new Promise(() => {}));
+    const { result } = renderHook(() => useAnalytics());
+    expect(result.current.isHeatmapLoading).toBe(true);
+  });
+
+  it('starts with heatmapData=[] before data arrives', () => {
+    mockGetYearHeatmap.mockReturnValue(new Promise(() => {}));
+    const { result } = renderHook(() => useAnalytics());
+    expect(result.current.heatmapData).toEqual([]);
+  });
+
+  it('sets heatmapData and isHeatmapLoading=false on successful heatmap fetch', async () => {
+    const heatmapRows = [
+      { date: '2026-05-01', averageMood: 4.0, entryCount: 2 },
+      { date: '2026-05-02', averageMood: 3.5, entryCount: 1 },
+    ];
+    mockGetYearHeatmap.mockResolvedValue(heatmapRows);
+    const { result } = renderHook(() => useAnalytics());
+    await waitFor(() => expect(result.current.isHeatmapLoading).toBe(false));
+    expect(result.current.heatmapData).toEqual(heatmapRows);
+  });
+
+  it('sets isHeatmapLoading=false even when heatmap fetch fails', async () => {
+    mockGetYearHeatmap.mockRejectedValue(new Error('heatmap error'));
+    const { result } = renderHook(() => useAnalytics());
+    await waitFor(() => expect(result.current.isHeatmapLoading).toBe(false));
+    expect(result.current.heatmapData).toEqual([]);
   });
 });

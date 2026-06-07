@@ -94,14 +94,36 @@ export function DayOfWeekPattern({ data, isLoading = false }: DayOfWeekPatternPr
         </div>
       )}
 
-      {/* Legend */}
-      {hasData && (
-        <div className="mt-4 pt-3 border-t border-slate-200 dark:border-slate-700">
-          <p className="text-xs text-slate-500 dark:text-slate-400 text-center">
-            Bar height = entry count, color = average mood
-          </p>
-        </div>
-      )}
+      {/* Best / worst callout */}
+      {hasData && (() => {
+        const active = data.filter((d) => d.entryCount > 0);
+        if (active.length < 2) return null;
+        const best = active.reduce((a, b) => a.averageMood >= b.averageMood ? a : b);
+        const worst = active.reduce((a, b) => a.averageMood <= b.averageMood ? a : b);
+        if (best.dayOfWeek === worst.dayOfWeek) return null;
+        return (
+          <div className="mt-4 pt-3 border-t border-slate-200 dark:border-slate-700 flex justify-around text-center">
+            <div>
+              <p className="text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-0.5">Best day</p>
+              <span
+                className="inline-block text-xs font-semibold px-2 py-0.5 rounded-full text-white"
+                style={{ backgroundColor: getMoodColor(best.averageMood) }}
+              >
+                {SHORT_DAY_NAMES[best.dayOfWeek]}
+              </span>
+            </div>
+            <div>
+              <p className="text-[10px] uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-0.5">Worst day</p>
+              <span
+                className="inline-block text-xs font-semibold px-2 py-0.5 rounded-full text-white"
+                style={{ backgroundColor: getMoodColor(worst.averageMood) }}
+              >
+                {SHORT_DAY_NAMES[worst.dayOfWeek]}
+              </span>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

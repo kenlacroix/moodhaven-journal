@@ -5,3 +5,4 @@ export { DayOfWeekPattern } from './DayOfWeekPattern';
 export { EmotionalTrends } from './EmotionalTrends';
 export { SentimentOverview } from './SentimentOverview';
 export { JournalingHabits } from './JournalingHabits';
+export { MoodYearHeatmap } from './MoodYearHeatmap';

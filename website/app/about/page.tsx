@@ -1,9 +1,7 @@
-"use client";
-
-import { useEffect, useRef, useState } from "react";
-import { motion, useReducedMotion } from "framer-motion";
 import Image from "next/image";
 import AnimatedReveal from "@/components/AnimatedReveal";
+import TimelineClient, { type Milestone } from "./TimelineClient";
+import { parseChangelog, readChangelog, type Release } from "@/lib/parseChangelog";
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
@@ -30,25 +28,10 @@ const PRINCIPLES = [
   },
 ];
 
-interface Milestone {
-  date: string;
-  title: string;
-  description: string;
-  projected?: boolean;
-}
-
-const MILESTONES: Milestone[] = [
+const NARRATIVE_MILESTONES: Milestone[] = [
   { date: "Mar 2025", title: "Idea Born", description: "Ken conceives MoodHaven after searching for a safe journaling space." },
   { date: "Aug 2025", title: "Alpha Launch", description: "First alpha builds — a quiet build-in-public project rather than a launch." },
   { date: "Oct 2025", title: "Feature Refinement", description: "Implemented privacy-first encryption, custom prompts, and mood tracking." },
-  { date: "Apr 2026", title: "v0.8.0 — Web App", description: "Launched web app at journal.moodhaven.app, Wear OS Phase 4, Time Capsule, and LAN peer sync." },
-  { date: "Apr 2026", title: "v0.9.0 — Security Hardening", description: "Lock guards on sensitive commands, settings refactor, and internal security hardening review." },
-  { date: "Apr 2026", title: "v0.9.1 — Unlock & Reset", description: "Factory reset, improved unlock flow, and pre-unlock session error handling." },
-  { date: "Apr 2026", title: "v0.9.3 — Website & Polish", description: "Redesigned landing site, improved download page, and across-the-board UI refinements." },
-  { date: "May 2026", title: "v1.0 — Public Release", description: "Stable release with full documentation, GitHub Wiki, broad platform support, and 702 automated tests." },
-  { date: "May 2026", title: "v1.1 — StillHaven", description: "Bilateral audio stimulation companion built into all builds. Settle your nervous system before you write — opt-in via Settings → Health." },
-  { date: "May 2026", title: "v1.2 — Voice Memo Drafts", description: "Watch recordings surface as reviewable draft cards in the Timeline. Edit, annotate, and publish to your journal — or discard. Includes WearOS Phase 2-5, writing appearance drawer, and per-module log levels." },
-  { date: "May 2026", title: "v1.2.1 — Security Hardening", description: "TOTP secrets encrypted at rest, writer window scoped capability, backend rate limiting on unlock, settings sync allowlist, full-restore integrity check, and CSP narrowed." },
 ];
 
 const TECH_LINKS = [
@@ -84,113 +67,58 @@ const TECH_LINKS = [
   },
 ];
 
-// ─── Timeline ─────────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function Timeline() {
-  const prefersReduced = useReducedMotion();
-  const completed = MILESTONES.filter((m) => !m.projected);
-  const projected = MILESTONES.filter((m) => m.projected);
-  const percentComplete = Math.round((completed.length / MILESTONES.length) * 100);
+const SECTION_PRIORITY = ["Added", "Changed", "Fixed", "Security"];
 
-  const entryRefs = useRef<Array<HTMLLIElement | null>>(Array(MILESTONES.length).fill(null));
-  const [visible, setVisible] = useState<boolean[]>(Array(MILESTONES.length).fill(false));
+function stripMarkdown(text: string): string {
+  return text
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/\*([^*]+)\*/g, "$1");
+}
 
-  useEffect(() => {
-    if (prefersReduced) {
-      setVisible(Array(MILESTONES.length).fill(true));
-      return;
-    }
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((e) => {
-          if (e.isIntersecting) {
-            const idx = Number(e.target.getAttribute("data-idx"));
-            setVisible((v) => {
-              const copy = [...v];
-              copy[idx] = true;
-              return copy;
-            });
-            observer.unobserve(e.target);
-          }
-        });
-      },
-      { threshold: 0.3 }
-    );
-    entryRefs.current.forEach((ref) => ref && observer.observe(ref));
-    return () => observer.disconnect();
-  }, [prefersReduced]);
+function firstBullet(release: Release): string {
+  for (const heading of SECTION_PRIORITY) {
+    const section = release.sections.find((s) => s.heading === heading);
+    if (section && section.items.length > 0) return stripMarkdown(section.items[0]);
+  }
+  for (const section of release.sections) {
+    if (section.items.length > 0) return stripMarkdown(section.items[0]);
+  }
+  return "New features and improvements.";
+}
 
-  return (
-    <div className="bg-primary-50 rounded-2xl p-6 lg:p-10">
-      {/* Progress bar */}
-      <div className="flex items-center gap-4 mb-8">
-        <div className="flex-1 bg-primary-100 rounded-full h-2">
-          <div
-            className="bg-primary-500 h-2 rounded-full transition-[width] duration-1000 ease-out"
-            style={{ width: `${percentComplete}%` }}
-          />
-        </div>
-        <span className="text-xs text-neutral-500 whitespace-nowrap">{percentComplete}% complete</span>
-      </div>
+function formatReleaseDate(iso: string): string {
+  if (!iso) return "";
+  try {
+    const [year, month] = iso.split("-");
+    const d = new Date(Number(year), Number(month) - 1, 1);
+    return d.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+  } catch {
+    return iso;
+  }
+}
 
-      <h3 className="text-sm font-semibold text-neutral-500 uppercase tracking-widest mb-4">
-        Milestones
-      </h3>
-      <ol role="list" className="space-y-5 mb-8">
-        {completed.map((m, idx) => (
-          <motion.li
-            key={idx}
-            data-idx={idx}
-            ref={(el) => { entryRefs.current[idx] = el; }}
-            initial={prefersReduced ? false : { opacity: 0, x: 30 }}
-            animate={visible[idx] ? { opacity: 1, x: 0 } : {}}
-            transition={{ duration: 0.5, ease: "easeOut" }}
-            className="group flex items-start gap-4"
-          >
-            <div className="flex flex-col items-center mt-1">
-              <span className="w-3 h-3 bg-primary-500 rounded-full ring-2 ring-white transition-colors group-hover:bg-accent-cta flex-shrink-0" />
-              {idx < completed.length - 1 && <span className="w-0.5 h-full min-h-[20px] bg-primary-200 mt-1" />}
-            </div>
-            <div>
-              <h4 className="text-sm font-semibold text-primary-700 group-hover:text-accent-cta transition-colors">
-                {m.title}
-              </h4>
-              <p className="text-xs text-neutral-400">{m.date}</p>
-              <p className="mt-1 text-sm text-neutral-600 leading-relaxed">{m.description}</p>
-            </div>
-          </motion.li>
-        ))}
-      </ol>
-
-      <h3 className="text-sm font-semibold text-neutral-500 uppercase tracking-widest mb-4">
-        Roadmap
-      </h3>
-      <ol role="list" className="space-y-5 opacity-60">
-        {projected.map((m, idx) => (
-          <li key={idx} className="group flex items-start gap-4">
-            <div className="flex flex-col items-center mt-1">
-              <span className="w-3 h-3 bg-transparent ring-2 ring-primary-500 rounded-full flex-shrink-0" />
-            </div>
-            <div>
-              <h4 className="text-sm font-semibold text-primary-700 flex items-center gap-2">
-                {m.title}
-                <span className="text-[10px] bg-neutral-200 text-neutral-500 px-1.5 py-0.5 rounded">
-                  Projected
-                </span>
-              </h4>
-              <p className="text-xs text-neutral-400">{m.date}</p>
-              <p className="mt-1 text-sm text-neutral-600 leading-relaxed">{m.description}</p>
-            </div>
-          </li>
-        ))}
-      </ol>
-    </div>
-  );
+function releaseToMilestone(release: Release): Milestone {
+  return {
+    date: formatReleaseDate(release.date),
+    title: `v${release.version}`,
+    description: firstBullet(release),
+  };
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function AboutPage() {
+  const md = readChangelog();
+  const releases = md ? parseChangelog(md) : [];
+
+  // Oldest-first release milestones (parseChangelog returns newest-first)
+  const releaseMilestones: Milestone[] = [...releases].reverse().map(releaseToMilestone);
+
+  const milestones: Milestone[] = [...NARRATIVE_MILESTONES, ...releaseMilestones];
+
   return (
     <main id="main-content" className="bg-[var(--background)] text-[var(--foreground)] px-4 pt-10 pb-16">
       <div className="max-w-3xl mx-auto space-y-16">
@@ -238,7 +166,7 @@ export default function AboutPage() {
             <h2 className="text-sm font-semibold text-neutral-500 uppercase tracking-widest mb-6">
               Project journey
             </h2>
-            <Timeline />
+            <TimelineClient milestones={milestones} />
           </section>
         </AnimatedReveal>
 

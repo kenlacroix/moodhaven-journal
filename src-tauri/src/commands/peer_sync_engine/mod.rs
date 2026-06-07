@@ -1819,6 +1819,7 @@ mod tests {
             status: None,
             session_id: None,
             word_count: None,
+            activity_ids: vec![],
         }
     }
 

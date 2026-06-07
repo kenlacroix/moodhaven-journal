@@ -691,7 +691,13 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
     };
     let entries_sent = to_send.len();
     for entry_row in to_send {
-        write_msg_enc(&mut stream, &key, &Msg::Entry { row: Box::new(entry_row) })?;
+        write_msg_enc(
+            &mut stream,
+            &key,
+            &Msg::Entry {
+                row: Box::new(entry_row),
+            },
+        )?;
     }
     write_msg_enc(&mut stream, &key, &Msg::Done { sent: entries_sent })?;
 
@@ -1294,7 +1300,13 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
     };
     let entries_sent = to_send.len();
     for entry_row in to_send {
-        write_msg_enc(&mut stream, &key, &Msg::Entry { row: Box::new(entry_row) })?;
+        write_msg_enc(
+            &mut stream,
+            &key,
+            &Msg::Entry {
+                row: Box::new(entry_row),
+            },
+        )?;
     }
     write_msg_enc(&mut stream, &key, &Msg::Done { sent: entries_sent })?;
 

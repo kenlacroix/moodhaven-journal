@@ -65,6 +65,12 @@ Platforms: Windows, Linux, macOS.
 | `src/lib/backend/browser-stubs.ts` | No-op stubs for Tauri-only plugins in browser builds |
 | `src/types/settings.ts` | App settings type definitions |
 | `src/lib/services/timeCapsuleService.ts` | Time capsule IPC wrappers |
+| `src/types/activities.ts` | `Activity` and `ActivityWithStats` type definitions |
+| `src/lib/services/activityService.ts` | Activity IPC wrappers (list, create, delete, sync, stats) |
+| `src/hooks/useActivities.ts` | Activity list state, create/delete custom activities, sync entry links |
+| `src/components/journal/ActivityPicker.tsx` | Pill grid for selecting activities on an entry; supports custom activity creation |
+| `src/hooks/useActivityAnalytics.ts` | Per-activity mood delta computation for the correlation chart |
+| `src/components/analytics/ActivityCorrelationChart.tsx` | SVG diverging bar chart of per-activity mood correlation (Phase 2) |
 | `src/hooks/useTimeCapsule.ts` | Time capsule state + logic |
 | `src/components/timecapsule/SealEntryModal.tsx` | Seal entry UI |
 | `src/components/timecapsule/TimeCapsuleRevealModal.tsx` | Capsule reveal UI |

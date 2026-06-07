@@ -13,7 +13,9 @@ const result = await invoke('command_name', { param: value });
 
 Parameter names in TypeScript use **camelCase**; Rust receives them as **snake_case** (Tauri handles conversion).
 
-**Lock guards (v0.9.0+):** Many commands require the session to be unlocked. Calling them before `unlock_app` returns `"Session is locked"`. Affected sections: Analytics, Settings (`get_setting`, `set_setting`, `get_all_settings`), Oura Ring, Time Capsule. `factory_reset` explicitly does **not** require unlock (it is the "forgot password" escape hatch).
+**Lock guards (v0.9.0+):** Many commands require the session to be unlocked. Calling them before `unlock_app` returns `"Session is locked"`. Affected sections: Analytics, Settings (`get_setting`, `set_setting`, `get_all_settings`), Oura Ring, Time Capsule, Activities, Voice Memos, Peer Pairing, and Cloud Providers (lock-gating extended to these in v1.8.0). `factory_reset` explicitly does **not** require unlock (it is the "forgot password" escape hatch).
+
+**ACL note (v1.8.0):** `get_year_heatmap` is in the IPC allowlist (`capabilities/default.json`). `sweep_preview_temp` is no longer in the allowlist — it remains a `#[tauri::command]` but is only invoked internally at startup, not over IPC.
 
 ---
 

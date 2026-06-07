@@ -47,7 +47,7 @@ Output directories: `dist-web/` (browser build) and `dist/` (desktop build).
 
 `browser-invoke.ts` exports an `invoke<T>(command: string, params?: object): Promise<T>` function that mirrors the Tauri API signature exactly. Internally it uses a `dispatch()` switch statement that routes approximately 60 Tauri command names to IndexedDB operations.
 
-It also maintains `_browserSessionUnlocked` state, mirroring the Rust session lock so that commands returning `"Session is locked"` behave identically to the desktop build.
+It also maintains `_browserSessionUnlocked` state, mirroring the Rust session lock so that commands returning `"Session is locked"` behave identically to the desktop build. A `LOCK_GATED_COMMANDS` set (v1.8.0) rejects the activity commands (`list_activities`, `create_activity`, `delete_activity`, `sync_entry_activities`, `get_entry_activities`, `list_all_entry_activities`, `get_activity_stats`) before unlock, matching the `require_unlocked` guards added on the Rust side. Voice memo commands are no-op stubs in browser mode and need no gate.
 
 Notable browser-specific behaviors:
 

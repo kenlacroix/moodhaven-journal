@@ -664,7 +664,7 @@ Frontend: encryptedImport(blob, password)
 
 - **Data in transit:** HTTPS (reqwest TLS) to provider APIs; never HTTP.
 - **Data at rest on provider:** AES-256-GCM ciphertext only — same envelope as the manual `.moodhaven` export. Providers cannot read journal content.
-- **Token storage:** OAuth tokens stored in the SQLite `settings` table. The access token row is not additionally encrypted (see gap below).
+- **Token storage:** OAuth access and refresh tokens are stored in the SQLite `settings` table, AES-256-GCM encrypted at rest under a per-device 32-byte key held in the OS keyring (DPAPI / Keychain / Secret Service). Encrypted values carry a `__tok_v1:` marker; plaintext tokens written by older builds are read as-is and transparently re-encrypted on next write (legacy passthrough migration). The key file falls back to `cloud_token_key.bin` (0600) in `app_data_dir` if the keyring is unavailable.
 - **Scope minimality:**
   - Dropbox: `files.content.write` + `files.content.read` scoped to `/Apps/MoodHaven/`.
   - Google Drive: `drive.appdata` — hidden folder accessible only to this app.
@@ -676,7 +676,6 @@ Frontend: encryptedImport(blob, password)
 |:---|:---|:---|
 | OAuth client credentials are compile-time placeholders (`DROPBOX_APP_KEY_PLACEHOLDER`, `GOOGLE_CLIENT_ID_PLACEHOLDER`) | Auth will fail until real credentials are registered and compiled in | Must be resolved before shipping |
 | Google Drive client_secret stored as a compile-time constant in the binary | Anyone who extracts the binary can find the secret; mitigated by `drive.appdata` scope restriction | Phase 2: move to PKCE-only or env-injected at build time |
-| OAuth access token stored unencrypted in SQLite `settings` table | Local attacker with DB access could use the token until it expires | Phase 2: encrypt with `secureStorage.ts` pattern |
 | Manual sync only (no auto-sync) | User must tap "Sync Now" explicitly | By design for Phase 1; scheduled sync is Phase 2 |
 | No backup rotation | Each sync overwrites the single `moodhaven-backup.moodhaven` file | Phase 2: versioned filenames or provider versioning |
 

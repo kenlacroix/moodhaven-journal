@@ -1,0 +1,71 @@
+name: Release Sync
+
+# Fires when a release is published (draft -> published). Keeps README download
+# tables + Recent Changes in sync with the release, then pushes to main —
+# which triggers the git-connected Cloudflare Pages rebuild of moodhaven.app,
+# whose download page reads latest-release.json from the now-published release.
+on:
+  release:
+    types: [published]
+  # Manual trigger for testing without publishing a release. Supply the tag of
+  # an existing release/tag; the job reads notes from that tag's annotation.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to sync (e.g. v1.8.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-sync
+  cancel-in-progress: false
+
+jobs:
+  sync-readme-and-website:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        with:
+          ref: main
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node 22
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6.4.0
+        with:
+          node-version: 22
+
+      - name: Read release notes from tag annotation
+        id: notes
+        env:
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          git fetch --tags --force --quiet
+          NOTES=$(git tag -l --format='%(contents)' "$TAG" 2>/dev/null || echo "")
+          {
+            echo "notes<<NOTES_EOF"
+            echo "$NOTES"
+            echo "NOTES_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Update README for release
+        env:
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+          NOTES: ${{ steps.notes.outputs.notes }}
+        run: node scripts/update-readme-release.cjs
+
+      - name: Commit and push to main
+        env:
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add README.md
+          # --allow-empty: even a no-op publish (e.g. re-publish) pushes a commit so
+          # Cloudflare Pages rebuilds and the download page picks up latest-release.json.
+          git commit --allow-empty -m "docs(readme): sync download links and changelog for $TAG [skip ci]"
+          git pull --rebase origin main
+          git push origin main

@@ -31,6 +31,8 @@ pub struct JournalEntryRow {
     pub updated_at: String,
     /// Tag names for this entry (fetched via GROUP_CONCAT join)
     pub tags: Vec<String>,
+    /// Activity IDs linked to this entry (fetched via correlated subquery)
+    pub activity_ids: Vec<String>,
     /// ISO timestamp until which this entry is sealed (None = not sealed)
     pub sealed_until: Option<String>,
     /// 'letter' | 'vault' | 'anniversary' — set on seal; 'anniversary' on auto-reveal
@@ -70,7 +72,8 @@ pub fn parse_tags(tags_str: Option<String>) -> Vec<String> {
 /// 4  location_weather, 5  book_id, 6  pinned, 7  created_at,
 /// 8  updated_at, 9  sealed_until, 10 capsule_type,
 /// 11 linked_original_id, 12 unsealed_at, 13 status,
-/// 14 session_id, 15 word_count, 16 tags (GROUP_CONCAT)
+/// 14 session_id, 15 word_count, 16 tags (GROUP_CONCAT),
+/// 17 activity_ids (correlated subquery GROUP_CONCAT)
 pub fn map_entry_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<JournalEntryRow> {
     let content_json_opt: Option<String> = row.get(1)?;
     let sealed_until: Option<String> = row.get(9)?;
@@ -81,6 +84,7 @@ pub fn map_entry_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<JournalEntryRo
     let session_id: Option<String> = row.get(14).ok().flatten();
     let word_count: Option<i32> = row.get(15).ok().flatten();
     let tags_str: Option<String> = row.get(16)?;
+    let activity_ids_str: Option<String> = row.get(17).ok().flatten();
 
     // Withhold content for entries that are sealed but not yet revealed.
     let is_sealed = sealed_until.is_some() && unsealed_at.is_none();
@@ -113,6 +117,7 @@ pub fn map_entry_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<JournalEntryRo
         linked_original_id,
         unsealed_at,
         tags: parse_tags(tags_str),
+        activity_ids: parse_tags(activity_ids_str),
         status,
         session_id,
         word_count,
@@ -148,7 +153,8 @@ pub fn create_entry(
     conn.query_row(
         "SELECT je.id, je.encrypted_content, je.mood, je.privacy_mode, je.location_weather, je.book_id, je.pinned, je.created_at, je.updated_at,
                 je.sealed_until, je.capsule_type, je.linked_original_id, je.unsealed_at, je.status, je.session_id, je.word_count,
-                COALESCE(GROUP_CONCAT(t.name, ','), '') as tags
+                COALESCE(GROUP_CONCAT(t.name, ','), '') as tags,
+                (SELECT COALESCE(GROUP_CONCAT(ea.activity_id, ','), '') FROM entry_activities ea WHERE ea.entry_id = je.id) as activity_ids
          FROM journal_entries je
          LEFT JOIN entry_tags et ON je.id = et.entry_id
          LEFT JOIN tags t ON et.tag_id = t.id
@@ -292,7 +298,8 @@ pub fn get_entry(db: &Database, id: &str) -> Result<Option<JournalEntryRow>, Str
     let result = conn.query_row(
         "SELECT je.id, je.encrypted_content, je.mood, je.privacy_mode, je.location_weather, je.book_id, je.pinned, je.created_at, je.updated_at,
                 je.sealed_until, je.capsule_type, je.linked_original_id, je.unsealed_at, je.status, je.session_id, je.word_count,
-                COALESCE(GROUP_CONCAT(t.name, ','), '') as tags
+                COALESCE(GROUP_CONCAT(t.name, ','), '') as tags,
+                (SELECT COALESCE(GROUP_CONCAT(ea.activity_id, ','), '') FROM entry_activities ea WHERE ea.entry_id = je.id) as activity_ids
          FROM journal_entries je
          LEFT JOIN entry_tags et ON je.id = et.entry_id
          LEFT JOIN tags t ON et.tag_id = t.id
@@ -319,7 +326,8 @@ pub fn get_all_entries(db: &Database, limit: Option<i32>) -> Result<Vec<JournalE
         .prepare(&format!(
             "SELECT je.id, je.encrypted_content, je.mood, je.privacy_mode, je.location_weather, je.book_id, je.pinned, je.created_at, je.updated_at,
                     je.sealed_until, je.capsule_type, je.linked_original_id, je.unsealed_at, je.status, je.session_id, je.word_count,
-                    COALESCE(GROUP_CONCAT(t.name, ','), '') as tags
+                    COALESCE(GROUP_CONCAT(t.name, ','), '') as tags,
+                    (SELECT COALESCE(GROUP_CONCAT(ea.activity_id, ','), '') FROM entry_activities ea WHERE ea.entry_id = je.id) as activity_ids
              FROM journal_entries je
              LEFT JOIN entry_tags et ON je.id = et.entry_id
              LEFT JOIN tags t ON et.tag_id = t.id
@@ -350,7 +358,8 @@ pub fn get_entries_by_date_range(
         .prepare(
             "SELECT je.id, je.encrypted_content, je.mood, je.privacy_mode, je.location_weather, je.book_id, je.pinned, je.created_at, je.updated_at,
                     je.sealed_until, je.capsule_type, je.linked_original_id, je.unsealed_at, je.status, je.session_id, je.word_count,
-                    COALESCE(GROUP_CONCAT(t.name, ','), '') as tags
+                    COALESCE(GROUP_CONCAT(t.name, ','), '') as tags,
+                    (SELECT COALESCE(GROUP_CONCAT(ea.activity_id, ','), '') FROM entry_activities ea WHERE ea.entry_id = je.id) as activity_ids
              FROM journal_entries je
              LEFT JOIN entry_tags et ON je.id = et.entry_id
              LEFT JOIN tags t ON et.tag_id = t.id
@@ -377,7 +386,8 @@ pub fn get_entries_on_this_day(db: &Database) -> Result<Vec<JournalEntryRow>, St
         .prepare(
             "SELECT je.id, je.encrypted_content, je.mood, je.privacy_mode, je.location_weather, je.book_id, je.pinned, je.created_at, je.updated_at,
                     je.sealed_until, je.capsule_type, je.linked_original_id, je.unsealed_at, je.status, je.session_id, je.word_count,
-                    COALESCE(GROUP_CONCAT(t.name, ','), '') as tags
+                    COALESCE(GROUP_CONCAT(t.name, ','), '') as tags,
+                    (SELECT COALESCE(GROUP_CONCAT(ea.activity_id, ','), '') FROM entry_activities ea WHERE ea.entry_id = je.id) as activity_ids
              FROM journal_entries je
              LEFT JOIN entry_tags et ON je.id = et.entry_id
              LEFT JOIN tags t ON et.tag_id = t.id
@@ -427,7 +437,8 @@ pub fn update_entry(
     conn.query_row(
         "SELECT je.id, je.encrypted_content, je.mood, je.privacy_mode, je.location_weather, je.book_id, je.pinned, je.created_at, je.updated_at,
                 je.sealed_until, je.capsule_type, je.linked_original_id, je.unsealed_at, je.status, je.session_id, je.word_count,
-                COALESCE(GROUP_CONCAT(t.name, ','), '') as tags
+                COALESCE(GROUP_CONCAT(t.name, ','), '') as tags,
+                (SELECT COALESCE(GROUP_CONCAT(ea.activity_id, ','), '') FROM entry_activities ea WHERE ea.entry_id = je.id) as activity_ids
          FROM journal_entries je
          LEFT JOIN entry_tags et ON je.id = et.entry_id
          LEFT JOIN tags t ON et.tag_id = t.id

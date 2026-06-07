@@ -131,6 +131,7 @@ interface BrowserEntryRow {
 | Journal CRUD | Full | Full |
 | Encryption (AES-256-GCM) | Full | Full |
 | Books, tags, analytics | Full | Full |
+| Mood analytics (year heatmap, streak, day-of-week) | Full | Full |
 | Time Capsule | Full | Full |
 | StillHaven | Full | Full |
 | Oura Ring sync | Full | Full (uses `window.fetch`) |

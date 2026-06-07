@@ -55,6 +55,11 @@ fn incoming_dir(app: &AppHandle) -> Result<std::path::PathBuf, String> {
 /// - `incoming_file`  — filename only (e.g. `"abc123.m4a"`), not a full path.
 ///   The full source path is `app_data_dir/voice_memos_incoming/<incoming_file>`.
 /// - `file_path` stored in DB is the relative path `voice_memos/<id>.m4a`.
+///
+/// Intentionally NOT gated by `require_unlocked`: the Wear OS bridge delivers
+/// memos while the desktop app is locked. This path never decrypts journal
+/// content; `timestamp`/`duration_ms`/`health_json` are unauthenticated
+/// metadata from the watch and are stored as-is.
 #[tauri::command]
 pub fn store_voice_memo(
     app: AppHandle,

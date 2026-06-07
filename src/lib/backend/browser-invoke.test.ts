@@ -232,3 +232,27 @@ describe('invoke("get_entries_on_this_day")', () => {
     expect(await invoke('get_entries_on_this_day')).toEqual([]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Session lock gate — PT6 parity with Rust require_unlocked guards
+// ---------------------------------------------------------------------------
+
+describe('session lock gate (activity commands)', () => {
+  it('rejects list_activities while locked', async () => {
+    await invoke('lock_app');
+    await expect(invoke('list_activities')).rejects.toThrow('Session is locked');
+  });
+
+  it('rejects create_activity while locked', async () => {
+    await invoke('lock_app');
+    await expect(
+      invoke('create_activity', { name: 'hiking', emoji: '🥾' })
+    ).rejects.toThrow('Session is locked');
+  });
+
+  it('allows list_activities after unlock_app', async () => {
+    await invoke('unlock_app');
+    await expect(invoke('list_activities')).resolves.toBeDefined();
+    await invoke('lock_app');
+  });
+});

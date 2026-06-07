@@ -16,7 +16,7 @@ use sha2::{Digest, Sha256};
 use tauri::{AppHandle, Manager, State};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
-use zeroize::Zeroizing;
+use zeroize::{Zeroize, Zeroizing};
 
 fn url_encode(s: &str) -> String {
     let mut out = String::with_capacity(s.len() * 3);
@@ -132,13 +132,13 @@ fn db_delete(conn: &rusqlite::Connection, key: &str) -> Result<(), String> {
 // as-is and transparently re-encrypted on next write (migration path).
 // ============================================================================
 
-use super::KEYRING_SERVICE;
-const TOKEN_KEYRING_ACCOUNT: &str = "cloud-token-encryption-key";
+use super::{require_unlocked, KEYRING_SERVICE};
+pub(crate) const TOKEN_KEYRING_ACCOUNT: &str = "cloud-token-encryption-key";
 const TOKEN_MARKER: &str = "__tok_v1:";
 
 fn load_or_create_token_key(app: &AppHandle) -> Result<Zeroizing<[u8; 32]>, String> {
     if let Ok(entry) = keyring::Entry::new(KEYRING_SERVICE, TOKEN_KEYRING_ACCOUNT) {
-        if let Ok(hex) = entry.get_password() {
+        if let Ok(hex) = entry.get_password().map(Zeroizing::new) {
             if let Ok(bytes) = hex::decode(hex.trim()) {
                 if let Ok(arr) = <[u8; 32]>::try_from(bytes.as_slice()) {
                     return Ok(Zeroizing::new(arr));
@@ -153,23 +153,29 @@ fn load_or_create_token_key(app: &AppHandle) -> Result<Zeroizing<[u8; 32]>, Stri
         .map_err(|e| format!("app_data_dir: {e}"))?;
     let key_path = app_data_dir.join("cloud_token_key.bin");
     if key_path.exists() {
-        let bytes = std::fs::read(&key_path).map_err(|e| e.to_string())?;
-        let arr: [u8; 32] = bytes
-            .try_into()
-            .map_err(|_| "cloud_token_key.bin must be 32 bytes".to_string())?;
+        let mut raw = std::fs::read(&key_path).map_err(|e| e.to_string())?;
+        if raw.len() != 32 {
+            raw.zeroize();
+            return Err("cloud_token_key.bin must be 32 bytes".to_string());
+        }
+        let mut arr = Zeroizing::new([0u8; 32]);
+        arr.copy_from_slice(&raw);
+        raw.zeroize();
         if let Ok(entry) = keyring::Entry::new(KEYRING_SERVICE, TOKEN_KEYRING_ACCOUNT) {
-            if entry.set_password(&hex::encode(arr)).is_ok() {
+            let hex_encoded = Zeroizing::new(hex::encode(arr.as_ref()));
+            if entry.set_password(&hex_encoded).is_ok() {
                 let _ = std::fs::remove_file(&key_path);
                 log::info!("[cloud-token] Migrated cloud_token_key.bin to OS keyring");
             }
         }
-        return Ok(Zeroizing::new(arr));
+        return Ok(arr);
     }
 
     let mut key = Zeroizing::new([0u8; 32]);
     rand::rngs::OsRng.fill_bytes(key.as_mut());
     let stored = if let Ok(entry) = keyring::Entry::new(KEYRING_SERVICE, TOKEN_KEYRING_ACCOUNT) {
-        entry.set_password(&hex::encode(*key)).is_ok()
+        let hex_encoded = Zeroizing::new(hex::encode(key.as_ref()));
+        entry.set_password(&hex_encoded).is_ok()
     } else {
         false
     };
@@ -230,30 +236,31 @@ fn decrypt_token(key: &Zeroizing<[u8; 32]>, stored: &str) -> Result<String, Stri
     String::from_utf8(plaintext_bytes).map_err(|e| e.to_string())
 }
 
+// The encryption key is resolved by callers via `load_or_create_token_key`
+// BEFORE acquiring the DB mutex — the keyring lookup is a blocking OS IPC
+// call and must never run under the lock (see CLAUDE.md mutex rules).
 fn db_set_token(
     conn: &rusqlite::Connection,
-    app: &AppHandle,
+    enc_key: &Zeroizing<[u8; 32]>,
     key: &str,
     value: &str,
 ) -> Result<(), String> {
-    let enc_key = load_or_create_token_key(app)?;
-    let encrypted = encrypt_token(&enc_key, value)?;
+    let encrypted = encrypt_token(enc_key, value)?;
     db_set(conn, key, &encrypted)
 }
 
 fn db_get_token(
     conn: &rusqlite::Connection,
-    app: &AppHandle,
+    enc_key: &Zeroizing<[u8; 32]>,
     key: &str,
 ) -> Result<Option<String>, String> {
     let stored = match db_get(conn, key)? {
         Some(v) => v,
         None => return Ok(None),
     };
-    let enc_key = load_or_create_token_key(app)?;
-    let plaintext = decrypt_token(&enc_key, &stored)?;
+    let plaintext = decrypt_token(enc_key, &stored)?;
     if !stored.starts_with(TOKEN_MARKER) {
-        if let Err(e) = db_set_token(conn, app, key, &plaintext) {
+        if let Err(e) = db_set_token(conn, enc_key, key, &plaintext) {
             log::warn!("[cloud-token] re-encrypt on read failed: {e}");
         }
     }
@@ -413,19 +420,19 @@ async fn exchange_google_code(
 
 fn store_tokens(
     conn: &rusqlite::Connection,
-    app: &AppHandle,
+    enc_key: &Zeroizing<[u8; 32]>,
     provider: &str,
     token_resp: &TokenResponse,
 ) -> Result<(), String> {
     db_set_token(
         conn,
-        app,
+        enc_key,
         &key_access_token(provider),
         &token_resp.access_token,
     )?;
 
     if let Some(ref rt) = token_resp.refresh_token {
-        db_set_token(conn, app, &key_refresh_token(provider), rt)?;
+        db_set_token(conn, enc_key, &key_refresh_token(provider), rt)?;
     }
 
     let expires_at = token_resp
@@ -592,11 +599,14 @@ async fn load_access_token_refreshing(
     app: &AppHandle,
     provider: &str,
 ) -> Result<String, String> {
+    // Resolve the encryption key BEFORE taking the DB lock — keyring IPC blocks.
+    let enc_key = load_or_create_token_key(app)?;
+
     // Read token fields under one lock, then drop lock before any async work.
     let (access_token, expires_at) = {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
         ensure_settings_table(&conn)?;
-        let at = db_get_token(&conn, app, &key_access_token(provider))?
+        let at = db_get_token(&conn, &enc_key, &key_access_token(provider))?
             .ok_or_else(|| format!("{} is not connected — run auth first", provider))?;
         let ea = db_get(&conn, &key_expires_at(provider))?.unwrap_or_default();
         (at, ea)
@@ -609,7 +619,7 @@ async fn load_access_token_refreshing(
     // Token expired — refresh it (no DB lock held during network call)
     let refresh_token = {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
-        db_get_token(&conn, app, &key_refresh_token(provider))?
+        db_get_token(&conn, &enc_key, &key_refresh_token(provider))?
             .ok_or_else(|| format!("No refresh token for {} — re-authenticate", provider))?
     };
 
@@ -618,7 +628,7 @@ async fn load_access_token_refreshing(
     // Store refreshed tokens
     {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
-        store_tokens(&conn, app, provider, &token_resp)?;
+        store_tokens(&conn, &enc_key, provider, &token_resp)?;
     }
 
     Ok(token_resp.access_token)
@@ -718,9 +728,7 @@ pub async fn cloud_provider_auth_start(
     lock: State<'_, AppLockState>,
     provider: String,
 ) -> Result<(), String> {
-    if lock.is_locked() {
-        return Err("Session is locked".to_string());
-    }
+    require_unlocked(&lock)?;
     // Validate provider and check placeholder credentials
     match provider.as_str() {
         "dropbox" => {
@@ -815,11 +823,12 @@ pub async fn cloud_provider_auth_start(
         _ => unreachable!(),
     };
 
-    // 7. Store tokens
+    // 7. Store tokens (keyring key resolved before the lock — keyring IPC blocks)
+    let enc_key = load_or_create_token_key(&app)?;
     {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
         ensure_settings_table(&conn)?;
-        store_tokens(&conn, &app, &provider, &token_resp)?;
+        store_tokens(&conn, &enc_key, &provider, &token_resp)?;
     }
 
     Ok(())
@@ -837,9 +846,7 @@ pub async fn cloud_provider_upload_blob(
     provider: String,
     blob: String,
 ) -> Result<(), String> {
-    if lock.is_locked() {
-        return Err("Session is locked".to_string());
-    }
+    require_unlocked(&lock)?;
 
     let access_token = load_access_token_refreshing(&db, &app, &provider).await?;
     let blob_bytes = blob.as_bytes();
@@ -913,9 +920,7 @@ pub async fn cloud_provider_download_blob(
     lock: State<'_, AppLockState>,
     provider: String,
 ) -> Result<String, String> {
-    if lock.is_locked() {
-        return Err("Session is locked".to_string());
-    }
+    require_unlocked(&lock)?;
 
     let access_token = load_access_token_refreshing(&db, &app, &provider).await?;
     let client = reqwest::Client::new();
@@ -1001,8 +1006,10 @@ pub async fn cloud_provider_download_blob(
 #[tauri::command]
 pub async fn cloud_provider_status(
     db: State<'_, Database>,
+    lock: State<'_, AppLockState>,
     provider: Option<String>,
 ) -> Result<Vec<ProviderStatus>, String> {
+    require_unlocked(&lock)?;
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     ensure_settings_table(&conn)?;
 
@@ -1034,9 +1041,7 @@ pub async fn cloud_provider_disconnect(
     lock: State<'_, AppLockState>,
     provider: String,
 ) -> Result<(), String> {
-    if lock.is_locked() {
-        return Err("Session is locked".to_string());
-    }
+    require_unlocked(&lock)?;
 
     match provider.as_str() {
         "dropbox" | "gdrive" => {}
@@ -1071,18 +1076,18 @@ pub async fn cloud_provider_refresh_token(
     lock: State<'_, AppLockState>,
     provider: String,
 ) -> Result<(), String> {
-    if lock.is_locked() {
-        return Err("Session is locked".to_string());
-    }
+    require_unlocked(&lock)?;
     match provider.as_str() {
         "dropbox" | "gdrive" => {}
         _ => return Err(format!("Unknown provider: {}", provider)),
     }
 
+    // Keyring key resolved before the lock — keyring IPC blocks.
+    let enc_key = load_or_create_token_key(&app)?;
     let refresh_token = {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
         ensure_settings_table(&conn)?;
-        db_get_token(&conn, &app, &key_refresh_token(&provider))?
+        db_get_token(&conn, &enc_key, &key_refresh_token(&provider))?
             .ok_or_else(|| format!("No refresh token for {} — re-authenticate", provider))?
     };
 
@@ -1090,7 +1095,7 @@ pub async fn cloud_provider_refresh_token(
 
     {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
-        store_tokens(&conn, &app, &provider, &token_resp)?;
+        store_tokens(&conn, &enc_key, &provider, &token_resp)?;
     }
 
     Ok(())

@@ -26,7 +26,7 @@ use crate::AppLockState;
 use serde::Serialize;
 
 use super::KEYRING_SERVICE;
-const KEYRING_ACCOUNT: &str = "desktop_biometric_session";
+pub(crate) const KEYRING_ACCOUNT: &str = "desktop_biometric_session";
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]

@@ -481,6 +481,15 @@ pub fn run() {
             // Sweep leftover preview temp files from previous sessions
             let _ = commands::sweep_preview_temp(app.handle().clone());
 
+            // Remove the Windows factory-reset orphan (moodhaven.db.old) left
+            // behind when the open DB handle blocked deletion during reset.
+            if let Ok(data_dir) = app.path().app_data_dir() {
+                let orphan = data_dir.join("moodhaven.db.old");
+                if orphan.exists() {
+                    let _ = std::fs::remove_file(&orphan);
+                }
+            }
+
             // Open devtools in debug mode
             #[cfg(debug_assertions)]
             {

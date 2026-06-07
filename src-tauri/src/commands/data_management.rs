@@ -260,6 +260,19 @@ pub async fn factory_reset(app: AppHandle) -> Result<bool, String> {
         }
     }
 
+    // Best-effort: clear OS keyring entries so the reset truly returns to
+    // first-run state. The cloud token encryption key and the biometric
+    // session credential would otherwise survive (stale secrets — the data
+    // they protect is gone, but a reset should not leave them behind).
+    for account in [
+        crate::commands::cloud_providers::TOKEN_KEYRING_ACCOUNT,
+        crate::commands::biometric::KEYRING_ACCOUNT,
+    ] {
+        if let Ok(entry) = keyring::Entry::new(crate::commands::KEYRING_SERVICE, account) {
+            let _ = entry.delete_password();
+        }
+    }
+
     Ok(true)
 }
 

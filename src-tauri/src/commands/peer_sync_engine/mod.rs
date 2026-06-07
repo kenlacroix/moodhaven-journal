@@ -122,6 +122,11 @@ unsafe impl Sync for SyncEngineState {}
 /// slow Wi-Fi or large databases.
 const RESTORE_CHUNK_BYTES: usize = 4 * 1024 * 1024; // 4 MiB
 
+/// Returned to callers when a peer omits `eph_pub` in the handshake.
+/// The v1 static-key fallback was removed in v1.8.0 (no forward secrecy).
+const V1_FALLBACK_REMOVED_MSG: &str =
+    "Server did not send eph_pub — v1 static-key fallback has been removed. Peer must be upgraded to v2.";
+
 fn do_serve_restore(
     app: &AppHandle,
     stream: &mut TcpStream,
@@ -288,10 +293,7 @@ fn do_full_restore_client(app: &AppHandle, peer_device_id: &str, host: &str) -> 
             &peer_device.public_key,
         )?,
         None => {
-            return Err(
-                "Server did not send eph_pub — v1 static-key fallback has been removed. Peer must be upgraded to v2."
-                    .to_string(),
-            );
+            return Err(V1_FALLBACK_REMOVED_MSG.to_string());
         }
     };
 
@@ -1113,10 +1115,7 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
             derive_sync_key_ecdh(my_eph_secret, hex, &my_identity.public_key, &peer_pubkey)?
         }
         None => {
-            return Err(
-                "Server did not send eph_pub — v1 static-key fallback has been removed. Peer must be upgraded to v2."
-                    .to_string(),
-            );
+            return Err(V1_FALLBACK_REMOVED_MSG.to_string());
         }
     };
 

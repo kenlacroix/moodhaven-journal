@@ -164,16 +164,9 @@ session_key = SHA-256(
 
 The X25519 shared secret is mixed with both static Ed25519 public keys so that device identity is bound into the session key. Compromising the ephemeral secret of one session does not expose any other session.
 
-**v1 (fallback — no forward secrecy):**
+**v1 (removed as of v1.8.0):**
 
-Used automatically if the connecting peer does not send `eph_pub` (pre-v2 client). Included for backwards compatibility only; should be removed once all peers are on v2.
-
-```
-session_key = SHA-256(
-    "moodhaven-sync-v1:" ||
-    sort_lexicographic([static_pub_A, static_pub_B])
-)
-```
+The v1 static-key fallback (no forward secrecy) has been removed. Peers that omit `eph_pub` in HELLO are rejected immediately with an upgrade message. All active clients must use v2.
 
 ### Authentication Handshake
 
@@ -290,7 +283,7 @@ Manual sync is also available via the Devices tab in Settings.
 
 When auditing the sync implementation, focus on:
 
-- `src-tauri/src/commands/peer_sync_engine/crypto.rs` — key derivation (v1 + v2), AES-GCM frame encrypt/decrypt
+- `src-tauri/src/commands/peer_sync_engine/crypto.rs` — key derivation (v2 ECDH only; v1 removed in v1.8.0), AES-GCM frame encrypt/decrypt
 - `src-tauri/src/commands/peer_sync_engine/connection.rs` — TCP server, handshake, authentication flow
 - `src-tauri/src/commands/peer_sync_engine/conflict.rs` — LWW upserts, timestamp validation, settings allowlist and merge
 - `src-tauri/src/commands/peer_sync_engine/protocol.rs` — wire message types, port formula

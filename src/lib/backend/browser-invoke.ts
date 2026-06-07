@@ -60,6 +60,20 @@ const APP_VERSION = import.meta.env.VITE_APP_VERSION ?? '0.0.0';
 // Mirrors the Tauri session lock state so browser-mode commands can gate on it.
 let _browserSessionUnlocked = false;
 
+// Commands gated by require_unlocked on the Rust side (PT6) that have real
+// IDB-backed implementations here. Kept in sync so browser mode rejects them
+// identically before unlock. Voice memo commands are no-op stubs in browser
+// mode and need no gate.
+const LOCK_GATED_COMMANDS = new Set([
+  'list_activities',
+  'create_activity',
+  'delete_activity',
+  'sync_entry_activities',
+  'get_entry_activities',
+  'list_all_entry_activities',
+  'get_activity_stats',
+]);
+
 type Params = Record<string, unknown>;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -72,6 +86,9 @@ export async function invoke<T>(command: string, params?: Params): Promise<T> {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function dispatch(command: string, p: Params): Promise<any> {
+  if (LOCK_GATED_COMMANDS.has(command) && !_browserSessionUnlocked) {
+    throw new Error('Session is locked');
+  }
   switch (command) {
     // -----------------------------------------------------------------------
     // Auth / password

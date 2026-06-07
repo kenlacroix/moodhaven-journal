@@ -1,6 +1,6 @@
 # MoodHaven Journal — Architecture Reference
 
-> **Version:** v1.6.0 (feat/cloud-sync-phase1) | **Last Updated:** 2026-06-06
+> **Version:** v1.8.0 | **Last Updated:** 2026-06-07
 
 ---
 
@@ -185,6 +185,26 @@ entry_tags (
 )
 ```
 
+### Activity Tagging
+
+```sql
+activities (
+  id            TEXT PRIMARY KEY,
+  name          TEXT NOT NULL,
+  emoji         TEXT NOT NULL DEFAULT '🏷️',
+  is_predefined INTEGER NOT NULL DEFAULT 0,   -- 1 = seeded at startup, cannot be deleted
+  created_at    TEXT NOT NULL
+)
+
+entry_activities (
+  entry_id    TEXT REFERENCES journal_entries(id) ON DELETE CASCADE,
+  activity_id TEXT REFERENCES activities(id) ON DELETE CASCADE,
+  PRIMARY KEY (entry_id, activity_id)
+)
+```
+
+15 activities are seeded on first launch (Exercise, Social, Work, Reading, Creative, Meditation, Good Sleep, Poor Sleep, Nature, Family, Cooking, Music, Learning, Travel, Gaming). Users can add up to 50 custom activities. `idx_entry_activities_entry` index on `entry_id` keeps correlated subquery cost constant.
+
 ### Authentication
 
 ```sql
@@ -346,6 +366,7 @@ Hooks are the primary abstraction between stores/services and UI components. Eac
 | `usePeerSync` | Discovery, pairing, sync orchestration |
 | `useWearVoiceMemos` | Incoming audio from Wear OS companion; post-transcription mood inference |
 | `useVoiceMemoDrafts` | Draft list state, `publishDraft`, `discardDraft` |
+| `useActivities` | Activity list, create/delete custom activities, sync entry links |
 | `useWearSignals` | Mood taps and health snapshots from watch |
 | `useAudioRecorder` | Mic recording (STT input) |
 | `useSpeechToText` | Model download, transcription |

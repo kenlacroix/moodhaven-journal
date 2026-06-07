@@ -399,6 +399,7 @@ See [CLAUDE.md](CLAUDE.md) for architecture, security guidelines, and convention
 
 ## Recent Changes
 
+**v1.8.0** — Activity tagging: tag entries with 15 built-in activities (Exercise, Meditation, Sleep, etc.) and up to 50 custom ones. Activity filter in the Timeline. Per-activity mood averages in Insights. Full browser/PWA parity. 1461 tests.
 **v1.6.0.1** — Forest and Sky rendering environments for StillHaven sessions. `EnvironmentPicker` lets users select the visual backdrop before starting a session. Patch fixes an environment-state regression from v1.6.0. 1283 tests.
 **v1.5.0** — Wrist Loop: watch sends a `still_trigger` signal to request a StillHaven session; `WristLoopBanner` renders a dismissable toast on desktop; `still_signal_links` table records signal→session provenance. Time of Day Insight card and Writing Momentum card added to the Insights view (no AI required). `useWristLoop` hook. 1245 tests.
 **v1.4.0** — StillHaven Effect: correlation card shows per-protocol activation delta vs. post-session journal mood; protocol recommendations surface in Session History. New `still_get_effect_stats` command. 1201 tests.

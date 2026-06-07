@@ -111,6 +111,7 @@ interface BrowserEntryRow {
   status: string | null;
   session_id?: string;
   word_count?: number;
+  activity_ids?: string[];
 }
 ```
 

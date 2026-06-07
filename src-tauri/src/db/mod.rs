@@ -722,6 +722,68 @@ impl Database {
             [],
         );
 
+        // Runtime migration: activities + entry_activities tables (v1.8.0)
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS activities (
+                id         TEXT PRIMARY KEY,
+                name       TEXT NOT NULL UNIQUE,
+                emoji      TEXT NOT NULL DEFAULT '✨',
+                is_custom  INTEGER NOT NULL DEFAULT 0,
+                sort_order INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS entry_activities (
+                entry_id    TEXT NOT NULL REFERENCES journal_entries(id) ON DELETE CASCADE,
+                activity_id TEXT NOT NULL REFERENCES activities(id) ON DELETE CASCADE,
+                PRIMARY KEY (entry_id, activity_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_entry_activities_entry
+                ON entry_activities(entry_id);
+            CREATE INDEX IF NOT EXISTS idx_entry_activities_activity
+                ON entry_activities(activity_id);",
+        )
+        .map_err(|e| format!("Failed to create activities tables: {}", e))?;
+
+        // Seed predefined activities on first run (idempotent — skipped if rows exist)
+        {
+            let count: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM activities WHERE is_custom = 0",
+                    [],
+                    |r| r.get(0),
+                )
+                .unwrap_or(0);
+
+            if count == 0 {
+                const PREDEFINED: &[(&str, &str)] = &[
+                    ("exercise", "🏃"),
+                    ("social", "👥"),
+                    ("work", "💼"),
+                    ("reading", "📚"),
+                    ("creative", "🎨"),
+                    ("meditation", "🧘"),
+                    ("good_sleep", "😴"),
+                    ("poor_sleep", "😵"),
+                    ("nature", "🌿"),
+                    ("family", "🏠"),
+                    ("cooking", "🍳"),
+                    ("music", "🎵"),
+                    ("learning", "📖"),
+                    ("travel", "✈️"),
+                    ("gaming", "🎮"),
+                ];
+                for (i, (name, emoji)) in PREDEFINED.iter().enumerate() {
+                    let id = format!("act_{}", name);
+                    let _ = conn.execute(
+                        "INSERT OR IGNORE INTO activities
+                             (id, name, emoji, is_custom, sort_order, created_at)
+                         VALUES (?1, ?2, ?3, 0, ?4, datetime('now'))",
+                        params![id, name, emoji, i as i32],
+                    );
+                }
+            }
+        }
+
         Ok(())
     }
 }

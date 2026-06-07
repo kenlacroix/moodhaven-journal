@@ -27,6 +27,8 @@ import { VoiceMemoDraftCard } from '../components/voice-memo/VoiceMemoDraftCard'
 import { VoiceDraftEditor } from '../components/voice-memo/VoiceDraftEditor';
 import type { VoiceMemo } from '../lib/services/voiceMemoService';
 import { useAppStore } from '../stores/appStore';
+import { useActivities } from '../hooks/useActivities';
+import { listAllEntryActivities } from '../lib/services/activityService';
 
 // Get current date string for change detection
 const getCurrentDateStr = () => formatDate(new Date());
@@ -120,12 +122,18 @@ export function TimelineView({ onSelectEntry, onNewEntry, onSealEntry, refreshTr
   // Tag filter (Feature 7)
   const [tagFilter, setTagFilter] = useState<string | null>(null);
 
+  // Activity filter
+  const [activityFilter, setActivityFilter] = useState<string | null>(null);
+  const [entryActivityMap, setEntryActivityMap] = useState<Map<string, string[]>>(new Map());
+  const { activities } = useActivities();
+
   // Track current date for auto-refresh of relative dates
   const [currentDate, setCurrentDate] = useState(getCurrentDateStr);
 
   useEffect(() => {
     loadEntries();
     loadMediaCounts();
+    loadActivityMap();
   }, [refreshTrigger]);
 
   // Auto-refresh relative dates when calendar date changes
@@ -151,6 +159,21 @@ export function TimelineView({ onSelectEntry, onNewEntry, onSealEntry, refreshTr
       logger.error('Failed to load entries:', { error: String(err) });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const loadActivityMap = async () => {
+    try {
+      const rows = await listAllEntryActivities();
+      const map = new Map<string, string[]>();
+      for (const r of rows) {
+        const existing = map.get(r.entryId) ?? [];
+        existing.push(r.activityId);
+        map.set(r.entryId, existing);
+      }
+      setEntryActivityMap(map);
+    } catch {
+      // non-critical
     }
   };
 
@@ -225,6 +248,11 @@ export function TimelineView({ onSelectEntry, onNewEntry, onSealEntry, refreshTr
       result = result.filter((e) => e.tags.includes(tagFilter));
     }
 
+    // Stage 3b: Activity
+    if (activityFilter) {
+      result = result.filter((e) => (entryActivityMap.get(e.id) ?? []).includes(activityFilter));
+    }
+
     // Stage 4: Search
     if (debouncedQuery) {
       const q = debouncedQuery.toLowerCase();
@@ -237,7 +265,7 @@ export function TimelineView({ onSelectEntry, onNewEntry, onSealEntry, refreshTr
     }
 
     return result;
-  }, [entries, dateRange, moodFilter, tagFilter, debouncedQuery, activeBookId]);
+  }, [entries, dateRange, moodFilter, tagFilter, activityFilter, entryActivityMap, debouncedQuery, activeBookId]);
 
   // Group filtered entries by date
   const groupedEntries = useMemo(
@@ -285,7 +313,7 @@ export function TimelineView({ onSelectEntry, onNewEntry, onSealEntry, refreshTr
   }, [entries]);
 
   const isAnyFilterActive =
-    moodFilter !== null || dateRange !== 'all' || tagFilter !== null || debouncedQuery !== '' || activeBookId !== null;
+    moodFilter !== null || dateRange !== 'all' || tagFilter !== null || activityFilter !== null || debouncedQuery !== '' || activeBookId !== null;
 
   // Pinned entries (always from full filtered list, not date-grouped)
   const [pinnedCollapsed, setPinnedCollapsed] = useState(false);
@@ -526,6 +554,31 @@ export function TimelineView({ onSelectEntry, onNewEntry, onSealEntry, refreshTr
         onSelect={setTagFilter}
         isAndroid={isMobile}
       />
+
+      {/* Activity filter chips */}
+      {activities.length > 0 && entries.length > 0 && (
+        <div className={`flex gap-2 mb-4 ${isMobile ? 'overflow-x-auto px-4 pb-1 flex-nowrap' : 'flex-wrap'}`}>
+          {activities.map((a) => {
+            const isActive = activityFilter === a.id;
+            return (
+              <button
+                key={a.id}
+                type="button"
+                onClick={() => setActivityFilter(isActive ? null : a.id)}
+                aria-pressed={isActive}
+                className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-all duration-150 ${
+                  isActive
+                    ? 'bg-violet-500 text-white ring-2 ring-violet-300 dark:ring-violet-700'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                }`}
+              >
+                <span>{a.emoji}</span>
+                <span className="capitalize">{a.name.replace(/_/g, ' ')}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* Empty state - no entries at all */}
       {entries.length === 0 && (

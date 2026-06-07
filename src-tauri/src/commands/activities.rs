@@ -1,7 +1,11 @@
 use crate::db::Database;
+use crate::AppLockState;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
+use tauri::State;
 use uuid::Uuid;
+
+use super::require_unlocked;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Activity {
@@ -66,6 +70,16 @@ pub async fn create_activity(
     };
     let id = format!("act_custom_{}", Uuid::new_v4().simple());
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let custom_count: i32 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM activities WHERE is_custom = 1",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap_or(0);
+    if custom_count >= 50 {
+        return Err("Maximum 50 custom activities allowed".to_string());
+    }
     let sort_order: i32 = conn
         .query_row(
             "SELECT COALESCE(MAX(sort_order), 0) + 1 FROM activities WHERE is_custom = 1",
@@ -117,9 +131,11 @@ pub async fn delete_activity(db: tauri::State<'_, Database>, id: String) -> Resu
 #[tauri::command]
 pub async fn sync_entry_activities(
     db: tauri::State<'_, Database>,
+    lock: State<'_, AppLockState>,
     entry_id: String,
     activity_ids: Vec<String>,
 ) -> Result<(), String> {
+    require_unlocked(&lock)?;
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     conn.execute(
         "DELETE FROM entry_activities WHERE entry_id = ?1",
@@ -187,7 +203,9 @@ pub struct EntryActivityRow {
 #[tauri::command]
 pub async fn get_activity_stats(
     db: tauri::State<'_, Database>,
+    lock: State<'_, AppLockState>,
 ) -> Result<Vec<ActivityStat>, String> {
+    require_unlocked(&lock)?;
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let mut stmt = conn
         .prepare(

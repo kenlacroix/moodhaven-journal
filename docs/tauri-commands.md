@@ -44,6 +44,7 @@ Parameter names in TypeScript use **camelCase**; Rust receives them as **snake_c
 - [Cloud Providers (Phase 1)](#cloud-providers-phase-1)
 - [PIN Unlock](#pin-unlock)
 - [Biometric Session Unlock](#biometric-session-unlock)
+- [Activity Tagging](#activity-tagging)
 
 ---
 
@@ -2198,4 +2199,97 @@ Remove the stored credential from the OS credential store. Called when the user 
 
 ```typescript
 invoke('biometric_clear_session') → Promise<void>
+```
+
+---
+
+## Activity Tagging
+
+**Source:** `src-tauri/src/commands/activities.rs`
+**IPC wrappers:** `src/lib/services/activityService.ts`
+**Hook:** `src/hooks/useActivities.ts`
+
+Activity tagging lets users associate journal entries with predefined or custom activities. 15 predefined activities are seeded on first launch. Users can add up to 50 custom activities. Per-activity mood averages and entry counts are available via `get_activity_stats`.
+
+---
+
+### `list_activities`
+
+List all activities (predefined + custom).
+
+```typescript
+invoke('list_activities') → Promise<Activity[]>
+```
+
+Where `Activity` is:
+```typescript
+{
+  id: string,
+  name: string,
+  emoji: string,
+  isPredefined: boolean,
+}
+```
+
+---
+
+### `create_activity`
+
+Create a custom activity. Returns an error if the custom activity limit (50) is reached or if the name exceeds 30 characters. The limit check is atomic — concurrent calls cannot race past the cap.
+
+```typescript
+invoke('create_activity', {
+  id: string,
+  name: string,
+  emoji: string,
+}) → Promise<Activity>
+```
+
+---
+
+### `delete_activity`
+
+Delete a custom activity. Predefined activities cannot be deleted — this returns an error if attempted.
+
+```typescript
+invoke('delete_activity', { id: string }) → Promise<void>
+```
+
+---
+
+### `sync_entry_activities`
+
+Replace all activity links for an entry. Called after each save to update the activity index. Passing an empty array clears all activity links for the entry.
+
+```typescript
+invoke('sync_entry_activities', {
+  entryId: string,
+  activityIds: string[],
+}) → Promise<void>
+```
+
+---
+
+### `get_entry_activities`
+
+Get all activities linked to a specific journal entry.
+
+```typescript
+invoke('get_entry_activities', { entryId: string }) → Promise<Activity[]>
+```
+
+---
+
+### `get_activity_stats`
+
+Get per-activity statistics: entry count and average mood. Used by the Insights view. Requires unlock.
+
+```typescript
+invoke('get_activity_stats') → Promise<Array<{
+  activityId: string,
+  name: string,
+  emoji: string,
+  entryCount: number,
+  avgMood: number,
+}>>
 ```

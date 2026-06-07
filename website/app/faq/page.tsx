@@ -35,6 +35,7 @@ const QUESTIONS = [
   },
   {
     icon: Coins,
+    id: "free",
     q: "Is MoodHaven free?",
     a: "Yes — completely free, forever. MoodHaven is open source under the MIT license. There is no Pro tier, no subscription, and no paid features. Everything ships to everyone.",
   },
@@ -166,7 +167,7 @@ export default function FAQPage() {
               const Icon = item.icon;
               return (
                 <AnimatedReveal key={item.q} delay={i * 0.06}>
-                  <div className="bg-white/90 rounded-xl p-5 ring-1 ring-neutral-100 space-y-2">
+                  <div id={"id" in item ? item.id : undefined} className="bg-white/90 rounded-xl p-5 ring-1 ring-neutral-100 space-y-2">
                     <div className="flex items-start gap-3">
                       <div className="w-8 h-8 rounded-lg bg-primary-50 flex items-center justify-center flex-shrink-0 mt-0.5">
                         <Icon className="w-4 h-4 text-primary-600" aria-hidden="true" />

@@ -1,0 +1,49 @@
+---
+title: "Why Local-First Is the Right Architecture for a Private Journal"
+publishDate: "2026-06-09"
+excerpt: "Cloud-first apps trade your data for convenience. Local-first flips that — you get the convenience, and your data never leaves until you decide it should."
+---
+
+Most journaling apps store your entries on their servers.
+
+Some are upfront about it. Others describe themselves as "encrypted" or "private" while still routing your data through infrastructure they control. A few, like OwnJournal, encrypt your data before sending it to Google Drive or Dropbox, which is better than nothing, but still means a cloud account is required for the app to function. The cloud is still in the loop.
+
+Local-first means something more specific: your device is the source of truth. The database lives on your disk. The app works fully offline, forever. Sync is something you opt into, on your terms, to destinations you choose.
+
+## Why this architecture matters for a journal
+
+Journaling is different from most software categories. You write things in a journal you would not say out loud. Fears about your health, frustrations with people you love, doubts about your choices, things you are not ready to share with anyone. A journal is only useful if you trust it completely.
+
+A journal stored on someone else's server is, by definition, a journal you share with that company. Their engineers could access it if they had reason to. A court order could compel them to produce it. A data breach could expose it. You accepted those terms when you signed up, buried in a document you did not read.
+
+The argument usually made in response to this is: "but we encrypt it." Encryption in transit protects your data from eavesdroppers on the network. Encryption at rest means the stored bytes are scrambled. Neither of those things prevents the company from decrypting your data using a key they hold, if they need to. Zero-knowledge systems do better, but they are rare, and "zero-knowledge" is a claim that is easy to make and hard to verify.
+
+Local-first sidesteps the question entirely. If the database never leaves your device, there is nothing for the company to hand over, breach, or misuse.
+
+## How MoodHaven implements this
+
+Every journal entry in MoodHaven is encrypted on your device before it touches disk. The encryption key is derived from your password using PBKDF2 with 600,000 iterations. The key is never stored. The encrypted content is saved to a local SQLite database. When you look at the raw database file, you see ciphertext.
+
+The save path in the Rust backend, `journal.rs`, makes no network calls. You can read it. There is no HTTP client in the entry creation function. Your writing goes from the editor to your disk, encrypted, with no stops in between.
+
+Peer sync, if you use it, works over your local network. Two devices on the same Wi-Fi can sync with each other directly, using an encrypted TCP connection with forward secrecy. There is no relay server. When both devices are away from the network, sync does not happen. Your data does not travel through any infrastructure that is not yours.
+
+WebDAV backup is available for people who want an off-device copy. You point it at a server you control, MinIO, a Nextcloud instance, a NAS, whatever you run. MoodHaven encrypts the backup before uploading it. The server sees ciphertext.
+
+## The tradeoff, named honestly
+
+You do not get "tap a button and your journal appears on your new phone in 30 seconds" out of the box.
+
+Peer sync requires both devices to be on the same network at the same time. If you get a new laptop and want your journal on it, you need to be home, on the same Wi-Fi as your old laptop, and run through the pairing flow. WebDAV backup requires you to have a server. None of this is difficult, but it is more friction than signing into an app with a Google account.
+
+This is a real tradeoff and I think it is worth naming directly rather than hiding in a footnote.
+
+But consider what you are trading for that convenience in a cloud-first app. You are trading the most personal writing you will ever do. For a Spotify playlist or a grocery list, that math probably works out fine. For a journal, I think the math runs the other way. A slightly slower new-device setup is a reasonable price for a system where no one else holds a copy of your thoughts.
+
+## Local-first is not a niche position
+
+1Password stores your vault locally and syncs only encrypted blobs. Obsidian treats your notes as files on your filesystem and makes cloud sync optional. Bitwarden, in its self-hosted form, gives you a server you run yourself. These are widely used, respected tools that made the same architectural choice MoodHaven makes.
+
+Local-first is not a limitation imposed by technical constraints. It is a design decision, made deliberately, in favor of the user's privacy over the developer's convenience. The cloud-first approach is easier to build and easier to monetize. Local-first requires more engineering and a different relationship with the people who use the software.
+
+MoodHaven is free and open source. The database is on your disk, the encryption key is in your head, and the code is on [GitHub](https://github.com/kenlacroix/moodhaven-journal) if you want to read it. [Download the desktop app](/download) for Windows, macOS, or Linux.

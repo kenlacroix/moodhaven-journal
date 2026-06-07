@@ -1,4 +1,4 @@
-import { HardDrive, ShieldCheck, Brain, BookOpen, Wifi, Monitor } from "lucide-react";
+import { HardDrive, ShieldCheck, Brain, BookOpen, Wifi, Monitor, Tag, Clock, Mic } from "lucide-react";
 import AnimatedReveal from "./AnimatedReveal";
 
 const FEATURES = [
@@ -37,6 +37,24 @@ const FEATURES = [
     name: "Every platform",
     description:
       "Native desktop on Windows, macOS, Linux. Browser PWA at journal.moodhaven.app. Wear OS for voice captures from your wrist.",
+  },
+  {
+    icon: Tag,
+    name: "Activity tagging",
+    description:
+      "Tag entries with activities — Exercise, Reading, Social, Meditation and more. See which activities correlate with your best and worst moods in the Insights view.",
+  },
+  {
+    icon: Clock,
+    name: "Time Capsule",
+    description:
+      "Seal any entry until a future date. Revisit a letter to your future self when the date arrives — or let anniversary entries surface each year automatically.",
+  },
+  {
+    icon: Mic,
+    name: "Voice memos from your wrist",
+    description:
+      "Record a voice reflection on Wear OS. Whisper.cpp transcribes it locally on your desktop — no cloud STT, no audio ever leaves your devices.",
   },
 ];
 

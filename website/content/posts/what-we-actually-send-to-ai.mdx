@@ -1,0 +1,59 @@
+---
+title: "What We Actually Send to the AI (and What We Don't)"
+publishDate: "2026-06-08"
+excerpt: "MoodHaven's AI features work from metadata — mood scores, patterns, frequency. Your journal text never leaves your device. Here's exactly what goes out and what stays in."
+---
+
+Most apps that say "AI-powered" have a quiet asterisk attached. The asterisk usually reads something like: we send your content to OpenAI, but we call it "anonymized" or "encrypted in transit." A few are honest about it. Most are not.
+
+I want to be direct about what MoodHaven does, because vagueness on this specific question is how trust erodes.
+
+## What the AI sees
+
+When you enable AI features in MoodHaven, the model receives a structured metadata object. It looks like this:
+
+```
+{
+  recentMoodAverage: 3.2,
+  moodTrend: "improving",
+  dominantEmotions: ["grateful", "anxious", "reflective"],
+  entryFrequency: "daily",
+  preferredTime: "evening"
+}
+```
+
+That is the entirety of what goes out. Five fields. All of them derived locally from your mood scores, timestamps, and entry patterns. None of them are your words.
+
+`recentMoodAverage` is the arithmetic mean of your last several mood ratings, which are integers from 1 to 5. `moodTrend` is calculated by comparing recent average to older average. `dominantEmotions` are categories extracted on your device from writing patterns, not from the text itself. `entryFrequency` is how often you write. `preferredTime` is when you most often open the app.
+
+There are no text fields in this object. There is no `entryContent`, no `recentEntries`, no `journalExcerpt`. The structure physically cannot carry your writing.
+
+## What the AI never sees
+
+The content of any journal entry you have written. Not a sentence, not a phrase, not a word. This is not a soft commitment that might change in a future version. The code that assembles the AI request object has no access to decrypted entry content. Entry content is AES-256-GCM ciphertext at rest, and the only place it is decrypted is in the editor on your device.
+
+## AI is off by default, and it stays off until you act
+
+When you first install MoodHaven, AI features are disabled. You have to go into Settings, find the AI section, read what it does, and explicitly turn it on. There is no nudge flow, no onboarding step that quietly suggests enabling it, no banner that appears after a week. It is off. You turn it on if you want it.
+
+When you do enable it, you also have to provide an API key. MoodHaven does not have its own AI backend. The request goes through your account.
+
+## BYOK: your key, your account
+
+If you use your own OpenAI API key, the metadata object described above is sent to OpenAI under your credentials, not ours. That means it appears in your OpenAI usage dashboard. It counts against your billing. And it is subject to OpenAI's data handling policies for API calls, which are different from their consumer product policies.
+
+This is worth understanding clearly. When you use BYOK, MoodHaven is a client library that calls OpenAI on your behalf. We are not a middleman holding your key on a server somewhere. The key lives in encrypted storage on your device and is passed directly in the request.
+
+## Ollama: zero data leaves your machine
+
+If you run a local Ollama instance, none of this goes anywhere. The request goes from MoodHaven to a process running on your own computer. No network traffic exits your machine. This is the most private AI configuration and the one I use personally.
+
+Setup requires installing Ollama and pulling a model, which takes some technical comfort but is not difficult. The MoodHaven settings panel has a field for the Ollama endpoint, and once it is pointed at your local instance, AI features work identically.
+
+## You can read the code
+
+I am not asking you to take my word for any of this. The AI request is assembled in `useInsights.ts`. The object that gets passed to the API call is in `aiService.ts`. There is no code path in either file that reads or attaches decrypted entry content to an outbound request.
+
+If you find one, open an issue. That would be a bug, and I would treat it as a serious one.
+
+MoodHaven is free and open source. [Read the source on GitHub](https://github.com/kenlacroix/moodhaven-journal) or [download the desktop app](/download).

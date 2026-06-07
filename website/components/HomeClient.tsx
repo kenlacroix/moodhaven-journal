@@ -10,8 +10,15 @@ import AppPreview from "./AppPreview";
 import PrivacyProof from "./PrivacyProof";
 import FeatureTabs from "./FeatureTabs";
 import NewsletterSignup from "./NewsletterSignup";
+import HowItWorks from "./HowItWorks";
+import ComparisonTable from "./ComparisonTable";
+import type { LatestRelease } from "@/lib/getLatestRelease";
 
-export default function HomeClient() {
+interface HomeClientProps {
+  latestRelease?: LatestRelease | null;
+}
+
+export default function HomeClient({ latestRelease }: HomeClientProps) {
   return (
     <div className="w-full">
       {/* Hero Section */}
@@ -24,14 +31,16 @@ export default function HomeClient() {
           <div className="flex flex-col lg:flex-row items-center gap-12">
             {/* Copy block */}
             <AnimatedReveal className="flex-1 text-center lg:text-left">
-              {/* Announcement chip */}
+              {/* Announcement chip — version pulled live from GitHub releases */}
               <a
                 href="/changelog"
                 className="inline-flex items-center gap-2 bg-white/10 border border-white/20 rounded-full px-3.5 py-1.5 mb-6 text-xs font-medium text-primary-100 hover:bg-white/20 transition-colors duration-200"
               >
                 <span className="w-1.5 h-1.5 rounded-full bg-accent-cta animate-pulse" aria-hidden="true" />
-                v1.1.0 — StillHaven ships
-                <span className="text-white font-semibold">See what&apos;s new →</span>
+                {latestRelease?.version
+                  ? `${latestRelease.version} — See what's new`
+                  : "See what's new"}
+                <span className="text-white font-semibold">→</span>
               </a>
 
               <h1 className="text-3xl md:text-5xl font-bold tracking-tight">
@@ -47,10 +56,10 @@ export default function HomeClient() {
                     href="https://journal.moodhaven.app"
                     className="w-full sm:w-auto text-center rounded-full bg-accent-cta text-neutral-900 px-6 py-3.5 text-sm font-semibold shadow transition-all duration-200 ease-out hover:bg-accent-cta/90 hover:scale-105 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-cta/60"
                   >
-                    Open in Browser <span aria-hidden="true">→</span>
+                    Try it live — no install <span aria-hidden="true">→</span>
                   </a>
                   <p className="text-xs text-primary-300 max-w-[160px] text-center lg:text-left">
-                    Start writing in 10 seconds, nothing to install.
+                    Open in your browser. No account, no download.
                   </p>
                 </div>
                 <div className="flex flex-col items-center lg:items-start gap-1.5">
@@ -66,23 +75,9 @@ export default function HomeClient() {
                 </div>
               </div>
 
-              {/* Trust strip */}
-              <div className="mt-6 flex flex-wrap justify-center lg:justify-start gap-2">
-                {[
-                  "v1.1.0",
-                  "702 tests",
-                  "MIT licensed",
-                  "Built in public",
-                ].map((label) => (
-                  <span
-                    key={label}
-                    className="inline-flex items-center gap-1.5 bg-white/10 border border-white/15 rounded-full px-3 py-1 text-xs text-primary-200"
-                  >
-                    <span className="w-1 h-1 rounded-full bg-primary-400" aria-hidden="true" />
-                    {label}
-                  </span>
-                ))}
-              </div>
+              <p className="text-xs text-primary-300 mt-2 text-center lg:text-left">
+                No Pro tier. No subscription. No paid features. Everything ships to everyone.
+              </p>
             </AnimatedReveal>
 
             {/* App screenshot — side-by-side on lg+, stacked below copy on smaller screens */}
@@ -112,9 +107,11 @@ export default function HomeClient() {
 
       <AppPreview />
       <PrivacyCallout />
+      <HowItWorks />
       <FeaturesGrid />
       <FeatureTabs />
       <PrivacyProof />
+      <ComparisonTable />
       <NewsletterSignup />
       <CommunityCallout />
     </div>

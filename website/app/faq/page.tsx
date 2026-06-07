@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { ShieldCheck, Download, Smartphone, Coins, Code2, Users, Lock, FileCode2, Brain, Wifi, Terminal, Waves } from "lucide-react";
+import { ShieldCheck, Download, Smartphone, Coins, Code2, Users, Lock, FileCode2, Brain, Wifi, Terminal, Waves, BarChart2, Tag, Calendar, BookOpen, Clock } from "lucide-react";
 import AnimatedReveal from "@/components/AnimatedReveal";
 import Link from "next/link";
 
@@ -83,6 +83,34 @@ const TECHNICAL = [
     q: "How do I install on Linux?",
     a: "Download the .AppImage from the Downloads page. Make it executable (chmod +x) and run it directly — no installation required. A .deb package is also available for Ubuntu-based distributions.",
     links: [{ label: "Downloads page", href: "/download" }],
+  },
+];
+
+const MOOD_TRACKING = [
+  {
+    icon: BarChart2,
+    q: "How does the mood tracker work?",
+    a: "You select a mood level (1–5) for each journal entry — from Very Low to Excellent. The app uses these to build a mood calendar heatmap, streak stats, and day-of-week pattern charts. No AI required — all analytics run locally.",
+  },
+  {
+    icon: Tag,
+    q: "What is activity tagging?",
+    a: "Activity tagging lets you link journal entries to activities — Exercise, Social, Reading, Meditation, Cooking, and more. 15 activities are predefined; you can add up to 50 custom ones. After a few weeks, the Insights view shows which activities correlate with your better or worse moods.",
+  },
+  {
+    icon: Calendar,
+    q: "What does the mood calendar show?",
+    a: "The calendar view shows a monthly heatmap: each day is colored by your average mood for that day. Green for excellent, yellow for neutral, orange/red for low. It lets you spot patterns across weeks and months without reading through individual entries.",
+  },
+  {
+    icon: BookOpen,
+    q: 'What is "On This Day"?',
+    a: "On This Day shows you entries written on this same date in previous years. It's a built-in way to see how far you've come or revisit a moment from a year ago — without having to search.",
+  },
+  {
+    icon: Clock,
+    q: "What is the Time Capsule?",
+    a: "The Time Capsule lets you seal any entry until a future date. The entry is hidden from your timeline and search results until the date arrives. Useful for letters to your future self, anniversary memories, or anything you want to revisit later.",
   },
 ];
 
@@ -196,6 +224,28 @@ export default function FAQPage() {
                         ))}
                       </div>
                     )}
+                  </div>
+                </details>
+              );
+            })}
+          </div>
+        </AnimatedReveal>
+
+        {/* Mood & Activity Tracking questions */}
+        <AnimatedReveal delay={0.11}>
+          <p className="text-xs font-semibold text-neutral-400 uppercase tracking-widest mb-5 mt-12">Mood &amp; Activity Tracking</p>
+          <div className="divide-y divide-neutral-100 rounded-xl ring-1 ring-neutral-200 overflow-hidden">
+            {MOOD_TRACKING.map((item) => {
+              const Icon = item.icon;
+              return (
+                <details key={item.q} className="group bg-white/90">
+                  <summary className="flex items-center gap-3 px-5 py-4 cursor-pointer select-none list-none hover:bg-primary-50 transition-colors focus-visible:ring-2 focus-visible:ring-primary-700 focus-visible:outline-none">
+                    <Icon className="w-4 h-4 text-primary-600 flex-shrink-0" aria-hidden="true" />
+                    <span className="flex-1 text-sm font-medium text-neutral-900">{item.q}</span>
+                    <span className="text-neutral-400 group-open:rotate-180 transition-transform duration-200 text-xs" aria-hidden="true">▾</span>
+                  </summary>
+                  <div className="px-5 pb-5 pt-1 pl-12 text-sm text-neutral-600 leading-relaxed">
+                    <p>{item.a}</p>
                   </div>
                 </details>
               );

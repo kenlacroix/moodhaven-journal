@@ -75,7 +75,9 @@ use x25519_dalek::{EphemeralSecret, PublicKey as X25519PublicKey};
 
 use crate::commands::peer_identity::get_or_create_device_identity;
 use crate::commands::peer_pairing::{load_trusted_devices, remove_trusted_device};
+use crate::commands::require_unlocked;
 use crate::db::{Database, JournalEntryRow};
+use crate::AppLockState;
 
 // ── Managed state ─────────────────────────────────────────────────────────────
 
@@ -1652,7 +1654,13 @@ pub fn peer_start_sync_server(
 /// Initiate a sync with a trusted peer (client side).
 /// Verifies the peer is trusted, then spawns a background thread.
 #[tauri::command]
-pub fn peer_sync_now(app: AppHandle, device_id: String, host: String) -> Result<(), String> {
+pub fn peer_sync_now(
+    app: AppHandle,
+    lock: State<'_, AppLockState>,
+    device_id: String,
+    host: String,
+) -> Result<(), String> {
+    require_unlocked(&lock)?;
     // Verify trusted
     let trusted = load_trusted_devices(&app)?;
     if !trusted.iter().any(|d| d.device_id == device_id) {
@@ -1672,7 +1680,11 @@ pub struct PeerSyncStateRecord {
 }
 
 #[tauri::command]
-pub fn peer_get_sync_states(app: AppHandle) -> Result<Vec<PeerSyncStateRecord>, String> {
+pub fn peer_get_sync_states(
+    app: AppHandle,
+    lock: State<'_, AppLockState>,
+) -> Result<Vec<PeerSyncStateRecord>, String> {
+    require_unlocked(&lock)?;
     let db = app
         .try_state::<Database>()
         .ok_or_else(|| "No DB state".to_string())?;
@@ -1704,7 +1716,13 @@ pub fn peer_get_sync_states(app: AppHandle) -> Result<Vec<PeerSyncStateRecord>, 
 /// Completion is signalled via `peer:restore_ready`.
 /// On completion the frontend should call `peer_apply_and_restart`.
 #[tauri::command]
-pub fn peer_full_restore(app: AppHandle, device_id: String, host: String) -> Result<(), String> {
+pub fn peer_full_restore(
+    app: AppHandle,
+    lock: State<'_, AppLockState>,
+    device_id: String,
+    host: String,
+) -> Result<(), String> {
+    require_unlocked(&lock)?;
     // Verify trusted
     let trusted = load_trusted_devices(&app)?;
     if !trusted.iter().any(|d| d.device_id == device_id) {

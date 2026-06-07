@@ -42,7 +42,7 @@ pub fn still_create_session(
         return Err(format!("Unknown bilateral_mode: {bilateral_mode}"));
     }
     if duration_seconds < 0 {
-        return Err("duration_seconds must not be negative".to_string());
+        return Err("duration_seconds must be non-negative".to_string());
     }
     db::still_create_session(
         &db,

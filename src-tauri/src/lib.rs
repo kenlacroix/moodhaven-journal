@@ -161,6 +161,15 @@ impl AppLockState {
     pub fn new() -> Self {
         AppLockState(Mutex::new(true))
     }
+    /// Lock state for a fresh install: unlocked when no password hash is stored.
+    /// The setup wizard runs before `unlock_app` is ever callable and needs
+    /// pairing/sync commands (pre-password there is no journal data to protect).
+    /// Any DB read error means "assume initialized" — start locked (default-deny;
+    /// an encrypted DB without its key errors here, which is exactly that case).
+    pub fn new_for_db(db: &db::Database) -> Self {
+        let uninitialized = matches!(db::get_password_hash(db), Ok(None));
+        AppLockState(Mutex::new(!uninitialized))
+    }
     pub fn is_locked(&self) -> bool {
         *self.0.lock().unwrap_or_else(|e| e.into_inner())
     }
@@ -434,8 +443,10 @@ pub fn run() {
                 log::set_max_level(filter);
             }
 
-            // Session lock state — starts locked, set to unlocked after auth
-            app.manage(AppLockState::new());
+            // Session lock state — starts locked once a password exists, set to
+            // unlocked after auth. Fresh installs (no stored password hash) start
+            // unlocked so the setup wizard can pair devices / restore from a peer.
+            app.manage(AppLockState::new_for_db(&app.state::<Database>()));
 
             // Backend rate limiter for verify_password — persisted to disk so
             // a process restart does not reset an active lockout.
@@ -743,6 +754,53 @@ pub fn run() {
 mod tests {
     use super::*;
     use std::time::{Duration, Instant};
+
+    fn db_with_user_settings() -> Database {
+        let conn = rusqlite::Connection::open_in_memory().expect("in-memory DB");
+        conn.execute_batch(
+            "CREATE TABLE user_settings (
+                id INTEGER PRIMARY KEY,
+                password_hash TEXT NOT NULL,
+                password_salt TEXT NOT NULL,
+                updated_at TEXT
+            );",
+        )
+        .expect("schema");
+        Database {
+            conn: Mutex::new(conn),
+            path: std::path::PathBuf::from(":memory:"),
+        }
+    }
+
+    #[test]
+    fn lock_state_starts_unlocked_on_fresh_install() {
+        // No password hash stored → setup wizard must be able to run
+        // pairing/sync commands, so the app starts unlocked.
+        let db = db_with_user_settings();
+        let s = AppLockState::new_for_db(&db);
+        assert!(!s.is_locked());
+    }
+
+    #[test]
+    fn lock_state_starts_locked_once_password_exists() {
+        let db = db_with_user_settings();
+        db::set_password_hash(&db, "hash", "salt").expect("store hash");
+        let s = AppLockState::new_for_db(&db);
+        assert!(s.is_locked());
+    }
+
+    #[test]
+    fn lock_state_starts_locked_when_db_unreadable() {
+        // Missing user_settings table → query errors → default-deny (locked).
+        // This is the encrypted-DB-without-key startup case.
+        let conn = rusqlite::Connection::open_in_memory().expect("in-memory DB");
+        let db = Database {
+            conn: Mutex::new(conn),
+            path: std::path::PathBuf::from(":memory:"),
+        };
+        let s = AppLockState::new_for_db(&db);
+        assert!(s.is_locked());
+    }
 
     #[test]
     fn check_allows_when_no_failures() {

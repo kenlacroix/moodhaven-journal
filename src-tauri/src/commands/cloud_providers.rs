@@ -174,7 +174,7 @@ fn load_or_create_token_key(app: &AppHandle) -> Result<[u8; 32], String> {
     };
     if !stored {
         std::fs::create_dir_all(&app_data_dir).map_err(|e| e.to_string())?;
-        std::fs::write(&key_path, &key).map_err(|e| e.to_string())?;
+        std::fs::write(&key_path, key).map_err(|e| e.to_string())?;
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;

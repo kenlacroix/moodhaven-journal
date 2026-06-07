@@ -1,7 +1,7 @@
 # Mood Analytics (v1.8.0 Phase 1, v1.9.0 Phase 2)
 
-> **Status (2026-06-07):** Phase 1 complete. PR #128 open — 6/7 CI checks passing (Windows pending). Awaiting merge.
-> **Branch:** `worktree-feat+mood-analytics`
+> **Status (2026-06-07):** Phase 1 complete. PR #130 open — CI running. Awaiting merge after PR #129 (activity-tagging).
+> **Branch:** `feat/mood-analytics`
 
 ---
 
@@ -48,7 +48,7 @@
 
 ## Phase 2 — v1.9.0 (deferred)
 
-**Prerequisite:** `activity-tagging` PR #126 must be merged to main so `src/types/activities.ts` and `getActivityStats` IPC wrapper are available.
+**Prerequisite:** `activity-tagging` PR #129 must be merged to main so `src/types/activities.ts` and `getActivityStats` IPC wrapper are available.
 
 ### 2a — Activity correlation chart (`ActivityCorrelationChart`)
 
@@ -96,6 +96,6 @@
 - [x] tsc --noEmit clean
 - [x] 1461 tests passing
 - [x] Rust E0597 borrow lifetime fix committed + pushed
-- [x] PR #128 open, 6/7 CI checks passing (Windows pending)
-- [ ] Windows CI green
-- [ ] PR merged to main
+- [x] PR #130 open (feat/mood-analytics)
+- [ ] CI green (run triggered 2026-06-07)
+- [ ] PR merged to main (after PR #129)

@@ -87,6 +87,7 @@ moodbloom-tauri/
 │   │   ├── sync/               # SyncDetailsModal
 │   │   ├── voice-memo/         # VoiceMemoDraftCard, VoiceDraftEditor
 │   │   ├── writing/            # AppearanceDrawer (font/size/tint/a11y)
+│   │   ├── analytics/          # MoodDistributionChart, ActivityCorrelationChart
 │   │   ├── oura/               # OuraConnectionCard, HealthContextBadge
 │   │   └── settings/           # SettingsPage tabs + Privacy sub-sections
 │   ├── features/               # Full page views

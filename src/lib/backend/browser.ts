@@ -12,7 +12,7 @@
  */
 
 const DB_NAME = 'moodhaven';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 // --------------------------------------------------------------------------
 // DB open / upgrade
@@ -61,6 +61,10 @@ export function openDB(): Promise<IDBDatabase> {
         if (!jeStore.indexNames.contains('session_id')) {
           jeStore.createIndex('session_id', 'session_id');
         }
+      }
+      // v3: activities
+      if (!db.objectStoreNames.contains('activities')) {
+        db.createObjectStore('activities', { keyPath: 'id' });
       }
     };
     req.onsuccess = () => { _db = req.result; resolve(req.result); };
@@ -567,4 +571,148 @@ export async function dbLinkJournalEntryToSession(
     await put(store, { ...existing, session_id: sessionId });
   }
 }
+
+// --------------------------------------------------------------------------
+// Activities (v1.8.0)
+// --------------------------------------------------------------------------
+
+const PREDEFINED_ACTIVITIES = [
+  { id: 'act_exercise', name: 'exercise', emoji: '🏃', isCustom: false, sortOrder: 0 },
+  { id: 'act_social', name: 'social', emoji: '👥', isCustom: false, sortOrder: 1 },
+  { id: 'act_work', name: 'work', emoji: '💼', isCustom: false, sortOrder: 2 },
+  { id: 'act_reading', name: 'reading', emoji: '📚', isCustom: false, sortOrder: 3 },
+  { id: 'act_creative', name: 'creative', emoji: '🎨', isCustom: false, sortOrder: 4 },
+  { id: 'act_meditation', name: 'meditation', emoji: '🧘', isCustom: false, sortOrder: 5 },
+  { id: 'act_good_sleep', name: 'good_sleep', emoji: '😴', isCustom: false, sortOrder: 6 },
+  { id: 'act_poor_sleep', name: 'poor_sleep', emoji: '😵', isCustom: false, sortOrder: 7 },
+  { id: 'act_nature', name: 'nature', emoji: '🌿', isCustom: false, sortOrder: 8 },
+  { id: 'act_family', name: 'family', emoji: '🏠', isCustom: false, sortOrder: 9 },
+  { id: 'act_cooking', name: 'cooking', emoji: '🍳', isCustom: false, sortOrder: 10 },
+  { id: 'act_music', name: 'music', emoji: '🎵', isCustom: false, sortOrder: 11 },
+  { id: 'act_learning', name: 'learning', emoji: '📖', isCustom: false, sortOrder: 12 },
+  { id: 'act_travel', name: 'travel', emoji: '✈️', isCustom: false, sortOrder: 13 },
+  { id: 'act_gaming', name: 'gaming', emoji: '🎮', isCustom: false, sortOrder: 14 },
+] as const;
+
+interface BrowserActivity {
+  id: string;
+  name: string;
+  emoji: string;
+  isCustom: boolean;
+  sortOrder: number;
+  activityIds?: string[];
+}
+
+async function ensureActivitiesSeeded(db: IDBDatabase): Promise<void> {
+  const t = tx(db, 'activities', 'readwrite');
+  const store = t.objectStore('activities');
+  for (const a of PREDEFINED_ACTIVITIES) {
+    const existing = await get<BrowserActivity>(store, a.id);
+    if (!existing) {
+      await put(store, { id: a.id, name: a.name, emoji: a.emoji, isCustom: false, sortOrder: a.sortOrder });
+    }
+  }
+}
+
+export async function dbListActivities(): Promise<BrowserActivity[]> {
+  const db = await openDB();
+  await ensureActivitiesSeeded(db);
+  const rows = await all<BrowserActivity>(tx(db, 'activities').objectStore('activities'));
+  return rows.sort((a, b) => {
+    if (a.isCustom !== b.isCustom) return a.isCustom ? 1 : -1;
+    if (!a.isCustom) return a.sortOrder - b.sortOrder;
+    return a.name.localeCompare(b.name);
+  });
+}
+
+export async function dbCreateActivity(name: string, emoji: string): Promise<BrowserActivity> {
+  const db = await openDB();
+  const all = await dbListActivities();
+  const nameNorm = name.trim().toLowerCase();
+  if (all.some((a) => a.name.toLowerCase() === nameNorm)) {
+    throw new Error('An activity with that name already exists');
+  }
+  const maxOrder = all.filter((a) => a.isCustom).reduce((m, a) => Math.max(m, a.sortOrder), 999);
+  const activity: BrowserActivity = {
+    id: `act_custom_${Date.now()}`,
+    name: nameNorm,
+    emoji: emoji || '✨',
+    isCustom: true,
+    sortOrder: maxOrder + 1,
+  };
+  await put(tx(db, 'activities', 'readwrite').objectStore('activities'), activity);
+  return activity;
+}
+
+export async function dbDeleteActivity(id: string): Promise<void> {
+  const db = await openDB();
+  const t = tx(db, 'activities', 'readwrite');
+  const store = t.objectStore('activities');
+  const existing = await get<BrowserActivity>(store, id);
+  if (!existing) throw new Error('Activity not found');
+  if (!existing.isCustom) throw new Error('Predefined activities cannot be deleted');
+  await del(store, id);
+}
+
+export async function dbSyncEntryActivities(entryId: string, activityIds: string[]): Promise<void> {
+  const db = await openDB();
+  const t = tx(db, 'journal_entries', 'readwrite');
+  const store = t.objectStore('journal_entries');
+  const existing = await get<BrowserEntryRow>(store, entryId);
+  if (existing) {
+    await put(store, { ...existing, activityIds });
+  }
+}
+
+export async function dbGetEntryActivities(entryId: string): Promise<string[]> {
+  const db = await openDB();
+  const t = tx(db, 'journal_entries');
+  const store = t.objectStore('journal_entries');
+  const entry = await get<BrowserEntryRow & { activityIds?: string[] }>(store, entryId);
+  return entry?.activityIds ?? [];
+}
+
+export async function dbListAllEntryActivities(): Promise<{ entry_id: string; activity_id: string }[]> {
+  const db = await openDB();
+  const entries = await all<BrowserEntryRow & { activityIds?: string[] }>(
+    tx(db, 'journal_entries').objectStore('journal_entries'),
+  );
+  const rows: { entry_id: string; activity_id: string }[] = [];
+  for (const e of entries) {
+    for (const aid of e.activityIds ?? []) {
+      rows.push({ entry_id: e.id, activity_id: aid });
+    }
+  }
+  return rows;
+}
+
+export async function dbGetActivityStats(): Promise<{
+  id: string; name: string; emoji: string; is_custom: boolean; avg_mood: number; entry_count: number;
+}[]> {
+  const db = await openDB();
+  await ensureActivitiesSeeded(db);
+  const [activities, entries] = await Promise.all([
+    all<BrowserActivity>(tx(db, 'activities').objectStore('activities')),
+    all<BrowserEntryRow & { activityIds?: string[] }>(tx(db, 'journal_entries').objectStore('journal_entries')),
+  ]);
+  const statsMap = new Map<string, { sum: number; count: number }>();
+  for (const e of entries) {
+    for (const aid of e.activityIds ?? []) {
+      const s = statsMap.get(aid) ?? { sum: 0, count: 0 };
+      s.sum += e.mood;
+      s.count += 1;
+      statsMap.set(aid, s);
+    }
+  }
+  const actMap = new Map(activities.map((a) => [a.id, a]));
+  return [...statsMap.entries()]
+    .map(([id, { sum, count }]) => {
+      const a = actMap.get(id);
+      if (!a) return null;
+      return { id, name: a.name, emoji: a.emoji, is_custom: a.isCustom, avg_mood: sum / count, entry_count: count };
+    })
+    .filter((x): x is NonNullable<typeof x> => x !== null)
+    .sort((a, b) => b.avg_mood - a.avg_mood);
+}
+
 

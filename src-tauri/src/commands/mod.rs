@@ -14,6 +14,7 @@ pub(crate) fn require_unlocked(lock: &State<'_, AppLockState>) -> Result<(), Str
     }
 }
 
+pub mod activities;
 pub mod analytics;
 pub mod biometric;
 pub mod books;
@@ -40,6 +41,7 @@ pub mod updater;
 pub mod voice_memos;
 pub mod writer_window;
 
+pub use activities::*;
 pub use analytics::*;
 pub use biometric::*;
 pub use books::*;

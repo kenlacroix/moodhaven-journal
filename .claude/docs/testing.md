@@ -76,7 +76,7 @@ For heavy crypto files, use Node environment: `// @vitest-environment node` at t
 | Test File | Tests |
 |-----------|-------|
 | `lib/backend/browser.test.ts` | 43 |
-| `lib/backend/browser-invoke.test.ts` | 5 |
+| `lib/backend/browser-invoke.test.ts` | 29 |
 | `components/ai/AICardWrapper.test.tsx` | 8 |
 | `components/ai/GratitudeStreakCard.test.tsx` | 8 |
 | `components/ai/MoodWeatherCard.test.tsx` | 6 |
@@ -156,7 +156,11 @@ For heavy crypto files, use Node environment: `// @vitest-environment node` at t
 | `stores/settingsStore.test.ts` | 18 |
 | `stores/stillStore.test.ts` | 31 |
 | `types/writingAppearance.test.ts` | 4 |
+| `components/analytics/ActivityCorrelationChart.test.tsx` | 8 |
 | `components/analytics/DayOfWeekPattern.test.tsx` | 7 |
 | `components/analytics/MoodYearHeatmap.test.tsx` | 10 |
 | `components/analytics/StreakCalendar.test.tsx` | 6 |
-| **Total** | **1461 (101 files)** |
+| `components/journal/ActivityPicker.test.tsx` | 12 |
+| `hooks/useActivities.test.ts` | 7 |
+| `hooks/useActivityAnalytics.test.ts` | 6 |
+| **Total** | **1494 (105 files)** |

@@ -48,6 +48,7 @@ commands.allow = [
   "get_monthly_mood_data",
   "get_full_analytics_bundle",
   "get_insights_metadata",
+  "get_year_heatmap",
   # Settings
   "get_setting",
   "set_setting",
@@ -255,7 +256,6 @@ commands.allow = [
   "open_media_attachment",
   "get_media_thumbnail",
   "delete_media_attachment",
-  "sweep_preview_temp",
   # Voice memos
   "store_voice_memo",
   "list_voice_memos",

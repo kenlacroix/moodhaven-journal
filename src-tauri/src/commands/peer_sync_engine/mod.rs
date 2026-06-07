@@ -515,7 +515,9 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
             derive_sync_key_ecdh(my_eph_secret, hex, &my_identity.public_key, &client_pubkey)?
         }
         None => {
-            log::warn!("[sync] Server: peer sent no eph_pub — v1 static-key fallback removed, closing");
+            log::warn!(
+                "[sync] Server: peer sent no eph_pub — v1 static-key fallback removed, closing"
+            );
             let _ = write_msg(
                 &mut stream,
                 &Msg::Err {

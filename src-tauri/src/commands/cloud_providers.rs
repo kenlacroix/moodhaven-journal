@@ -14,9 +14,9 @@ use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tauri::{AppHandle, Manager, State};
-use zeroize::Zeroizing;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
+use zeroize::Zeroizing;
 
 fn url_encode(s: &str) -> String {
     let mut out = String::with_capacity(s.len() * 3);
@@ -417,7 +417,12 @@ fn store_tokens(
     provider: &str,
     token_resp: &TokenResponse,
 ) -> Result<(), String> {
-    db_set_token(conn, app, &key_access_token(provider), &token_resp.access_token)?;
+    db_set_token(
+        conn,
+        app,
+        &key_access_token(provider),
+        &token_resp.access_token,
+    )?;
 
     if let Some(ref rt) = token_resp.refresh_token {
         db_set_token(conn, app, &key_refresh_token(provider), rt)?;

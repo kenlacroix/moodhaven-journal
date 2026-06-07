@@ -852,14 +852,20 @@ mod tests {
     fn complete_session_nonexistent_id_is_noop() {
         let db = test_db();
         let result = still_complete_session(&db, "nope", "2026-01-01T11:00:00", 600);
-        assert!(result.is_ok(), "missing session id must be a no-op (crash-reconnect safe)");
+        assert!(
+            result.is_ok(),
+            "missing session id must be a no-op (crash-reconnect safe)"
+        );
     }
 
     #[test]
     fn abandon_session_nonexistent_id_is_noop() {
         let db = test_db();
         let result = still_abandon_session(&db, "nope", "2026-01-01T10:05:00");
-        assert!(result.is_ok(), "missing session id must be a no-op (crash-reconnect safe)");
+        assert!(
+            result.is_ok(),
+            "missing session id must be a no-op (crash-reconnect safe)"
+        );
     }
 
     // ── get_session_brief — partial activation ───────────────────────────────

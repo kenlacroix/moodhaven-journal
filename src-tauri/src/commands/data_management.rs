@@ -198,8 +198,7 @@ pub async fn factory_reset(app: AppHandle) -> Result<bool, String> {
         }
         #[cfg(not(target_os = "windows"))]
         {
-            fs::remove_file(&db_path)
-                .map_err(|e| format!("Failed to delete database: {}", e))?;
+            fs::remove_file(&db_path).map_err(|e| format!("Failed to delete database: {}", e))?;
         }
     }
 

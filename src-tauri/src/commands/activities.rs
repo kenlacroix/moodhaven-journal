@@ -28,7 +28,11 @@ pub struct ActivityStat {
 
 /// List all activities — predefined first (sort_order), then custom (alpha).
 #[tauri::command]
-pub async fn list_activities(db: tauri::State<'_, Database>) -> Result<Vec<Activity>, String> {
+pub async fn list_activities(
+    db: tauri::State<'_, Database>,
+    lock: State<'_, AppLockState>,
+) -> Result<Vec<Activity>, String> {
+    require_unlocked(&lock)?;
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let mut stmt = conn
         .prepare(
@@ -56,9 +60,11 @@ pub async fn list_activities(db: tauri::State<'_, Database>) -> Result<Vec<Activ
 #[tauri::command]
 pub async fn create_activity(
     db: tauri::State<'_, Database>,
+    lock: State<'_, AppLockState>,
     name: String,
     emoji: String,
 ) -> Result<Activity, String> {
+    require_unlocked(&lock)?;
     let name = name.trim().to_lowercase();
     if name.is_empty() || name.len() > 50 {
         return Err("Activity name must be 1–50 characters".to_string());
@@ -110,7 +116,12 @@ pub async fn create_activity(
 
 /// Delete a custom activity. Errors if id refers to a predefined activity.
 #[tauri::command]
-pub async fn delete_activity(db: tauri::State<'_, Database>, id: String) -> Result<(), String> {
+pub async fn delete_activity(
+    db: tauri::State<'_, Database>,
+    lock: State<'_, AppLockState>,
+    id: String,
+) -> Result<(), String> {
+    require_unlocked(&lock)?;
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let is_custom: i32 = conn
         .query_row(
@@ -156,8 +167,10 @@ pub async fn sync_entry_activities(
 #[tauri::command]
 pub async fn get_entry_activities(
     db: tauri::State<'_, Database>,
+    lock: State<'_, AppLockState>,
     entry_id: String,
 ) -> Result<Vec<String>, String> {
+    require_unlocked(&lock)?;
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let mut stmt = conn
         .prepare("SELECT activity_id FROM entry_activities WHERE entry_id = ?1")
@@ -175,7 +188,9 @@ pub async fn get_entry_activities(
 #[tauri::command]
 pub async fn list_all_entry_activities(
     db: tauri::State<'_, Database>,
+    lock: State<'_, AppLockState>,
 ) -> Result<Vec<EntryActivityRow>, String> {
+    require_unlocked(&lock)?;
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let mut stmt = conn
         .prepare("SELECT entry_id, activity_id FROM entry_activities")

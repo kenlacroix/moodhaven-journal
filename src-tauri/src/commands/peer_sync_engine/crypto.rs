@@ -7,18 +7,6 @@ use x25519_dalek::{EphemeralSecret, PublicKey as X25519PublicKey};
 
 // ── Key derivation ────────────────────────────────────────────────────────────
 
-/// Legacy: static key from both Ed25519 public keys (no forward secrecy).
-/// Used as fallback when the remote peer does not advertise an eph_pub.
-pub fn derive_sync_key_static(pub_a: &str, pub_b: &str) -> [u8; 32] {
-    let mut keys = [pub_a, pub_b];
-    keys.sort_unstable();
-    let mut h = Sha256::new();
-    h.update(b"moodhaven-sync-v1:");
-    h.update(keys[0].as_bytes());
-    h.update(keys[1].as_bytes());
-    h.finalize().into()
-}
-
 /// v2: ephemeral X25519 ECDH + static identity binding → forward-secret session key.
 /// session_key = SHA-256("moodhaven-sync-v2:" || X25519_shared || sorted(static_a, static_b))
 pub fn derive_sync_key_ecdh(
@@ -79,23 +67,6 @@ mod tests {
     use super::*;
     use rand::rngs::OsRng;
     use x25519_dalek::EphemeralSecret;
-
-    #[test]
-    fn static_key_is_symmetric() {
-        let k1 = derive_sync_key_static("aaaaaa", "bbbbbb");
-        let k2 = derive_sync_key_static("bbbbbb", "aaaaaa");
-        assert_eq!(k1, k2, "static key derivation must be commutative");
-    }
-
-    #[test]
-    fn static_key_differs_for_different_peer_pairs() {
-        let k1 = derive_sync_key_static("device-a", "device-b");
-        let k2 = derive_sync_key_static("device-a", "device-c");
-        assert_ne!(
-            k1, k2,
-            "distinct peer pairs must yield distinct transport keys"
-        );
-    }
 
     #[test]
     fn encrypt_decrypt_round_trip() {

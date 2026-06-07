@@ -48,9 +48,6 @@
 //! using their device private key, proving possession before any data is exchanged.
 //! `session_key = SHA-256("moodhaven-sync-v2:" || ecdh_shared || sorted(pub_A, pub_B))`
 //!
-//! **v1 (fallback, no forward secrecy):** Used when the peer omits `eph_pub`.
-//! `session_key = SHA-256("moodhaven-sync-v1:" || sorted(pub_A, pub_B))`
-//!
 //! Frame format: [4-byte big-endian length][12-byte nonce][AES-256-GCM ciphertext]
 
 mod conflict;
@@ -290,7 +287,12 @@ fn do_full_restore_client(app: &AppHandle, peer_device_id: &str, host: &str) -> 
             &my_identity.public_key,
             &peer_device.public_key,
         )?,
-        None => derive_sync_key_static(&my_identity.public_key, &peer_device.public_key),
+        None => {
+            return Err(
+                "Server did not send eph_pub — v1 static-key fallback has been removed. Peer must be upgraded to v2."
+                    .to_string(),
+            );
+        }
     };
 
     log::info!("[restore] Connected to {server_name}, requesting full DB");
@@ -507,14 +509,23 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
     }
     log::info!("[sync] Server: {client_device_id} authenticated via Ed25519 HELLO challenge");
 
-    // Derive session key: ECDH if client supports v2, else legacy static key
+    // Derive session key: v2 X25519 ECDH required; reject peers that omit eph_pub.
     let key = match client_eph_pub {
         Some(ref hex) => {
             derive_sync_key_ecdh(my_eph_secret, hex, &my_identity.public_key, &client_pubkey)?
         }
         None => {
-            log::warn!("[sync] Server: peer sent no eph_pub — using legacy static key");
-            derive_sync_key_static(&my_identity.public_key, &client_pubkey)
+            log::warn!("[sync] Server: peer sent no eph_pub — v1 static-key fallback removed, closing");
+            let _ = write_msg(
+                &mut stream,
+                &Msg::Err {
+                    msg: "v1 static-key protocol is no longer supported. Upgrade your MoodHaven client.".to_string(),
+                },
+            );
+            let _ = stream.shutdown(std::net::Shutdown::Both);
+            return Err(format!(
+                "[sync] Rejected {client_device_id}: no eph_pub (v1 fallback removed)"
+            ));
         }
     };
 
@@ -1094,14 +1105,16 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
         log::debug!("[sync] Client: sent Ed25519 AUTH response");
     }
 
-    // Derive session key: ECDH if server supports v2, else legacy static key
+    // Derive session key: v2 X25519 ECDH required; reject servers that omit eph_pub.
     let key = match server_eph_pub {
         Some(ref hex) => {
             derive_sync_key_ecdh(my_eph_secret, hex, &my_identity.public_key, &peer_pubkey)?
         }
         None => {
-            log::warn!("[sync] Client: server sent no eph_pub — using legacy static key");
-            derive_sync_key_static(&my_identity.public_key, &peer_pubkey)
+            return Err(
+                "Server did not send eph_pub — v1 static-key fallback has been removed. Peer must be upgraded to v2."
+                    .to_string(),
+            );
         }
     };
 
@@ -1820,25 +1833,6 @@ mod tests {
             session_id: None,
             word_count: None,
         }
-    }
-
-    // ── Key derivation ────────────────────────────────────────────────────────
-
-    #[test]
-    fn key_derivation_static_symmetric() {
-        let key_ab = derive_sync_key_static("pubkey_a", "pubkey_b");
-        let key_ba = derive_sync_key_static("pubkey_b", "pubkey_a");
-        assert_eq!(key_ab, key_ba, "static key must be symmetric");
-    }
-
-    #[test]
-    fn key_derivation_different_peers_differ() {
-        let key_ab = derive_sync_key_static("pubkey_a", "pubkey_b");
-        let key_ac = derive_sync_key_static("pubkey_a", "pubkey_c");
-        assert_ne!(
-            key_ab, key_ac,
-            "different peer keys must yield different transport keys"
-        );
     }
 
     // ── LWW upsert logic ──────────────────────────────────────────────────────

@@ -195,6 +195,26 @@ commands.allow = [
   "still_link_signal_to_session",
   # Journal ↔ session link
   "link_journal_entry_to_session",
+  # Activities (structured entry tagging — v1.8.0)
+  "list_activities",
+  "create_activity",
+  "delete_activity",
+  "sync_entry_activities",
+  "get_entry_activities",
+  "get_activity_stats",
+  "list_all_entry_activities",
+  # Desktop biometric unlock (OS keyring — v1.6.0)
+  "biometric_is_available",
+  "biometric_store_session",
+  "biometric_retrieve_session",
+  "biometric_clear_session",
+  # Cloud provider OAuth sync (Phase 1 — v1.6.0)
+  "cloud_provider_auth_start",
+  "cloud_provider_upload_blob",
+  "cloud_provider_download_blob",
+  "cloud_provider_status",
+  "cloud_provider_disconnect",
+  "cloud_provider_refresh_token",
 ]
 
 [[permission]]

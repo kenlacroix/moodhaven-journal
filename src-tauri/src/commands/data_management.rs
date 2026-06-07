@@ -183,9 +183,24 @@ pub async fn factory_reset(app: AppHandle) -> Result<bool, String> {
     // Close database connection by dropping the state
     // Note: This requires the app to be restarted after reset
 
-    // Delete database file
+    // Delete database file.
+    // On Windows, open file handles prevent deletion — rename the file instead.
+    // The renamed file is orphaned and deleted when the process exits.
+    // On macOS/Linux, deletion of an open file unlinks the path; the inode lives
+    // until the last handle closes, so deletion works unconditionally.
     if db_path.exists() {
-        fs::remove_file(&db_path).map_err(|e| format!("Failed to delete database: {}", e))?;
+        #[cfg(target_os = "windows")]
+        {
+            let orphan = db_path.with_extension("db.old");
+            if let Err(rename_err) = fs::rename(&db_path, &orphan) {
+                return Err(format!("Failed to remove database: {}", rename_err));
+            }
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            fs::remove_file(&db_path)
+                .map_err(|e| format!("Failed to delete database: {}", e))?;
+        }
     }
 
     // Delete settings file if it exists
@@ -218,6 +233,7 @@ pub async fn factory_reset(app: AppHandle) -> Result<bool, String> {
         "media",             // Encrypted media attachments
         "moodhaven_restore.pending", // Staged full-restore DB file — must not re-apply after reset
         "moodhaven_restore.pending.sha256", // Integrity check file for the above
+        "moodhaven.db.old",  // Windows rename-on-reset orphan — cleaned up on next fresh start
     ];
     for file in files_to_delete {
         let path = app_data.join(file);

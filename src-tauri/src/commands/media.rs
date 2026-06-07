@@ -30,6 +30,7 @@ use sha2::Sha256;
 use std::path::Path;
 use tauri::{AppHandle, Manager, State};
 use uuid::Uuid;
+use zeroize::Zeroizing;
 
 use crate::db::Database;
 use crate::AppLockState;
@@ -64,9 +65,9 @@ pub struct MediaAttachment {
 // ── Crypto helpers ─────────────────────────────────────────────────────────────
 
 /// Derive a 256-bit AES key from a password + salt using PBKDF2-HMAC-SHA256.
-fn derive_key(password: &str, salt: &[u8]) -> [u8; 32] {
-    let mut key = [0u8; 32];
-    pbkdf2_hmac::<Sha256>(password.as_bytes(), salt, PBKDF2_ROUNDS, &mut key);
+fn derive_key(password: &str, salt: &[u8]) -> Zeroizing<[u8; 32]> {
+    let mut key = Zeroizing::new([0u8; 32]);
+    pbkdf2_hmac::<Sha256>(password.as_bytes(), salt, PBKDF2_ROUNDS, &mut *key);
     key
 }
 

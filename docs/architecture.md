@@ -338,7 +338,7 @@ Hooks are the primary abstraction between stores/services and UI components. Eac
 | Hook | Concern |
 |:---|:---|
 | `useJournal` | Entry CRUD, auto-save, tag sync |
-| `useAnalytics` | Mood stats, streaks, day-of-week patterns |
+| `useAnalytics` | Mood stats, streaks, day-of-week patterns, year heatmap |
 | `useInsights` | AI insight generation, pattern nudges |
 | `useJournalPrompts` | Context-aware writing prompts |
 | `useCalendar` | Calendar data, daily timeline |

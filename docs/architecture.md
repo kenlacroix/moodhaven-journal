@@ -371,6 +371,8 @@ Hooks are the primary abstraction between stores/services and UI components. Eac
 | `useSpeechToText` | Model download, transcription |
 | `useReminderScheduler` | Notification scheduling |
 | `useUpdateCheck` | GitHub release polling |
+| `useActivities` | Activity list, create/delete custom activities, sync entry links |
+| `useActivityAnalytics` | Per-activity mood delta computation for correlation chart |
 
 ### Service Layer
 

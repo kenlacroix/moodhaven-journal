@@ -209,6 +209,7 @@ pub fn db_get_entries_full(
                 status: r.get(13).ok().flatten(),
                 session_id: r.get(14).ok().flatten(),
                 word_count: r.get(15).ok().flatten(),
+                activity_ids: vec![],
             })
         })
         .map_err(|e| format!("query entries full: {e}"))?

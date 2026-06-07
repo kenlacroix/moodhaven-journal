@@ -153,6 +153,7 @@ pub fn get_due_capsules(
             status: None,
             session_id: None,
             word_count: None,
+            activity_ids: vec![],
         })
     });
 

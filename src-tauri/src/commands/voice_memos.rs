@@ -20,6 +20,8 @@ use crate::db::{self, Database, VoiceMemoRow};
 use crate::AppLockState;
 use rusqlite::params;
 use tauri::{AppHandle, Manager, State};
+
+use super::require_unlocked;
 use tauri_plugin_shell::ShellExt;
 use uuid::Uuid;
 
@@ -109,20 +111,33 @@ pub fn store_voice_memo(
 #[tauri::command]
 pub fn list_voice_memos(
     db: State<Database>,
+    lock: State<'_, AppLockState>,
     limit: Option<i32>,
 ) -> Result<Vec<VoiceMemoRow>, String> {
+    require_unlocked(&lock)?;
     db::list_voice_memos(&db, limit)
 }
 
 /// Get a single voice memo by id.
 #[tauri::command]
-pub fn get_voice_memo(db: State<Database>, id: String) -> Result<Option<VoiceMemoRow>, String> {
+pub fn get_voice_memo(
+    db: State<Database>,
+    lock: State<'_, AppLockState>,
+    id: String,
+) -> Result<Option<VoiceMemoRow>, String> {
+    require_unlocked(&lock)?;
     db::get_voice_memo(&db, &id)
 }
 
 /// Delete a voice memo record and its audio file.
 #[tauri::command]
-pub fn delete_voice_memo(app: AppHandle, db: State<Database>, id: String) -> Result<(), String> {
+pub fn delete_voice_memo(
+    app: AppHandle,
+    db: State<Database>,
+    lock: State<'_, AppLockState>,
+    id: String,
+) -> Result<(), String> {
+    require_unlocked(&lock)?;
     // Look up file path before deleting the row
     let row = db::get_voice_memo(&db, &id)?;
 
@@ -147,9 +162,11 @@ pub fn delete_voice_memo(app: AppHandle, db: State<Database>, id: String) -> Res
 #[tauri::command]
 pub fn patch_voice_memo_transcription(
     db: State<Database>,
+    lock: State<'_, AppLockState>,
     id: String,
     transcription: String,
 ) -> Result<(), String> {
+    require_unlocked(&lock)?;
     db::patch_voice_memo_transcription(&db, &id, &transcription)
 }
 
@@ -169,9 +186,11 @@ pub fn patch_voice_memo_transcription(
 pub async fn transcribe_voice_memo(
     app: AppHandle,
     db: State<'_, Database>,
+    lock: State<'_, AppLockState>,
     id: String,
     model: String,
 ) -> Result<String, String> {
+    require_unlocked(&lock)?;
     // 1. Look up the stored file path
     let row = db::get_voice_memo(&db, &id)?
         .ok_or_else(|| format!("transcribe_voice_memo: memo not found: {}", id))?;
@@ -237,9 +256,11 @@ pub async fn transcribe_voice_memo(
 #[tauri::command]
 pub fn link_voice_memo_to_entry(
     db: State<Database>,
+    lock: State<'_, AppLockState>,
     memo_id: String,
     entry_id: String,
 ) -> Result<(), String> {
+    require_unlocked(&lock)?;
     db::link_voice_memo_to_entry(&db, &memo_id, &entry_id)
 }
 

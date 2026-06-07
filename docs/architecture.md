@@ -685,5 +685,6 @@ Frontend: encryptedImport(blob, password)
 | [`docs/howto-getting-started.md`](howto-getting-started.md) | First-run setup tutorial for new users |
 | [`docs/howto-time-capsule.md`](howto-time-capsule.md) | Time capsule feature: sealing, reveal flow, anniversary reveals |
 | [`docs/howto-stillhaven.md`](howto-stillhaven.md) | StillHaven bilateral stimulation: sessions, protocols, journal handoff |
+| [`docs/howto-mood-analytics.md`](howto-mood-analytics.md) | Mood analytics: year heatmap, streak calendar, day-of-week patterns |
 | [`docs/tauri-commands.md`](tauri-commands.md) | Full reference for all ~165 Tauri commands |
 | [`docs/threat-model.md`](threat-model.md) | Security threat model and mitigations |

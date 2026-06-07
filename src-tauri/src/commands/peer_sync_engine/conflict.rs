@@ -395,6 +395,28 @@ pub fn db_upsert_setting(
     Ok(true)
 }
 
+/// Sync activity links for an entry received during peer sync.
+/// Uses INSERT OR IGNORE so unknown activity IDs (custom activities that haven't
+/// synced yet) are silently dropped rather than causing a FK violation error.
+pub fn db_sync_entry_activities(
+    conn: &Connection,
+    entry_id: &str,
+    activity_ids: &[String],
+) -> Result<(), String> {
+    for aid in activity_ids {
+        let aid = aid.trim();
+        if aid.is_empty() {
+            continue;
+        }
+        conn.execute(
+            "INSERT OR IGNORE INTO entry_activities (entry_id, activity_id) VALUES (?1, ?2)",
+            rusqlite::params![entry_id, aid],
+        )
+        .map_err(|e| format!("link synced activity: {e}"))?;
+    }
+    Ok(())
+}
+
 pub fn db_upsert_tags(conn: &Connection, entry_id: &str, tags: &[String]) -> Result<(), String> {
     if tags.is_empty() {
         return Ok(());
@@ -478,6 +500,7 @@ pub fn db_upsert_entry(conn: &Connection, row: &JournalEntryRow) -> Result<bool,
             )
             .map_err(|e| format!("insert entry: {e}"))?;
             db_upsert_tags(conn, &row.id, &row.tags)?;
+            db_sync_entry_activities(conn, &row.id, &row.activity_ids)?;
             Ok(true)
         }
         Some(ref local)
@@ -513,6 +536,7 @@ pub fn db_upsert_entry(conn: &Connection, row: &JournalEntryRow) -> Result<bool,
             )
             .map_err(|e| format!("update entry: {e}"))?;
             db_upsert_tags(conn, &row.id, &row.tags)?;
+            db_sync_entry_activities(conn, &row.id, &row.activity_ids)?;
             Ok(true)
         }
         _ => Ok(false), // local is same age or newer — skip

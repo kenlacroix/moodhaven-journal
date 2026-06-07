@@ -1,6 +1,6 @@
 # MoodHaven Journal — Threat Model
 
-> **Version:** v1.6.0 (feat/cloud-sync-phase1) | **Last Updated:** 2026-06-06
+> **Version:** v1.8.0 (fix/security-pt6-acl-lockguard) | **Last Updated:** 2026-06-07
 
 This document describes what MoodHaven Journal protects, against whom, and where the design intentionally draws the line.
 
@@ -226,6 +226,7 @@ This document describes what MoodHaven Journal protects, against whom, and where
 - Since v0.9.0, `verify_password` runs in Rust (PBKDF2-SHA-256, constant-time comparison). The frontend calls `verify_password` and only calls `unlock_app` after a confirmed `true` return.
 - Tauri capability ACL (`capabilities/default.json`) controls which commands the frontend can invoke.
 - The frontend also implements `timingSafeEqual` for the client-side hash comparison path (used during first-run setup before `unlock_app` exists).
+- The Rust session lock (`AppLockState`) is **setup-aware** (v1.8.0). A fresh install with no stored password hash starts **unlocked** so the first-run setup wizard can pair devices and restore from a peer — there is no journal data to protect before a password exists. Once a password hash is stored, or if the DB is unreadable (e.g. an encrypted DB without its key), the lock starts **locked** (default-deny). Data commands — including peer sync (`peer_sync_now`, `peer_full_restore`, `peer_get_sync_states`) and pairing status/cancel (`peer_cancel_pairing`, `peer_pairing_is_active`) — enforce `require_unlocked` server-side, so a locked session cannot drive sync or read sync state regardless of what the frontend invokes.
 
 **Residual risk:** If an attacker can inject arbitrary JS into the WebView (e.g. via a script-injection bug in TipTap's paste handling), they could call `invoke('unlock_app')` directly. The Rust session lock does not independently verify the password was correct — it trusts the frontend's call. This is an architectural gap noted for future hardening.
 

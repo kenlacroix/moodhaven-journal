@@ -362,6 +362,7 @@ pub fn run() {
             if let Some(parent) = db_path.parent() {
                 let pending = parent.join("moodhaven_restore.pending");
                 let checksum_path = parent.join("moodhaven_restore.pending.sha256");
+                let dbstate_src = parent.join("moodhaven_restore.pending.dbstate");
                 if pending.exists() {
                     let integrity_ok = if checksum_path.exists() {
                         use sha2::{Digest, Sha256};
@@ -395,8 +396,41 @@ pub fn run() {
                         );
                         if let Err(e) = std::fs::rename(&pending, &db_path) {
                             log::error!("[restore] WARNING: failed to apply pending DB: {e}");
+                        } else {
+                            // Write db_state.json to match the source's encryption state.
+                            // Without the source salt, verify_password can never derive the
+                            // SQLCipher key on this device and the restore is a dead end.
+                            // The salt is not secret (already public in each device's
+                            // db_state.json) and is required because key = PBKDF2(password, salt).
+                            let state = std::fs::read_to_string(&dbstate_src)
+                                .ok()
+                                .and_then(|s| {
+                                    serde_json::from_str::<crate::db::DbStateFile>(&s).ok()
+                                })
+                                .unwrap_or_default();
+                            if let Some(state_parent) = db_path.parent() {
+                                let state_path = state_parent.join("db_state.json");
+                                match serde_json::to_string(&state) {
+                                    Ok(json) => {
+                                        if let Err(e) = std::fs::write(&state_path, json) {
+                                            log::error!(
+                                                "[restore] WARNING: failed to write db_state.json: {e}"
+                                            );
+                                        } else {
+                                            log::info!(
+                                                "[restore] Wrote db_state.json (encrypted={})",
+                                                state.encrypted
+                                            );
+                                        }
+                                    }
+                                    Err(e) => log::error!(
+                                        "[restore] WARNING: failed to serialize db_state: {e}"
+                                    ),
+                                }
+                            }
                         }
                         let _ = std::fs::remove_file(&checksum_path);
+                        let _ = std::fs::remove_file(&dbstate_src);
                     }
                 }
             }

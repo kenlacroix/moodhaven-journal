@@ -238,6 +238,12 @@ fn do_serve_restore(
     let total_bytes = db_bytes.len() as u64;
     let total_chunks = db_bytes.len().div_ceil(RESTORE_CHUNK_BYTES);
 
+    // Read the source's encryption state so the restored device can write a
+    // matching db_state.json. Without the salt the restored device cannot derive
+    // the SQLCipher key and could never unlock. The salt is not secret (it is
+    // already public in db_state.json on every device that shares this password).
+    let source_state = crate::db::read_db_state(&db_path);
+
     log::info!(
         "[restore] Serving DB ({} bytes, {} chunks) to {}",
         total_bytes,
@@ -279,13 +285,16 @@ fn do_serve_restore(
         );
     }
 
-    // Signal completion.
+    // Signal completion, including the source's encryption state + salt so the
+    // restored device can derive the same SQLCipher key.
     write_msg_enc(
         stream,
         key,
         &Msg::RestoreEnd {
             total_bytes,
             chunks: total_chunks as u64,
+            encrypted: source_state.encrypted,
+            salt: source_state.salt.clone(),
         },
     )?;
 
@@ -408,6 +417,10 @@ fn do_full_restore_client(app: &AppHandle, peer_device_id: &str, host: &str) -> 
 
     let mut bytes_received: u64 = 0;
     let mut chunks_received: u64 = 0;
+    // Source encryption state, captured from RestoreEnd. Persisted alongside the
+    // pending DB so peer_apply_and_restart can write db_state.json after promotion.
+    let restore_encrypted;
+    let restore_salt: Option<String>;
 
     loop {
         match read_msg_enc(&mut stream, &key)? {
@@ -449,11 +462,16 @@ fn do_full_restore_client(app: &AppHandle, peer_device_id: &str, host: &str) -> 
             Msg::RestoreEnd {
                 total_bytes,
                 chunks,
+                encrypted,
+                salt,
             } => {
+                restore_encrypted = encrypted;
+                restore_salt = salt;
                 log::info!(
-                    "[restore] Transfer complete: {} bytes in {} chunks",
+                    "[restore] Transfer complete: {} bytes in {} chunks (encrypted={})",
                     total_bytes,
-                    chunks
+                    chunks,
+                    restore_encrypted
                 );
                 break;
             }
@@ -481,6 +499,20 @@ fn do_full_restore_client(app: &AppHandle, peer_device_id: &str, host: &str) -> 
         std::fs::write(&checksum_path, &digest)
             .map_err(|e| format!("write restore checksum: {e}"))?;
         log::info!("[restore] SHA-256 of pending DB: {digest}");
+    }
+
+    // Persist the source's encryption state so peer_apply_and_restart can write a
+    // matching db_state.json after promoting the DB. Without this, the restored
+    // device has the encrypted DB but no salt and can never derive the key.
+    {
+        let dbstate = crate::db::DbStateFile {
+            encrypted: restore_encrypted,
+            salt: restore_salt,
+        };
+        let json = serde_json::to_string(&dbstate)
+            .map_err(|e| format!("serialize restore dbstate: {e}"))?;
+        let dbstate_path = app_data.join("moodhaven_restore.pending.dbstate");
+        std::fs::write(&dbstate_path, json).map_err(|e| format!("write restore dbstate: {e}"))?;
     }
 
     // Atomically move tmp → pending.
@@ -1874,6 +1906,7 @@ pub fn peer_apply_and_restart(app: AppHandle) -> Result<(), String> {
     let parent = db_path.parent().ok_or("no parent dir")?;
     let pending = parent.join("moodhaven_restore.pending");
     let checksum_path = parent.join("moodhaven_restore.pending.sha256");
+    let dbstate_path = parent.join("moodhaven_restore.pending.dbstate");
 
     if !pending.exists() {
         return Err("No pending restore file found".to_string());
@@ -1889,9 +1922,10 @@ pub fn peer_apply_and_restart(app: AppHandle) -> Result<(), String> {
             std::fs::read(&pending).map_err(|e| format!("read pending restore for verify: {e}"))?;
         let actual = hex::encode(Sha256::digest(&data));
         if actual != expected {
-            // Remove both files to avoid leaving a corrupt pending restore.
+            // Remove the pending files to avoid leaving a corrupt restore.
             let _ = std::fs::remove_file(&pending);
             let _ = std::fs::remove_file(&checksum_path);
+            let _ = std::fs::remove_file(&dbstate_path);
             return Err(format!(
                 "Restore file integrity check failed (expected {expected}, got {actual}) — aborted"
             ));

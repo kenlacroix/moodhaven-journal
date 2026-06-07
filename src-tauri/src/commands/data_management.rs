@@ -204,15 +204,18 @@ pub async fn factory_reset(app: AppHandle) -> Result<bool, String> {
         "logs",
         "peer_key.bin",
         "trusted_devices.json",
-        "device.json",      // Ed25519 public key metadata (low-sensitivity but stale)
-        "pw_lockout.json",  // Password rate-limiter state — reset with the app
-        "pin_lockout.json", // PIN rate-limiter state — reset with the app
-        "db_state.json",    // SQLCipher encryption state — must be removed with the DB
-        "moodhaven_enc.db", // Encrypted export tmp — survives interrupted migrations
-        "moodhaven_old.db", // Windows-only rename backup — may survive interrupted migrations
-        "voice_memos",      // Encrypted audio files from watch companion
+        "device.json",       // Ed25519 public key metadata (low-sensitivity but stale)
+        "pw_lockout.json",   // Password rate-limiter state — reset with the app
+        "pin_lockout.json",  // PIN rate-limiter state — reset with the app
+        "db_state.json",     // SQLCipher encryption state — must be removed with the DB
+        "db_state.json.tmp", // Atomic write tmp — may survive a crash during state write
+        "moodhaven.db-wal",  // SQLite WAL frames — may contain plaintext pre-migration entries
+        "moodhaven.db-shm",  // SQLite shared-memory index for WAL
+        "moodhaven_enc.db",  // Encrypted export tmp — survives interrupted migrations
+        "moodhaven_old.db",  // Windows-only rename backup — may survive interrupted migrations
+        "voice_memos",       // Encrypted audio files from watch companion
         "voice_memos_incoming", // Staging directory for incoming watch audio
-        "media",            // Encrypted media attachments
+        "media",             // Encrypted media attachments
         "moodhaven_restore.pending", // Staged full-restore DB file — must not re-apply after reset
         "moodhaven_restore.pending.sha256", // Integrity check file for the above
     ];
@@ -225,6 +228,12 @@ pub async fn factory_reset(app: AppHandle) -> Result<bool, String> {
                 fs::remove_file(&path).ok();
             }
         }
+    }
+
+    // Delete media preview cache — open_media_attachment decrypts to a temp file here.
+    // sweep_preview_temp() runs at startup but not during reset; explicitly clear it.
+    if let Ok(cache_dir) = app.path().app_cache_dir() {
+        fs::remove_dir_all(cache_dir.join("mb_preview")).ok();
     }
 
     // Delete the rotating log file from app_log_dir (may differ from app_data_dir on macOS/Linux)
@@ -252,10 +261,10 @@ fn encrypt_export_payload(plaintext: &str, password: &str) -> Result<String, Str
     rand::thread_rng().fill_bytes(&mut salt);
     rand::thread_rng().fill_bytes(&mut nonce_bytes);
 
-    let mut key = [0u8; 32];
-    pbkdf2_hmac::<Sha256>(password.as_bytes(), &salt, EXPORT_PBKDF2_ROUNDS, &mut key);
+    let mut key = Zeroizing::new([0u8; 32]);
+    pbkdf2_hmac::<Sha256>(password.as_bytes(), &salt, EXPORT_PBKDF2_ROUNDS, &mut *key);
 
-    let cipher = Aes256Gcm::new_from_slice(&key).map_err(|e| format!("cipher init: {e}"))?;
+    let cipher = Aes256Gcm::new_from_slice(&*key).map_err(|e| format!("cipher init: {e}"))?;
     let nonce = Nonce::from_slice(&nonce_bytes);
     let ciphertext = cipher
         .encrypt(nonce, plaintext.as_bytes())
@@ -769,10 +778,16 @@ pub async fn write_text_file(
 
     // Block writes to sensitive system and shell-config paths using component-based
     // matching so that ".ssh" in a directory name elsewhere does not false-match.
+    // Lowercased for case-insensitive matching on Windows.
     let blocked_by_component = canonical.components().any(|c| {
+        let name = c.as_os_str().to_str().unwrap_or("").to_lowercase();
         matches!(
-            c.as_os_str().to_str().unwrap_or(""),
+            name.as_str(),
             ".ssh" | ".gnupg" | ".aws" | ".config"
+            // Windows: block auto-start and system folders anywhere in the path so
+            // that e.g. C:\Users\x\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\
+            // is caught even though it doesn't start with C:\Windows\.
+            | "startup" | "system32" | "syswow64"
         )
     });
     // Also block absolute system path prefixes that must match from the root.
@@ -790,7 +805,11 @@ pub async fn write_text_file(
         "c:\\users\\all users",
     ]
     .iter()
-    .any(|p| canonical_str.starts_with(p));
+    // Use `contains` for mid-path Windows system dirs (e.g. Roaming\Microsoft\Windows\...)
+    .any(|p| canonical_str.starts_with(p))
+        || ["\\windows\\", "\\microsoft\\windows\\"]
+            .iter()
+            .any(|p| canonical_str.contains(p));
     // Block shell config dot-files by name (not directory components).
     let blocked_by_filename = canonical
         .file_name()
@@ -867,9 +886,9 @@ mod tests {
         if nonce_bytes.len() != EXPORT_NONCE_LEN {
             return Err(format!("invalid nonce len: {}", nonce_bytes.len()));
         }
-        let mut key = [0u8; 32];
-        pbkdf2_hmac::<Sha256>(password.as_bytes(), &salt, EXPORT_PBKDF2_ROUNDS, &mut key);
-        let cipher = Aes256Gcm::new_from_slice(&key).map_err(|e| format!("cipher: {e}"))?;
+        let mut key = Zeroizing::new([0u8; 32]);
+        pbkdf2_hmac::<Sha256>(password.as_bytes(), &salt, EXPORT_PBKDF2_ROUNDS, &mut *key);
+        let cipher = Aes256Gcm::new_from_slice(&*key).map_err(|e| format!("cipher: {e}"))?;
         let nonce = Nonce::from_slice(&nonce_bytes);
         let plaintext = cipher
             .decrypt(nonce, ciphertext.as_ref())

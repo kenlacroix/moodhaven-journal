@@ -24,6 +24,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tauri::State;
 use totp_rs::{Algorithm, Secret, TOTP};
+use zeroize::Zeroizing;
 
 const TOTP_PBKDF2_ITERATIONS: u32 = 600_000;
 const TOTP_ENC_PREFIX: &str = "enc:v1:";
@@ -73,11 +74,16 @@ fn encrypt_totp_secret(secret: &str, password: &str) -> Result<String, String> {
     rand::rngs::OsRng.fill_bytes(&mut salt);
     rand::rngs::OsRng.fill_bytes(&mut nonce_bytes);
 
-    let mut key = [0u8; 32];
-    pbkdf2::<Hmac<Sha256>>(password.as_bytes(), &salt, TOTP_PBKDF2_ITERATIONS, &mut key)
-        .map_err(|e| format!("pbkdf2: {e}"))?;
+    let mut key = Zeroizing::new([0u8; 32]);
+    pbkdf2::<Hmac<Sha256>>(
+        password.as_bytes(),
+        &salt,
+        TOTP_PBKDF2_ITERATIONS,
+        &mut *key,
+    )
+    .map_err(|e| format!("pbkdf2: {e}"))?;
 
-    let cipher = Aes256Gcm::new_from_slice(&key).map_err(|e| format!("aes init: {e}"))?;
+    let cipher = Aes256Gcm::new_from_slice(&*key).map_err(|e| format!("aes init: {e}"))?;
     let nonce = Nonce::from_slice(&nonce_bytes);
     let ct = cipher
         .encrypt(nonce, secret.as_bytes())
@@ -125,11 +131,16 @@ fn decrypt_totp_secret(stored: &str, password: &str) -> Result<String, String> {
         ));
     }
 
-    let mut key = [0u8; 32];
-    pbkdf2::<Hmac<Sha256>>(password.as_bytes(), &salt, TOTP_PBKDF2_ITERATIONS, &mut key)
-        .map_err(|e| format!("pbkdf2: {e}"))?;
+    let mut key = Zeroizing::new([0u8; 32]);
+    pbkdf2::<Hmac<Sha256>>(
+        password.as_bytes(),
+        &salt,
+        TOTP_PBKDF2_ITERATIONS,
+        &mut *key,
+    )
+    .map_err(|e| format!("pbkdf2: {e}"))?;
 
-    let cipher = Aes256Gcm::new_from_slice(&key).map_err(|e| format!("aes init: {e}"))?;
+    let cipher = Aes256Gcm::new_from_slice(&*key).map_err(|e| format!("aes init: {e}"))?;
     let nonce = Nonce::from_slice(&nonce_bytes);
     let plaintext = cipher
         .decrypt(nonce, ct.as_ref())

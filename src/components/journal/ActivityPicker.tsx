@@ -145,7 +145,6 @@ export function ActivityPicker({
       ) : (
         <div className="flex items-center gap-1.5 flex-wrap">
           <input
-            ref={nameInputRef}
             type="text"
             value={newEmoji}
             onChange={(e) => setNewEmoji(e.target.value)}
@@ -154,6 +153,7 @@ export function ActivityPicker({
             className="w-10 text-center px-1 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
           />
           <input
+            ref={nameInputRef}
             type="text"
             value={newName}
             onChange={(e) => { setNewName(e.target.value); setAddError(null); }}

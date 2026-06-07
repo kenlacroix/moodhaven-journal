@@ -302,7 +302,7 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
   const [allActivities, setAllActivities] = useState<Activity[]>([]);
   const [selectedActivityIds, setSelectedActivityIds] = useState<string[]>([]);
   useEffect(() => {
-    listActivities().then(setAllActivities).catch(() => {});
+    listActivities().then((acts) => setAllActivities(acts ?? [])).catch(() => {});
   }, []);
   useEffect(() => {
     if (entryId) {

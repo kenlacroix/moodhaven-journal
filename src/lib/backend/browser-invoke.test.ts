@@ -232,3 +232,141 @@ describe('invoke("get_entries_on_this_day")', () => {
     expect(await invoke('get_entries_on_this_day')).toEqual([]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Activity commands — browser IDB backend
+// ---------------------------------------------------------------------------
+
+describe('invoke("list_activities")', () => {
+  it('returns 15 predefined activities when no custom ones exist', async () => {
+    const acts = await invoke<{ id: string; name: string; isCustom: boolean }[]>('list_activities');
+    expect(acts.length).toBe(15);
+    expect(acts.every((a) => !a.isCustom)).toBe(true);
+  });
+
+  it('returns predefined + custom activities after creation', async () => {
+    await invoke('create_activity', { name: 'Yoga', emoji: '🧘' });
+    const acts = await invoke<{ id: string; isCustom: boolean }[]>('list_activities');
+    expect(acts.length).toBe(16);
+    expect(acts.filter((a) => a.isCustom).length).toBe(1);
+  });
+});
+
+describe('invoke("create_activity")', () => {
+  it('creates a custom activity and returns it', async () => {
+    const act = await invoke<{ id: string; name: string; emoji: string; isCustom: boolean }>(
+      'create_activity',
+      { name: 'Hiking', emoji: '🥾' },
+    );
+    expect(act.name).toBe('Hiking');
+    expect(act.emoji).toBe('🥾');
+    expect(act.isCustom).toBe(true);
+    expect(act.id).toMatch(/^act_custom_/);
+  });
+});
+
+describe('invoke("delete_activity")', () => {
+  it('removes a custom activity', async () => {
+    const created = await invoke<{ id: string }>('create_activity', { name: 'Temp', emoji: '🔥' });
+    await invoke('delete_activity', { id: created.id });
+    const acts = await invoke<{ id: string; isCustom: boolean }[]>('list_activities');
+    expect(acts.find((a) => a.id === created.id)).toBeUndefined();
+  });
+});
+
+describe('invoke("sync_entry_activities") + invoke("get_entry_activities")', () => {
+  it('links activities to an entry and retrieves them', async () => {
+    const now = new Date().toISOString();
+    await dbCreateEntry({
+      id: 'entry-act-1',
+      encrypted_content: { iv: '', data: '', salt: '' },
+      mood: 4,
+      privacy_mode: 0,
+      location_weather: null,
+      book_id: 'default',
+      pinned: 0,
+      created_at: now,
+      updated_at: now,
+      tags: [],
+      sealed_until: null,
+      capsule_type: null,
+      linked_original_id: null,
+      unsealed_at: null,
+      status: null,
+    });
+
+    await invoke('sync_entry_activities', {
+      entryId: 'entry-act-1',
+      activityIds: ['act_exercise', 'act_reading'],
+    });
+
+    const linked = await invoke<{ id: string }[]>('get_entry_activities', { entryId: 'entry-act-1' });
+    expect(linked.map((a) => a.id).sort()).toEqual(['act_exercise', 'act_reading'].sort());
+  });
+
+  it('returns empty array for an entry with no activities', async () => {
+    const now = new Date().toISOString();
+    await dbCreateEntry({
+      id: 'entry-act-2',
+      encrypted_content: { iv: '', data: '', salt: '' },
+      mood: 3,
+      privacy_mode: 0,
+      location_weather: null,
+      book_id: 'default',
+      pinned: 0,
+      created_at: now,
+      updated_at: now,
+      tags: [],
+      sealed_until: null,
+      capsule_type: null,
+      linked_original_id: null,
+      unsealed_at: null,
+      status: null,
+    });
+
+    const linked = await invoke<unknown[]>('get_entry_activities', { entryId: 'entry-act-2' });
+    expect(linked).toEqual([]);
+  });
+});
+
+describe('invoke("get_activity_stats")', () => {
+  it('returns stats for all activities with zero counts when no entries', async () => {
+    const stats = await invoke<{ activityId: string; entryCount: number; avgMood: number }[]>(
+      'get_activity_stats',
+    );
+    expect(stats.length).toBe(15);
+    expect(stats.every((s) => s.entryCount === 0 && s.avgMood === 0)).toBe(true);
+  });
+
+  it('counts entries and computes avgMood for linked activities', async () => {
+    const now = new Date().toISOString();
+    await dbCreateEntry({
+      id: 'entry-stats-1',
+      encrypted_content: { iv: '', data: '', salt: '' },
+      mood: 4,
+      privacy_mode: 0,
+      location_weather: null,
+      book_id: 'default',
+      pinned: 0,
+      created_at: now,
+      updated_at: now,
+      tags: [],
+      sealed_until: null,
+      capsule_type: null,
+      linked_original_id: null,
+      unsealed_at: null,
+      status: null,
+    });
+    await invoke('sync_entry_activities', {
+      entryId: 'entry-stats-1',
+      activityIds: ['act_exercise'],
+    });
+
+    const stats = await invoke<{ activityId: string; entryCount: number; avgMood: number }[]>(
+      'get_activity_stats',
+    );
+    const exerciseStat = stats.find((s) => s.activityId === 'act_exercise');
+    expect(exerciseStat?.entryCount).toBe(1);
+    expect(exerciseStat?.avgMood).toBe(4);
+  });
+});

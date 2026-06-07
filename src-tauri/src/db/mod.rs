@@ -85,15 +85,42 @@ impl Database {
     /// the connection is opened but no pragmas or migrations are run — the caller must
     /// call `apply_key()` after the user authenticates before the connection is usable.
     pub fn new(db_path: PathBuf) -> Result<Self, String> {
-        let state = read_db_state(&db_path);
+        let mut state = read_db_state(&db_path);
 
-        // Recovery: if db_state.json says encrypted=true and moodhaven_enc.db still exists,
-        // the previous migration was interrupted between db_state.json write and the rename.
-        // Complete the rename now to bring the file to a consistent encrypted state.
-        if state.encrypted {
-            let tmp_path = db_path.with_file_name("moodhaven_enc.db");
-            if tmp_path.exists() {
+        // Recovery: if moodhaven_enc.db exists, a previous migration was interrupted.
+        // Determine how far it got based on the salt pre-write and encrypted flag.
+        let tmp_path = db_path.with_file_name("moodhaven_enc.db");
+        if tmp_path.exists() {
+            if !state.encrypted {
+                if state.salt.is_some() {
+                    // Salt was pre-written before export (v1.7.5+): migration was in progress.
+                    // Update db_state.json to encrypted:true and complete the rename below.
+                    log::warn!(
+                        "[sqlcipher] Found moodhaven_enc.db with pre-written salt — \
+                         completing interrupted migration (SQLC-004)"
+                    );
+                    let _ = write_db_state(
+                        &db_path,
+                        &DbStateFile {
+                            encrypted: true,
+                            salt: state.salt.clone(),
+                        },
+                    );
+                    state.encrypted = true;
+                } else {
+                    // No salt: crash occurred before the pre-write (pre-v1.7.5 path) or
+                    // the revert path was hit. The encrypted tmp cannot be keyed without the
+                    // salt — discard it and fall through to open the original plaintext DB.
+                    log::warn!(
+                        "[sqlcipher] Found moodhaven_enc.db without salt — \
+                         discarding orphaned file (SQLC-004)"
+                    );
+                    let _ = std::fs::remove_file(&tmp_path);
+                }
+            } else {
                 log::info!("[sqlcipher] Completing interrupted migration on startup");
+            }
+            if state.encrypted {
                 #[cfg(target_os = "windows")]
                 let _ = std::fs::remove_file(&db_path);
                 if let Err(e) = std::fs::rename(&tmp_path, &db_path) {
@@ -175,6 +202,17 @@ impl Database {
 
         // Clean up any previous incomplete attempt
         let _ = std::fs::remove_file(&tmp_path);
+
+        // Pre-write the salt before creating moodhaven_enc.db. If a crash occurs
+        // before the encrypted:true write in step 3, SQLC-004 recovery in Database::new()
+        // will find salt.is_some() and can complete the migration on next startup.
+        write_db_state(
+            &self.path,
+            &DbStateFile {
+                encrypted: false,
+                salt: Some(salt_b64.to_string()),
+            },
+        )?;
 
         // 1. Flush WAL and export to encrypted tmp file (hold conn lock for this block)
         {

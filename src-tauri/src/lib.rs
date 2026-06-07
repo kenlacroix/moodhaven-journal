@@ -555,6 +555,14 @@ pub fn run() {
             // Statistics
             commands::get_mood_statistics,
             commands::get_overall_statistics,
+            // Activities (structured entry tagging)
+            commands::list_activities,
+            commands::create_activity,
+            commands::delete_activity,
+            commands::sync_entry_activities,
+            commands::get_entry_activities,
+            commands::get_activity_stats,
+            commands::list_all_entry_activities,
             // Analytics
             commands::get_mood_distribution,
             commands::get_streak_stats,
@@ -562,6 +570,7 @@ pub fn run() {
             commands::get_monthly_mood_data,
             commands::get_full_analytics_bundle,
             commands::get_insights_metadata,
+            commands::get_year_heatmap,
             // Settings
             commands::get_setting,
             commands::set_setting,

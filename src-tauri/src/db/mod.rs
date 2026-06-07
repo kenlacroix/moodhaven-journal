@@ -58,11 +58,7 @@ pub fn read_db_state(db_path: &Path) -> DbStateFile {
 fn write_db_state(db_path: &Path, state: &DbStateFile) -> Result<(), String> {
     let path = db_state_path(db_path);
     let json = serde_json::to_string(state).map_err(|e| format!("serialize db_state: {e}"))?;
-    // Atomic write: write to a tmp file then rename so a crash mid-write never leaves a
-    // partial JSON that causes the recovery path to misclassify the DB state.
-    let tmp = path.with_extension("json.tmp");
-    std::fs::write(&tmp, &json).map_err(|e| format!("write db_state.json.tmp: {e}"))?;
-    std::fs::rename(&tmp, &path).map_err(|e| format!("rename db_state.json: {e}"))?;
+    std::fs::write(&path, json).map_err(|e| format!("write db_state.json: {e}"))?;
     Ok(())
 }
 
@@ -91,34 +87,46 @@ impl Database {
     pub fn new(db_path: PathBuf) -> Result<Self, String> {
         let mut state = read_db_state(&db_path);
 
-        // Recovery: if moodhaven_enc.db exists, a previous encrypt_in_place was interrupted.
-        // Two sub-cases:
-        //   (a) db_state.json says encrypted=true  — crash after state write, before rename
-        //   (b) db_state.json missing/encrypted=false — crash before state write (SQLC-004)
-        // In case (b) the plaintext moodhaven.db is still present and would otherwise be
-        // opened normally, silently discarding the encrypted copy forever.
+        // Recovery: if moodhaven_enc.db exists, a previous migration was interrupted.
+        // Determine how far it got based on the salt pre-write and encrypted flag.
         let tmp_path = db_path.with_file_name("moodhaven_enc.db");
         if tmp_path.exists() {
             if !state.encrypted {
-                log::warn!(
-                    "[sqlcipher] Found moodhaven_enc.db without db_state.json — \
-                     completing interrupted migration (SQLC-004 recovery)"
-                );
-                let _ = write_db_state(
-                    &db_path,
-                    &DbStateFile {
-                        encrypted: true,
-                        salt: None,
-                    },
-                );
-                state.encrypted = true;
+                if state.salt.is_some() {
+                    // Salt was pre-written before export (v1.7.5+): migration was in progress.
+                    // Update db_state.json to encrypted:true and complete the rename below.
+                    log::warn!(
+                        "[sqlcipher] Found moodhaven_enc.db with pre-written salt — \
+                         completing interrupted migration (SQLC-004)"
+                    );
+                    let _ = write_db_state(
+                        &db_path,
+                        &DbStateFile {
+                            encrypted: true,
+                            salt: state.salt.clone(),
+                        },
+                    );
+                    state.encrypted = true;
+                } else {
+                    // No salt: crash occurred before the pre-write (pre-v1.7.5 path) or
+                    // the revert path was hit. The encrypted tmp cannot be keyed without the
+                    // salt — discard it and fall through to open the original plaintext DB.
+                    log::warn!(
+                        "[sqlcipher] Found moodhaven_enc.db without salt — \
+                         discarding orphaned file (SQLC-004)"
+                    );
+                    let _ = std::fs::remove_file(&tmp_path);
+                }
             } else {
                 log::info!("[sqlcipher] Completing interrupted migration on startup");
             }
-            #[cfg(target_os = "windows")]
-            let _ = std::fs::remove_file(&db_path);
-            if let Err(e) = std::fs::rename(&tmp_path, &db_path) {
-                log::error!("[sqlcipher] Startup recovery rename failed: {e}");
+            if state.encrypted {
+                #[cfg(target_os = "windows")]
+                if let Err(e) = std::fs::remove_file(&db_path) {
+                    log::warn!("[sqlcipher] Windows pre-rename remove failed: {e}");
+                }
+                std::fs::rename(&tmp_path, &db_path)
+                    .map_err(|e| format!("[sqlcipher] Startup recovery rename failed: {e}"))?;
             }
         }
 
@@ -195,6 +203,17 @@ impl Database {
 
         // Clean up any previous incomplete attempt
         let _ = std::fs::remove_file(&tmp_path);
+
+        // Pre-write the salt before creating moodhaven_enc.db. If a crash occurs
+        // before the encrypted:true write in step 3, SQLC-004 recovery in Database::new()
+        // will find salt.is_some() and can complete the migration on next startup.
+        write_db_state(
+            &self.path,
+            &DbStateFile {
+                encrypted: false,
+                salt: Some(salt_b64.to_string()),
+            },
+        )?;
 
         // 1. Flush WAL and export to encrypted tmp file (hold conn lock for this block)
         {
@@ -721,6 +740,68 @@ impl Database {
             "CREATE INDEX IF NOT EXISTS idx_entries_book_id ON journal_entries(book_id)",
             [],
         );
+
+        // Runtime migration: activities + entry_activities tables (v1.8.0)
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS activities (
+                id         TEXT PRIMARY KEY,
+                name       TEXT NOT NULL UNIQUE,
+                emoji      TEXT NOT NULL DEFAULT '✨',
+                is_custom  INTEGER NOT NULL DEFAULT 0,
+                sort_order INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS entry_activities (
+                entry_id    TEXT NOT NULL REFERENCES journal_entries(id) ON DELETE CASCADE,
+                activity_id TEXT NOT NULL REFERENCES activities(id) ON DELETE CASCADE,
+                PRIMARY KEY (entry_id, activity_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_entry_activities_entry
+                ON entry_activities(entry_id);
+            CREATE INDEX IF NOT EXISTS idx_entry_activities_activity
+                ON entry_activities(activity_id);",
+        )
+        .map_err(|e| format!("Failed to create activities tables: {}", e))?;
+
+        // Seed predefined activities on first run (idempotent — skipped if rows exist)
+        {
+            let count: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM activities WHERE is_custom = 0",
+                    [],
+                    |r| r.get(0),
+                )
+                .unwrap_or(0);
+
+            if count == 0 {
+                const PREDEFINED: &[(&str, &str)] = &[
+                    ("exercise", "🏃"),
+                    ("social", "👥"),
+                    ("work", "💼"),
+                    ("reading", "📚"),
+                    ("creative", "🎨"),
+                    ("meditation", "🧘"),
+                    ("good_sleep", "😴"),
+                    ("poor_sleep", "😵"),
+                    ("nature", "🌿"),
+                    ("family", "🏠"),
+                    ("cooking", "🍳"),
+                    ("music", "🎵"),
+                    ("learning", "📖"),
+                    ("travel", "✈️"),
+                    ("gaming", "🎮"),
+                ];
+                for (i, (name, emoji)) in PREDEFINED.iter().enumerate() {
+                    let id = format!("act_{}", name);
+                    let _ = conn.execute(
+                        "INSERT OR IGNORE INTO activities
+                             (id, name, emoji, is_custom, sort_order, created_at)
+                         VALUES (?1, ?2, ?3, 0, ?4, datetime('now'))",
+                        params![id, name, emoji, i as i32],
+                    );
+                }
+            }
+        }
 
         Ok(())
     }

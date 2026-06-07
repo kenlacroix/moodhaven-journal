@@ -1,6 +1,6 @@
 # Browser / PWA Mode
 
-> **Version:** v1.6.0 | **Last Updated:** 2026-06-06
+> **Version:** v1.8.0 | **Last Updated:** 2026-06-07
 
 MoodHaven Journal runs in two modes: the full **Tauri desktop app** (the primary target) and a **browser / PWA build** that runs without Rust, usable in any modern browser. This document explains what the browser build is, how its shim layer works, and what contributors need to know when working with it.
 
@@ -131,6 +131,7 @@ interface BrowserEntryRow {
 | Journal CRUD | Full | Full |
 | Encryption (AES-256-GCM) | Full | Full |
 | Books, tags, analytics | Full | Full |
+| Mood analytics (year heatmap, streak, day-of-week) | Full | Full |
 | Time Capsule | Full | Full |
 | StillHaven | Full | Full |
 | Oura Ring sync | Full | Full (uses `window.fetch`) |

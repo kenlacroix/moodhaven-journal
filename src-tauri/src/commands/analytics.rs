@@ -3,8 +3,8 @@
 //! Commands for calendar view and analytics dashboard features.
 
 use crate::db::{
-    self, CalendarDayData, Database, DayOfWeekStats, FullAnalyticsBundle, InsightsMetadata,
-    MoodDistribution, StreakStats,
+    self, CalendarDayData, Database, DayOfWeekStats, FullAnalyticsBundle, HeatmapDay,
+    InsightsMetadata, MoodDistribution, StreakStats,
 };
 use crate::AppLockState;
 use tauri::State;
@@ -81,4 +81,14 @@ pub fn get_insights_metadata(
 ) -> Result<InsightsMetadata, String> {
     require_unlocked(&lock)?;
     db::get_insights_metadata(&db)
+}
+
+/// Get per-day mood data for the trailing 365 days (year heatmap)
+#[tauri::command]
+pub fn get_year_heatmap(
+    db: State<Database>,
+    lock: State<'_, AppLockState>,
+) -> Result<Vec<HeatmapDay>, String> {
+    require_unlocked(&lock)?;
+    db::get_year_heatmap(&db)
 }

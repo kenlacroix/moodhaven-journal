@@ -63,6 +63,14 @@ pub struct CalendarDayData {
     pub entry_count: i32,
 }
 
+/// Per-day mood data for the year heatmap (trailing 365 days, sparse)
+#[derive(Debug, Serialize, Deserialize)]
+pub struct HeatmapDay {
+    pub date: String,
+    pub average_mood: f64,
+    pub entry_count: i32,
+}
+
 /// Get mood statistics for a date range
 pub fn get_mood_stats(
     db: &Database,
@@ -356,28 +364,49 @@ pub fn get_full_analytics_bundle(
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| format!("DOW row parsing failed: {}", e))?;
 
-    let mut trend_stmt = conn
-        .prepare(
-            "SELECT date(created_at) as date, AVG(mood) as avg_mood, COUNT(*) as count
-             FROM journal_entries
-             WHERE date(created_at) >= date('now', ?1)
-             GROUP BY date(created_at)
-             ORDER BY date",
-        )
-        .map_err(|e| format!("Trend prepare failed: {}", e))?;
-
-    let trend_offset = format!("-{} days", trend_days);
-    let trend_data = trend_stmt
-        .query_map(params![trend_offset], |row| {
-            Ok(DailyStats {
-                date: row.get(0)?,
-                average_mood: row.get(1)?,
-                entry_count: row.get(2)?,
+    let trend_data: Vec<DailyStats> = if trend_days <= 0 {
+        let mut all_stmt = conn
+            .prepare(
+                "SELECT date(created_at) AS date, AVG(mood) AS avg_mood, COUNT(*) AS count
+                 FROM journal_entries
+                 GROUP BY date(created_at)
+                 ORDER BY date",
+            )
+            .map_err(|e| format!("All-time trend prepare failed: {}", e))?;
+        let rows: Result<Vec<DailyStats>, _> = all_stmt
+            .query_map([], |row| {
+                Ok(DailyStats {
+                    date: row.get(0)?,
+                    average_mood: row.get(1)?,
+                    entry_count: row.get(2)?,
+                })
             })
-        })
-        .map_err(|e| format!("Trend query failed: {}", e))?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| format!("Trend row parsing failed: {}", e))?;
+            .map_err(|e| format!("All-time trend query failed: {}", e))?
+            .collect();
+        rows.map_err(|e| format!("All-time trend row parsing failed: {}", e))?
+    } else {
+        let mut trend_stmt = conn
+            .prepare(
+                "SELECT date(created_at) AS date, AVG(mood) AS avg_mood, COUNT(*) AS count
+                 FROM journal_entries
+                 WHERE date(created_at) >= date('now', ?1)
+                 GROUP BY date(created_at)
+                 ORDER BY date",
+            )
+            .map_err(|e| format!("Trend prepare failed: {}", e))?;
+        let trend_offset = format!("-{} days", trend_days);
+        let rows: Result<Vec<DailyStats>, _> = trend_stmt
+            .query_map(params![trend_offset], |row| {
+                Ok(DailyStats {
+                    date: row.get(0)?,
+                    average_mood: row.get(1)?,
+                    entry_count: row.get(2)?,
+                })
+            })
+            .map_err(|e| format!("Trend query failed: {}", e))?
+            .collect();
+        rows.map_err(|e| format!("Trend row parsing failed: {}", e))?
+    };
 
     Ok(FullAnalyticsBundle {
         average_mood,
@@ -597,6 +626,73 @@ pub fn get_monthly_mood_data(
     }
 
     Ok(fallback_data)
+}
+
+/// Per-day mood data for the trailing 365 days. Sparse — only days with entries returned.
+/// Tries the `mood_daily_stats` materialized view first; falls back to journal_entries directly.
+pub fn get_year_heatmap(db: &Database) -> Result<Vec<HeatmapDay>, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT date, average_mood, entry_count
+             FROM mood_daily_stats
+             WHERE date >= date('now', '-365 days')
+             ORDER BY date ASC",
+        )
+        .map_err(|e| format!("Heatmap view prepare failed: {}", e))?;
+
+    let rows: Vec<HeatmapDay> = stmt
+        .query_map([], |row| {
+            Ok(HeatmapDay {
+                date: row.get(0)?,
+                average_mood: row.get(1)?,
+                entry_count: row.get(2)?,
+            })
+        })
+        .map_err(|e| format!("Heatmap view query failed: {}", e))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("Heatmap view row parsing failed: {}", e))?;
+
+    if !rows.is_empty() {
+        return Ok(rows);
+    }
+
+    // View is empty — check if there are any entries at all before the costlier fallback query
+    let entry_count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM journal_entries WHERE date(created_at) >= date('now', '-365 days')",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+
+    if entry_count == 0 {
+        return Ok(vec![]);
+    }
+
+    let mut fallback = conn
+        .prepare(
+            "SELECT date(created_at) AS date, AVG(mood) AS avg_mood, COUNT(*) AS cnt
+             FROM journal_entries
+             WHERE date(created_at) >= date('now', '-365 days')
+             GROUP BY date(created_at)
+             ORDER BY date ASC",
+        )
+        .map_err(|e| format!("Heatmap fallback prepare failed: {}", e))?;
+
+    let result: Vec<HeatmapDay> = fallback
+        .query_map([], |row| {
+            Ok(HeatmapDay {
+                date: row.get(0)?,
+                average_mood: row.get(1)?,
+                entry_count: row.get(2)?,
+            })
+        })
+        .map_err(|e| format!("Heatmap fallback query failed: {}", e))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("Heatmap fallback row parsing failed: {}", e))?;
+    Ok(result)
 }
 
 fn days_in_month(year: i32, month: i32) -> i32 {

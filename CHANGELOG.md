@@ -5,6 +5,58 @@ All notable changes to MoodHaven Journal are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.8.0] — 2026-06-07
+
+### Added
+- **Activity tagging** — tag journal entries with what you were doing (Work, Exercise, Social, and more). Custom activities supported (up to 50). Filter the All Entries timeline by activity. Powered by 7 new Tauri commands and a new `activities` + `entry_activities` schema.
+- **Mood analytics: year heatmap** — 53-week GitHub-style heatmap showing daily mood across the past year. Available in Insights view.
+- **Mood analytics: all-time trend** — rolling 90-day smoothed mood trendline with direction indicator (improving / stable / declining).
+- **Mood analytics: streak calendar** — 12-week dot grid visualising your journaling consistency.
+- **Mood analytics: best/worst day pattern** — callout chips identifying your statistically best and worst days of the week (requires 3+ active days, Δ≥0.2 to suppress noise).
+- **Activity correlation chart** — diverging bar chart showing which activities correlate with better or worse mood. Displayed in Insights view when you have 5+ tagged entries.
+
+---
+
+## [1.7.5] — 2026-06-07
+
+### Security
+- **SQLCipher at-rest encryption** — PBKDF2-derived key material in `data_management.rs` and `journal.rs` wrapped in `Zeroizing<[u8; 32]>` for guaranteed stack overwrite on drop; TCP sync server start hoisted into `unlock_app` to prevent sync before session is fully authenticated.
+- **SQLC-004 recovery hardened** — salt pre-written to `db_state.json` before `moodhaven_enc.db` is created; recovery branches on `salt.is_some()` so a force-kill mid-migration no longer leaves the app stuck in "missing encryption record" state.
+- **Startup recovery rename error propagated** — `Database::new()` now returns `Err` on rename failure during SQLC-004 recovery instead of logging and continuing in an inconsistent state.
+- **Factory reset cleanup** — `pin_lockout.json`, `db_state.json.tmp`, `moodhaven.db-wal`, and `moodhaven.db-shm` added to the reset file list.
+
+---
+
+## [1.7.4] — 2026-06-06
+
+### Security
+- **PT5 findings** — write_text_file path blocklist extended to cover Windows `Startup` and `System32` attack paths (C1); factory_reset now deletes WAL/SHM sidecar files and the media preview cache (C3); PBKDF2-derived key material in `two_factor.rs`, `data_management.rs`, and `media.rs` wrapped in `Zeroizing` for stack overwrite on drop (A5).
+
+---
+
+## [1.7.3] — 2026-06-06
+
+### Security
+- **PT4 findings** — `verify_password` PBKDF2 key and base64 hash string wrapped in `Zeroizing` (MEM-001); `DbKeyState::get()` key copy zeroized before `encrypt_in_place` (MEM-002); three stale ACL entries removed from `app-commands.toml` (ACL-002).
+- **SQLC-004 recovery** — orphaned `moodhaven_enc.db` detected unconditionally at startup; `db_state.json` written atomically (tmp→rename) on all code paths.
+
+---
+
+## [1.7.2] — 2026-06-06
+
+### Security
+- **PT1–PT3 findings** — `encrypt_in_place` WAL/SHM retry loop + Windows rename retry (SQLC-001); PBKDF2 key wrapped in `Zeroizing<String>` (SQLC-003); public key removed from UDP probe broadcasts (RECON-003); `pubkey_hint` removed from mDNS TXT (RECON-002); PIN removed from QR payload (PAIRING-C06); `get_entries_on_this_day` added to ACL (ACL-001).
+
+---
+
+## [1.7.1] — 2026-06-06
+
+### Changed
+- **Mobile layout gates** — responsive layout extended to cover iOS and narrow browser viewports; dead-code sweep removes unused exports, types, and components.
+- **Android NDK CI** — NDK cross-compilation toolchain added to CI release build pipeline.
+
+---
+
 ## [1.7.0] — 2026-06-06
 
 ### Security

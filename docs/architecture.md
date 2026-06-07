@@ -1,6 +1,6 @@
 # MoodHaven Journal — Architecture Reference
 
-> **Version:** v1.6.0 (feat/cloud-sync-phase1) | **Last Updated:** 2026-06-06
+> **Version:** v1.8.0 | **Last Updated:** 2026-06-07
 
 ---
 
@@ -67,7 +67,7 @@ MoodHaven Journal is a **local-first desktop application** built on Tauri v2 (Ru
 | 2FA | totp-rs + native CTAP2/HID | TOTP + hardware keys |
 | Charts | Custom SVG | No charting library |
 | Logging | tauri-plugin-log + `src/lib/services/logger.ts` | Rotating file (prod), stderr (dev); `set_log_level` at runtime |
-| Testing | Vitest + Testing Library | 1,283 tests |
+| Testing | Vitest + Testing Library | 1,434 tests |
 | Build | Vite 8 + Tauri CLI | |
 
 ---
@@ -87,6 +87,7 @@ moodbloom-tauri/
 │   │   ├── sync/               # SyncDetailsModal
 │   │   ├── voice-memo/         # VoiceMemoDraftCard, VoiceDraftEditor
 │   │   ├── writing/            # AppearanceDrawer (font/size/tint/a11y)
+│   │   ├── analytics/          # MoodYearHeatmap, StreakCalendar, DayOfWeekPattern, MoodDistributionChart
 │   │   ├── oura/               # OuraConnectionCard, HealthContextBadge
 │   │   └── settings/           # SettingsPage tabs + Privacy sub-sections
 │   ├── features/               # Full page views
@@ -260,6 +261,24 @@ media_attachments (
 )
 ```
 
+### Activities
+
+```sql
+activities (
+  id           TEXT PRIMARY KEY,
+  name         TEXT UNIQUE NOT NULL,      -- normalised lowercase, 1–50 chars
+  emoji        TEXT NOT NULL,
+  is_custom    INTEGER NOT NULL DEFAULT 0, -- 0=predefined, 1=user-created
+  sort_order   INTEGER NOT NULL DEFAULT 0
+)
+
+entry_activities (
+  entry_id     TEXT REFERENCES journal_entries(id) ON DELETE CASCADE,
+  activity_id  TEXT REFERENCES activities(id) ON DELETE CASCADE,
+  PRIMARY KEY (entry_id, activity_id)
+)
+```
+
 ### Sync
 
 ```sql
@@ -338,7 +357,7 @@ Hooks are the primary abstraction between stores/services and UI components. Eac
 | Hook | Concern |
 |:---|:---|
 | `useJournal` | Entry CRUD, auto-save, tag sync |
-| `useAnalytics` | Mood stats, streaks, day-of-week patterns |
+| `useAnalytics` | Mood stats, streaks, day-of-week patterns, year heatmap |
 | `useInsights` | AI insight generation, pattern nudges |
 | `useJournalPrompts` | Context-aware writing prompts |
 | `useCalendar` | Calendar data, daily timeline |
@@ -684,5 +703,6 @@ Frontend: encryptedImport(blob, password)
 | [`docs/howto-getting-started.md`](howto-getting-started.md) | First-run setup tutorial for new users |
 | [`docs/howto-time-capsule.md`](howto-time-capsule.md) | Time capsule feature: sealing, reveal flow, anniversary reveals |
 | [`docs/howto-stillhaven.md`](howto-stillhaven.md) | StillHaven bilateral stimulation: sessions, protocols, journal handoff |
-| [`docs/tauri-commands.md`](tauri-commands.md) | Full reference for all ~164 Tauri commands |
+| [`docs/howto-mood-analytics.md`](howto-mood-analytics.md) | Mood analytics: year heatmap, streak calendar, day-of-week patterns |
+| [`docs/tauri-commands.md`](tauri-commands.md) | Full reference for all ~165 Tauri commands |
 | [`docs/threat-model.md`](threat-model.md) | Security threat model and mitigations |

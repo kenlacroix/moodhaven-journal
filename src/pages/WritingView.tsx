@@ -25,6 +25,9 @@
 
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { saveEntry, getEntryById, patchEntryLocationWeather, deleteEntry, getBookTags } from '../lib/services/journalService';
+import { syncEntryActivities, getEntryActivities } from '../lib/services/activityService';
+import { useActivities } from '../hooks/useActivities';
+import { ActivityPicker } from '../components/journal/ActivityPicker';
 import { captureLocationWeather, getWeatherEmoji, displayTemp } from '../lib/services/locationWeatherService';
 import { getGreeting } from '../lib/utils/dateUtils';
 import { getReadingTime, didHitMilestone } from '../lib/utils/writingUtils';
@@ -251,6 +254,8 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
   const appearanceToggleRef = useRef<HTMLButtonElement | null>(null);
   const [pulseAppearanceHint, setPulseAppearanceHint] = useState(false);
   const [tagManagerOpen, setTagManagerOpen] = useState(false);
+  const [selectedActivityIds, setSelectedActivityIds] = useState<string[]>([]);
+  const { activities, isLoading: activitiesLoading, addCustom: addCustomActivity, remove: removeCustomActivity } = useActivities();
   const [usedTemplateIds, setUsedTemplateIds] = useState<string[]>(() => getUsedTemplates());
   const setShowPrompts = useSettingsStore((s) => s.setShowPrompts);
   const showPrompts = useSettingsStore((s) => s.settings.journal.showPrompts);
@@ -434,6 +439,7 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
           if (entry.locationWeather) setLocationWeather(entry.locationWeather);
         }
       });
+      getEntryActivities(entryId).then(setSelectedActivityIds).catch(() => {});
     }
   }, [entryId]);
 
@@ -477,6 +483,7 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
       setThumbnails({});
       savedEntryIdRef.current = null;
       prevAutoMoodRef.current = null;
+      setSelectedActivityIds([]);
     }
   }, [isNewEntry]);
 
@@ -547,6 +554,7 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
           setLastSavedAt(new Date());
           setLastSaveOk(true);
           onEntrySaved?.();
+          syncEntryActivities(saved.id, selectedActivityIds).catch(() => {});
         })
         .catch((err) => {
           logger.error('Auto-save failed:', { error: String(err) });
@@ -556,7 +564,7 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
     }, 2000);
   // `mood` and `content` are intentionally included: a mood auto-detection or
   // format change after the last keystroke should still be reflected in the save.
-  }, [content, contentText, wordCount, title, mood, privacyMode, autoTitle, activeBookId, onEntrySaved]);
+  }, [content, contentText, wordCount, title, mood, privacyMode, autoTitle, activeBookId, onEntrySaved, selectedActivityIds]);
 
   useEffect(() => { scheduleAutoSave(); }, [contentText, title, privacyMode, scheduleAutoSave]);
 
@@ -649,6 +657,7 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
       savedEntryIdRef.current = saved.id;
       setLastSavedAt(new Date());
       onEntrySaved?.();
+      syncEntryActivities(saved.id, selectedActivityIds).catch(() => {});
     } finally {
       setIsSaving(false);
     }
@@ -1423,6 +1432,19 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
                   >
                     + tag
                   </button>
+                </div>
+              )}
+              {/* Activity picker — shown when not in distraction-free mode */}
+              {!distractionFree && (
+                <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                  <ActivityPicker
+                    activities={activities}
+                    selectedIds={selectedActivityIds}
+                    onChange={setSelectedActivityIds}
+                    onAddCustom={addCustomActivity}
+                    onRemoveCustom={removeCustomActivity}
+                    isLoading={activitiesLoading}
+                  />
                 </div>
               )}
             </div>

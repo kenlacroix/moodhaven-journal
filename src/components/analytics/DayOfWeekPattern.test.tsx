@@ -31,11 +31,17 @@ describe('DayOfWeekPattern', () => {
     expect(bars.length).toBeGreaterThanOrEqual(7);
   });
 
-  it('shows best/worst callout chips when 2+ active days exist', () => {
+  it('shows best/worst callout chips when 3+ active days exist', () => {
     const data = makeData([3, 4, 3.5, 4.5, 3, 4, 3]);
     render(<DayOfWeekPattern data={data} />);
     expect(screen.getByText('Best day')).toBeInTheDocument();
     expect(screen.getByText('Worst day')).toBeInTheDocument();
+  });
+
+  it('does not show callout when only 2 active days exist', () => {
+    const data = makeData([0, 0, 0, 4.5, 0, 3, 0]);
+    render(<DayOfWeekPattern data={data} />);
+    expect(screen.queryByText('Best day')).not.toBeInTheDocument();
   });
 
   it('best day chip shows the day with highest average mood', () => {

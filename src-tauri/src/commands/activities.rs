@@ -59,7 +59,11 @@ pub async fn create_activity(
     if name.is_empty() || name.len() > 50 {
         return Err("Activity name must be 1–50 characters".to_string());
     }
-    let emoji = if emoji.is_empty() { "✨".to_string() } else { emoji };
+    let emoji = if emoji.is_empty() {
+        "✨".to_string()
+    } else {
+        emoji
+    };
     let id = format!("act_custom_{}", Uuid::new_v4().simple());
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let sort_order: i32 = conn
@@ -81,15 +85,18 @@ pub async fn create_activity(
             e.to_string()
         }
     })?;
-    Ok(Activity { id, name, emoji, is_custom: true, sort_order })
+    Ok(Activity {
+        id,
+        name,
+        emoji,
+        is_custom: true,
+        sort_order,
+    })
 }
 
 /// Delete a custom activity. Errors if id refers to a predefined activity.
 #[tauri::command]
-pub async fn delete_activity(
-    db: tauri::State<'_, Database>,
-    id: String,
-) -> Result<(), String> {
+pub async fn delete_activity(db: tauri::State<'_, Database>, id: String) -> Result<(), String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let is_custom: i32 = conn
         .query_row(

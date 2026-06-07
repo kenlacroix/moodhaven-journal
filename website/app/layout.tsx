@@ -5,6 +5,7 @@ import "./globals.css";
 import NavBar from "@/components/NavBar";
 import Footer from "@/components/Footer";
 import Script from "next/script";
+import packageJson from "../package.json";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -34,6 +35,11 @@ export const metadata: Metadata = {
   creator: "MoodHaven",
   alternates: {
     canonical: "https://www.moodhaven.app",
+    types: {
+      "application/rss+xml": [
+        { url: "https://www.moodhaven.app/blog/rss.xml", title: "MoodHaven Journal Blog" },
+      ],
+    },
   },
   openGraph: {
     title: "MoodHaven Journal — Privacy-First Journaling App",
@@ -127,7 +133,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 },
                 "author": { "@id": "https://www.moodhaven.app/#org" },
                 "screenshot": "https://www.moodhaven.app/icons/opengraph-image.png",
-                "softwareVersion": "1.1.0",
+                "softwareVersion": packageJson.version,
                 "license": "https://opensource.org/licenses/MIT"
               }
             ]

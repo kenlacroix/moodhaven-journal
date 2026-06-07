@@ -799,7 +799,11 @@ pub fn peer_revoke_device(
 /// Does NOT join the thread — the cancel is fire-and-forget from the frontend's perspective.
 /// The next call to `peer_generate_pairing_token` will join before rebinding.
 #[tauri::command]
-pub fn peer_cancel_pairing(state: State<'_, PairingServerState>) -> Result<(), String> {
+pub fn peer_cancel_pairing(
+    state: State<'_, PairingServerState>,
+    lock: State<'_, AppLockState>,
+) -> Result<(), String> {
+    require_unlocked(&lock)?;
     if let Ok(mut g) = state.stop_tx.lock() {
         if let Some(tx) = g.take() {
             let _ = tx.send(());
@@ -815,6 +819,10 @@ pub fn peer_cancel_pairing(state: State<'_, PairingServerState>) -> Result<(), S
 
 /// Whether the pairing HTTP server is currently active.
 #[tauri::command]
-pub fn peer_pairing_is_active(state: State<'_, PairingServerState>) -> bool {
-    state.is_serving.load(Ordering::SeqCst)
+pub fn peer_pairing_is_active(
+    state: State<'_, PairingServerState>,
+    lock: State<'_, AppLockState>,
+) -> Result<bool, String> {
+    require_unlocked(&lock)?;
+    Ok(state.is_serving.load(Ordering::SeqCst))
 }

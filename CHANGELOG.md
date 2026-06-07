@@ -8,9 +8,22 @@ Versions follow [Semantic Versioning](https://semver.org/).
 ## [1.8.0] — 2026-06-07
 
 ### Added
-- **Mood analytics — Year Heatmap** — a full 53-week calendar heatmap of your mood colored by the existing mood palette, surfaced in the Insights → Deep Dive section. Supports an "All Time" period alongside the existing 7/30/90-day windows.
-- **Mood analytics — StreakCalendar** — a compact 12-week dot grid showing recent journaling activity and mood at a glance; reuses heatmap data with no additional queries.
-- **Mood analytics — Day-of-week pattern** — best and worst day callout chips derived from all-time day-of-week averages, shown in the Deep Dive section.
+- **Activity tagging** — tag journal entries with what you were doing (Work, Exercise, Social, and more). Custom activities supported (up to 50). Filter the All Entries timeline by activity. Powered by 7 new Tauri commands and a new `activities` + `entry_activities` schema.
+- **Mood analytics: year heatmap** — 53-week GitHub-style heatmap showing daily mood across the past year. Available in Insights view.
+- **Mood analytics: all-time trend** — rolling 90-day smoothed mood trendline with direction indicator (improving / stable / declining).
+- **Mood analytics: streak calendar** — 12-week dot grid visualising your journaling consistency.
+- **Mood analytics: best/worst day pattern** — callout chips identifying your statistically best and worst days of the week (requires 3+ active days, Δ≥0.2 to suppress noise).
+- **Activity correlation chart** — diverging bar chart showing which activities correlate with better or worse mood. Displayed in Insights view when you have 5+ tagged entries.
+
+---
+
+## [1.7.5] — 2026-06-07
+
+### Security
+- **SQLCipher at-rest encryption** — PBKDF2-derived key material in `data_management.rs` and `journal.rs` wrapped in `Zeroizing<[u8; 32]>` for guaranteed stack overwrite on drop; TCP sync server start hoisted into `unlock_app` to prevent sync before session is fully authenticated.
+- **SQLC-004 recovery hardened** — salt pre-written to `db_state.json` before `moodhaven_enc.db` is created; recovery branches on `salt.is_some()` so a force-kill mid-migration no longer leaves the app stuck in "missing encryption record" state.
+- **Startup recovery rename error propagated** — `Database::new()` now returns `Err` on rename failure during SQLC-004 recovery instead of logging and continuing in an inconsistent state.
+- **Factory reset cleanup** — `pin_lockout.json`, `db_state.json.tmp`, `moodhaven.db-wal`, and `moodhaven.db-shm` added to the reset file list.
 
 ---
 

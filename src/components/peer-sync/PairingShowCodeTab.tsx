@@ -7,7 +7,8 @@ import {
   onPairingAttemptFailed,
   onPairingLocked,
 } from '../../lib/services/peerPairingService';
-import { useQRCode, useCountdown, formatCountdown } from './PairingHooks';
+import { useCountdown, formatCountdown } from './PairingHooks';
+import { QRCodeSVG } from 'qrcode.react';
 import { PINDisplay, LockedBanner } from './PairingUIComponents';
 
 export function ShowCodeTab({
@@ -20,7 +21,6 @@ export function ShowCodeTab({
   const [error, setError] = useState('');
   const [attemptWarning, setAttemptWarning] = useState<number | null>(null);
   const [lockedOut, setLockedOut] = useState(false);
-  const qrDataUrl = useQRCode(tokenInfo?.qrPayload ?? null);
   const secondsLeft = useCountdown(tokenInfo?.expiresAt ?? null);
 
   useEffect(() => {
@@ -126,12 +126,17 @@ export function ShowCodeTab({
 
       {/* QR code */}
       <div className="flex flex-col items-center gap-2">
-        {qrDataUrl ? (
-          <img
-            src={qrDataUrl}
-            alt="Pairing QR code"
-            className="w-40 h-40 rounded-xl border-2 border-violet-100 dark:border-violet-900/40"
-          />
+        {tokenInfo?.qrPayload ? (
+          <div className="w-40 h-40 rounded-xl border-2 border-violet-100 dark:border-violet-900/40 bg-[#faf5ff] flex items-center justify-center p-2">
+            <QRCodeSVG
+              value={tokenInfo.qrPayload}
+              size={144}
+              level="M"
+              bgColor="#faf5ff"
+              fgColor="#4c1d95"
+              title="Pairing QR code"
+            />
+          </div>
         ) : (
           <div className="w-40 h-40 rounded-xl bg-violet-50 dark:bg-violet-900/10 border-2 border-violet-100 dark:border-violet-900/40 flex items-center justify-center">
             <div className="w-6 h-6 border-2 border-violet-400 border-t-transparent rounded-full animate-spin" />

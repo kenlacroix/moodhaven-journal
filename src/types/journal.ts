@@ -131,6 +131,8 @@ export interface JournalEntry {
   sessionId?: string | null;
   // Word count computed from plaintext at write time (null for legacy entries)
   wordCount?: number | null;
+  // Activity IDs linked to this entry
+  activityIds?: string[];
 }
 
 // Form data for creating/editing entries

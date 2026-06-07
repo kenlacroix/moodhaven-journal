@@ -43,6 +43,7 @@ interface EncryptedJournalEntryRow {
   unsealed_at?: string | null;
   session_id?: string | null;
   word_count?: number | null;
+  activity_ids?: string[];
 }
 
 
@@ -238,6 +239,7 @@ export async function createEntry(
     created_at: row.created_at,
     updated_at: row.updated_at,
     sessionId: row.session_id ?? null,
+    activityIds: row.activity_ids ?? [],
   };
 }
 
@@ -351,6 +353,7 @@ export async function updateEntry(
     created_at: row.created_at,
     updated_at: row.updated_at,
     sessionId: row.session_id ?? null,
+    activityIds: row.activity_ids ?? [],
   };
 }
 
@@ -420,6 +423,7 @@ async function decryptEntry(
     unsealedAt: row.unsealed_at ?? null,
     sessionId: row.session_id ?? null,
     wordCount: row.word_count ?? null,
+    activityIds: row.activity_ids ?? [],
   };
 }
 

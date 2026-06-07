@@ -25,7 +25,7 @@
 use crate::AppLockState;
 use serde::Serialize;
 
-const KEYRING_SERVICE: &str = "com.moodhaven.app";
+use super::KEYRING_SERVICE;
 const KEYRING_ACCOUNT: &str = "desktop_biometric_session";
 
 #[derive(Serialize)]

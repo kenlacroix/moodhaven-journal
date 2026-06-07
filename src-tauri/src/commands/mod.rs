@@ -5,6 +5,8 @@
 use crate::AppLockState;
 use tauri::State;
 
+pub const KEYRING_SERVICE: &str = "com.moodhaven.app";
+
 /// Shared lock guard used by all command modules.
 pub(crate) fn require_unlocked(lock: &State<'_, AppLockState>) -> Result<(), String> {
     if lock.is_locked() {

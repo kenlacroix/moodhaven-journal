@@ -16,7 +16,7 @@ use sha2::{Digest, Sha256};
 use std::fs;
 use tauri::{AppHandle, Manager};
 
-const KEYRING_SERVICE: &str = "com.moodhaven.app";
+use super::KEYRING_SERVICE;
 const KEYRING_ACCOUNT: &str = "peer-signing-key";
 
 /// Public device identity (safe to share, returned to frontend)

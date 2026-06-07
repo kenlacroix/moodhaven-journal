@@ -234,6 +234,7 @@ pub async fn factory_reset(app: AppHandle) -> Result<bool, String> {
         "moodhaven_restore.pending", // Staged full-restore DB file — must not re-apply after reset
         "moodhaven_restore.pending.sha256", // Integrity check file for the above
         "moodhaven.db.old",  // Windows rename-on-reset orphan — cleaned up on next fresh start
+        "cloud_token_key.bin", // OAuth token encryption key fallback (keyring-unavailable path)
     ];
     for file in files_to_delete {
         let path = app_data.join(file);

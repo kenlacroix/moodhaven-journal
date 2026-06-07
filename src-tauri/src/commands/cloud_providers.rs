@@ -14,6 +14,7 @@ use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tauri::{AppHandle, Manager, State};
+use zeroize::Zeroizing;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 
@@ -131,16 +132,16 @@ fn db_delete(conn: &rusqlite::Connection, key: &str) -> Result<(), String> {
 // as-is and transparently re-encrypted on next write (migration path).
 // ============================================================================
 
-const TOKEN_KEYRING_SERVICE: &str = "com.moodhaven.app";
+use super::KEYRING_SERVICE;
 const TOKEN_KEYRING_ACCOUNT: &str = "cloud-token-encryption-key";
 const TOKEN_MARKER: &str = "__tok_v1:";
 
-fn load_or_create_token_key(app: &AppHandle) -> Result<[u8; 32], String> {
-    if let Ok(entry) = keyring::Entry::new(TOKEN_KEYRING_SERVICE, TOKEN_KEYRING_ACCOUNT) {
+fn load_or_create_token_key(app: &AppHandle) -> Result<Zeroizing<[u8; 32]>, String> {
+    if let Ok(entry) = keyring::Entry::new(KEYRING_SERVICE, TOKEN_KEYRING_ACCOUNT) {
         if let Ok(hex) = entry.get_password() {
             if let Ok(bytes) = hex::decode(hex.trim()) {
                 if let Ok(arr) = <[u8; 32]>::try_from(bytes.as_slice()) {
-                    return Ok(arr);
+                    return Ok(Zeroizing::new(arr));
                 }
             }
         }
@@ -156,32 +157,38 @@ fn load_or_create_token_key(app: &AppHandle) -> Result<[u8; 32], String> {
         let arr: [u8; 32] = bytes
             .try_into()
             .map_err(|_| "cloud_token_key.bin must be 32 bytes".to_string())?;
-        if let Ok(entry) = keyring::Entry::new(TOKEN_KEYRING_SERVICE, TOKEN_KEYRING_ACCOUNT) {
+        if let Ok(entry) = keyring::Entry::new(KEYRING_SERVICE, TOKEN_KEYRING_ACCOUNT) {
             if entry.set_password(&hex::encode(arr)).is_ok() {
                 let _ = std::fs::remove_file(&key_path);
                 log::info!("[cloud-token] Migrated cloud_token_key.bin to OS keyring");
             }
         }
-        return Ok(arr);
+        return Ok(Zeroizing::new(arr));
     }
 
-    let mut key = [0u8; 32];
-    rand::rngs::OsRng.fill_bytes(&mut key);
-    let stored = if let Ok(entry) = keyring::Entry::new(TOKEN_KEYRING_SERVICE, TOKEN_KEYRING_ACCOUNT) {
-        entry.set_password(&hex::encode(key)).is_ok()
+    let mut key = Zeroizing::new([0u8; 32]);
+    rand::rngs::OsRng.fill_bytes(key.as_mut());
+    let stored = if let Ok(entry) = keyring::Entry::new(KEYRING_SERVICE, TOKEN_KEYRING_ACCOUNT) {
+        entry.set_password(&hex::encode(*key)).is_ok()
     } else {
         false
     };
     if !stored {
         std::fs::create_dir_all(&app_data_dir).map_err(|e| e.to_string())?;
-        std::fs::write(&key_path, key).map_err(|e| e.to_string())?;
         #[cfg(unix)]
         {
-            use std::os::unix::fs::PermissionsExt;
-            if let Ok(mut perms) = std::fs::metadata(&key_path).map(|m| m.permissions()) {
-                perms.set_mode(0o600);
-                let _ = std::fs::set_permissions(&key_path, perms);
-            }
+            use std::os::unix::fs::OpenOptionsExt;
+            std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .mode(0o600)
+                .open(&key_path)
+                .and_then(|mut f| std::io::Write::write_all(&mut f, key.as_ref()))
+                .map_err(|e| e.to_string())?;
+        }
+        #[cfg(not(unix))]
+        {
+            std::fs::write(&key_path, key.as_ref()).map_err(|e| e.to_string())?;
         }
         log::info!("[cloud-token] Keyring unavailable — stored cloud token key in file (0600)");
     } else {
@@ -190,10 +197,10 @@ fn load_or_create_token_key(app: &AppHandle) -> Result<[u8; 32], String> {
     Ok(key)
 }
 
-fn encrypt_token(key: &[u8; 32], plaintext: &str) -> Result<String, String> {
+fn encrypt_token(key: &Zeroizing<[u8; 32]>, plaintext: &str) -> Result<String, String> {
     use aes_gcm::aead::{Aead, KeyInit};
     use aes_gcm::{AeadCore, Aes256Gcm, Key};
-    let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(key));
+    let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(key.as_ref()));
     let nonce = Aes256Gcm::generate_nonce(&mut aes_gcm::aead::OsRng);
     let ciphertext = cipher
         .encrypt(&nonce, plaintext.as_bytes())
@@ -203,7 +210,7 @@ fn encrypt_token(key: &[u8; 32], plaintext: &str) -> Result<String, String> {
     Ok(format!("{}{}", TOKEN_MARKER, URL_SAFE_NO_PAD.encode(blob)))
 }
 
-fn decrypt_token(key: &[u8; 32], stored: &str) -> Result<String, String> {
+fn decrypt_token(key: &Zeroizing<[u8; 32]>, stored: &str) -> Result<String, String> {
     use aes_gcm::aead::{Aead, KeyInit};
     use aes_gcm::{Aes256Gcm, Key, Nonce};
     if !stored.starts_with(TOKEN_MARKER) {
@@ -216,7 +223,7 @@ fn decrypt_token(key: &[u8; 32], stored: &str) -> Result<String, String> {
         return Err("token blob too short".to_string());
     }
     let nonce = Nonce::from_slice(&blob[..12]);
-    let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(key));
+    let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(key.as_ref()));
     let plaintext_bytes = cipher
         .decrypt(nonce, &blob[12..])
         .map_err(|_| "token decryption failed (wrong key or tampered data)".to_string())?;
@@ -246,7 +253,9 @@ fn db_get_token(
     let enc_key = load_or_create_token_key(app)?;
     let plaintext = decrypt_token(&enc_key, &stored)?;
     if !stored.starts_with(TOKEN_MARKER) {
-        let _ = db_set_token(conn, app, key, &plaintext);
+        if let Err(e) = db_set_token(conn, app, key, &plaintext) {
+            log::warn!("[cloud-token] re-encrypt on read failed: {e}");
+        }
     }
     Ok(Some(plaintext))
 }
@@ -701,8 +710,12 @@ async fn perform_token_refresh(
 pub async fn cloud_provider_auth_start(
     app: AppHandle,
     db: State<'_, Database>,
+    lock: State<'_, AppLockState>,
     provider: String,
 ) -> Result<(), String> {
+    if lock.is_locked() {
+        return Err("Session is locked".to_string());
+    }
     // Validate provider and check placeholder credentials
     match provider.as_str() {
         "dropbox" => {
@@ -1050,8 +1063,12 @@ pub async fn cloud_provider_disconnect(
 pub async fn cloud_provider_refresh_token(
     app: AppHandle,
     db: State<'_, Database>,
+    lock: State<'_, AppLockState>,
     provider: String,
 ) -> Result<(), String> {
+    if lock.is_locked() {
+        return Err("Session is locked".to_string());
+    }
     match provider.as_str() {
         "dropbox" | "gdrive" => {}
         _ => return Err(format!("Unknown provider: {}", provider)),

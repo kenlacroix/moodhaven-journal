@@ -124,13 +124,11 @@ pub fn still_complete_session(
 ) -> Result<(), String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
-    let n = conn
-        .execute(
-            "UPDATE still_sessions SET completed_at = ?1, duration_seconds = ?2 WHERE id = ?3",
-            params![completed_at, duration_seconds, id],
-        )
-        .map_err(|e| format!("Failed to complete session: {}", e))?;
-    let _ = n;
+    conn.execute(
+        "UPDATE still_sessions SET completed_at = ?1, duration_seconds = ?2 WHERE id = ?3",
+        params![completed_at, duration_seconds, id],
+    )
+    .map_err(|e| format!("Failed to complete session: {}", e))?;
 
     Ok(())
 }
@@ -138,13 +136,11 @@ pub fn still_complete_session(
 pub fn still_abandon_session(db: &Database, id: &str, abandoned_at: &str) -> Result<(), String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
-    let n = conn
-        .execute(
-            "UPDATE still_sessions SET abandoned_at = ?1 WHERE id = ?2",
-            params![abandoned_at, id],
-        )
-        .map_err(|e| format!("Failed to abandon session: {}", e))?;
-    let _ = n;
+    conn.execute(
+        "UPDATE still_sessions SET abandoned_at = ?1 WHERE id = ?2",
+        params![abandoned_at, id],
+    )
+    .map_err(|e| format!("Failed to abandon session: {}", e))?;
 
     Ok(())
 }

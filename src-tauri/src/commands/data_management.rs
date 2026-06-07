@@ -48,7 +48,7 @@ pub fn unlock_app(
                 .map(|s| s.password_salt)
                 .unwrap_or_default();
             if !salt_b64.is_empty() {
-                db.encrypt_in_place(&*key, &salt_b64)?;
+                db.encrypt_in_place(&key, &salt_b64)?;
                 log::info!("[sqlcipher] Database encrypted successfully");
             }
         }

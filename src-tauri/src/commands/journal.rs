@@ -85,7 +85,7 @@ pub fn verify_password(
         pbkdf2::<Hmac<Sha256>>(password.as_bytes(), &salt, 600_000, derived.as_mut())
             .map_err(|e| format!("pbkdf2 error: {e}"))?;
 
-        match db.apply_key(&*derived) {
+        match db.apply_key(&derived) {
             Ok(()) => {
                 rate_limiter.record_success();
                 let twofa_enabled = db::is_2fa_enabled(&db).unwrap_or(false);

@@ -16,6 +16,8 @@ import { getWeatherEmoji } from '../lib/services/locationWeatherService';
 import { listAllMedia } from '../lib/services/mediaService';
 import { EntryActionsMenu } from '../components/journal/EntryActionsMenu';
 import { TagCloud } from '../components/journal/TagCloud';
+import { listActivities } from '../lib/services/activityService';
+import type { Activity } from '../types/activities';
 import type { JournalEntry } from '../types/journal';
 import { MOOD_OPTIONS } from '../types/journal';
 import { useBooksStore } from '../stores/booksStore';
@@ -119,6 +121,13 @@ export function TimelineView({ onSelectEntry, onNewEntry, onSealEntry, refreshTr
 
   // Tag filter (Feature 7)
   const [tagFilter, setTagFilter] = useState<string | null>(null);
+
+  // Activity filter
+  const [activityFilter, setActivityFilter] = useState<string | null>(null);
+  const [allActivities, setAllActivities] = useState<Activity[]>([]);
+  useEffect(() => {
+    listActivities().then((acts) => setAllActivities(acts ?? [])).catch(() => {});
+  }, []);
 
   // Track current date for auto-refresh of relative dates
   const [currentDate, setCurrentDate] = useState(getCurrentDateStr);
@@ -225,6 +234,11 @@ export function TimelineView({ onSelectEntry, onNewEntry, onSealEntry, refreshTr
       result = result.filter((e) => e.tags.includes(tagFilter));
     }
 
+    // Stage 3.5: Activity
+    if (activityFilter) {
+      result = result.filter((e) => (e.activityIds ?? []).includes(activityFilter));
+    }
+
     // Stage 4: Search
     if (debouncedQuery) {
       const q = debouncedQuery.toLowerCase();
@@ -237,7 +251,7 @@ export function TimelineView({ onSelectEntry, onNewEntry, onSealEntry, refreshTr
     }
 
     return result;
-  }, [entries, dateRange, moodFilter, tagFilter, debouncedQuery, activeBookId]);
+  }, [entries, dateRange, moodFilter, tagFilter, activityFilter, debouncedQuery, activeBookId]);
 
   // Group filtered entries by date
   const groupedEntries = useMemo(
@@ -285,7 +299,7 @@ export function TimelineView({ onSelectEntry, onNewEntry, onSealEntry, refreshTr
   }, [entries]);
 
   const isAnyFilterActive =
-    moodFilter !== null || dateRange !== 'all' || tagFilter !== null || debouncedQuery !== '' || activeBookId !== null;
+    moodFilter !== null || dateRange !== 'all' || tagFilter !== null || activityFilter !== null || debouncedQuery !== '' || activeBookId !== null;
 
   // Pinned entries (always from full filtered list, not date-grouped)
   const [pinnedCollapsed, setPinnedCollapsed] = useState(false);
@@ -327,6 +341,7 @@ export function TimelineView({ onSelectEntry, onNewEntry, onSealEntry, refreshTr
     setMoodFilter(null);
     setDateRange('all');
     setTagFilter(null);
+    setActivityFilter(null);
     setSearchQuery('');
     setDebouncedQuery('');
     if (searchTimeoutRef.current) {
@@ -527,6 +542,31 @@ export function TimelineView({ onSelectEntry, onNewEntry, onSealEntry, refreshTr
         isAndroid={isMobile}
       />
 
+      {/* Activity filter chips */}
+      {allActivities.length > 0 && (
+        <div className={`flex gap-2 mb-4 overflow-x-auto pb-1 ${isMobile ? 'px-4 flex-nowrap' : 'flex-wrap'}`}>
+          {allActivities.map((activity) => {
+            const isActive = activityFilter === activity.id;
+            return (
+              <button
+                key={activity.id}
+                type="button"
+                onClick={() => setActivityFilter(isActive ? null : activity.id)}
+                aria-pressed={isActive}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-all duration-150 ${
+                  isActive
+                    ? 'bg-emerald-500 text-white ring-2 ring-emerald-300 dark:ring-emerald-700'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                }`}
+              >
+                <span aria-hidden="true">{activity.emoji}</span>
+                <span>{activity.name}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {/* Empty state - no entries at all */}
       {entries.length === 0 && (
         <div className="text-center py-16">
@@ -697,7 +737,7 @@ export function TimelineView({ onSelectEntry, onNewEntry, onSealEntry, refreshTr
           try { await patchEntryPinned(id, pinned); }
           catch { handlePinToggle(id, !pinned); }
         }}
-        filterKey={`${activeBookId ?? ''}-${moodFilter ?? ''}-${dateRange}-${tagFilter ?? ''}-${debouncedQuery}`}
+        filterKey={`${activeBookId ?? ''}-${moodFilter ?? ''}-${dateRange}-${tagFilter ?? ''}-${activityFilter ?? ''}-${debouncedQuery}`}
       />
 
       {/* Voice draft editor overlay (Phase 5) */}

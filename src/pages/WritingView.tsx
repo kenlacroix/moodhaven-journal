@@ -25,6 +25,9 @@
 
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { saveEntry, getEntryById, patchEntryLocationWeather, deleteEntry, getBookTags } from '../lib/services/journalService';
+import { listActivities, syncEntryActivities, getEntryActivities, createActivity, deleteActivity } from '../lib/services/activityService';
+import { ActivityPicker } from '../components/journal/ActivityPicker';
+import type { Activity } from '../types/activities';
 import { captureLocationWeather, getWeatherEmoji, displayTemp } from '../lib/services/locationWeatherService';
 import { getGreeting } from '../lib/utils/dateUtils';
 import { getReadingTime, didHitMilestone } from '../lib/utils/writingUtils';
@@ -294,6 +297,20 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
   useEffect(() => {
     getBookTags(activeBookId ?? 'default').then(setBookTags).catch(() => {});
   }, [activeBookId]);
+
+  // Activities
+  const [allActivities, setAllActivities] = useState<Activity[]>([]);
+  const [selectedActivityIds, setSelectedActivityIds] = useState<string[]>([]);
+  useEffect(() => {
+    listActivities().then(setAllActivities).catch(() => {});
+  }, []);
+  useEffect(() => {
+    if (entryId) {
+      getEntryActivities(entryId).then((acts) => setSelectedActivityIds(acts.map((a) => a.id))).catch(() => {});
+    } else {
+      setSelectedActivityIds([]);
+    }
+  }, [entryId]);
 
   // Weather / location context captured in background on mount
   const locationWeatherRef = useRef<LocationWeather | null>(null);
@@ -649,6 +666,7 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
       savedEntryIdRef.current = saved.id;
       setLastSavedAt(new Date());
       onEntrySaved?.();
+      syncEntryActivities(saved.id, selectedActivityIds).catch(() => {});
     } finally {
       setIsSaving(false);
     }
@@ -1423,6 +1441,33 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
                   >
                     + tag
                   </button>
+                </div>
+              )}
+              {/* Activity picker — shown below tags once entry exists */}
+              {!isNewEntry && !distractionFree && allActivities.length > 0 && (
+                <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                  <ActivityPicker
+                    activities={allActivities}
+                    selectedIds={selectedActivityIds}
+                    onToggle={(id) => {
+                      const next = selectedActivityIds.includes(id)
+                        ? selectedActivityIds.filter((x) => x !== id)
+                        : [...selectedActivityIds, id];
+                      setSelectedActivityIds(next);
+                      if (savedEntryIdRef.current) {
+                        syncEntryActivities(savedEntryIdRef.current, next).catch(() => {});
+                      }
+                    }}
+                    onCreateCustom={async (name, emoji) => {
+                      const act = await createActivity(name, emoji);
+                      setAllActivities((prev) => [...prev, act].sort((a, b) => a.sortOrder - b.sortOrder));
+                    }}
+                    onDeleteCustom={async (id) => {
+                      await deleteActivity(id);
+                      setAllActivities((prev) => prev.filter((a) => a.id !== id));
+                      setSelectedActivityIds((prev) => prev.filter((x) => x !== id));
+                    }}
+                  />
                 </div>
               )}
             </div>

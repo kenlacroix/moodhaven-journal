@@ -274,6 +274,7 @@ pub async fn factory_reset(app: AppHandle, db: State<'_, Database>) -> Result<bo
         "media",             // Encrypted media attachments
         "moodhaven_restore.pending", // Staged full-restore DB file — must not re-apply after reset
         "moodhaven_restore.pending.sha256", // Integrity check file for the above
+        "moodhaven_restore.pending.dbstate", // db_state salt companion for the staged restore
         "moodhaven.db.old",  // Windows rename-on-reset orphan — cleaned up on next fresh start
         "moodhaven.db-wal.old", // Renamed WAL sidecar (Windows reset) — swept at startup
         "moodhaven.db-shm.old", // Renamed SHM sidecar (Windows reset) — swept at startup

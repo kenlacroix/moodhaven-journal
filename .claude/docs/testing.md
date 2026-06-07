@@ -104,7 +104,7 @@ For heavy crypto files, use Node environment: `// @vitest-environment node` at t
 | `components/voice-memo/VoiceMemoDraftCard.test.tsx` | 9 |
 | `components/writing/AppearanceDrawer.test.tsx` | 6 |
 | `hooks/use2FASetup.test.ts` | 7 |
-| `hooks/useAnalytics.test.ts` | 17 |
+| `hooks/useAnalytics.test.ts` | 22 |
 | `hooks/useAppBanners.test.ts` | 5 |
 | `hooks/useCalendar.test.ts` | 27 |
 | `hooks/useInsights.test.ts` | 7 |
@@ -156,8 +156,11 @@ For heavy crypto files, use Node environment: `// @vitest-environment node` at t
 | `stores/settingsStore.test.ts` | 18 |
 | `stores/stillStore.test.ts` | 31 |
 | `types/writingAppearance.test.ts` | 4 |
+| `components/analytics/ActivityCorrelationChart.test.tsx` | 8 |
+| `components/analytics/DayOfWeekPattern.test.tsx` | 7 |
+| `components/analytics/MoodYearHeatmap.test.tsx` | 10 |
+| `components/analytics/StreakCalendar.test.tsx` | 6 |
+| `components/journal/ActivityPicker.test.tsx` | 12 |
 | `hooks/useActivities.test.ts` | 7 |
 | `hooks/useActivityAnalytics.test.ts` | 6 |
-| `components/journal/ActivityPicker.test.tsx` | 12 |
-| `components/analytics/ActivityCorrelationChart.test.tsx` | 8 |
-| **Total** | **1467 (86 files)** |
+| **Total** | **1494 (105 files)** |

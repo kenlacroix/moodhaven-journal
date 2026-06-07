@@ -6,3 +6,5 @@ export { EmotionalTrends } from './EmotionalTrends';
 export { SentimentOverview } from './SentimentOverview';
 export { JournalingHabits } from './JournalingHabits';
 export { ActivityCorrelationChart } from './ActivityCorrelationChart';
+export { MoodYearHeatmap } from './MoodYearHeatmap';
+export { StreakCalendar } from './StreakCalendar';

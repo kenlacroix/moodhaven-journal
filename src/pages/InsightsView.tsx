@@ -41,6 +41,8 @@ import {
   SentimentOverview,
   JournalingHabits,
   ActivityCorrelationChart,
+  MoodYearHeatmap,
+  StreakCalendar,
 } from '../components/analytics';
 
 // ── Section header ──────────────────────────────────────────────────────────────
@@ -450,6 +452,24 @@ export function InsightsView({ onNavigateToSettings }: InsightsViewProps) {
         className={`overflow-hidden transition-all duration-300 ${deepDiveOpen ? 'max-h-[2000px] opacity-100' : 'max-h-0 opacity-0'}`}
       >
         <div className="pt-2 space-y-6">
+          {/* 12-week streak calendar */}
+          <div className="card p-4">
+            <h3 className="text-sm font-medium text-slate-700 dark:text-slate-200 mb-3">Recent Activity</h3>
+            <StreakCalendar
+              heatmapData={analytics.heatmapData}
+              isLoading={analytics.isHeatmapLoading}
+            />
+          </div>
+
+          {/* Year heatmap */}
+          <div className="card p-4">
+            <h3 className="text-sm font-medium text-slate-700 dark:text-slate-200 mb-3">Year at a Glance</h3>
+            <MoodYearHeatmap
+              data={analytics.heatmapData}
+              isLoading={analytics.isHeatmapLoading}
+            />
+          </div>
+
           {/* Row 1: Mood Trend + Distribution */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div>

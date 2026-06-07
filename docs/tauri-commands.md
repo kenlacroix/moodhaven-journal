@@ -1,6 +1,6 @@
 # Tauri Command Reference
 
-> **Version:** v1.8.0 | **Total commands:** ~170
+> **Version:** v1.8.0 | **Total commands:** ~165
 >
 > This document lists all `#[tauri::command]` functions exposed by MoodHaven Journal's Rust backend.
 > Commands are registered in `src-tauri/src/lib.rs` and permitted in `src-tauri/capabilities/default.json`.
@@ -44,7 +44,6 @@ Parameter names in TypeScript use **camelCase**; Rust receives them as **snake_c
 - [Cloud Providers (Phase 1)](#cloud-providers-phase-1)
 - [PIN Unlock](#pin-unlock)
 - [Biometric Session Unlock](#biometric-session-unlock)
-- [Activity Tagging](#activity-tagging)
 
 ---
 
@@ -446,7 +445,7 @@ Fetch all analytics data in a single DB call (replaces 5 parallel IPC calls). Re
 
 ```typescript
 invoke('get_full_analytics_bundle', {
-  trendDays: number,   // number of days for trend data window
+  trendDays: number,   // days for trend window; pass 0 for all-time
 }) → Promise<{
   averageMood: number,
   totalEntries: number,
@@ -470,6 +469,20 @@ invoke('get_insights_metadata') → Promise<{
   topTags: string[],
   lastEntryDate: string | null,
 }>
+```
+
+---
+
+### `get_year_heatmap`
+
+Get per-day mood data for the entire journal history, used to render the year heatmap in Insights. Requires unlock.
+
+```typescript
+invoke('get_year_heatmap') → Promise<Array<{
+  date: string,          // YYYY-MM-DD
+  averageMood: number,   // 1–5 average
+  entryCount: number,
+}>>
 ```
 
 ---
@@ -2199,97 +2212,4 @@ Remove the stored credential from the OS credential store. Called when the user 
 
 ```typescript
 invoke('biometric_clear_session') → Promise<void>
-```
-
----
-
-## Activity Tagging
-
-**Source:** `src-tauri/src/commands/activities.rs`
-**IPC wrappers:** `src/lib/services/activityService.ts`
-**Hook:** `src/hooks/useActivities.ts`
-
-Activity tagging lets users associate journal entries with predefined or custom activities. 15 predefined activities are seeded on first launch. Users can add up to 50 custom activities. Per-activity mood averages and entry counts are available via `get_activity_stats`.
-
----
-
-### `list_activities`
-
-List all activities (predefined + custom).
-
-```typescript
-invoke('list_activities') → Promise<Activity[]>
-```
-
-Where `Activity` is:
-```typescript
-{
-  id: string,
-  name: string,
-  emoji: string,
-  isPredefined: boolean,
-}
-```
-
----
-
-### `create_activity`
-
-Create a custom activity. Returns an error if the custom activity limit (50) is reached or if the name exceeds 30 characters. The limit check is atomic — concurrent calls cannot race past the cap.
-
-```typescript
-invoke('create_activity', {
-  id: string,
-  name: string,
-  emoji: string,
-}) → Promise<Activity>
-```
-
----
-
-### `delete_activity`
-
-Delete a custom activity. Predefined activities cannot be deleted — this returns an error if attempted.
-
-```typescript
-invoke('delete_activity', { id: string }) → Promise<void>
-```
-
----
-
-### `sync_entry_activities`
-
-Replace all activity links for an entry. Called after each save to update the activity index. Passing an empty array clears all activity links for the entry.
-
-```typescript
-invoke('sync_entry_activities', {
-  entryId: string,
-  activityIds: string[],
-}) → Promise<void>
-```
-
----
-
-### `get_entry_activities`
-
-Get all activities linked to a specific journal entry.
-
-```typescript
-invoke('get_entry_activities', { entryId: string }) → Promise<Activity[]>
-```
-
----
-
-### `get_activity_stats`
-
-Get per-activity statistics: entry count and average mood. Used by the Insights view. Requires unlock.
-
-```typescript
-invoke('get_activity_stats') → Promise<Array<{
-  activityId: string,
-  name: string,
-  emoji: string,
-  entryCount: number,
-  avgMood: number,
-}>>
 ```

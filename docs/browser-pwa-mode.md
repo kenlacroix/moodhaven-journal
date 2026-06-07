@@ -76,7 +76,7 @@ The HTTP service (`src/lib/services/http.ts`) is an exception — it is shim-awa
 
 ```
 DB_NAME    = 'moodhaven'
-DB_VERSION = 3
+DB_VERSION = 2
 ```
 
 ### Object stores
@@ -89,7 +89,6 @@ DB_VERSION = 3
 | `webdav_state` | `id` | Singleton WebDAV ETag guard (`{ id: 'singleton', filename, etag }`) |
 | `still_sessions` | `id` | StillHaven session records |
 | `still_activation_samples` | `id` | Pre/post activation samples linked to sessions |
-| `activities` | `id` | Predefined and custom activities (v3 migration) |
 
 ### Entry schema (`BrowserEntryRow`)
 
@@ -112,8 +111,6 @@ interface BrowserEntryRow {
   status: string | null;
   session_id?: string;
   word_count?: number;
-  // stored as runtime extension by dbSyncEntryActivities — not in the TS interface
-  activityIds?: string[];
 }
 ```
 
@@ -134,7 +131,7 @@ interface BrowserEntryRow {
 | Journal CRUD | Full | Full |
 | Encryption (AES-256-GCM) | Full | Full |
 | Books, tags, analytics | Full | Full |
-| Activity tagging | Full | Full |
+| Mood analytics (year heatmap, streak, day-of-week) | Full | Full |
 | Time Capsule | Full | Full |
 | StillHaven | Full | Full |
 | Oura Ring sync | Full | Full (uses `window.fetch`) |

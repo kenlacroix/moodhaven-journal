@@ -44,14 +44,22 @@ export interface TrendDataPoint {
 export interface AnalyticsPeriod {
   label: string;
   days: number;
-  key: '7' | '30' | '90';
+  key: '7' | '30' | '90' | 'all';
 }
 
 export const ANALYTICS_PERIODS: AnalyticsPeriod[] = [
   { label: '7 Days', days: 7, key: '7' },
   { label: '30 Days', days: 30, key: '30' },
   { label: '90 Days', days: 90, key: '90' },
+  { label: 'All Time', days: 0, key: 'all' },
 ];
+
+// Per-day mood data for the year heatmap
+export interface HeatmapDay {
+  date: string;
+  averageMood: number;
+  entryCount: number;
+}
 
 // Full analytics data
 export interface AnalyticsData {

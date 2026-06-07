@@ -212,11 +212,24 @@ async function dispatch(command: string, p: Params): Promise<any> {
           average_mood: r.avgMood,
           entry_count: r.count,
         })),
-        trend_data: (await dbGetMoodStatistics(
-          new Date(Date.now() - (p.trendDays as number) * 86400000).toISOString().slice(0, 10),
-          new Date().toISOString().slice(0, 10)
-        )).map((r) => ({ date: r.date, average_mood: r.avgMood, entry_count: r.count })),
+        trend_data: (await (async () => {
+          const trendDays = p.trendDays as number;
+          if (trendDays <= 0) {
+            // all-time: use epoch start so all entries qualify
+            return dbGetMoodStatistics('1970-01-01', new Date().toISOString().slice(0, 10));
+          }
+          return dbGetMoodStatistics(
+            new Date(Date.now() - trendDays * 86400000).toISOString().slice(0, 10),
+            new Date().toISOString().slice(0, 10)
+          );
+        })()).map((r) => ({ date: r.date, average_mood: r.avgMood, entry_count: r.count })),
       };
+    }
+    case 'get_year_heatmap': {
+      const yearAgo = new Date(Date.now() - 365 * 86400000).toISOString().slice(0, 10);
+      const today = new Date().toISOString().slice(0, 10);
+      const rows = await dbGetMoodStatistics(yearAgo, today);
+      return rows.map((r) => ({ date: r.date, average_mood: r.avgMood, entry_count: r.count }));
     }
     case 'get_insights_metadata': {
       const allEntries = await dbGetAllEntries();

@@ -570,6 +570,7 @@ pub fn run() {
             commands::get_monthly_mood_data,
             commands::get_full_analytics_bundle,
             commands::get_insights_metadata,
+            commands::get_year_heatmap,
             // Settings
             commands::get_setting,
             commands::set_setting,

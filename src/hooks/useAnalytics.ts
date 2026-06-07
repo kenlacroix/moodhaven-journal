@@ -5,8 +5,8 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { getFullAnalytics, getMoodTrend } from '../lib/services/analyticsService';
-import type { AnalyticsData, TrendDataPoint, AnalyticsPeriod } from '../types/analytics';
+import { getFullAnalytics, getMoodTrend, getYearHeatmap } from '../lib/services/analyticsService';
+import type { AnalyticsData, TrendDataPoint, AnalyticsPeriod, HeatmapDay } from '../types/analytics';
 import { ANALYTICS_PERIODS } from '../types/analytics';
 import { logger } from '../lib/services/logger';
 
@@ -18,6 +18,10 @@ interface UseAnalyticsReturn {
   trendPeriod: AnalyticsPeriod;
   setTrendPeriod: (period: AnalyticsPeriod) => void;
   trendData: TrendDataPoint[];
+
+  // Year heatmap
+  heatmapData: HeatmapDay[];
+  isHeatmapLoading: boolean;
 
   // Loading states
   isLoading: boolean;
@@ -32,8 +36,10 @@ export function useAnalytics(): UseAnalyticsReturn {
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [trendPeriod, setTrendPeriodState] = useState<AnalyticsPeriod>(ANALYTICS_PERIODS[1]); // 30 days default
   const [trendData, setTrendData] = useState<TrendDataPoint[]>([]);
+  const [heatmapData, setHeatmapData] = useState<HeatmapDay[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isTrendLoading, setIsTrendLoading] = useState(false);
+  const [isHeatmapLoading, setIsHeatmapLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Fetch all analytics data
@@ -81,11 +87,22 @@ export function useAnalytics(): UseAnalyticsReturn {
     fetchAnalytics();
   }, [fetchAnalytics]);
 
+  // Heatmap fetch — once on mount, independent of trend period
+  useEffect(() => {
+    setIsHeatmapLoading(true);
+    getYearHeatmap()
+      .then(setHeatmapData)
+      .catch(() => {})
+      .finally(() => setIsHeatmapLoading(false));
+  }, []);
+
   return {
     data,
     trendPeriod,
     setTrendPeriod,
     trendData,
+    heatmapData,
+    isHeatmapLoading,
     isLoading,
     isTrendLoading,
     error,

@@ -84,13 +84,13 @@ npm run build:web                        # production build → dist-web/
 |:---|:---|
 | Rich text editor (bold, italic, headings, lists) | 5-level mood scale with auto-detection as you type |
 | 7 guided templates (Gratitude, Goals, Free Write…) | Calendar heatmap and mood trend charts |
-| Multiple journals (Books) with colour-coding | Streak tracking and day-of-week patterns |
+| Multiple journals (Books) with colour-coding | 53-week year heatmap, streak calendar, and day-of-week mood patterns |
 | Privacy mode per entry (Open / Mindful / Private) | Insights view with AI prompts *(opt-in, metadata only)* |
 | Focus mode — hides UI, enables typewriter scroll | On This Day — resurfaces past entries by date |
 | Speech-to-text via offline whisper.cpp sidecar | Full-text search with mood and date filters (`Ctrl+K`) |
 | Time capsules — seal an entry until a future date | Sentiment and emotional trends — all computed locally |
 | Location & weather context at entry creation | Voice memo draft pipeline — review and edit before publishing |
-| Writing appearance drawer — font, size, line height, tint | Activity tagging — tag entries with 15 predefined activities + custom; mood correlation chart in Insights |
+| Writing appearance drawer — font, size, line height, tint | |
 
 | Protect | Sync |
 |:---|:---|
@@ -399,7 +399,7 @@ See [CLAUDE.md](CLAUDE.md) for architecture, security guidelines, and convention
 
 ## Recent Changes
 
-**v1.8.0** — Activity tagging: tag journal entries with 15 predefined activities (Exercise, Social, Work, Reading, etc.) and up to 50 custom activities. Activity correlation chart in Insights shows diverging bars for per-activity mood delta vs overall average. Timeline filter bar lets you filter entries by activity. Browser/PWA full parity via IndexedDB v3 with activities object store. 1,467 tests.
+**v1.8.0** — Mood analytics Phase 1: 53-week year heatmap in Insights view, all-time trend period, best/worst day-of-week callout chips, and 12-week dot-grid streak calendar. New `get_year_heatmap` Rust command. Browser/PWA full parity. 1,461 tests.
 **v1.7.4** — Security hardening: PT5 fixes — `write_text_file` path blocklist extended to cover Windows attack paths, factory reset deletes WAL/SHM sidecar files, PBKDF2 key material wrapped in `Zeroizing` in `two_factor.rs`, `data_management.rs`, and `media.rs`.
 **v1.6.0.1** — Forest and Sky rendering environments for StillHaven sessions. `EnvironmentPicker` lets users select the visual backdrop before starting a session. Patch fixes an environment-state regression from v1.6.0. 1283 tests.
 **v1.5.0** — Wrist Loop: watch sends a `still_trigger` signal to request a StillHaven session; `WristLoopBanner` renders a dismissable toast on desktop; `still_signal_links` table records signal→session provenance. Time of Day Insight card and Writing Momentum card added to the Insights view (no AI required). `useWristLoop` hook. 1245 tests.

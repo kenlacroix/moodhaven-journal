@@ -575,7 +575,6 @@ fn install_macos_dmg(dmg: &std::path::Path) -> Result<(), String> {
 mod tests {
     use super::*;
     use sha2::{Digest, Sha256};
-    use std::io::Write as _;
 
     fn write_temp(bytes: &[u8]) -> std::path::PathBuf {
         let mut path = std::env::temp_dir();

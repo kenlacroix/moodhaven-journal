@@ -311,11 +311,18 @@ export function LockScreen() {
 
     try {
       await factoryReset();
-      await exitApp();
     } catch (err) {
-      setError('Failed to reset. Please try again.');
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.error('Erase & Start Fresh failed', { error: msg });
+      setError(`Reset failed: ${msg}. If this persists, fully close and reopen the app, then try again.`);
       setIsErasing(false);
+      return;
     }
+    // Reset succeeded — exit so the app restarts into first-run. A failure here is
+    // not a reset failure (data is already wiped), so don't report it as one.
+    await exitApp().catch((err) =>
+      logger.warn('exit_app after reset failed', { error: String(err) }),
+    );
   }, [eraseConfirmText]);
 
   // Handle PIN unlock submission

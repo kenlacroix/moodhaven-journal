@@ -9,6 +9,7 @@ use aes_gcm::{
 use base64::{engine::general_purpose, Engine as _};
 use pbkdf2::pbkdf2_hmac;
 use rand::RngCore;
+use rusqlite::Connection;
 use sha2::Sha256;
 use std::fs;
 use tauri::{AppHandle, Manager, State};
@@ -173,7 +174,7 @@ pub fn exit_app(db_key: State<'_, DbKeyState>) {
 /// Intentionally does NOT require unlock — this is the "forgot password / erase
 /// everything" escape hatch and must work from the lock screen.
 #[tauri::command]
-pub async fn factory_reset(app: AppHandle) -> Result<bool, String> {
+pub async fn factory_reset(app: AppHandle, db: State<'_, Database>) -> Result<bool, String> {
     // Wipe any in-memory session-bridge password before erasing on-disk data.
     if let Some(bridge) = app.try_state::<crate::commands::session_bridge::SessionBridge>() {
         bridge.clear();
@@ -188,35 +189,46 @@ pub async fn factory_reset(app: AppHandle) -> Result<bool, String> {
         .app_data_dir()
         .map_err(|e| format!("Failed to get app data dir: {}", e))?;
 
-    // Close database connection by dropping the state
-    // Note: This requires the app to be restarted after reset
-
-    // Delete database file.
-    // On Windows, open file handles prevent deletion — rename the file instead.
-    // The renamed file is orphaned and deleted when the process exits.
-    // On macOS/Linux, deletion of an open file unlinks the path; the inode lives
-    // until the last handle closes, so deletion works unconditionally.
-    if db_path.exists() {
-        #[cfg(target_os = "windows")]
-        {
-            let orphan = db_path.with_extension("db.old");
-            if let Err(rename_err) = fs::rename(&db_path, &orphan) {
-                return Err(format!("Failed to remove database: {}", rename_err));
-            }
-            // WAL/SHM share the open-handle problem — the remove_file pass
-            // below silently fails on them. Rename them to .old too so the
-            // startup orphan sweep removes them once handles close; a fresh
-            // DB must never see a stale WAL under the same filename.
-            for suffix in ["-wal", "-shm"] {
-                let side = app_data.join(format!("moodhaven.db{}", suffix));
-                if side.exists() {
-                    let _ = fs::rename(&side, app_data.join(format!("moodhaven.db{}.old", suffix)));
-                }
-            }
+    // Release the live SQLite handle BEFORE touching the file. On Windows the OS
+    // denies rename/delete of a file the process holds open (os error 5/32), which
+    // previously made factory_reset fail outright ("failed to reset"). Swap the
+    // stored connection for an in-memory placeholder so the original Connection
+    // drops and releases the OS file handle — mirrors encrypt_in_place's pattern.
+    if let Ok(mut conn) = db.conn.lock() {
+        let _ = conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);");
+        if let Ok(placeholder) = Connection::open_in_memory() {
+            *conn = placeholder; // original connection drops here, releasing the handle
         }
-        #[cfg(not(target_os = "windows"))]
-        {
-            fs::remove_file(&db_path).map_err(|e| format!("Failed to delete database: {}", e))?;
+    }
+
+    // Remove a file, retrying briefly (Windows may keep the handle for a moment
+    // after the Connection drops), then falling back to a rename-to-.old that the
+    // startup orphan sweep finishes once the OS finally releases the handle.
+    let remove_with_fallback =
+        |target: &std::path::Path, orphan: &std::path::Path| -> Result<(), String> {
+            for attempt in 0..5u8 {
+                if !target.exists() || fs::remove_file(target).is_ok() {
+                    return Ok(());
+                }
+                if attempt == 4 {
+                    return fs::rename(target, orphan)
+                        .map_err(|e| format!("Failed to remove database: {e}"));
+                }
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
+            Ok(())
+        };
+
+    // Delete the database file. With the handle released above, plain removal
+    // succeeds on all platforms; the .old rename is retained only as a last resort.
+    if db_path.exists() {
+        remove_with_fallback(&db_path, &db_path.with_extension("db.old"))?;
+    }
+    for suffix in ["-wal", "-shm"] {
+        let side = app_data.join(format!("moodhaven.db{suffix}"));
+        if side.exists() {
+            let orphan = app_data.join(format!("moodhaven.db{suffix}.old"));
+            let _ = remove_with_fallback(&side, &orphan); // sidecars are non-fatal
         }
     }
 

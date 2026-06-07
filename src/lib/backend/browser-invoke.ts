@@ -42,6 +42,12 @@ import {
   dbStillListSessions,
   dbStillGetSessionWithSamples,
   dbLinkJournalEntryToSession,
+  dbListActivities,
+  dbCreateActivity,
+  dbDeleteActivity,
+  dbSyncEntryActivities,
+  dbGetEntryActivities,
+  dbGetActivityStats,
   type BrowserEntryRow,
   type BrowserBook,
   type BrowserStillSession,
@@ -162,6 +168,29 @@ async function dispatch(command: string, p: Params): Promise<any> {
     }
     case 'get_book_tags': {
       return dbGetBookTags(p.bookId as string);
+    }
+
+    // -----------------------------------------------------------------------
+    // Activities
+    // -----------------------------------------------------------------------
+    case 'list_activities': {
+      return dbListActivities();
+    }
+    case 'create_activity': {
+      const id = `act_custom_${crypto.randomUUID().replace(/-/g, '')}`;
+      return dbCreateActivity(id, p.name as string, p.emoji as string);
+    }
+    case 'delete_activity': {
+      return dbDeleteActivity(p.id as string);
+    }
+    case 'sync_entry_activities': {
+      return dbSyncEntryActivities(p.entryId as string, p.activityIds as string[]);
+    }
+    case 'get_entry_activities': {
+      return dbGetEntryActivities(p.entryId as string);
+    }
+    case 'get_activity_stats': {
+      return dbGetActivityStats();
     }
 
     // -----------------------------------------------------------------------

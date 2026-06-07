@@ -134,6 +134,7 @@ export interface BrowserEntryRow {
   status: string | null;
   session_id?: string | null;
   word_count?: number | null;
+  activity_ids?: string[];
 }
 
 // --------------------------------------------------------------------------
@@ -566,5 +567,91 @@ export async function dbLinkJournalEntryToSession(
   if (existing) {
     await put(store, { ...existing, session_id: sessionId });
   }
+}
+
+// --------------------------------------------------------------------------
+// Activities (browser: denormalized as activity_ids on entry rows)
+// --------------------------------------------------------------------------
+
+const PREDEFINED_ACTIVITIES = [
+  { id: 'act_exercise',   name: 'Exercise',   emoji: '🏃', isCustom: false, sortOrder: 0 },
+  { id: 'act_social',     name: 'Social',     emoji: '👥', isCustom: false, sortOrder: 1 },
+  { id: 'act_work',       name: 'Work',       emoji: '💼', isCustom: false, sortOrder: 2 },
+  { id: 'act_reading',    name: 'Reading',    emoji: '📚', isCustom: false, sortOrder: 3 },
+  { id: 'act_creative',   name: 'Creative',   emoji: '🎨', isCustom: false, sortOrder: 4 },
+  { id: 'act_meditation', name: 'Meditation', emoji: '🧘', isCustom: false, sortOrder: 5 },
+  { id: 'act_good_sleep', name: 'Good Sleep', emoji: '😴', isCustom: false, sortOrder: 6 },
+  { id: 'act_poor_sleep', name: 'Poor Sleep', emoji: '😵', isCustom: false, sortOrder: 7 },
+  { id: 'act_nature',     name: 'Nature',     emoji: '🌿', isCustom: false, sortOrder: 8 },
+  { id: 'act_family',     name: 'Family',     emoji: '🏠', isCustom: false, sortOrder: 9 },
+  { id: 'act_cooking',    name: 'Cooking',    emoji: '🍳', isCustom: false, sortOrder: 10 },
+  { id: 'act_music',      name: 'Music',      emoji: '🎵', isCustom: false, sortOrder: 11 },
+  { id: 'act_learning',   name: 'Learning',   emoji: '📖', isCustom: false, sortOrder: 12 },
+  { id: 'act_travel',     name: 'Travel',     emoji: '✈️', isCustom: false, sortOrder: 13 },
+  { id: 'act_gaming',     name: 'Gaming',     emoji: '🎮', isCustom: false, sortOrder: 14 },
+] as const;
+
+type ActivityRecord = { id: string; name: string; emoji: string; isCustom: boolean; sortOrder: number; createdAt: string };
+
+export async function dbListActivities(): Promise<ActivityRecord[]> {
+  const customRaw = await dbGetSetting('browser_custom_activities');
+  const custom: ActivityRecord[] = customRaw ? JSON.parse(customRaw) : [];
+  const now = new Date().toISOString();
+  const predefined: ActivityRecord[] = PREDEFINED_ACTIVITIES.map((a) => ({ ...a, createdAt: now }));
+  return [...predefined, ...custom].sort((a, b) => a.sortOrder - b.sortOrder);
+}
+
+const MAX_BROWSER_CUSTOM_ACTIVITIES = 50;
+
+export async function dbCreateActivity(id: string, name: string, emoji: string): Promise<ActivityRecord> {
+  const customRaw = await dbGetSetting('browser_custom_activities');
+  const custom: ActivityRecord[] = customRaw ? JSON.parse(customRaw) : [];
+  if (custom.length >= MAX_BROWSER_CUSTOM_ACTIVITIES) {
+    throw new Error(`Custom activity limit reached (${MAX_BROWSER_CUSTOM_ACTIVITIES})`);
+  }
+  const sortOrder = custom.reduce((max, a) => Math.max(max, a.sortOrder), 99) + 1;
+  const newActivity: ActivityRecord = { id, name, emoji, isCustom: true, sortOrder, createdAt: new Date().toISOString() };
+  await dbSetSetting('browser_custom_activities', JSON.stringify([...custom, newActivity]));
+  return newActivity;
+}
+
+export async function dbDeleteActivity(id: string): Promise<void> {
+  const customRaw = await dbGetSetting('browser_custom_activities');
+  const custom: ActivityRecord[] = customRaw ? JSON.parse(customRaw) : [];
+  await dbSetSetting('browser_custom_activities', JSON.stringify(custom.filter((a) => a.id !== id)));
+}
+
+export async function dbSyncEntryActivities(entryId: string, activityIds: string[]): Promise<void> {
+  const db = await openDB();
+  const t = tx(db, 'journal_entries', 'readwrite');
+  const store = t.objectStore('journal_entries');
+  const existing = await get<BrowserEntryRow>(store, entryId);
+  if (existing) {
+    await put(store, { ...existing, activity_ids: activityIds });
+  }
+}
+
+export async function dbGetEntryActivities(entryId: string): Promise<ActivityRecord[]> {
+  const db = await openDB();
+  const t = tx(db, 'journal_entries', 'readonly');
+  const entry = await get<BrowserEntryRow>(t.objectStore('journal_entries'), entryId);
+  if (!entry?.activity_ids?.length) return [];
+  const all = await dbListActivities();
+  return all.filter((a) => entry.activity_ids!.includes(a.id));
+}
+
+export async function dbGetActivityStats(): Promise<{ activityId: string; name: string; emoji: string; entryCount: number; avgMood: number }[]> {
+  const db = await openDB();
+  const t = tx(db, 'journal_entries', 'readonly');
+  const entries = await all<BrowserEntryRow>(t.objectStore('journal_entries'));
+  const activities = await dbListActivities();
+
+  return activities.map((act) => {
+    const linked = entries.filter((e) => (e.activity_ids ?? []).includes(act.id));
+    const avgMood = linked.length > 0
+      ? linked.reduce((sum, e) => sum + e.mood, 0) / linked.length
+      : 0;
+    return { activityId: act.id, name: act.name, emoji: act.emoji, entryCount: linked.length, avgMood };
+  });
 }
 

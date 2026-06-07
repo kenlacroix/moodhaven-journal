@@ -1,7 +1,8 @@
 //! Cloud provider sync commands for MoodHaven Journal
 //!
 //! Implements OAuth 2.0 PKCE flows (RFC 8252) for Dropbox and Google Drive.
-//! Tokens are stored in the SQLite settings table. All journal data uploaded
+//! Tokens are stored in the SQLite settings table, AES-256-GCM encrypted at
+//! rest under a per-device key held in the OS keyring. All journal data uploaded
 //! to cloud providers is already AES-256-GCM encrypted by the frontend before
 //! being passed to these commands — the providers only ever see ciphertext.
 
@@ -12,7 +13,7 @@ use base64::Engine as _;
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Manager, State};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 
@@ -118,6 +119,136 @@ fn db_delete(conn: &rusqlite::Connection, key: &str) -> Result<(), String> {
     conn.execute("DELETE FROM settings WHERE key = ?1", [key])
         .map_err(|e| e.to_string())?;
     Ok(())
+}
+
+// ============================================================================
+// Cloud token encryption (AES-256-GCM, per-device keyring key)
+//
+// OAuth access/refresh tokens are encrypted at rest using a random 32-byte key
+// stored in the OS keyring (DPAPI / Keychain / Secret Service). If the keyring
+// is unavailable, a fallback key file (0600) is used. Stored blobs are prefixed
+// with `__tok_v1:` so plaintext values written by older builds are returned
+// as-is and transparently re-encrypted on next write (migration path).
+// ============================================================================
+
+const TOKEN_KEYRING_SERVICE: &str = "com.moodhaven.app";
+const TOKEN_KEYRING_ACCOUNT: &str = "cloud-token-encryption-key";
+const TOKEN_MARKER: &str = "__tok_v1:";
+
+fn load_or_create_token_key(app: &AppHandle) -> Result<[u8; 32], String> {
+    if let Ok(entry) = keyring::Entry::new(TOKEN_KEYRING_SERVICE, TOKEN_KEYRING_ACCOUNT) {
+        if let Ok(hex) = entry.get_password() {
+            if let Ok(bytes) = hex::decode(hex.trim()) {
+                if let Ok(arr) = <[u8; 32]>::try_from(bytes.as_slice()) {
+                    return Ok(arr);
+                }
+            }
+        }
+    }
+
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("app_data_dir: {e}"))?;
+    let key_path = app_data_dir.join("cloud_token_key.bin");
+    if key_path.exists() {
+        let bytes = std::fs::read(&key_path).map_err(|e| e.to_string())?;
+        let arr: [u8; 32] = bytes
+            .try_into()
+            .map_err(|_| "cloud_token_key.bin must be 32 bytes".to_string())?;
+        if let Ok(entry) = keyring::Entry::new(TOKEN_KEYRING_SERVICE, TOKEN_KEYRING_ACCOUNT) {
+            if entry.set_password(&hex::encode(arr)).is_ok() {
+                let _ = std::fs::remove_file(&key_path);
+                log::info!("[cloud-token] Migrated cloud_token_key.bin to OS keyring");
+            }
+        }
+        return Ok(arr);
+    }
+
+    let mut key = [0u8; 32];
+    rand::rngs::OsRng.fill_bytes(&mut key);
+    let stored = if let Ok(entry) = keyring::Entry::new(TOKEN_KEYRING_SERVICE, TOKEN_KEYRING_ACCOUNT) {
+        entry.set_password(&hex::encode(key)).is_ok()
+    } else {
+        false
+    };
+    if !stored {
+        std::fs::create_dir_all(&app_data_dir).map_err(|e| e.to_string())?;
+        std::fs::write(&key_path, &key).map_err(|e| e.to_string())?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            if let Ok(mut perms) = std::fs::metadata(&key_path).map(|m| m.permissions()) {
+                perms.set_mode(0o600);
+                let _ = std::fs::set_permissions(&key_path, perms);
+            }
+        }
+        log::info!("[cloud-token] Keyring unavailable — stored cloud token key in file (0600)");
+    } else {
+        log::info!("[cloud-token] Generated and stored cloud token key in OS keyring");
+    }
+    Ok(key)
+}
+
+fn encrypt_token(key: &[u8; 32], plaintext: &str) -> Result<String, String> {
+    use aes_gcm::aead::{Aead, KeyInit};
+    use aes_gcm::{AeadCore, Aes256Gcm, Key};
+    let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(key));
+    let nonce = Aes256Gcm::generate_nonce(&mut aes_gcm::aead::OsRng);
+    let ciphertext = cipher
+        .encrypt(&nonce, plaintext.as_bytes())
+        .map_err(|e| format!("token encrypt: {e}"))?;
+    let mut blob = nonce.to_vec();
+    blob.extend_from_slice(&ciphertext);
+    Ok(format!("{}{}", TOKEN_MARKER, URL_SAFE_NO_PAD.encode(blob)))
+}
+
+fn decrypt_token(key: &[u8; 32], stored: &str) -> Result<String, String> {
+    use aes_gcm::aead::{Aead, KeyInit};
+    use aes_gcm::{Aes256Gcm, Key, Nonce};
+    if !stored.starts_with(TOKEN_MARKER) {
+        return Ok(stored.to_string());
+    }
+    let blob = URL_SAFE_NO_PAD
+        .decode(&stored[TOKEN_MARKER.len()..])
+        .map_err(|e| format!("token base64 decode: {e}"))?;
+    if blob.len() < 12 {
+        return Err("token blob too short".to_string());
+    }
+    let nonce = Nonce::from_slice(&blob[..12]);
+    let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(key));
+    let plaintext_bytes = cipher
+        .decrypt(nonce, &blob[12..])
+        .map_err(|_| "token decryption failed (wrong key or tampered data)".to_string())?;
+    String::from_utf8(plaintext_bytes).map_err(|e| e.to_string())
+}
+
+fn db_set_token(
+    conn: &rusqlite::Connection,
+    app: &AppHandle,
+    key: &str,
+    value: &str,
+) -> Result<(), String> {
+    let enc_key = load_or_create_token_key(app)?;
+    let encrypted = encrypt_token(&enc_key, value)?;
+    db_set(conn, key, &encrypted)
+}
+
+fn db_get_token(
+    conn: &rusqlite::Connection,
+    app: &AppHandle,
+    key: &str,
+) -> Result<Option<String>, String> {
+    let stored = match db_get(conn, key)? {
+        Some(v) => v,
+        None => return Ok(None),
+    };
+    let enc_key = load_or_create_token_key(app)?;
+    let plaintext = decrypt_token(&enc_key, &stored)?;
+    if !stored.starts_with(TOKEN_MARKER) {
+        let _ = db_set_token(conn, app, key, &plaintext);
+    }
+    Ok(Some(plaintext))
 }
 
 // ============================================================================
@@ -273,13 +404,14 @@ async fn exchange_google_code(
 
 fn store_tokens(
     conn: &rusqlite::Connection,
+    app: &AppHandle,
     provider: &str,
     token_resp: &TokenResponse,
 ) -> Result<(), String> {
-    db_set(conn, &key_access_token(provider), &token_resp.access_token)?;
+    db_set_token(conn, app, &key_access_token(provider), &token_resp.access_token)?;
 
     if let Some(ref rt) = token_resp.refresh_token {
-        db_set(conn, &key_refresh_token(provider), rt)?;
+        db_set_token(conn, app, &key_refresh_token(provider), rt)?;
     }
 
     let expires_at = token_resp
@@ -441,12 +573,16 @@ async fn gdrive_update_existing(
 // Internal: load access token, refreshing if expired
 // ============================================================================
 
-async fn load_access_token_refreshing(db: &Database, provider: &str) -> Result<String, String> {
+async fn load_access_token_refreshing(
+    db: &Database,
+    app: &AppHandle,
+    provider: &str,
+) -> Result<String, String> {
     // Read token fields under one lock, then drop lock before any async work.
     let (access_token, expires_at) = {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
         ensure_settings_table(&conn)?;
-        let at = db_get(&conn, &key_access_token(provider))?
+        let at = db_get_token(&conn, app, &key_access_token(provider))?
             .ok_or_else(|| format!("{} is not connected — run auth first", provider))?;
         let ea = db_get(&conn, &key_expires_at(provider))?.unwrap_or_default();
         (at, ea)
@@ -459,7 +595,7 @@ async fn load_access_token_refreshing(db: &Database, provider: &str) -> Result<S
     // Token expired — refresh it (no DB lock held during network call)
     let refresh_token = {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
-        db_get(&conn, &key_refresh_token(provider))?
+        db_get_token(&conn, app, &key_refresh_token(provider))?
             .ok_or_else(|| format!("No refresh token for {} — re-authenticate", provider))?
     };
 
@@ -468,7 +604,7 @@ async fn load_access_token_refreshing(db: &Database, provider: &str) -> Result<S
     // Store refreshed tokens
     {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
-        store_tokens(&conn, provider, &token_resp)?;
+        store_tokens(&conn, app, provider, &token_resp)?;
     }
 
     Ok(token_resp.access_token)
@@ -665,7 +801,7 @@ pub async fn cloud_provider_auth_start(
     {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
         ensure_settings_table(&conn)?;
-        store_tokens(&conn, &provider, &token_resp)?;
+        store_tokens(&conn, &app, &provider, &token_resp)?;
     }
 
     Ok(())
@@ -677,6 +813,7 @@ pub async fn cloud_provider_auth_start(
 /// command is purely a transport layer.
 #[tauri::command]
 pub async fn cloud_provider_upload_blob(
+    app: AppHandle,
     db: State<'_, Database>,
     lock: State<'_, AppLockState>,
     provider: String,
@@ -686,7 +823,7 @@ pub async fn cloud_provider_upload_blob(
         return Err("Session is locked".to_string());
     }
 
-    let access_token = load_access_token_refreshing(&db, &provider).await?;
+    let access_token = load_access_token_refreshing(&db, &app, &provider).await?;
     let blob_bytes = blob.as_bytes();
 
     match provider.as_str() {
@@ -753,6 +890,7 @@ pub async fn cloud_provider_upload_blob(
 /// frontend is responsible for decryption).
 #[tauri::command]
 pub async fn cloud_provider_download_blob(
+    app: AppHandle,
     db: State<'_, Database>,
     lock: State<'_, AppLockState>,
     provider: String,
@@ -761,7 +899,7 @@ pub async fn cloud_provider_download_blob(
         return Err("Session is locked".to_string());
     }
 
-    let access_token = load_access_token_refreshing(&db, &provider).await?;
+    let access_token = load_access_token_refreshing(&db, &app, &provider).await?;
     let client = reqwest::Client::new();
 
     let blob_bytes: Vec<u8> = match provider.as_str() {
@@ -910,6 +1048,7 @@ pub async fn cloud_provider_disconnect(
 /// Also exposed as a command for frontend pre-flight checks.
 #[tauri::command]
 pub async fn cloud_provider_refresh_token(
+    app: AppHandle,
     db: State<'_, Database>,
     provider: String,
 ) -> Result<(), String> {
@@ -921,7 +1060,7 @@ pub async fn cloud_provider_refresh_token(
     let refresh_token = {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
         ensure_settings_table(&conn)?;
-        db_get(&conn, &key_refresh_token(&provider))?
+        db_get_token(&conn, &app, &key_refresh_token(&provider))?
             .ok_or_else(|| format!("No refresh token for {} — re-authenticate", provider))?
     };
 
@@ -929,7 +1068,7 @@ pub async fn cloud_provider_refresh_token(
 
     {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
-        store_tokens(&conn, &provider, &token_resp)?;
+        store_tokens(&conn, &app, &provider, &token_resp)?;
     }
 
     Ok(())

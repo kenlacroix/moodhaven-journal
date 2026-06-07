@@ -65,6 +65,11 @@ Platforms: Windows, Linux, macOS.
 | `src/lib/backend/browser-stubs.ts` | No-op stubs for Tauri-only plugins in browser builds |
 | `src/types/settings.ts` | App settings type definitions |
 | `src/lib/services/timeCapsuleService.ts` | Time capsule IPC wrappers |
+| `src/types/analytics.ts` | `HeatmapDay`, `AnalyticsPeriod`, `ANALYTICS_PERIODS` type definitions |
+| `src/lib/services/analyticsService.ts` | Analytics IPC wrappers including `getYearHeatmap()` |
+| `src/components/analytics/MoodYearHeatmap.tsx` | 53-week SVG year heatmap for InsightsView |
+| `src/components/analytics/StreakCalendar.tsx` | 12-week dot grid recent-activity calendar |
+| `src/components/analytics/DayOfWeekPattern.tsx` | Best/worst day-of-week callout chips |
 | `src/hooks/useTimeCapsule.ts` | Time capsule state + logic |
 | `src/components/timecapsule/SealEntryModal.tsx` | Seal entry UI |
 | `src/components/timecapsule/TimeCapsuleRevealModal.tsx` | Capsule reveal UI |

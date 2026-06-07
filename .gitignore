@@ -93,3 +93,7 @@ keystore*.jks
 src-tauri/gen/android/app/src/main/assets/assets/
 src-tauri/gen/android/app/src/main/assets/fonts/
 REPO-HEALTH-*.md
+
+# Python bytecode
+__pycache__/
+*.pyc

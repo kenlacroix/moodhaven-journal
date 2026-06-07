@@ -1,6 +1,7 @@
 vi.mock('../hooks/useInsights', () => ({ useInsights: vi.fn() }));
 vi.mock('../hooks/useAnalytics', () => ({ useAnalytics: vi.fn() }));
 vi.mock('../hooks/useAIInsights', () => ({ useAIInsights: vi.fn() }));
+vi.mock('../hooks/useActivityAnalytics', () => ({ useActivityAnalytics: vi.fn(() => ({ stats: [], isLoading: false, hasData: false })) }));
 vi.mock('../stores/booksStore', () => ({ useBooksStore: vi.fn() }));
 
 // Stub all child components so tests focus on InsightsView layout logic
@@ -19,6 +20,7 @@ vi.mock('../components/analytics', () => ({
   EmotionalTrends: () => <div data-testid="emotional-trends" />,
   SentimentOverview: () => <div data-testid="sentiment-overview" />,
   JournalingHabits: () => <div data-testid="journaling-habits" />,
+  ActivityCorrelationChart: () => <div data-testid="activity-correlation-chart" />,
 }));
 
 import { render, screen, fireEvent } from '@testing-library/react';

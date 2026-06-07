@@ -22,6 +22,7 @@
 import { useState, useRef, type ReactNode } from 'react';
 import { useInsights } from '../hooks/useInsights';
 import { useAnalytics } from '../hooks/useAnalytics';
+import { useActivityAnalytics } from '../hooks/useActivityAnalytics';
 import { useAIInsights } from '../hooks/useAIInsights';
 import { useBooksStore } from '../stores/booksStore';
 import { MoodWeatherCard } from '../components/ai/MoodWeatherCard';
@@ -39,6 +40,7 @@ import {
   EmotionalTrends,
   SentimentOverview,
   JournalingHabits,
+  ActivityCorrelationChart,
 } from '../components/analytics';
 
 // ── Section header ──────────────────────────────────────────────────────────────
@@ -145,6 +147,7 @@ export function InsightsView({ onNavigateToSettings }: InsightsViewProps) {
   } = useInsights();
 
   const analytics = useAnalytics();
+  const activityAnalytics = useActivityAnalytics(analytics.data?.averageMood ?? 3);
   const { metadata: aiMetadata, isLoading: isMetadataLoading } = useAIInsights();
 
   const { books } = useBooksStore();
@@ -396,6 +399,17 @@ export function InsightsView({ onNavigateToSettings }: InsightsViewProps) {
           <button type="button" onClick={analytics.refresh} className="mt-2 text-sm text-rose-600 dark:text-rose-400 underline">
             Try again
           </button>
+        </div>
+      )}
+
+      {/* Activity correlation — only rendered when there is activity data */}
+      {(activityAnalytics.hasData || activityAnalytics.isLoading) && (
+        <div className="mb-6">
+          <ActivityCorrelationChart
+            stats={activityAnalytics.stats}
+            overallAvgMood={analytics.data?.averageMood ?? 3}
+            isLoading={activityAnalytics.isLoading}
+          />
         </div>
       )}
 

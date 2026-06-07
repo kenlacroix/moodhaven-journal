@@ -1,6 +1,6 @@
 # Mood Analytics (v1.8.0 Phase 1, v1.9.0 Phase 2)
 
-> **Status (2026-06-07):** Phase 1 complete. PR #130 open — CI running. Awaiting merge after PR #129 (activity-tagging).
+> **Status (2026-06-07):** Phase 1 complete. PR #130 open — CI green (run 27081613253). Docs complete (howto-mood-analytics.md). Awaiting merge after PR #129 (activity-tagging).
 > **Branch:** `feat/mood-analytics`
 
 ---
@@ -97,5 +97,6 @@
 - [x] 1461 tests passing
 - [x] Rust E0597 borrow lifetime fix committed + pushed
 - [x] PR #130 open (feat/mood-analytics)
-- [ ] CI green (run triggered 2026-06-07)
+- [x] CI green — run 27081613253 confirmed success 2026-06-07; subsequent runs cancelled by doc pushes (docs-only commits, no code change)
+- [x] docs: howto-mood-analytics.md added; architecture.md + CLAUDE.md updated
 - [ ] PR merged to main (after PR #129)

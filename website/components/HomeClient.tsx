@@ -16,6 +16,18 @@ import HeroParticles from "./HeroParticles";
 import HowIBuiltThis from "./HowIBuiltThis";
 import type { LatestRelease } from "@/lib/getLatestRelease";
 
+function staleDays(iso: string): number | null {
+  const then = new Date(iso).getTime();
+  if (isNaN(then)) return null;
+  return Math.floor((Date.now() - then) / 86_400_000);
+}
+
+function freshnessLabel(days: number): string {
+  if (days === 0) return "Released today";
+  if (days === 1) return "Released yesterday";
+  return `Released ${days} days ago`;
+}
+
 interface HomeClientProps {
   latestRelease?: LatestRelease | null;
   statsStrip?: React.ReactNode;
@@ -93,6 +105,15 @@ export default function HomeClient({ latestRelease, statsStrip }: HomeClientProp
               <p className="text-xs text-primary-300 mt-2 text-center lg:text-left">
                 No Pro tier. No subscription. No paid features. Everything ships to everyone.
               </p>
+
+              {latestRelease?.publishedAt && (() => {
+                const days = staleDays(latestRelease.publishedAt);
+                return days !== null ? (
+                  <p className="text-xs text-primary-300 mt-1 text-center lg:text-left">
+                    {freshnessLabel(days)}
+                  </p>
+                ) : null;
+              })()}
             </AnimatedReveal>
 
             {/* App screenshot — side-by-side on lg+, stacked below copy on smaller screens */}
@@ -134,7 +155,7 @@ export default function HomeClient({ latestRelease, statsStrip }: HomeClientProp
       </div>
       <ComparisonTable />
       <NewsletterSignup />
-      <CommunityCallout />
+      <CommunityCallout version={latestRelease?.version} publishedAt={latestRelease?.publishedAt} />
     </div>
   );
 }

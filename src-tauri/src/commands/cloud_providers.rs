@@ -6,7 +6,8 @@
 //! being passed to these commands — the providers only ever see ciphertext.
 
 use crate::db::Database;
-use crate::AppLockState;
+use crate::{AppLockState};
+use super::require_unlocked;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine as _;
 use rand::RngCore;
@@ -126,7 +127,13 @@ fn db_delete(conn: &rusqlite::Connection, key: &str) -> Result<(), String> {
 
 fn generate_code_verifier() -> String {
     let mut bytes = [0u8; 32];
-    rand::thread_rng().fill_bytes(&mut bytes);
+    rand::rngs::OsRng.fill_bytes(&mut bytes);
+    URL_SAFE_NO_PAD.encode(bytes)
+}
+
+fn generate_oauth_state() -> String {
+    let mut bytes = [0u8; 16];
+    rand::rngs::OsRng.fill_bytes(&mut bytes);
     URL_SAFE_NO_PAD.encode(bytes)
 }
 
@@ -149,7 +156,7 @@ fn is_token_expired(expires_at: &str) -> bool {
 // TCP OAuth callback listener
 // ============================================================================
 
-async fn wait_for_oauth_code(listener: TcpListener) -> Result<String, String> {
+async fn wait_for_oauth_code(listener: TcpListener, expected_state: &str) -> Result<String, String> {
     let (mut stream, _) = listener.accept().await.map_err(|e| e.to_string())?;
     let mut buf = [0u8; 4096];
     let n = stream.read(&mut buf).await.map_err(|e| e.to_string())?;
@@ -157,6 +164,16 @@ async fn wait_for_oauth_code(listener: TcpListener) -> Result<String, String> {
 
     let code = extract_query_param(&request, "code")
         .ok_or_else(|| "No authorization code in OAuth callback".to_string())?;
+
+    // Validate state parameter to defend against CSRF on the localhost callback.
+    let returned_state = extract_query_param(&request, "state").unwrap_or_default();
+    if returned_state != expected_state {
+        let _ = stream.write_all(
+            b"HTTP/1.1 400 Bad Request\r\nContent-Type: text/html\r\n\r\n\
+              <html><body><h2>Authorization failed: invalid state parameter.</h2></body></html>",
+        ).await;
+        return Err("OAuth state parameter mismatch — possible CSRF on localhost callback".to_string());
+    }
 
     let response = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n\
         <html><body style=\"font-family:sans-serif;padding:2em\">\
@@ -565,8 +582,11 @@ async fn perform_token_refresh(
 pub async fn cloud_provider_auth_start(
     app: AppHandle,
     db: State<'_, Database>,
+    lock: State<'_, AppLockState>,
     provider: String,
 ) -> Result<(), String> {
+    require_unlocked(&lock)?;
+
     // Validate provider and check placeholder credentials
     match provider.as_str() {
         "dropbox" => {
@@ -588,9 +608,10 @@ pub async fn cloud_provider_auth_start(
         _ => return Err(format!("Unknown provider: {}", provider)),
     }
 
-    // 1. Generate PKCE pair
+    // 1. Generate PKCE pair + CSRF state token
     let code_verifier = generate_code_verifier();
     let code_challenge = generate_code_challenge(&code_verifier);
+    let oauth_state = generate_oauth_state();
 
     // 2. Bind listener on OS-assigned port
     let listener = TcpListener::bind("127.0.0.1:0")
@@ -609,10 +630,12 @@ pub async fn cloud_provider_auth_start(
                 &response_type=code\
                 &code_challenge={}\
                 &code_challenge_method=S256\
-                &token_access_type=offline",
+                &token_access_type=offline\
+                &state={}",
                 DROPBOX_APP_KEY,
                 url_encode(&redirect_uri),
-                code_challenge
+                code_challenge,
+                oauth_state
             )
         }
         "gdrive" => {
@@ -625,11 +648,13 @@ pub async fn cloud_provider_auth_start(
                 &code_challenge_method=S256\
                 &scope={}\
                 &access_type=offline\
-                &prompt=consent",
+                &prompt=consent\
+                &state={}",
                 GOOGLE_CLIENT_ID,
                 url_encode(&redirect_uri),
                 code_challenge,
-                url_encode("https://www.googleapis.com/auth/drive.appdata")
+                url_encode("https://www.googleapis.com/auth/drive.appdata"),
+                oauth_state
             )
         }
         _ => unreachable!(),
@@ -648,7 +673,7 @@ pub async fn cloud_provider_auth_start(
     // 5. Wait up to 5 minutes for the OAuth callback
     let code = tokio::time::timeout(
         std::time::Duration::from_secs(300),
-        wait_for_oauth_code(listener),
+        wait_for_oauth_code(listener, &oauth_state),
     )
     .await
     .map_err(|_| "OAuth authorization timed out (5 minutes). Please try again.".to_string())?

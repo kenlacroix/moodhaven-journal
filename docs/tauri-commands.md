@@ -1,6 +1,6 @@
 # Tauri Command Reference
 
-> **Version:** v1.7.0 | **Total commands:** ~164
+> **Version:** v1.8.0 | **Total commands:** ~170
 >
 > This document lists all `#[tauri::command]` functions exposed by MoodHaven Journal's Rust backend.
 > Commands are registered in `src-tauri/src/lib.rs` and permitted in `src-tauri/capabilities/default.json`.

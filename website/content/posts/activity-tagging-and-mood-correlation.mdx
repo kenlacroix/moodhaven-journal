@@ -1,0 +1,51 @@
+---
+title: "Activity Tagging: Seeing What Actually Affects Your Mood"
+publishDate: "2026-06-10"
+excerpt: "Tracking activities alongside mood turns a journal into a feedback loop. After a few weeks you can see — not guess — which habits are helping and which aren't."
+---
+
+Most mood trackers tell you how you felt but not why.
+
+You logged a 2 out of 5 on Tuesday. You have no idea if it was the bad sleep, the difficult meeting, the fact that you skipped lunch, or just a slow day. The number sits there, accurate and useless. Without context, patterns do not emerge. Without patterns, you cannot change anything.
+
+Activity tagging is MoodHaven's answer to the "why."
+
+## How it works
+
+When you finish writing an entry, you can tag it with activities. MoodHaven ships with 15 predefined categories: Exercise, Social, Work, Reading, Creative, Meditation, Good Sleep, Poor Sleep, Nature, Family, Cooking, Music, Learning, Travel, and Gaming. You can also create up to 50 custom activities for anything those categories do not cover.
+
+Tagging takes a few seconds. You tap the activity pills at the bottom of the entry before closing it. That is the entire input.
+
+Over time, those tags accumulate alongside your mood scores. After a few weeks, the Insights view shows a correlation chart: for each activity, the average mood on days you tagged it versus days you did not. If you tagged Exercise 20 times and your average mood on those days was 3.8 versus a baseline of 3.1, that is information worth knowing.
+
+## Correlation, not causation
+
+It is worth being precise about what this chart does and does not show.
+
+Correlation means the two things tend to appear together. It does not mean one caused the other. Seeing that Exercise correlates with mood +0.7 in your data does not prove exercise made you feel better. You might exercise more on days you already feel good. The direction of the relationship is not something a simple average can resolve.
+
+But correlation from your own data over your own months is more useful than a generic wellness tip from a lifestyle blog. "Exercise improves mood" is advice you have heard. "In your journal, over the last 60 days, the 18 entries tagged Exercise averaged a full point higher than the 40 entries without it" is specific to you. You can work with that.
+
+The chart is honest about being a correlation chart, not a causal one. What you do with the information is yours to decide.
+
+## Privacy
+
+Activity tags are stored locally in the same SQLite database as everything else. They sit in a join table that links entry IDs to activity IDs. Nothing about your activity patterns is sent anywhere.
+
+The correlation chart is computed on your device, from your local data, every time you open Insights. There is no server, no analytics pipeline, no aggregation across users. The computation is simple SQL, and you can read it in `activities.rs` if you want to understand exactly how the averages are calculated.
+
+## What actually changes after a month of tagging
+
+The patterns that emerge tend to surprise people.
+
+You might expect Exercise to be your strongest positive correlate and find that Social edges it out. You might discover Poor Sleep is far more damaging to your mood than you had given it credit for. Or you might see that Gaming, which you had mentally filed as unproductive, does not correlate with worse days at all.
+
+These are not insights a generic app can give you. They come from your data, tagged by you, specific to how your life actually works.
+
+After 4 to 6 weeks of consistent tagging, most people have enough data for something resembling a pattern. It does not require perfect consistency. Missing a few days does not invalidate the rest. The chart fills in as you go.
+
+## No tier, no paywall
+
+Activity tagging and the correlation chart ship to everyone. There is no insights tier, no subscription required to see your own patterns. MoodHaven is free and MIT licensed, and that includes the features that took the most time to build.
+
+[Download the desktop app](/download) for Windows, macOS, or Linux, or [read the source on GitHub](https://github.com/kenlacroix/moodhaven-journal).

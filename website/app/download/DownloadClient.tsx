@@ -88,6 +88,12 @@ function staleDays(publishedAt: string): number | null {
   return Math.floor((Date.now() - then) / (1000 * 60 * 60 * 24));
 }
 
+function freshnessLabel(days: number): string {
+  if (days === 0) return "Released today";
+  if (days === 1) return "Released yesterday";
+  return `Released ${days} days ago`;
+}
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export default function DownloadClient({ release }: { release: LatestRelease | null }) {
@@ -111,7 +117,7 @@ export default function DownloadClient({ release }: { release: LatestRelease | n
       ? release.assets.find((a) => a.name.endsWith("_x64.dmg"))
       : undefined;
 
-  const _days = release?.publishedAt ? staleDays(release.publishedAt) : null;
+  const days = release?.publishedAt ? staleDays(release.publishedAt) : null;
 
   const iconClass = "w-8 h-8";
 
@@ -184,6 +190,11 @@ export default function DownloadClient({ release }: { release: LatestRelease | n
               <span className="inline-flex items-center gap-1.5 bg-primary-50 text-primary-700 border border-primary-200 text-xs font-semibold px-2.5 py-1 rounded-full">
                 <span className="w-1.5 h-1.5 rounded-full bg-primary-500 inline-block" aria-hidden="true" />
                 {release.version} — latest
+              </span>
+            )}
+            {days !== null && (
+              <span className="inline-flex items-center text-xs text-neutral-500 bg-neutral-100 px-2.5 py-1 rounded-full">
+                {freshnessLabel(days)}
               </span>
             )}
             {primaryAsset?.checksumVerified !== false && (

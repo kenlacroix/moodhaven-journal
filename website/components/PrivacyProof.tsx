@@ -1,5 +1,6 @@
 // components/PrivacyProof.tsx
 import AnimatedReveal from "./AnimatedReveal";
+import PrivacyDemo from "./PrivacyDemo";
 
 const NEVER_COLLECTED = [
   "Journal text",
@@ -125,6 +126,9 @@ export default function PrivacyProof() {
             </div>
           </AnimatedReveal>
         </div>
+        <AnimatedReveal delay={0.3} className="mt-6">
+          <PrivacyDemo />
+        </AnimatedReveal>
       </div>
     </section>
   );

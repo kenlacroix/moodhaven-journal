@@ -113,17 +113,43 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
     />
   );
 
+  const articleLd = {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "headline": post.title,
+    "description": post.excerpt,
+    "datePublished": post.publishDate,
+    "author": {
+      "@type": "Person",
+      "name": "Ken LaCroix",
+      "url": "https://www.moodhaven.app/about"
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": "MoodHaven Journal",
+      "url": "https://www.moodhaven.app"
+    },
+    "url": `https://www.moodhaven.app/blog/${slug}`,
+    ...(post.heroImage ? { "image": `https://www.moodhaven.app${post.heroImage}` } : {}),
+  };
+
   return (
-    <BlogPostClient
-      title={post.title}
-      publishDate={post.publishDate}
-      readingTime={readingTime}
-      mdx={mdxContent}
-      heroImage={post.heroImage}
-      headings={toc}
-      accentColor={post.accentColor}
-      prevPost={prevPost}
-      nextPost={nextPost}
-    />
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(articleLd) }}
+      />
+      <BlogPostClient
+        title={post.title}
+        publishDate={post.publishDate}
+        readingTime={readingTime}
+        mdx={mdxContent}
+        heroImage={post.heroImage}
+        headings={toc}
+        accentColor={post.accentColor}
+        prevPost={prevPost}
+        nextPost={nextPost}
+      />
+    </>
   );
 }

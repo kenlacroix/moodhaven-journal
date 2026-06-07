@@ -19,6 +19,14 @@ const CALLOUTS = [
     label: "Multiple journals",
     description: "Named books with emoji and color. Work, personal, therapy — separate.",
   },
+  {
+    label: "Activity tagging",
+    description: "Tag what you were doing — Exercise, Social, Reading — then see mood patterns in the Insights view.",
+  },
+  {
+    label: "Mood calendar",
+    description: "Monthly heatmap colored by daily mood. Spot patterns at a glance across weeks and months.",
+  },
 ];
 
 export default function AppPreview() {
@@ -30,7 +38,7 @@ export default function AppPreview() {
             See it in action
           </p>
           <h2 className="text-center text-2xl md:text-3xl font-bold text-neutral-900 mb-4">
-            A writing space that respects you
+            A writing space built for reflection
           </h2>
           <p className="text-center text-neutral-500 text-base mb-12 max-w-md mx-auto">
             Clean, focused, and private by default. Your words stay on your device.

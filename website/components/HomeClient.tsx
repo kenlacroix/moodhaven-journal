@@ -10,8 +10,30 @@ import AppPreview from "./AppPreview";
 import PrivacyProof from "./PrivacyProof";
 import FeatureTabs from "./FeatureTabs";
 import NewsletterSignup from "./NewsletterSignup";
+import HowItWorks from "./HowItWorks";
+import ComparisonTable from "./ComparisonTable";
+import HeroParticles from "./HeroParticles";
+import HowIBuiltThis from "./HowIBuiltThis";
+import type { LatestRelease } from "@/lib/getLatestRelease";
 
-export default function HomeClient() {
+function staleDays(iso: string): number | null {
+  const then = new Date(iso).getTime();
+  if (isNaN(then)) return null;
+  return Math.floor((Date.now() - then) / 86_400_000);
+}
+
+function freshnessLabel(days: number): string {
+  if (days === 0) return "Released today";
+  if (days === 1) return "Released yesterday";
+  return `Released ${days} days ago`;
+}
+
+interface HomeClientProps {
+  latestRelease?: LatestRelease | null;
+  statsStrip?: React.ReactNode;
+}
+
+export default function HomeClient({ latestRelease, statsStrip }: HomeClientProps) {
   return (
     <div className="w-full">
       {/* Hero Section */}
@@ -19,24 +41,38 @@ export default function HomeClient() {
         {/* Violet gradient background — on-brand, no external photo */}
         <div className="absolute inset-0 bg-gradient-to-br from-primary-900 via-primary-800 to-primary-700 z-0" />
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(139,92,246,0.3)_0%,_transparent_60%)] z-0 pointer-events-none" />
+        {/* Floating particle layer — mouse-repel, pointer-events-none, purely decorative */}
+        <HeroParticles />
 
         <div className="relative z-10 max-w-6xl mx-auto px-4">
           <div className="flex flex-col lg:flex-row items-center gap-12">
             {/* Copy block */}
             <AnimatedReveal className="flex-1 text-center lg:text-left">
-              {/* Announcement chip */}
+              {/* Announcement chip — version pulled live from GitHub releases */}
               <a
                 href="/changelog"
                 className="inline-flex items-center gap-2 bg-white/10 border border-white/20 rounded-full px-3.5 py-1.5 mb-6 text-xs font-medium text-primary-100 hover:bg-white/20 transition-colors duration-200"
               >
                 <span className="w-1.5 h-1.5 rounded-full bg-accent-cta animate-pulse" aria-hidden="true" />
-                v1.1.0 — StillHaven ships
-                <span className="text-white font-semibold">See what&apos;s new →</span>
+                {latestRelease?.version
+                  ? `${latestRelease.version} — See what's new`
+                  : "See what's new"}
+                <span className="text-white font-semibold">→</span>
               </a>
 
               <h1 className="text-3xl md:text-5xl font-bold tracking-tight">
                 Your Private Journal That Stays Yours
               </h1>
+              <p className="text-sm text-primary-300 mt-2 mb-1">
+                Built by{' '}
+                <a
+                  href="/about"
+                  className="text-primary-100 hover:text-white underline underline-offset-2 transition-colors duration-150"
+                >
+                  Ken LaCroix
+                </a>
+                {' '}· open source · MIT licensed
+              </p>
               <p className="text-lg md:text-xl text-primary-200 mt-4 max-w-lg mx-auto lg:mx-0">
                 Local-first journaling with mood tracking and AI insights — all on your device. No accounts, no cloud, no compromises.
               </p>
@@ -47,10 +83,10 @@ export default function HomeClient() {
                     href="https://journal.moodhaven.app"
                     className="w-full sm:w-auto text-center rounded-full bg-accent-cta text-neutral-900 px-6 py-3.5 text-sm font-semibold shadow transition-all duration-200 ease-out hover:bg-accent-cta/90 hover:scale-105 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-cta/60"
                   >
-                    Open in Browser <span aria-hidden="true">→</span>
+                    Try it live — no install <span aria-hidden="true">→</span>
                   </a>
                   <p className="text-xs text-primary-300 max-w-[160px] text-center lg:text-left">
-                    Start writing in 10 seconds, nothing to install.
+                    Open in your browser. No account, no download.
                   </p>
                 </div>
                 <div className="flex flex-col items-center lg:items-start gap-1.5">
@@ -66,23 +102,18 @@ export default function HomeClient() {
                 </div>
               </div>
 
-              {/* Trust strip */}
-              <div className="mt-6 flex flex-wrap justify-center lg:justify-start gap-2">
-                {[
-                  "v1.1.0",
-                  "702 tests",
-                  "MIT licensed",
-                  "Built in public",
-                ].map((label) => (
-                  <span
-                    key={label}
-                    className="inline-flex items-center gap-1.5 bg-white/10 border border-white/15 rounded-full px-3 py-1 text-xs text-primary-200"
-                  >
-                    <span className="w-1 h-1 rounded-full bg-primary-400" aria-hidden="true" />
-                    {label}
-                  </span>
-                ))}
-              </div>
+              <p className="text-xs text-primary-300 mt-2 text-center lg:text-left">
+                No Pro tier. No subscription. No paid features. Everything ships to everyone.
+              </p>
+
+              {latestRelease?.publishedAt && (() => {
+                const days = staleDays(latestRelease.publishedAt);
+                return days !== null ? (
+                  <p className="text-xs text-primary-300 mt-1 text-center lg:text-left">
+                    {freshnessLabel(days)}
+                  </p>
+                ) : null;
+              })()}
             </AnimatedReveal>
 
             {/* App screenshot — side-by-side on lg+, stacked below copy on smaller screens */}
@@ -110,13 +141,21 @@ export default function HomeClient() {
         </div>
       </section>
 
+      {/* Live stats strip — dark monospace bar passed as server component from page.tsx */}
+      {statsStrip}
+
       <AppPreview />
       <PrivacyCallout />
+      <HowItWorks />
+      <HowIBuiltThis />
       <FeaturesGrid />
       <FeatureTabs />
-      <PrivacyProof />
+      <div className="bg-primary-950">
+        <PrivacyProof />
+      </div>
+      <ComparisonTable />
       <NewsletterSignup />
-      <CommunityCallout />
+      <CommunityCallout version={latestRelease?.version} publishedAt={latestRelease?.publishedAt} />
     </div>
   );
 }

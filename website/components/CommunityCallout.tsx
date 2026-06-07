@@ -4,16 +4,32 @@ import { useState } from "react";
 import Link from "next/link";
 import AnimatedReveal from "./AnimatedReveal";
 
-// Update these at each release (bump version, test count, release date).
-const BUILD_STATS = [
-  { label: "Current version", value: "v1.1.0" },
-  { label: "Automated tests", value: "702" },
-  { label: "License", value: "MIT" },
-  { label: "First commit", value: "Mar 2025" },
-];
+function formatPublishedAt(iso: string): string {
+  try {
+    const d = new Date(iso);
+    return d.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+  } catch {
+    return "";
+  }
+}
 
-export default function CommunityCallout() {
+interface CommunityCalloutProps {
+  version?: string;
+  publishedAt?: string;
+}
+
+export default function CommunityCallout({ version, publishedAt }: CommunityCalloutProps) {
   const [badgeFailed, setBadgeFailed] = useState(false);
+
+  const displayVersion = version ?? "v1.8.0";
+  const displayDate = publishedAt ? formatPublishedAt(publishedAt) : "";
+
+  const BUILD_STATS = [
+    { label: "Current version", value: displayVersion },
+    { label: "Automated tests", value: "1,461" },
+    { label: "License", value: "MIT" },
+    { label: "First commit", value: "Mar 2025" },
+  ];
 
   return (
     <section className="bg-[var(--background)] px-4 py-14">
@@ -48,6 +64,12 @@ export default function CommunityCallout() {
               </div>
             ))}
           </dl>
+
+          {displayDate && (
+            <p className="text-xs text-neutral-400 -mt-4 mb-6">
+              {displayVersion} released {displayDate}
+            </p>
+          )}
 
           <p className="text-sm text-neutral-600 mb-8 max-w-sm mx-auto leading-relaxed">
             Built in public. Every line of code visible to you. MIT licensed.

@@ -69,6 +69,9 @@ models/
 docs/internal/
 .gstack/
 
+# Review artifacts — should not live in repo root
+PR-REVIEW-*.md
+
 # Internal planning and retro data — not for public repo
 # active-plans/ is gitignored (local-only in-flight plans); docs/internal/plans/ holds completed/archived
 ceo-plans/

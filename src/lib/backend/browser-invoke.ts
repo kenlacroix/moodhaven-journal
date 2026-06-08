@@ -454,6 +454,20 @@ async function dispatch(command: string, p: Params): Promise<any> {
       URL.revokeObjectURL(url);
       return;
     }
+    case 'write_binary_file': {
+      // Trigger browser download of base64-encoded bytes (recovery-key PDF export).
+      const raw = atob(p.contentsBase64 as string);
+      const bytes = new Uint8Array(raw.length);
+      for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+      const blob = new Blob([bytes], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = (p.path as string).split('/').pop() ?? 'download.pdf';
+      a.click();
+      URL.revokeObjectURL(url);
+      return;
+    }
     case 'read_text_file':
       // BYO-Cloud folder sync reads arbitrary OS paths — not reachable from the browser sandbox.
       throw new Error('Folder sync requires the desktop app');

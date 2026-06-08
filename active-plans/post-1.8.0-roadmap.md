@@ -82,16 +82,23 @@ cap, path-traversal guard) and verifies SHA-256 against `checksums.txt`, but:
 ### P1 — Code-signing phases (cost-gated; removes "unknown publisher" / Gatekeeper blocks)
 Phased, in order. **Skip EV** — since March 2024 it no longer buys instant SmartScreen trust and
 requires a business entity.
-1. **Phase 0 ($0, ~1h):** keep minisign + checksums (done); add a "Verify your download" README/
-   site section + unsigned-build disclaimer; optional Linux GPG detached `.asc` sigs.
+1. **Phase 0 ($0, ~1h) ✅ DONE:** keep minisign + checksums (done); "Verify your download" section
+   added to README + website download page (`DownloadClient.tsx`) with the unsigned-build /
+   SmartScreen-Gatekeeper disclaimer, the minisign verify command + pubkey, and the VirusTotal link.
+   Optional Linux GPG detached `.asc` sigs not done (minisign covers authenticity). Decision
+   (2026-06-08): code signing deferred on cost; VirusTotal auto-submission is the interim AV story.
 2. **Phase 1 — Windows via Azure Trusted Signing (~$10/mo, highest ROI):** individual-eligible
    (self-employed US/CA), no USB token, Microsoft-trusted root, Tauri `signCommand` + `dotnet sign`.
    Removes "unknown publisher" instantly; SmartScreen reputation accrues organically with the same cert.
 3. **Phase 2 — macOS Developer ID + notarize + staple ($99/yr):** the only path past Gatekeeper
    ("damaged / can't be opened"); CI scaffolding (`APPLE_*` env block) is already stubbed in
    `build.yml` — uncomment + add secrets + real Team ID.
-4. **Phase 3 — reactive AV (as-needed):** VirusTotal each release; submit false positives to the
-   specific flagging vendors (Microsoft MSRC first). Signed binaries clear far faster.
+4. **Phase 3 — reactive AV (as-needed) ⏳ AUTOMATED:** the `build.yml` `update-manifest` job now
+   runs `scripts/submit-virustotal.cjs` (needs the `VT_API_KEY` repo secret) — submits each desktop
+   installer to VirusTotal post-build and attaches `virustotal.txt` (per-asset hash-based report
+   links) to the release. Non-fatal + throttled for the free public tier (4/min, 500/day;
+   non-commercial use only). Still manual when needed: submit false positives to the specific
+   flagging vendors (Microsoft MSRC first). Signed binaries clear far faster.
 
 → Source: `research-av-signing.md`
 

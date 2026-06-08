@@ -428,6 +428,16 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: node scripts/generate-checksums.cjs
 
+      # Submit installers to VirusTotal and publish per-asset report links.
+      # Transparency signal only (not a code signature); never blocks a release.
+      - name: Submit installers to VirusTotal
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+          VT_API_KEY: ${{ secrets.VT_API_KEY }}
+        run: node scripts/submit-virustotal.cjs
+
       - name: Generate latest-release.json and attach to release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

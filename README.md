@@ -15,6 +15,7 @@
 <a href="#watch--phone-companion-beta"><img src="https://img.shields.io/badge/companion-Wear%20OS%20%7C%20Android-f97316?style=flat-square" alt="Companion"></a>
 <a href="https://tauri.app"><img src="https://img.shields.io/badge/built%20with-Tauri%202-ffd866?style=flat-square" alt="Built with Tauri"></a>
 <a href="#security--privacy"><img src="https://img.shields.io/badge/encryption-AES--256--GCM-ef4444?style=flat-square" alt="Encryption"></a>
+<a href="https://github.com/kenlacroix/moodhaven-journal/releases/latest/download/virustotal.txt"><img src="https://img.shields.io/badge/VirusTotal-scan%20reports-394eff?style=flat-square&logo=virustotal&logoColor=white" alt="VirusTotal scan reports"></a>
 </p>
 
 <p>MoodHaven Journal is a zero-knowledge journaling app designed to keep your thoughts safe.<br>Your entries are encrypted end-to-end, and your password never leaves your device.</p>
@@ -121,6 +122,20 @@ Grab the latest build from the [Releases](https://github.com/kenlacroix/moodhave
 | **Linux** | `MoodHaven_1.8.2_amd64.AppImage` | Any modern distro |
 | **Linux (Debian)** | `MoodHaven_1.8.2_amd64.deb` | Ubuntu 22.04+ |
 | **Web** | `npm run build:web` → serve `dist-web/` | Any modern browser |
+
+### Verifying Your Download
+
+MoodHaven is **not yet code-signed** (no commercial signing certificate). On Windows you may see a SmartScreen "unknown publisher" prompt, and on macOS Gatekeeper may warn the build is unverified — this is expected for an unsigned open-source app, not a sign of tampering. Until signing lands, every release ships three independent ways to verify the bytes you downloaded:
+
+- **SHA-256 checksums** — each release attaches `checksums.txt`. Compare your file:
+  - Windows (PowerShell): `Get-FileHash .\MoodHaven_*-setup.exe -Algorithm SHA256`
+  - macOS/Linux: `shasum -a 256 MoodHaven_*` (or `sha256sum`)
+- **Minisign signature** — each installer has a companion `.sig` signed with our release key. Verify with [minisign](https://jedisct1.github.io/minisign/):
+  ```bash
+  minisign -Vm MoodHaven_<version>_amd64.AppImage -P RWT1wIrjUnfXZuS/DdD4KiyMU31U/yOIhFUlwkWALb5cSc6Grzh5CE57
+  ```
+  (This is the same key the in-app updater verifies before installing an update.)
+- **VirusTotal** — each release attaches `virustotal.txt` linking a public multi-engine scan report for every installer. A clean report means no antivirus engine flags the build.
 
 ### First Launch
 

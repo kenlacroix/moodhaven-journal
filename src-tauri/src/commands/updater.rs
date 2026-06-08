@@ -1092,4 +1092,33 @@ abc123  target.exe
         let result = load_pubkey();
         assert!(result.is_ok(), "compiled-in pubkey must decode: {result:?}");
     }
+
+    #[test]
+    fn release_signature_must_be_base64_decoded_form() {
+        // `tauri signer sign` writes a base64-WRAPPED .sig, but verify_minisign
+        // feeds the file straight into Signature::decode, which expects the RAW
+        // minisign text. The release must therefore publish the base64-DECODED
+        // signature (the CI build does this with `openssl base64 -d`). This locks
+        // that contract: had it shipped wrong, at-rest update verification would
+        // be inert exactly like the encryption-at-rest bug this campaign fixed.
+        let fx = MinisignFixture::generate();
+        let data = b"the released installer bytes";
+        let path = write_temp(data);
+
+        let raw_sig = fx.sign(data); // the decoded form CI must publish
+        let wrapped_sig = base64::engine::general_purpose::STANDARD.encode(raw_sig.as_bytes()); // tauri's on-disk .sig
+
+        let raw_ok = verify_minisign_with_key(&path, &raw_sig, &fx.pubkey_config_value());
+        let wrapped = verify_minisign_with_key(&path, &wrapped_sig, &fx.pubkey_config_value());
+        let _ = std::fs::remove_file(&path);
+
+        assert!(
+            raw_ok.is_ok(),
+            "decoded (raw) signature must verify: {raw_ok:?}"
+        );
+        assert!(
+            wrapped.is_err(),
+            "base64-wrapped tauri .sig must NOT verify directly — CI must decode it before upload"
+        );
+    }
 }

@@ -195,7 +195,14 @@ directly contradicts the decided Tauri-v2-iOS approach (reuses all ~150 Rust com
 
 The four items below survived reconciliation as genuine, net-new value. Decided with owner 2026-06-08.
 
-### P1 — BYO-Cloud folder sync (the "storage blindness" fix) — PRIMARY sync story
+### P1 — BYO-Cloud folder sync (the "storage blindness" fix) — PRIMARY sync story ✅ DESKTOP SHIPPED (PR #149)
+**Status:** **Desktop slice shipped** (PR #149). New `read_text_file` Rust command (shares
+`write_text_file`'s sensitive-path guard via `guard_user_file_path`); `'byocloud'` storage backend +
+`byocloud {folderPath, lastSyncAt}` settings/store/defaults; `byoCloudService` (pickSyncFolder /
+byoCloudUpload via `exportWithMedia` / byoCloudDownload via `encryptedImport`); SyncTab folder-picker +
+Back up / Restore UI; browser shim throws for `read_text_file`. Mobile (Android SAF tree-URI, iOS
+security-scoped bookmark) remains a **spike-first** item — not yet built.
+
 **Decision:** make **file-provider folder sync** the primary/default cloud-sync path; keep the existing
 OAuth Dropbox/GDrive code as a secondary "power user" option (it stays as-is, real credentials when
 convenient — no longer the headline).
@@ -207,8 +214,8 @@ The OS sync client handles propagation for free — no server, no OAuth registra
 API. Lower friction, fewer moving parts, and it works with *any* folder-syncing service the user
 already has.
 
-- **Desktop:** plain filesystem path chosen via `tauri-plugin-dialog` folder picker; persist the path
-  in settings; write/read `moodhaven-backup.moodhaven` there. Trivial — reuses `export_data`/`import_data`.
+- **Desktop:** ✅ DONE (PR #149) — filesystem path chosen via `tauri-plugin-dialog` folder picker;
+  path persisted in settings; write/read `moodhaven-backup.moodhaven` there. Reuses `export_data`/`import_data`.
 - **Android:** Storage Access Framework — persisted tree URI (`takePersistableUriPermission`). **Verify**
   whether `tauri-plugin-fs` + dialog expose a persistable tree URI on Android, or whether a small
   native plugin is needed. Do not assume; spike first.
@@ -271,7 +278,7 @@ about peers was already covered by the v1.8.0 consent-gate + auth work.
 
 | Item | Source | Disposition | Where it lives |
 |---|---|---|---|
-| BYO-Cloud folder sync | Gemini (refined) | **BUILD — primary sync** | §4 P1 + `ios-app-v2-0.md` Ph1 |
+| BYO-Cloud folder sync | Gemini (refined) | **DESKTOP SHIPPED (PR #149)** — mobile spike pending | §4 P1 + `ios-app-v2-0.md` Ph1 |
 | OAuth Dropbox/GDrive | existing | Keep as secondary | `ios-app-v2-0.md` Ph1 (creds when convenient) |
 | PDF Recovery Kit | Gemini + owner | **BUILD** | §4 P1 |
 | Media compression | Gemini (confirmed gap) | **BUILD** | §4 P2 |

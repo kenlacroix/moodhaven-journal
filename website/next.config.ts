@@ -8,6 +8,11 @@ const nextConfig: NextConfig = {
         destination: "/about",
         permanent: true,
       },
+      {
+        source: "/blog/how-i-tried-to-break-my-own-encrypted-journal",
+        destination: "/blog/stress-testing-the-privacy-in-your-journal",
+        permanent: true,
+      },
     ];
   },
 };

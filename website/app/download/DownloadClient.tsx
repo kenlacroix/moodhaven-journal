@@ -217,7 +217,7 @@ export default function DownloadClient({ release }: { release: LatestRelease | n
               text stayed encrypted, but some metadata (mood, dates, tags) was readable if
               someone had the database file.{" "}
               <Link
-                href="/blog/how-i-tried-to-break-my-own-encrypted-journal"
+                href="/blog/stress-testing-the-privacy-in-your-journal"
                 className="font-medium text-primary-700 underline hover:text-primary-900"
               >
                 Read the details →

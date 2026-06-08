@@ -1,0 +1,126 @@
+---
+title: "How We Stress-Tested the Privacy in Your Journal — Ten Rounds of Attacks"
+publishDate: "2026-06-07"
+excerpt: "Ten rounds of real attacks against our own private journaling app, on tools we built from scratch. The one thing it exists to protect — your entries — was never exposed. Here's the honest accounting."
+heroImage: "/images/blog/how-i-tried-to-break-my-own-encrypted-journal.png"
+---
+
+*Ten rounds of real attacks against our own app, on tools we built from scratch. The one thing it exists to protect — your entries — was never exposed. Here's the honest accounting: among other things we found a flagship encryption feature that had never actually turned on (now fixed and verified) and a Windows bug our own attack tool caught live. The last round attacked our own fixes, found a bug in each, fixed them, and then came back clean — which is how we knew to stop.*
+
+If you trust MoodHaven with your private thoughts, you deserve more than a promise that they're safe. We're a small, open-source project — not a security firm with a credentialed red team — but that doesn't lower the bar; it just means the proof has to be in the work. So here is that promise being stress-tested, deliberately and repeatedly, with modern tools. This is how we hold "your data stays yours" to account.
+
+## The short version
+
+[MoodHaven Journal](https://github.com/kenlacroix/moodhaven-journal) keeps everything on your own computer — no accounts, no cloud, no servers reading your entries. The whole point of the app is to protect what you write, so "trust us, it's secure" was never going to be good enough. We needed to actually *try to break it.*
+
+So we built a small attack lab: a dedicated attacker machine, plus two "victim" machines (a Windows PC and an Ubuntu PC) running the real, installed app. Then we ran a structured penetration test against it — the same kind of adversarial testing a security firm would do — and did it not once but **ten times in a row**, fixing what we found between each round and then attacking the fixed version again. The final round attacked the *previous* round's fixes on purpose. To do it at all we had to build our own tools, including a from-scratch copy of the app's own encrypted sync protocol, because the ordinary security scanners have nothing to say about a private app like this.
+
+Here's the part that matters for your data:
+
+- **65+ specific attacks were attempted.** Each one was a real probe, not a checklist tick.
+- **41 of them found a genuine vulnerability** through the seventh round. Some were serious (a way to read your data, a way to lose your edits silently). Some were small.
+- **All 41 were fixed**, with the code changes tied to specific releases.
+- **The eighth round** found the big one: a flagship "encrypted at rest" feature that had *never actually engaged.* That fix is now **verified working end-to-end on the installed Windows build** — a fresh setup really does encrypt the database on disk and unlock cleanly. (Re-checking it on Linux is still pending, and we say so.)
+- **The ninth round** turned our own custom attack tool on the app and found six more issues — including one the tool caught *live* while attacking, not by reading code. All six are **fixed and committed**, backed by reproductions and tests.
+- **The tenth round** is the one that let us stop. Instead of attacking the app again, we attacked the *ninth round's fixes* — because a fix is new code that hasn't been tested yet — and found a real bug in each of the two trickiest ones. Both were fixed, and then an independent re-check for new serious problems came back **clean**, with everything still working. That clean pass is what closed the campaign.
+- **The remaining attacks failed** — which is its own kind of good news. They proved that defenses we'd designed actually held up under attack.
+
+The most interesting finding wasn't a single bug. It was a *pattern:* **round after round uncovered a new problem that an earlier round's fix had accidentally introduced.** The eighth round delivered the sharpest example: a flagship "encrypted at rest" feature, added to fix an earlier round's "your database is readable" finding, that had *never actually engaged in any build, on any operating system.* The ninth round kept the pattern going — the very fixes for that encryption work turned out to hide two more bugs that could lose data. And the tenth round proved the pattern was the *method,* not bad luck: we went looking for bugs in the ninth round's fixes on purpose, and each one had one. Fixing a security issue is itself a code change, and any code change is new ground that hasn't been attacked yet. That insight — that you can't fix your way to "done" in one pass, and that a fix's own existence is not evidence it works — is the spine of this whole project.
+
+It also tells you how a project like this *ends* honestly. You don't reach zero bugs; you **converge.** The attacks reachable from outside — what someone on your network, or hitting your app without first stealing your computer, could do — were all closed. The problems that remained at the end all required a thief who already had your unlocked machine or a device you'd once trusted, and the worst they could do was lock *you* out, not read your journal. And the one thing the whole app exists to protect — that nobody could ever read journal entries they weren't meant to — held through all ten rounds. When the final fresh hunt for new serious bugs came up empty while everything still worked, that was the signal the loop had run its course — not a sign we'd given up looking.
+
+## Why we attacked our own app
+
+We designed MoodHaven to be secure from day one: every journal entry is encrypted on your device before it ever touches disk, the encryption key is derived from your password and never stored, and there's no server in the middle that could be breached.
+
+But there's a trap in that sentence. We *designed* it to be secure. Reading your own code and nodding along is not the same thing as attacking it. You see what you intended to build, not what you actually built — and the gap between those two is exactly where vulnerabilities live.
+
+After we shipped a feature that lets two of your own devices exchange entries directly over your home network, that gap started to bother us. It added a lot of new surface we'd reasoned about carefully but never actually *attacked.* So we decided to treat the app the way an external auditor would: assume nothing, try everything, and only believe a defense works after failing to break it.
+
+A note on how the work was done: we used an AI assistant (Claude Code) as the orchestrator — reading the whole codebase to flag weak points, driving the attacker and victim machines, running several investigations in parallel, and writing fixes while the bug was still fresh. This was not "AI does security for you." It was a tireless, well-read collaborator that kept the campaign organized across multi-day sessions, with a human pointing it at the right targets and making the judgment calls. (If you want the engineer's-eye account of that loop and the tools behind it, there's a companion writeup linked at the end.)
+
+A couple of deliberate choices mattered. We tested the **installed** app, not a development build — the same thing you download — because several of the most important findings only exist in the packaged version. And we tested on **two operating systems on purpose,** because some of the worst bugs were Windows-only and we'd never have caught them on Linux alone.
+
+## The headline findings, in plain language
+
+### Your data was encrypted — but the story around it wasn't
+
+The journal entries themselves were always properly encrypted. But when we copied the app's database file off the victim machine and opened it with a standard tool, we could still read a lot: which days you wrote, your daily mood scores, and — most sensitively — your **tag names.** Tags like "therapy," "anxiety," or a person's name are revealing in themselves, even if the entry text is scrambled. Someone who stole the database could reconstruct a detailed behavioral profile without decrypting a single word. The fix was to encrypt the whole database file at rest. (There's a sting in the tail here, and it gets its own section below.)
+
+### Edits that silently disappeared
+
+The feature that syncs entries between your devices decides which version of an edited entry "wins" by comparing timestamps. The comparison treated the timestamp as plain text — and in text, a date like "9999-12-31" sorts as larger than any real date. A compromised device could stamp an entry with a far-future date so that **every future edit you made would silently lose** and never survive a sync. The app looked fine; your changes just wouldn't stick. The fix was to compare timestamps as real dates and reject any that claim to be from the future.
+
+### Secrets leaking over your local network
+
+This one we'd never have caught by reading code — we only saw it by capturing the actual network traffic. The device-discovery feature was **broadcasting each device's full public encryption key** across the local network every 30 seconds. Because the sync encryption is derived from both devices' keys, anyone passively listening on the same network could collect them and decrypt all the sync traffic — with no pairing and no password. The fix was to strip those keys out of the discovery broadcasts entirely.
+
+### The full-database transfer that an old key could trigger
+
+The setup flow for a new device lets it pull your entire database from an existing device over your home network. The trouble was that the device holding the data simply handed it over on request — no prompt, no approval. So a device that had been paired once and then lost or stolen could quietly pull your whole journal whenever your real device was running. The fix mirrors how pairing works: the device with the data must now explicitly *arm* a transfer for a short, one-time window, so it takes a present person to approve it — not just possession of an old key.
+
+### The flagship encryption feature that never turned on
+
+This is the finding we least wanted to write and most needed to.
+
+Several rounds earlier, the "your database is readable" problem was fixed by encrypting the entire database file at rest. It was the headline security feature of that whole stretch of work. It was documented. It passed subsequent rounds of testing. We believed it, and so did everyone reviewing it. The trouble is that none of that is evidence the code actually does what it says.
+
+The eighth round confirmed, on a real installed build, that the database was *never encrypted on any install, on any operating system.* Every copy of the app had been quietly running on a plaintext database the whole time — the exact problem the encryption feature was supposed to have solved. The encryption step fired on first unlock, failed its own check, and silently fell back to the original unencrypted file. Because the fallback was silent and the app kept working normally, nobody noticed.
+
+The cause was a subtle mismatch: the database was written with one form of the key, but every read asked for a *transformed* version of that same key — so the file could never be reopened, and the app quietly gave up and used the plaintext copy instead. Two independent investigations landed on the same root cause. To be sure we weren't misreading it, we built a tiny standalone program that did nothing but encrypt a database one way and reopen it the other — and reproduced the exact failure in isolation. Run against the corrected key handling, that same reproduction now opens cleanly.
+
+There was no test covering the "encrypt it, close it, reopen it" round trip. That single missing test is the whole reason a non-functional security feature shipped and survived multiple rounds of review.
+
+Where this stands, honestly: the root cause is confirmed, the fix is applied, it's proven by both the standalone reproduction and a new regression test — and, the part we refused to claim until it was true, it's now **verified working end-to-end on a real installed Windows build.** After a clean setup the database really is encrypted on disk, there's no leftover half-finished file, the app unlocks normally, and the syncing feature starts. Re-checking the same thing on Linux is still pending, and we'll flag that wherever it matters.
+
+The irony is total and worth sitting with: an earlier round *fixed* the readable-database problem, and the eighth round found that the fix never took effect. The earlier round wasn't wrong about the design — it was wrong to believe the design was running. That gap, between "we wrote the fix" and "the fix executes correctly on a real machine," is the entire reason this campaign keeps going — and it's why we wouldn't call this one done until we'd reinstalled the corrected build from scratch and watched it encrypt and unlock for real.
+
+### The ninth round — when our own tool started finding bugs
+
+The eighth round fixed the encryption. The ninth round did something different: instead of reading the code to guess what might be wrong, we pointed a tool we'd built — a from-scratch copy of the app's own encrypted sync protocol — straight at the running app and watched what broke. Six issues came out of it.
+
+The most interesting one we'd never have found by reading code. A fake "trusted device" would connect, complete the whole cryptographic handshake, and then — only on Windows — the app would silently drop the connection partway through. Not an error, not a rejection, just a quiet failure that depends on exact timing and only happens against a real client over a real network. Watching our own tool get stuck on it is what exposed it. Fixed.
+
+Two of the six were new data-loss bugs hiding *inside* the eighth round's encryption fixes — the "fixed it, then broke it" pattern, again. One was a recovery routine that could replace your good database with a half-finished one without first checking it actually worked; the fix makes it verify the new file opens before ever putting it in place, and keeps your original untouched otherwise. The other was in "Sync from Another Device": a fresh device could pull your whole encrypted database but was never sent the small piece of information needed to unlock it, so the copy arrived permanently unreadable; the fix sends that piece along with the data. Both are fixed and committed and covered by tests — and both got attacked again in the very next round (more on that below). What's still honestly outstanding is the *live* re-test on real hardware (actually restoring onto a fresh machine and force-killing a real migration to confirm the recovery path); that's a deferred item, not done yet, and we won't pretend it is.
+
+The other three were smaller but real: two more commands that could run while the app was locked (now they can't), the "I'm setting up a new device" window now closing automatically when the app locks, and the pairing QR code — which had silently stopped drawing, quietly forcing everyone to type a PIN by hand — now fixed with a test so it can't break unnoticed again.
+
+### The tenth round — attacking our own fixes, then a clean pass
+
+Every round so far had attacked the *app.* The tenth round attacked the *previous round's fixes* — on the idea that has run through this whole project: a fix is brand-new code, and the code most likely to be hiding a fresh bug is the code we just wrote while feeling confident we'd made things safer. So we took the ninth round's two trickiest fixes — the recovery routine and the "Sync from Another Device" repair — and went after them as if a stranger had written them. Each one had a real problem.
+
+The recovery fix had a blind spot: if someone with access to your computer deleted or swapped your database, the recovery check could be fooled into quietly creating a brand-new *empty* journal and accepting it as your real one — substituting an empty journal for yours. Fixed, so a missing database is now treated as an honest error instead of being silently replaced.
+
+The "Sync from Another Device" fix had the opposite kind of hole: the new device trusted the unlock information it received without checking it, so a tampered-with or buggy source could send bad data and **permanently lock you out of the freshly copied journal.** Fixed, so that piece is now validated and tied into the same integrity check as the rest of the transfer before it's ever used.
+
+Finding a bug in each of the two fixes we'd set out to attack was, oddly, the encouraging part — it meant the approach was working. The decisive moment came after: with both new bugs fixed, we ran one more independent hunt for *new* serious problems and re-checked that everything still worked normally — and it came back **clean.** No new serious findings, and nothing broken. That's what let us stop, and it's worth being honest about why it's a fair place to stop rather than just running out of steam:
+
+- Everything an attacker could reach from outside your machine was closed.
+- The problems that remained all needed a thief who already had your unlocked computer — or a device you'd once trusted and then lost — and the worst they could do was lock *you* out, not read your journal.
+- The one thing that matters most — that no attack, in any round, ever exposed the actual content of your entries — held the entire way through.
+
+That's convergence, not a claim of perfection. You can't attack your way to a *proof* that zero bugs remain. What you can do is close everything reachable from outside, watch the leftover risks shrink from "reads your data" to "needs your unlocked laptop and only annoys you," confirm the core protection never broke, and then run one more fresh check and have it come back empty. When that happens, you've done the job — and that's where the tenth round left it.
+
+## Why this took tools that didn't exist
+
+Here's the thing nobody tells you about pentesting your own software: for an app like this, the tools don't exist yet. Off-the-shelf security scanners are built to crawl websites and public APIs. They have nothing to say about a private desktop app that talks to your *other* devices over your home network in its own encrypted language — there's no website to point them at. So testing it for real meant building our own instrumentation, and that turned out to be as much of the work as finding the bugs.
+
+The centerpiece was a from-scratch copy of the app's own secure networking, so we could pose as a trusted device and probe one thing at a time. That's the tool that caught the Windows bug *live* — not by reading code, but by getting stuck mid-handshake exactly where the source said it shouldn't. The honest lesson is that the distance between "we designed this securely" and "we proved it's secure" could only be closed by building tools that don't come off a shelf — and those tools caught problems the generic scanners never would have.
+
+A good penetration test is not measured only by the holes it finds. The roughly two dozen attacks that *failed* are evidence that the defenses we'd built actually work under fire — and they're the part that should matter most to you:
+
+- **Injecting malicious code** through book and tag names didn't work — the app escapes text by default and never takes the unsafe shortcut that would let it through.
+- **Flooding the sync engine** to crash it didn't work — untrusted devices are rejected before any large data is read, and a hard size cap blocks memory-exhaustion attempts.
+- **Smuggling malicious settings from a rogue device** didn't work — only a single, explicitly allowed preferences blob can sync; credentials and security secrets are blocked.
+- **Brute-forcing the recovery key** is infeasible — there are so many possible keys (roughly 1.3 followed by 36 zeros) that exhausting them would take on the order of 10^27 years at realistic cracking speeds.
+- **Memory checks after the fixes** came back clean — the sensitive key material that showed up in earlier checks was gone. (One honest caveat: the *fresh* memory check against the very latest build is the one test still pending; the wiping is verified in the code and by tests, but we haven't re-run the live dump yet, and we won't pretend we have.)
+
+Confirming that a defense holds is a different kind of value from finding a hole, but it's real value. It turns "we think this is safe" into "we tried to break this and couldn't."
+
+## What this means for your data
+
+If you use MoodHaven, here's the takeaway in one breath: the thing the app exists to protect — the actual words you write — was never exposed in any of the ten rounds, and the ways an attacker could reach your machine from the outside are now closed. The risks that remain require someone to already have your unlocked computer in hand, and even then the worst case is being locked out of your own journal, not having it read.
+
+"We take security seriously" should mean something concrete, so here's the concrete version: we thought we'd built something secure, and we had — mostly. We even thought we'd *fixed* the parts that weren't, and on one flagship feature we were wrong about that for a long time. Trying hard to break it — on real machines, with tools we had to build ourselves and reproductions that can't be argued with — is what turned "mostly" into something we can actually stand behind. The defenses we couldn't break are the ones we now trust; and the feature we *thought* was protecting your data, but wasn't, is exactly the kind of thing this whole process exists to catch.
+
+If you want the engineer's-eye version of this campaign — how the test was built, the protocol emulator and fuzzers behind it, the AI-orchestrated verify loop, and the lessons that generalize past this one app — there's a companion writeup on the developer side: [Red-Teaming My Own Encrypted Journaling App, Ten Rounds Deep](https://www.kennethlacroix.me/post/red-teaming-my-own-encrypted-journaling-app-ten-rounds-deep).

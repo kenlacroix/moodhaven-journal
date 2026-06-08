@@ -6,6 +6,7 @@ const columns = [
     links: [
       { label: "Open Journal App", href: "https://journal.moodhaven.app", external: true },
       { label: "Download Desktop", href: "/download" },
+      { label: "Platforms", href: "/platforms" },
       { label: "About", href: "/about" },
     ],
   },

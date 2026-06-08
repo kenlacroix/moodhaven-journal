@@ -2,6 +2,7 @@
 title: "What We Actually Send to the AI (and What We Don't)"
 publishDate: "2026-06-08"
 excerpt: "MoodHaven's AI features work from metadata — mood scores, patterns, frequency. Your journal text never leaves your device. Here's exactly what goes out and what stays in."
+heroImage: "/images/blog/what-we-actually-send-to-ai.png"
 ---
 
 Most apps that say "AI-powered" have a quiet asterisk attached. The asterisk usually reads something like: we send your content to OpenAI, but we call it "anonymized" or "encrypted in transit." A few are honest about it. Most are not.
@@ -10,23 +11,21 @@ I want to be direct about what MoodHaven does, because vagueness on this specifi
 
 ## What the AI sees
 
-When you enable AI features in MoodHaven, the model receives a structured metadata object. It looks like this:
+When you enable an AI feature in MoodHaven, the model receives a small block of **aggregate metadata** — numbers and category labels your device computes from your mood ratings, timestamps, and writing patterns. The exact fields depend on which feature you used. A request for writing prompts reads roughly like this:
 
 ```
-{
-  recentMoodAverage: 3.2,
-  moodTrend: "improving",
-  dominantEmotions: ["grateful", "anxious", "reflective"],
-  entryFrequency: "daily",
-  preferredTime: "evening"
-}
+Average mood: 3.2/5 (improving trend) · recent 3.4/5 · volatility low
+Dominant emotions recently: grateful, anxious, reflective
+Journaling frequency: daily · current streak: 6 days
+Best day for journaling: Sunday
+Gratitude mentions: 40% of entries · goal mentions: 15% of entries
 ```
 
-That is the entirety of what goes out. Five fields. All of them derived locally from your mood scores, timestamps, and entry patterns. None of them are your words.
+A weekly reflection or a wellness insight sends a slightly different slice — entry counts over a period, the spread of your 1-to-5 mood ratings, sentiment percentages, time-of-day patterns. But it is the same *kind* of data every time: counts, averages, frequencies, streaks, and emotion **labels**. Never a sentence you wrote.
 
-`recentMoodAverage` is the arithmetic mean of your last several mood ratings, which are integers from 1 to 5. `moodTrend` is calculated by comparing recent average to older average. `dominantEmotions` are categories extracted on your device from writing patterns, not from the text itself. `entryFrequency` is how often you write. `preferredTime` is when you most often open the app.
+Those values get dropped into the request right next to an instruction that tells the model, in as many words, to base its response on your *patterns, not your actual journal content*. There is no `entryContent` field, no `recentEntries`, no excerpt of your writing. The request has nowhere to put your words.
 
-There are no text fields in this object. There is no `entryContent`, no `recentEntries`, no `journalExcerpt`. The structure physically cannot carry your writing.
+The emotion labels deserve a note, because that is the one place text is involved. Categories like "grateful" or "anxious" are worked out **on your device** by scanning your entries locally — but only the resulting labels travel with the request. The sentences they came from never leave.
 
 ## What the AI never sees
 
@@ -52,7 +51,7 @@ Setup requires installing Ollama and pulling a model, which takes some technical
 
 ## You can read the code
 
-I am not asking you to take my word for any of this. The AI request is assembled in `useInsights.ts`. The object that gets passed to the API call is in `aiService.ts`. There is no code path in either file that reads or attaches decrypted entry content to an outbound request.
+I am not asking you to take my word for any of this. The metadata is computed in `useInsights.ts`, and the exact text sent to the model is built by the `buildPromptGenerationPrompt`, `buildInsightsPrompt`, and `buildWeeklyReflectionPrompt` functions in `aiService.ts` — you can read every field that goes into the request. None of them reads or attaches decrypted entry content to an outbound request.
 
 If you find one, open an issue. That would be a bug, and I would treat it as a serious one.
 

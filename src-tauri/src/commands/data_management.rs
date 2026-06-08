@@ -81,6 +81,7 @@ pub fn lock_app(
     lock: State<'_, AppLockState>,
     twofa: State<'_, TwoFactorPendingState>,
     db_key: State<'_, DbKeyState>,
+    db: State<'_, Database>,
     session_bridge: State<'_, crate::commands::session_bridge::SessionBridge>,
     restore_arm: State<'_, crate::commands::peer_sync_engine::RestoreArmState>,
 ) -> Result<(), String> {
@@ -91,6 +92,16 @@ pub fn lock_app(
     restore_arm.clear();
     // Wipe any unconsumed writer-window password so plaintext never survives a lock.
     session_bridge.clear();
+    // Release the keyed SQLCipher connection so SQLCipher zeroes the raw 256-bit key it
+    // held for the connection's lifetime — otherwise the key persists in the connection's
+    // memory after lock and is recoverable from a process memory dump. No-op for an
+    // unencrypted DB (the placeholder swap simply drops a non-keyed connection). Best-effort:
+    // a swap failure must not block locking the session.
+    if db.is_encrypted() {
+        if let Err(e) = db.release_key() {
+            log::warn!("[sqlcipher] release_key on lock failed: {e}");
+        }
+    }
     Ok(())
 }
 

@@ -250,6 +250,28 @@ impl Database {
         Ok(())
     }
 
+    /// Release the keyed SQLCipher connection on lock so SQLCipher zeroes and frees its
+    /// in-memory key material. The live keyed `Connection` is swapped for a fresh
+    /// `Connection::open_in_memory()` placeholder; dropping the old connection makes
+    /// SQLCipher wipe the raw 256-bit key it had held for the connection's lifetime.
+    ///
+    /// Without this, `lock_app` clears the app's own key copy but the database connection
+    /// stays keyed for the life of the process, so the raw key persists in the connection's
+    /// memory after lock and is recoverable from a process memory dump.
+    ///
+    /// This mirrors the `factory_reset` / `encrypt_in_place` swap-to-in-memory pattern.
+    /// The next unlock routes through `verify_password` → `apply_key`, which opens the real
+    /// `moodhaven.db` file fresh and re-keys it — it never PRAGMA-keys this placeholder.
+    /// A best-effort WAL checkpoint flushes pending frames before the handle is released.
+    pub fn release_key(&self) -> Result<(), String> {
+        let mut conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let _ = conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);");
+        let placeholder =
+            Connection::open_in_memory().map_err(|e| format!("release_key placeholder: {e}"))?;
+        *conn = placeholder; // keyed connection drops here, zeroing SQLCipher key material
+        Ok(())
+    }
+
     /// Promote a pending, interrupted-migration `moodhaven_enc.db` ONLY after key-verifying it.
     /// On verify failure the original `moodhaven.db` is preserved and the tmp discarded.
     fn promote_pending_tmp(&self, tmp_path: &Path, hex_key: &str) -> Result<(), String> {
@@ -1505,6 +1527,130 @@ mod sqlcipher_key_tests {
             after.salt.as_deref(),
             Some("dGVzdC1zYWx0"),
             "salt must be preserved, never stranded"
+        );
+
+        drop(db);
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    // Lock/unlock zeroization guard (E2): on lock the keyed SQLCipher connection must be
+    // released (swapped for an in-memory placeholder) so SQLCipher zeroes its raw key — the
+    // DB then becomes unreadable until the next unlock re-opens and re-keys the on-disk file.
+    // This exercises lock → (not readable / key released) → unlock → data readable again.
+    #[test]
+    fn release_key_then_apply_key_round_trips_encrypted_db() {
+        use super::{write_db_state, Database, DbStateFile};
+
+        let hex_key: String = (0u8..32)
+            .map(|b| format!("{:02x}", b.wrapping_mul(13).wrapping_add(5)))
+            .collect();
+        let key: [u8; 32] = {
+            let mut k = [0u8; 32];
+            for (i, byte) in k.iter_mut().enumerate() {
+                *byte = u8::from_str_radix(&hex_key[i * 2..i * 2 + 2], 16).unwrap();
+            }
+            k
+        };
+
+        let dir = std::env::temp_dir();
+        let pid = std::process::id();
+        let base = dir.join(format!("mh_relkey_{pid}"));
+        let _ = std::fs::remove_dir_all(&base);
+        let _ = std::fs::create_dir_all(&base);
+        let db_path = base.join("moodhaven.db");
+        let enc_path = base.join("moodhaven_enc.db");
+
+        // 1. Seed a real plaintext DB (full schema) with a known row, then encrypt it via
+        //    sqlcipher_export and promote it to moodhaven.db so we have a genuine encrypted
+        //    at-rest DB — exactly what the app holds after the one-time migration.
+        {
+            let seed = Database::new(db_path.clone()).expect("seed plaintext DB");
+            {
+                let conn = seed.conn.lock().unwrap();
+                conn.execute(
+                    "INSERT INTO journal_entries (id, encrypted_content, mood, created_at, updated_at)
+                     VALUES ('e1', 'cipher-blob', 4, datetime('now'), datetime('now'))",
+                    [],
+                )
+                .unwrap();
+                let enc_str = enc_path.to_str().unwrap();
+                conn.execute_batch(&format!(
+                    "ATTACH DATABASE '{enc_str}' AS encrypted KEY \"x'{hex_key}'\";
+                     SELECT sqlcipher_export('encrypted');
+                     DETACH DATABASE encrypted;"
+                ))
+                .unwrap();
+            }
+            drop(seed);
+        }
+        std::fs::rename(&enc_path, &db_path).unwrap();
+        write_db_state(
+            &db_path,
+            &DbStateFile {
+                encrypted: true,
+                salt: Some("dGVzdC1zYWx0".to_string()),
+            },
+        )
+        .unwrap();
+
+        // 2. Boot against the encrypted file (Database::new opens it but does NOT key it).
+        let db = Database::new(db_path.clone()).expect("open encrypted DB");
+
+        // 3. First unlock keys the connection and serves the row.
+        db.apply_key(&key).expect("initial unlock must key the DB");
+        {
+            let conn = db.conn.lock().unwrap();
+            let content: String = conn
+                .query_row(
+                    "SELECT encrypted_content FROM journal_entries WHERE id = 'e1'",
+                    [],
+                    |r| r.get(0),
+                )
+                .expect("unlocked DB must serve the row");
+            assert_eq!(content, "cipher-blob");
+        }
+
+        // 4. Lock: release the keyed connection. The live connection is now an in-memory
+        //    placeholder with no journal_entries table — proving the keyed handle (and its
+        //    raw key) was dropped rather than kept alive for the process lifetime.
+        db.release_key().expect("release_key must succeed");
+        {
+            let conn = db.conn.lock().unwrap();
+            let res = conn.query_row(
+                "SELECT encrypted_content FROM journal_entries WHERE id = 'e1'",
+                [],
+                |r| r.get::<_, String>(0),
+            );
+            assert!(
+                res.is_err(),
+                "after release_key the placeholder connection must not serve journal data"
+            );
+        }
+
+        // 5. Unlock again: apply_key re-opens the real on-disk encrypted file and re-keys it.
+        db.apply_key(&key)
+            .expect("re-unlock must re-open and re-key the on-disk DB");
+        {
+            let conn = db.conn.lock().unwrap();
+            let content: String = conn
+                .query_row(
+                    "SELECT encrypted_content FROM journal_entries WHERE id = 'e1'",
+                    [],
+                    |r| r.get(0),
+                )
+                .expect("re-unlocked DB must serve the row again");
+            assert_eq!(
+                content, "cipher-blob",
+                "lock → unlock cycle must restore read access to the encrypted DB"
+            );
+        }
+
+        // 6. A wrong key after release must NOT silently re-open the DB (it stays released).
+        db.release_key().expect("release_key must succeed");
+        let wrong = [0u8; 32];
+        assert!(
+            db.apply_key(&wrong).is_err(),
+            "wrong key after lock must fail to unlock"
         );
 
         drop(db);

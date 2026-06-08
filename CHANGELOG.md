@@ -5,6 +5,21 @@ All notable changes to MoodHaven Journal are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.8.2] — 2026-06-07
+
+### Changed
+
+- **Seamless silent updates on Windows** — installing an in-app update no longer opens the NSIS wizard. Because MoodHaven installs per-user into `%LOCALAPPDATA%`, the updater now runs the installer silently (`/S`, no UAC prompt) and relaunches the app automatically once the new files are in place. Your settings and encrypted database live in `%APPDATA%` and are untouched by install/uninstall, so they carry over with no action. Linux AppImage updates were already in-place and silent; macOS still opens the disk image (silent install is gated on notarization — tracked in the roadmap).
+
+### Security
+
+- **CSPRNG for all cryptographic material** — salt, nonce, OAuth PKCE verifier, and backup-code generation now draw directly from the OS CSPRNG (`OsRng`) instead of the thread-local RNG, across cloud-provider OAuth, export encryption, media encryption, and 2FA backup codes. A defensive hardening; no behavior change for users.
+- **OAuth CSRF state parameter** — the Dropbox and Google Drive OAuth flows now generate a random `state` token, include it in the authorization URL, and validate it on the localhost redirect callback. A mismatch returns HTTP 400 and aborts the token exchange, closing a CSRF vector on the loopback listener.
+
+### Fixed
+
+- **Release checksums now cover Linux packages** — `checksums.txt` published with each release now includes `.deb` and `.rpm` installers (previously only `.AppImage`, `.exe`, `.dmg`, `.msi`, `.aab`), so package-manager downloads can be verified against the published hash.
+
 ## [1.8.1] — 2026-06-07
 
 ### Security

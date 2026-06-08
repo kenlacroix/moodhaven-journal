@@ -8,7 +8,7 @@ use aes_gcm::{
 };
 use base64::{engine::general_purpose, Engine as _};
 use pbkdf2::pbkdf2_hmac;
-use rand::RngCore;
+use rand::{rngs::OsRng, RngCore};
 use rusqlite::Connection;
 use sha2::Sha256;
 use std::fs;
@@ -343,8 +343,8 @@ const EXPORT_NONCE_LEN: usize = 12; // 96 bits — matches WebCrypto IV_LENGTH
 fn encrypt_export_payload(plaintext: &str, password: &str) -> Result<String, String> {
     let mut salt = [0u8; EXPORT_SALT_LEN];
     let mut nonce_bytes = [0u8; EXPORT_NONCE_LEN];
-    rand::thread_rng().fill_bytes(&mut salt);
-    rand::thread_rng().fill_bytes(&mut nonce_bytes);
+    OsRng.fill_bytes(&mut salt);
+    OsRng.fill_bytes(&mut nonce_bytes);
 
     let mut key = Zeroizing::new([0u8; 32]);
     pbkdf2_hmac::<Sha256>(password.as_bytes(), &salt, EXPORT_PBKDF2_ROUNDS, &mut *key);

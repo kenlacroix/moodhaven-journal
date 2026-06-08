@@ -14,7 +14,29 @@
 
 Ordered by leverage for a solo, non-commercial portfolio project (signal-per-hour, not max infra).
 
-### P0 — 1.8.1 updater: signature verification + security severity (small, belongs next)
+### P0 — 1.8.1 updater: signature verification + security severity ✅ SHIPPED (1.8.1)
+**Status:** minisign signature verification (self-contained `minisign-verify` crate, compile-time
+`const` pubkey) + `severity` with the `current < 1.8.0 ⇒ security` non-skippable rule both shipped
+in 1.8.1 (PRs #136/#137). Migration-progress UX emits remain open (P2 polish).
+
+### P0 — 1.8.2 updater: seamless silent install ✅ SHIPPED (1.8.2)
+**Status:** **Option A shipped.** Because MoodHaven installs per-user into `%LOCALAPPDATA%`, the
+custom updater now runs the Windows NSIS installer silently (`/S`, no UAC) and relaunches the app
+automatically; user data in `%APPDATA%` is untouched, so settings/DB carry over. Linux AppImage was
+already in-place + silent. macOS still opens the DMG (silent install is notarization-gated — see the
+code-signing phases below). Also fixed: `checksums.txt` now includes `.deb`/`.rpm`.
+
+**Option B (future direction — adopt `tauri-plugin-updater`):** replace the custom GitHub-Releases
+poller with `tauri-plugin-updater`, which verifies minisign natively and provides native
+silent-install + relaunch across all three OSes (and removes the bespoke per-OS install code in
+`updater.rs`). Bigger refactor: it expects a Tauri-shaped update manifest (vs. our
+`latest-release.json` + `checksums.txt`), changes the asset/endpoint contract, and would re-home the
+severity/`current < 1.8.0` security-nag logic. Worth doing when the per-OS install matrix (esp.
+macOS notarized silent install) becomes the maintenance bottleneck. Keep Option A's custom flow until
+then — it's working and fully under our control.
+
+→ Original P0 analysis (now historical), retained for context:
+
 The custom GitHub-Releases updater is strong on transport (HTTPS-only, host allowlist, 200 MB
 cap, path-traversal guard) and verifies SHA-256 against `checksums.txt`, but:
 - **Authenticity gap (the trust-anchor hole):** CI already signs every bundle (`.sig` via

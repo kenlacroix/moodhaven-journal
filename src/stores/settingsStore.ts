@@ -88,6 +88,8 @@ interface SettingsState {
   setStorageType: (type: StorageBackend) => void;
   setWebDAVConfig: (config: Partial<WebDAVConfig>) => void;
   setLastSyncDate: (date: string, direction: 'upload' | 'download') => void;
+  setByoCloudFolder: (folderPath: string | null) => void;
+  setByoCloudLastSync: (date: string) => void;
 
   // Tutorial
   setHasSeenTutorial: (seen: boolean) => void;
@@ -523,6 +525,32 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
           ...state.settings.storage,
           lastSyncDate: date,
           lastSyncDirection: direction,
+        },
+      },
+      hasUnsavedChanges: true,
+    }));
+  },
+
+  setByoCloudFolder: (folderPath) => {
+    set((state) => ({
+      settings: {
+        ...state.settings,
+        storage: {
+          ...state.settings.storage,
+          byocloud: { ...state.settings.storage.byocloud, folderPath },
+        },
+      },
+      hasUnsavedChanges: true,
+    }));
+  },
+
+  setByoCloudLastSync: (date) => {
+    set((state) => ({
+      settings: {
+        ...state.settings,
+        storage: {
+          ...state.settings.storage,
+          byocloud: { ...state.settings.storage.byocloud, lastSyncAt: date },
         },
       },
       hasUnsavedChanges: true,

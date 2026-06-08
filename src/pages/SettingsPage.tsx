@@ -150,6 +150,8 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
     setReminderSound,
     setStorageType,
     setWebDAVConfig,
+    setByoCloudFolder,
+    setByoCloudLastSync,
     setHasSeenTutorial,
     setSTTEnabled,
     setSTTModel,
@@ -519,6 +521,8 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
           setWebDAVConfig={setWebDAVConfig}
           setSyncMode={setSyncMode}
           setSyncIntervalMinutes={setSyncIntervalMinutes}
+          setByoCloudFolder={setByoCloudFolder}
+          setByoCloudLastSync={setByoCloudLastSync}
         />
       )}
       {activeTab === 'ai' && (

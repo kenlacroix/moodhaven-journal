@@ -99,7 +99,7 @@ export interface ReminderSettings {
 }
 
 // Storage backend options
-export type StorageBackend = 'local' | 'webdav' | 'dropbox' | 'gdrive';
+export type StorageBackend = 'local' | 'webdav' | 'dropbox' | 'gdrive' | 'byocloud';
 
 // WebDAV connection configuration
 export interface WebDAVConfig {
@@ -119,6 +119,9 @@ interface StorageSettings {
     dropbox: { connected: boolean; lastSyncAt: string | null };
     gdrive: { connected: boolean; lastSyncAt: string | null };
   };
+  // BYO-Cloud folder sync: a user-picked folder mirrored to iCloud/Drive/Dropbox/OneDrive
+  // by the OS sync client. We write/read the encrypted backup blob there directly.
+  byocloud: { folderPath: string | null; lastSyncAt: string | null };
 }
 
 // Tutorial settings
@@ -316,6 +319,7 @@ export function createDefaultSettings(): AppSettings {
         dropbox: { connected: false, lastSyncAt: null },
         gdrive: { connected: false, lastSyncAt: null },
       },
+      byocloud: { folderPath: null, lastSyncAt: null },
     },
     tutorial: {
       hasSeenTutorial: false,

@@ -450,6 +450,9 @@ async function dispatch(command: string, p: Params): Promise<any> {
       URL.revokeObjectURL(url);
       return;
     }
+    case 'read_text_file':
+      // BYO-Cloud folder sync reads arbitrary OS paths — not reachable from the browser sandbox.
+      throw new Error('Folder sync requires the desktop app');
 
     // -----------------------------------------------------------------------
     // 2FA — browser provides TOTP via WebCrypto; stubs for hardware key

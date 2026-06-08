@@ -14,6 +14,9 @@ export interface UpdateAsset {
   checksum: string;
 }
 
+/** Update urgency. "security" updates are non-skippable in the UI. */
+export type UpdateSeverity = 'security' | 'recommended' | 'optional';
+
 export interface UpdateInfo {
   version: string;
   current_version: string;
@@ -24,6 +27,11 @@ export interface UpdateInfo {
   asset: UpdateAsset | null;
   can_self_update: boolean;
   platform: string;
+  /**
+   * Update urgency, computed in Rust. Currently-running versions below the
+   * security floor (1.8.0, the pre-encryption cohort) report "security".
+   */
+  severity: UpdateSeverity;
 }
 
 /**

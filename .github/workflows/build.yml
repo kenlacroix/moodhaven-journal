@@ -428,14 +428,26 @@ jobs:
           # Comma-join, then pretty-print with jq for safety
           ASSETS_RAW="[$(printf '%s\n' "${ASSETS[@]}" | paste -sd ',')]"
 
+          # Severity: releases at or above the 1.8.0 encryption-at-rest floor are
+          # security updates for the pre-1.8.0 (plaintext-DB) cohort. The in-app
+          # updater computes this from the *running* version; this field mirrors
+          # it for the website / external consumers of latest-release.json.
+          MAJOR=$(echo "$VERSION" | cut -d. -f1)
+          MINOR=$(echo "$VERSION" | cut -d. -f2)
+          SEVERITY="recommended"
+          if [ "$MAJOR" -gt 1 ] || { [ "$MAJOR" -eq 1 ] && [ "$MINOR" -ge 8 ]; }; then
+            SEVERITY="security"
+          fi
+
           jq -n \
             --arg version "$VERSION" \
             --arg releaseUrl "https://github.com/${{ github.repository }}/releases/tag/$TAG" \
             --arg publishedAt "$PUBLISHED_AT" \
+            --arg severity "$SEVERITY" \
             --argjson assets "$ASSETS_RAW" \
-            '{ version: $version, releaseUrl: $releaseUrl, publishedAt: $publishedAt, assets: $assets }' \
+            '{ version: $version, releaseUrl: $releaseUrl, publishedAt: $publishedAt, severity: $severity, assets: $assets }' \
             > latest-release.json
-          echo "Generated latest-release.json with $(jq 'length' <<< "$ASSETS_RAW") assets"
+          echo "Generated latest-release.json with $(jq 'length' <<< "$ASSETS_RAW") assets (severity: $SEVERITY)"
 
           gh release upload "$TAG" latest-release.json --clobber
 

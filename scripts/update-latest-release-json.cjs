@@ -53,10 +53,22 @@ const assets = release.assets
     sizeLabel: sizeLabel(a.size || 0),
   }));
 
+// Severity: releases at or above the 1.8.0 encryption-at-rest floor are
+// security updates for the pre-1.8.0 (plaintext-DB) cohort. Mirrors the rule
+// the in-app updater applies to the *running* version.
+function computeSeverity(tag) {
+  const [major = 0, minor = 0] = tag
+    .replace(/^v/, '')
+    .split('.')
+    .map((n) => parseInt(n, 10) || 0);
+  return major > 1 || (major === 1 && minor >= 8) ? 'security' : 'recommended';
+}
+
 const payload = {
   version: release.tagName,
   releaseUrl: release.url,
   publishedAt: release.publishedAt,
+  severity: computeSeverity(release.tagName),
   assets,
 };
 

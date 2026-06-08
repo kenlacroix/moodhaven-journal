@@ -1,6 +1,9 @@
 # Crash-Replay Test Harness (the credibility anchor)
 
-> **Status:** Plan / not started — *do not build yet.* This doc is the build spec.
+> **Status:** ✅ Built (2026-06-08). Layer A matrix (9 boundary tests, 5 ignored
+> change-password placeholders) green under `cargo test`; Layer B `kill -9` harness green
+> (5/5 boundaries survive SIGKILL). Wired into `.github/workflows/test.yml`. Captured
+> exhibit + matrix output in §9 below for the blog.
 > **Branch:** `test/crash-replay-harness` (own branch + PR, planning committed first).
 > **Parent epic:** [`change-password.md`](change-password.md) §7. Built **first**, against the
 > **existing** crash-safe migration (`encrypt_in_place`), then reused by `change_master_password`.
@@ -206,3 +209,51 @@ Windows SIGKILL.
 - Release build proven to compile the macro to a no-op (no `MH_CRASH_*` effect).
 - `change_master_password` placeholder matrix present and `#[ignore]`d with descriptive names.
 - The exhibit table + the `cargo test` matrix output captured for the blog (`change-password.md` §11).
+
+---
+
+## 9. Build results (captured 2026-06-08)
+
+**Files:** `crash_point!` macro + `crash_inject` + 5 boundary hooks in `src-tauri/src/db/mod.rs`;
+B6′ interrupted-rename backup-restore branch in `Database::new`; `src-tauri/src/db/crash_replay.rs`
+(Layer A); `src-tauri/examples/crash_probe.rs` + `scripts/crash-replay.sh` (Layer B); CI step in
+`.github/workflows/test.yml`. Release-inertness guard `crash_point_is_inert_in_release`
+(`#[cfg(not(debug_assertions))]`) verified under `cargo test --release`.
+
+### Layer A — `cargo test db::crash_replay` (the regression net)
+
+```
+test db::crash_replay::migration::b0_before_salt_write ... ok
+test db::crash_replay::migration::b1_salt_written_no_tmp ... ok
+test db::crash_replay::migration::b2_valid_tmp_promotes ... ok
+test db::crash_replay::migration::b2p_corrupt_tmp_preserves_original ... ok
+test db::crash_replay::migration::b3_state_true_valid_tmp_promotes ... ok
+test db::crash_replay::migration::b4_conn_placeholder_swapped ... ok
+test db::crash_replay::migration::b5_wal_removed_before_rename ... ok
+test db::crash_replay::migration::b6_rename_done ... ok
+test db::crash_replay::migration::b6p_rename_interrupted_backup_restore ... ok
+test db::crash_replay::change_master_password::cmp_b0_inner_txn_pre_commit_recovers_old ... ignored
+test db::crash_replay::change_master_password::cmp_b1_post_commit_pre_media_recovers_new ... ignored
+test db::crash_replay::change_master_password::cmp_b2_mid_media_swap_recovers_new ... ignored
+test db::crash_replay::change_master_password::cmp_b3_post_media_pre_rekey_recovers_new ... ignored
+test db::crash_replay::change_master_password::cmp_b4_post_rekey_pre_marker_clear_recovers_new ... ignored
+```
+
+### Layer B — `scripts/crash-replay.sh` (the blog exhibit)
+
+```
+boundary                   killed   recovered   sentinel result
+--------                   ------   ---------   -------- ------
+encrypt.after_salt         SIGKILL  old         intact   PASS
+encrypt.after_export       SIGKILL  new         intact   PASS
+encrypt.after_state_true   SIGKILL  new         intact   PASS
+encrypt.before_rename      SIGKILL  new         intact   PASS
+encrypt.after_rename       SIGKILL  new         intact   PASS
+
+→ 5/5 boundaries: data survived a kill -9 at every step
+```
+
+**Note vs. §5.3 sketch:** the sketch guessed `encrypt.before_rename → old`; the real code recovers
+`new` there (once `encrypted:true` + a valid tmp are on disk, recovery always promotes). The harness
+reports the *actual* outcome — only the invariant (`old XOR new`, sentinel intact) is asserted, not a
+hardcoded old/new split. One genuinely-`old` SIGKILL exhibit remains (`after_salt`, no tmp yet).

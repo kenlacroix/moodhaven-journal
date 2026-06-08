@@ -18,6 +18,9 @@ pub mod signals;
 pub mod still;
 pub mod voice_memos;
 
+#[cfg(test)]
+mod crash_replay;
+
 pub use analytics::*;
 pub use books::*;
 pub use journal::*;
@@ -63,6 +66,61 @@ fn write_db_state(db_path: &Path, state: &DbStateFile) -> Result<(), String> {
 }
 
 // ============================================================================
+// Crash-replay harness hook (Layer B — literal SIGKILL)
+// ============================================================================
+
+/// Crash-injection hook for the crash-replay test harness (`scripts/crash-replay.sh`).
+///
+/// Debug-only and inert by default: it does nothing unless the `MH_CRASH_POINT`
+/// environment variable is set and exactly matches `label`. When armed it stops the
+/// process *at this exact boundary* so an external `kill -9` lands deterministically:
+///
+/// - **park mode (default):** create the readiness file named by `MH_CRASH_READY`
+///   (so the parent knows the dangerous step has not yet run), then block forever.
+///   The parent then sends a genuine `SIGKILL`.
+/// - **abort mode (`MH_CRASH_MODE=abort`):** `std::process::abort()` immediately —
+///   for environments where the parent cannot signal the child.
+///
+/// There is NO release-build effect: `crash_point!` compiles this call out entirely in
+/// release (`debug_assertions` off), and even in debug it is a no-op unless armed.
+#[cfg(debug_assertions)]
+pub fn crash_inject(label: &str) {
+    match std::env::var("MH_CRASH_POINT") {
+        Ok(want) if want == label => {}
+        _ => return,
+    }
+    log::warn!("[crash_point] armed boundary reached: {label}");
+    if let Ok(ready) = std::env::var("MH_CRASH_READY") {
+        if !ready.is_empty() {
+            let _ = std::fs::write(&ready, label.as_bytes());
+        }
+    }
+    if std::env::var("MH_CRASH_MODE").ok().as_deref() == Some("abort") {
+        std::process::abort();
+    }
+    // Park at the boundary; the harness sends SIGKILL. Sleep in long ticks — the
+    // process is killed externally, so this loop never exits on its own.
+    loop {
+        std::thread::sleep(std::time::Duration::from_secs(3600));
+    }
+}
+
+/// Fire a named crash boundary for the crash-replay harness.
+///
+/// Expands to nothing in release builds (gated on `debug_assertions`); in debug builds
+/// it is still inert unless `MH_CRASH_POINT` matches the label (see [`crash_inject`]).
+macro_rules! crash_point {
+    ($label:expr) => {{
+        #[cfg(debug_assertions)]
+        $crate::db::crash_inject($label);
+    }};
+}
+// Re-exported for reuse by the change_master_password feature PR, which will drop the
+// same macro at its phase boundaries (active-plans/change-password.md §7).
+#[allow(unused_imports)]
+pub(crate) use crash_point;
+
+// ============================================================================
 // User settings row
 // ============================================================================
 
@@ -86,6 +144,22 @@ impl Database {
     /// call `apply_key()` after the user authenticates before the connection is usable.
     pub fn new(db_path: PathBuf) -> Result<Self, String> {
         let mut state = read_db_state(&db_path);
+
+        // Recovery (B6′ — interrupted rename): the Windows backup-and-rename window in
+        // encrypt_in_place / atomic_promote moves the original aside to moodhaven_old.db
+        // before renaming the encrypted tmp into place. A crash in that window can leave
+        // moodhaven.db absent while the backup survives. If the live DB is missing but the
+        // backup exists, restore it so the normal tmp / key-verified promotion below can run.
+        // Cross-platform safe: it fires only when the live file is absent AND a backup is
+        // present, so it never clobbers an already-promoted encrypted DB.
+        let backup_path = db_path.with_file_name("moodhaven_old.db");
+        if !db_path.exists() && backup_path.exists() {
+            log::warn!(
+                "[sqlcipher] moodhaven.db missing but moodhaven_old.db backup present — \
+                 restoring backup (interrupted-rename recovery, B6′)"
+            );
+            let _ = std::fs::rename(&backup_path, &db_path);
+        }
 
         // Recovery: if moodhaven_enc.db exists, a previous migration was interrupted.
         // Determine how far it got based on the salt pre-write and encrypted flag.
@@ -463,6 +537,7 @@ impl Database {
                 salt: Some(salt_b64.to_string()),
             },
         )?;
+        crash_point!("encrypt.after_salt");
 
         // 1. Flush WAL and export to encrypted tmp file (hold conn lock for this block)
         {
@@ -489,6 +564,7 @@ impl Database {
                 .execute_batch("SELECT count(*) FROM sqlite_master;")
                 .map_err(|_| "encrypted db unreadable after export".to_string())?;
         }
+        crash_point!("encrypt.after_export");
 
         // 3. Write db_state.json BEFORE releasing the file handle. This must happen before
         //    the rename: if a crash occurs between here and step 6, Database::new() will
@@ -500,6 +576,7 @@ impl Database {
                 salt: Some(salt_b64.to_string()),
             },
         )?;
+        crash_point!("encrypt.after_state_true");
 
         // 4. Release the original file by replacing the conn with an in-memory placeholder
         {
@@ -523,6 +600,7 @@ impl Database {
             }
             std::thread::sleep(std::time::Duration::from_millis(50));
         }
+        crash_point!("encrypt.before_rename");
 
         // 6. Rename encrypted tmp to final path.
         //    On Windows, rename fails if the destination exists — move the original to a
@@ -586,6 +664,7 @@ impl Database {
             }
             return Err(e);
         }
+        crash_point!("encrypt.after_rename");
 
         // 7. Open final keyed connection to the encrypted file
         {
@@ -1145,6 +1224,19 @@ pub fn is_2fa_enabled(db: &Database) -> Result<bool, String> {
 #[cfg(test)]
 mod sqlcipher_key_tests {
     use rusqlite::Connection;
+
+    // Release-build inertness guard (crash-replay harness DoD): in release the
+    // `crash_point!` macro must expand to nothing, so even an armed `MH_CRASH_POINT`
+    // can neither park nor abort. Compiled only under `cargo test --release`; if the
+    // macro were active here it would block forever and hang the test run.
+    #[cfg(not(debug_assertions))]
+    #[test]
+    fn crash_point_is_inert_in_release() {
+        std::env::set_var("MH_CRASH_POINT", "encrypt.after_salt");
+        super::crash_point!("encrypt.after_salt");
+        std::env::remove_var("MH_CRASH_POINT");
+        // Reaching this line proves the boundary did not park or abort in release.
+    }
 
     // Regression guard for the SQLCipher key-application bug: the DB is encrypted
     // with a RAW key via `ATTACH ... KEY "x'<hex>'"`, so it MUST be read back with

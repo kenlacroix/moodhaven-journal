@@ -125,6 +125,14 @@ jobs:
         working-directory: src-tauri
         run: cargo test
 
+      - name: Crash-replay SIGKILL harness (Layer B)
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        # Literally kill -9 the migration at each on-disk boundary and assert startup
+        # recovery never loses data. kill -9 is Linux/macOS only; Windows boundaries are
+        # covered by the Layer-A state-injection matrix in `cargo test` above.
+        run: ./scripts/crash-replay.sh
+
       - name: Cargo audit (CVE check)
         if: matrix.os == 'ubuntu-latest'
         working-directory: src-tauri

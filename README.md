@@ -55,9 +55,9 @@
 
 | Platform | Installer |
 |:---|:---|
-| Windows | `MoodHaven_1.6.0.1_x64-setup.exe` |
-| macOS | `MoodHaven_1.6.0.1_x64.dmg` |
-| Linux | `moodhaven_1.6.0.1_amd64.AppImage` or `.deb` |
+| Windows | `MoodHaven_1.8.1_x64-setup.exe` |
+| macOS | `MoodHaven_1.8.1_x64.dmg` |
+| Linux | `MoodHaven_1.8.1_amd64.AppImage` or `.deb` |
 
 **Browser** — Run directly in your browser or self-host with the `dist-web/` build. No Rust or install required.
 
@@ -116,10 +116,10 @@ Grab the latest build from the [Releases](https://github.com/kenlacroix/moodhave
 
 | Platform | Installer | Minimum Version |
 |:---|:---|:---|
-| **Windows** | `MoodHaven_1.6.0.1_x64-setup.exe` | Windows 10 |
-| **macOS** | `MoodHaven_1.6.0.1_x64.dmg` | macOS 10.15 Catalina |
-| **Linux** | `moodhaven_1.6.0.1_amd64.AppImage` | Any modern distro |
-| **Linux (Debian)** | `moodhaven_1.6.0.1_amd64.deb` | Ubuntu 22.04+ |
+| **Windows** | `MoodHaven_1.8.1_x64-setup.exe` | Windows 10 |
+| **macOS** | `MoodHaven_1.8.1_x64.dmg` | macOS 10.15 Catalina |
+| **Linux** | `MoodHaven_1.8.1_amd64.AppImage` | Any modern distro |
+| **Linux (Debian)** | `MoodHaven_1.8.1_amd64.deb` | Ubuntu 22.04+ |
 | **Web** | `npm run build:web` → serve `dist-web/` | Any modern browser |
 
 ### First Launch
@@ -399,6 +399,7 @@ See [CLAUDE.md](CLAUDE.md) for architecture, security guidelines, and convention
 
 ## Recent Changes
 
+**v1.8.1** — v1.8.1 — Security follow-ups to 1.8.0 Three security improvements after the 1.8.0 encryption-at-rest release: Update authenticity. The in-app updater now verifies the minisign signature of a downloaded build before installing, not just its SHA-256 checksum. A missing or invalid signature aborts the update (SHA-256 stays as an additional integrity check). This closes an authenticity gap: a checksum rides the same channel as the binary, so it proves integrity, not provenance. Security-update prompt. Updates now carry a severity. An install older than 1.8.0 sees a prominent, non-skippable "Security update — please install" banner — the mechanism that carries pre-1.8.0 installs to the encryption-at-rest fix. Encryption key released on lock. Locking the app now releases the keyed SQLCipher connection, so the 256-bit database key is wiped from memory on lock, not only on quit. Found via the project's own live memory-forensics test (E2). Unlock transparently re-opens and re-keys the database. See CHANGELOG.md for details.
 **v1.8.0** — **Security release.** Whole-database encryption at rest now actually engages — verified end-to-end on the installed build — after a key-format bug had left it inert since 1.7.0 (journal text was always encrypted; database metadata was readable at rest with file access). Found and fixed via the project's own pentest campaign, alongside PT6–PT10 hardening: full-DB restore consent gate, default-deny session lock, peer-sync reliability, recovery/restore data-loss fixes, key/password zeroization, OAuth-token-at-rest encryption. Upgrade recommended; see CHANGELOG. Also in 1.8.0: Mood analytics Phase 1 (53-week year heatmap, all-time trend, day-of-week chips, streak calendar; `get_year_heatmap`). 1,512 frontend + 195 Rust tests.
 **v1.7.4** — Security hardening: PT5 fixes — `write_text_file` path blocklist extended to cover Windows attack paths, factory reset deletes WAL/SHM sidecar files, PBKDF2 key material wrapped in `Zeroizing` in `two_factor.rs`, `data_management.rs`, and `media.rs`.
 **v1.6.0.1** — Forest and Sky rendering environments for StillHaven sessions. `EnvironmentPicker` lets users select the visual backdrop before starting a session. Patch fixes an environment-state regression from v1.6.0. 1283 tests.

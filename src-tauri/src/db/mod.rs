@@ -1656,4 +1656,209 @@ mod sqlcipher_key_tests {
         drop(db);
         let _ = std::fs::remove_dir_all(&base);
     }
+
+    /// Build a deterministic 32-byte raw key (and its hex form) for migration tests.
+    fn test_key(seed: u8) -> [u8; 32] {
+        let mut k = [0u8; 32];
+        for (i, byte) in k.iter_mut().enumerate() {
+            *byte = (i as u8).wrapping_mul(seed).wrapping_add(seed);
+        }
+        k
+    }
+
+    // Upgrade-migration E2E (highest-value release gap): an N-1 install ships a PLAINTEXT
+    // moodhaven.db (db_state.json absent). The first unlock on the new binary derives the
+    // key and runs the one-time `encrypt_in_place` migration. This test drives that real
+    // migration path end-to-end and asserts the single thing the PT8 "SQLCipher-inert" bug
+    // got wrong for three minor versions: the on-disk file must be actual CIPHERTEXT
+    // afterwards, not a plaintext `SQLite format 3` DB — while every seeded row survives.
+    #[test]
+    fn encrypt_in_place_migrates_plaintext_to_ciphertext_at_rest() {
+        use super::{read_db_state, Database};
+
+        const SQLITE_MAGIC: &[u8] = b"SQLite format 3\0";
+
+        let dir = std::env::temp_dir();
+        let pid = std::process::id();
+        let base = dir.join(format!("mh_migrate_e2e_{pid}"));
+        let _ = std::fs::remove_dir_all(&base);
+        let _ = std::fs::create_dir_all(&base);
+        let db_path = base.join("moodhaven.db");
+        let tmp_path = base.join("moodhaven_enc.db");
+
+        // 1. Seed a pre-1.8.0-style plaintext profile: full schema via Database::new (no
+        //    db_state.json → encrypted:false) with known journal rows the user must not lose.
+        {
+            let seed = Database::new(db_path.clone()).expect("seed plaintext DB");
+            {
+                let conn = seed.conn.lock().unwrap();
+                conn.execute_batch(
+                    "INSERT INTO journal_entries (id, encrypted_content, mood, created_at, updated_at)
+                     VALUES ('e1', 'blob-one', 5, datetime('now'), datetime('now')),
+                            ('e2', 'blob-two', 2, datetime('now'), datetime('now'));",
+                )
+                .unwrap();
+            }
+            assert!(!seed.is_encrypted(), "fresh seed must be plaintext");
+            drop(seed);
+        }
+
+        // 2. Sanity: the on-disk file really is a plaintext SQLite DB before migration.
+        let before = std::fs::read(&db_path).unwrap();
+        assert!(
+            before.starts_with(SQLITE_MAGIC),
+            "pre-migration file must be a plaintext `SQLite format 3` DB"
+        );
+
+        // 3. Boot the new binary and run the real one-time migration (what unlock_app calls).
+        let db = Database::new(db_path.clone()).expect("open plaintext DB on new binary");
+        assert!(!db.is_encrypted(), "still plaintext before first unlock");
+        let key = test_key(7);
+        let salt_b64 = "dGVzdC1zYWx0"; // base64("test-salt") — stored verbatim in db_state
+        db.encrypt_in_place(&key, salt_b64)
+            .expect("one-time migration must succeed");
+
+        // 4. db_state is now authoritative-encrypted, the interrupted-migration tmp is gone.
+        assert!(
+            db.is_encrypted(),
+            "db_state must report encrypted after migration"
+        );
+        let state = read_db_state(&db_path);
+        assert!(state.encrypted);
+        assert_eq!(
+            state.salt.as_deref(),
+            Some(salt_b64),
+            "salt must be persisted"
+        );
+        assert!(
+            !tmp_path.exists(),
+            "moodhaven_enc.db must be renamed away, not left behind"
+        );
+
+        // 5. THE regression guard: the on-disk file must no longer be a plaintext SQLite DB.
+        let after = std::fs::read(&db_path).unwrap();
+        assert!(
+            !after.starts_with(SQLITE_MAGIC),
+            "post-migration file must be ciphertext, not a plaintext `SQLite format 3` header \
+             (this is exactly the PT8 SQLCipher-inert bug)"
+        );
+
+        // 6. Data intact: the migrated connection serves every row through the keyed handle.
+        {
+            let conn = db.conn.lock().unwrap();
+            let n: i64 = conn
+                .query_row("SELECT count(*) FROM journal_entries", [], |r| r.get(0))
+                .expect("migrated DB must serve rows");
+            assert_eq!(n, 2, "both seeded rows must survive the migration");
+            let blob: String = conn
+                .query_row(
+                    "SELECT encrypted_content FROM journal_entries WHERE id = 'e1'",
+                    [],
+                    |r| r.get(0),
+                )
+                .unwrap();
+            assert_eq!(blob, "blob-one");
+        }
+
+        // 7. At rest the bytes are unreadable without the key: an unkeyed open, and a
+        //    wrong-key open, must both fail; only the correct raw key decrypts.
+        {
+            let unkeyed = Connection::open(&db_path).unwrap();
+            assert!(
+                unkeyed
+                    .query_row("SELECT count(*) FROM journal_entries", [], |r| r
+                        .get::<_, i64>(0))
+                    .is_err(),
+                "unkeyed open of the encrypted file must not read journal data"
+            );
+        }
+        {
+            let wrong_hex = hex::encode(test_key(99));
+            let wrong = Connection::open(&db_path).unwrap();
+            wrong
+                .execute_batch(&format!("PRAGMA key = \"x'{wrong_hex}'\";"))
+                .unwrap();
+            assert!(
+                wrong
+                    .query_row("SELECT count(*) FROM journal_entries", [], |r| r
+                        .get::<_, i64>(0))
+                    .is_err(),
+                "wrong key must not decrypt the at-rest DB"
+            );
+        }
+
+        drop(db);
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    // Companion to the migration E2E: prove an already-migrated profile REOPENS cleanly on a
+    // subsequent launch. Database::new must open the encrypted file without keying it (the
+    // passive handle can't read journal data), and the first apply_key of the session must
+    // re-key it and restore full read access — the exact startup→unlock path every launch
+    // after the one-time migration takes.
+    #[test]
+    fn migrated_profile_reopens_and_decrypts_on_next_launch() {
+        use super::Database;
+
+        let dir = std::env::temp_dir();
+        let pid = std::process::id();
+        let base = dir.join(format!("mh_migrate_reopen_{pid}"));
+        let _ = std::fs::remove_dir_all(&base);
+        let _ = std::fs::create_dir_all(&base);
+        let db_path = base.join("moodhaven.db");
+
+        let key = test_key(13);
+
+        // 1. Seed + migrate, exactly as the first-unlock path does, then close the app.
+        {
+            let seed = Database::new(db_path.clone()).expect("seed plaintext DB");
+            {
+                let conn = seed.conn.lock().unwrap();
+                conn.execute(
+                    "INSERT INTO journal_entries (id, encrypted_content, mood, created_at, updated_at)
+                     VALUES ('e1', 'persisted-blob', 3, datetime('now'), datetime('now'))",
+                    [],
+                )
+                .unwrap();
+            }
+            seed.encrypt_in_place(&key, "dGVzdC1zYWx0")
+                .expect("migration must succeed");
+            drop(seed); // app exit
+        }
+
+        // 2. Next launch: Database::new opens the encrypted file but does not key it, so the
+        //    passive connection cannot read journal data until the user unlocks.
+        let db = Database::new(db_path.clone()).expect("reopen encrypted DB on next launch");
+        assert!(
+            db.is_encrypted(),
+            "reopened profile must be recognised as encrypted"
+        );
+        {
+            let conn = db.conn.lock().unwrap();
+            assert!(
+                conn.query_row("SELECT count(*) FROM journal_entries", [], |r| r
+                    .get::<_, i64>(0))
+                    .is_err(),
+                "passive (unkeyed) connection must not serve journal data before unlock"
+            );
+        }
+
+        // 3. First unlock of the new session keys the connection and restores the row.
+        db.apply_key(&key)
+            .expect("unlock must re-key the reopened DB");
+        {
+            let conn = db.conn.lock().unwrap();
+            let blob: String = conn
+                .query_row(
+                    "SELECT encrypted_content FROM journal_entries WHERE id = 'e1'",
+                    [],
+                    |r| r.get(0),
+                )
+                .expect("unlocked reopened DB must serve the migrated row");
+            assert_eq!(blob, "persisted-blob");
+        }
+
+        drop(db);
+        let _ = std::fs::remove_dir_all(&base);
+    }
 }

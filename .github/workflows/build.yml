@@ -202,35 +202,49 @@ jobs:
             src-tauri/target/${{ matrix.target }}/release/bundle/**/*.sig
           retention-days: 1
 
-      # Upload the updater minisign signatures to the release.
-      # tauri-action uploads the installers but not their `.sig` companions, and
-      # the in-app updater (src-tauri/src/commands/updater.rs) fetches
-      # "<asset>.sig" for the AppImage / NSIS setup.exe it downloads and treats a
-      # missing signature as a hard error. Upload them here so auto-update from
-      # a signature-verifying build (1.8.1+) can succeed. macOS auto-update is a
-      # separate concern (Tauri signs the .app.tar.gz, not the .dmg the updater
-      # expects), tracked in the roadmap.
-      - name: Upload updater signatures to release
+      # Sign the installers and upload the updater minisign signatures.
+      # The in-app updater (src-tauri/src/commands/updater.rs) fetches
+      # "<asset>.sig" for the asset it downloads (AppImage / NSIS setup.exe / dmg)
+      # and treats a missing signature as a hard error. tauri-action signs the
+      # bundles during the build but then deletes the `.sig` companions (and the
+      # duplicate lowercase bundles) right after uploading the primary installers,
+      # so they never reach the release. Re-sign the installers that remain on
+      # disk with the same key and upload the signatures. The signature is over
+      # the exact installer bytes, so it verifies against the compiled-in pubkey.
+      - name: Sign installers and upload updater signatures
         if: github.event_name == 'push'
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
           set -euo pipefail
           shopt -s nullglob
           TAG="${{ github.ref_name }}"
           BUNDLE="src-tauri/target/${{ matrix.target }}/release/bundle"
           # Capitalised product-name globs match the installers tauri-action
-          # actually uploaded (avoids the lowercase mood-haven_* duplicate bundle).
-          sigs=( "$BUNDLE"/appimage/MoodHaven_*.AppImage.sig \
-                 "$BUNDLE"/nsis/MoodHaven_*-setup.exe.sig )
-          if [ ${#sigs[@]} -eq 0 ]; then
-            echo "No updater .sig files for ${{ matrix.target }} (expected on macOS); skipping."
+          # uploaded (skipping the lowercase mood-haven_* duplicate bundles).
+          installers=( "$BUNDLE"/appimage/MoodHaven_*.AppImage \
+                       "$BUNDLE"/nsis/MoodHaven_*-setup.exe \
+                       "$BUNDLE"/dmg/MoodHaven_*.dmg )
+          if [ ${#installers[@]} -eq 0 ]; then
+            echo "No updater installers found for ${{ matrix.target }}; skipping."
             exit 0
           fi
-          for sig in "${sigs[@]}"; do
-            echo "Uploading $(basename "$sig")"
-            gh release upload "$TAG" "$sig" --clobber
+          for f in "${installers[@]}"; do
+            echo "Signing $(basename "$f")"
+            npx --no-install @tauri-apps/cli signer sign "$f"
+            # `tauri signer sign` writes a base64-WRAPPED .sig. The in-app updater
+            # (verify_minisign) feeds the .sig straight into minisign-verify's
+            # Signature::decode, which expects the RAW minisign text — so it
+            # rejects the base64-wrapped form. Publish the base64-DECODED
+            # signature. openssl is used for a portable decode (BSD base64 on
+            # macOS has no `-d`). Locked by a regression test in updater.rs.
+            openssl base64 -d -A -in "$f.sig" -out "$f.sig.raw"
+            mv "$f.sig.raw" "$f.sig"
+            gh release upload "$TAG" "$f.sig" --clobber
+            echo "Uploaded $(basename "$f").sig"
           done
 
   # ── Android: Wear OS companion APK ─────────────────────────────────────────

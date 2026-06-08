@@ -178,6 +178,44 @@ fn decrypt_mbmf(data: &[u8], password: &str) -> Result<Vec<u8>, String> {
     }
 }
 
+/// Re-encrypt one MBMF blob from `old_password` to `new_password` — the pure transform
+/// behind `change_master_password`'s media step (active-plans/change-password.md §4.5).
+/// Decrypts under the old key and re-encrypts under a fresh per-file salt/key derived
+/// from the new password. Pure and side-effect-free so it can be unit-tested in isolation;
+/// the orchestrator wraps it with stage-then-rename + per-file progress for crash-safety.
+#[allow(dead_code)] // wired up by change_master_password in the implementation pass (§4.5)
+pub(crate) fn reencrypt_mbmf(
+    data: &[u8],
+    old_password: &str,
+    new_password: &str,
+) -> Result<Vec<u8>, String> {
+    let plaintext = decrypt_mbmf(data, old_password)?;
+    encrypt_to_mbmf(&plaintext, new_password)
+}
+
+/// Re-encrypt every media file on disk from the old password to the new one — the
+/// filesystem (non-transactional) half of `change_master_password` (§4.5, §8 "weakest
+/// link"). For each MBMF file: read → [`reencrypt_mbmf`] → write to a staging file →
+/// fsync → atomic rename over the original, recording per-file progress in the pending
+/// marker so a crash mid-sweep resumes from the next unfinished file.
+///
+/// SCAFFOLD: signature + contract are fixed (drives the `cmp_b2_mid_media_swap` boundary);
+/// the staging/rename/progress body is pending the implementation pass. Returns an explicit
+/// not-implemented error until then so it cannot run against real media.
+#[allow(dead_code)] // wired up by change_master_password in the implementation pass (§4.5)
+pub(crate) fn reencrypt_all_media(
+    _app: &AppHandle,
+    _old_password: &str,
+    _new_password: &str,
+) -> Result<usize, String> {
+    // TODO(change-password §4.5): enumerate media_attachments → for each file
+    // stage `reencrypt_mbmf(read, old, new)` → fsync → atomic rename → mark progress.
+    Err(
+        "reencrypt_all_media not yet implemented (active-plans/change-password.md §4.5)"
+            .to_string(),
+    )
+}
+
 // ── Filesystem helpers ─────────────────────────────────────────────────────────
 
 /// Returns Ok(()) if entry_id is safe to use as a path component, Err otherwise.

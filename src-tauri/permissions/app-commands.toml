@@ -16,6 +16,8 @@ commands.allow = [
   "verify_password",
   "unlock_app",
   "lock_app",
+  # Change master password (requires unlock; re-encrypts all data)
+  "change_master_password",
   # PIN unlock (pin_is_enabled + pin_unlock are pre-auth; pin_setup + pin_disable require unlock)
   "pin_is_enabled",
   "pin_setup",

@@ -8,6 +8,7 @@ import { use2FASetup } from '../../../hooks/use2FASetup';
 import { PrivacyAutoLock } from './PrivacyAutoLock';
 import { PrivacyBiometric } from './PrivacyBiometric';
 import { PrivacyPinUnlock } from './PrivacyPinUnlock';
+import { PrivacyChangePassword } from './PrivacyChangePassword';
 import { PrivacyTwoFactor } from './PrivacyTwoFactor';
 import { PrivacyDataManagement } from './PrivacyDataManagement';
 import { TransparencySection } from './PrivacyTransparency';
@@ -110,6 +111,8 @@ export function PrivacyTab({
         />
 
         <PrivacyPinUnlock sessionPassword={sessionPassword} />
+
+        <PrivacyChangePassword sessionPassword={sessionPassword} />
 
         <PrivacyTwoFactor
           twoFactorStatus={twoFactorStatus}

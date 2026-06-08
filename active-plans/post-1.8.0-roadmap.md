@@ -105,10 +105,11 @@ Full GUI auto-spin-up is the wrong target (a Tauri GUI needs a real desktop sess
 → Source: `research-vm-autospinup.md`
 
 ### P2 — Password-manager / passkey unlock (mostly "document + honesty", one real build later)
-- **Ship now ($0, ~1–2h):** document "save your MoodHaven password in your PM; copy-paste to
-  unlock" + an inline hint near the unlock field; point at the existing clipboard-clear setting.
-  PM browser-extension **autofill into the native Tauri WebView is architecturally impossible** —
-  state that plainly to users.
+- **Ship now ($0, ~1–2h):** ✅ SHIPPED — `docs/howto-password-managers.md` documents the
+  "save in your PM; copy-paste to unlock" workflow, states plainly that PM browser-extension
+  **autofill into the native Tauri WebView is architecturally impossible**, and points at the
+  existing clipboard-clear setting. An inline hint was added beneath the unlock field in
+  `src/pages/LockScreen.tsx`, and the doc is indexed in `CLAUDE.md`.
 - **Do NOT build:** a PM CLI/SDK bridge (Option D) — storing a PM PAT/service-account token
   on-device inverts the zero-knowledge threat model (worse than today's PIN/keyring).
 - **Roadmap item (real engineering, ~1–2 wks):** promote the **existing native CTAP2 hardware-key

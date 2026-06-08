@@ -945,6 +945,46 @@ pub async fn write_text_file(
     Ok(written_size)
 }
 
+/// Write binary bytes (base64-encoded by the frontend) to a user-selected path.
+/// Mirrors `write_text_file`'s path guard; used by the recovery-key PDF export so a
+/// binary PDF can be written to a path the user picks via the save dialog (the FS
+/// plugin's scope restrictions block arbitrary user-selected paths).
+#[tauri::command]
+pub async fn write_binary_file(
+    path: String,
+    contents_base64: String,
+    lock: State<'_, AppLockState>,
+) -> Result<u64, String> {
+    require_unlocked(&lock)?;
+    let canonical = guard_user_file_path(&path)?;
+    let file_path = canonical.as_path();
+
+    if let Some(parent) = file_path.parent() {
+        if !parent.exists() {
+            return Err(format!("Directory does not exist: {}", parent.display()));
+        }
+    }
+
+    let bytes = general_purpose::STANDARD
+        .decode(contents_base64.as_bytes())
+        .map_err(|e| format!("Invalid base64 payload: {}", e))?;
+
+    fs::write(file_path, &bytes).map_err(|e| format!("Failed to write file: {}", e))?;
+
+    let metadata =
+        fs::metadata(file_path).map_err(|e| format!("File verification failed: {}", e))?;
+    let written_size = metadata.len();
+    let expected_size = bytes.len() as u64;
+    if written_size != expected_size {
+        return Err(format!(
+            "File verification failed: expected {} bytes, got {} bytes",
+            expected_size, written_size
+        ));
+    }
+
+    Ok(written_size)
+}
+
 /// Read a UTF-8 text file from a user-selected path. Honors the same path guard as
 /// `write_text_file`. Used by BYO-Cloud folder sync to read back the encrypted backup
 /// blob from a user-picked sync folder (one the OS keeps mirrored to iCloud/Drive/etc.).

@@ -3,7 +3,7 @@
  * generate-checksums.js
  *
  * Runs in CI after all platform builds complete.
- * Finds all downloadable release assets (AppImage, exe, dmg) in the
+ * Finds all downloadable release assets (AppImage, exe, dmg, msi, deb, rpm) in the
  * artifacts/ directory, computes SHA-256 for each, writes checksums.txt,
  * then uploads it to the GitHub release.
  *
@@ -31,7 +31,7 @@ const ARTIFACTS_DIR = path.join(process.cwd(), 'artifacts');
 const CHECKSUM_FILE = path.join(process.cwd(), 'checksums.txt');
 
 // Extensions we want to checksum (updater assets + installers + Android bundles)
-const ASSET_EXTENSIONS = ['.AppImage', '.exe', '.dmg', '.msi', '.aab'];
+const ASSET_EXTENSIONS = ['.AppImage', '.exe', '.dmg', '.msi', '.deb', '.rpm', '.aab'];
 
 // ── Collect all platform assets ────────────────────────────────────────────────
 function findAssets(dir) {

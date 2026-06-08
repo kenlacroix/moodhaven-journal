@@ -668,14 +668,36 @@ fn install_linux_appimage(new_appimage: &std::path::Path) -> Result<(), String> 
     std::process::exit(0);
 }
 
-// ── Windows: run NSIS installer (handles UAC internally) ──────────────────────
+// ── Windows: run NSIS installer silently, then relaunch ───────────────────────
 
 #[cfg(target_os = "windows")]
 fn install_windows_exe(installer: &std::path::Path) -> Result<(), String> {
-    std::process::Command::new(installer)
+    // MoodHaven installs per-user into %LOCALAPPDATA%, so the NSIS installer
+    // never needs elevation — `/S` runs a fully silent install with no UAC
+    // prompt and no wizard. User data lives in %APPDATA%\com.moodhaven.app
+    // (Roaming) and is untouched by install/uninstall, so settings and the
+    // encrypted database are preserved automatically.
+    //
+    // The installer must replace the currently-running executable, so this
+    // process has to exit first. We hand the sequence to a detached `cmd`:
+    //   1. run the installer silently (cmd blocks until setup.exe returns),
+    //   2. wait ~2 s for file handles to settle, then
+    //   3. relaunch the freshly-installed binary.
+    // `&` chains the steps unconditionally; the `ping` is the classic headless
+    // delay (`timeout` needs a console and fails when stdin is redirected).
+    let installer_str = installer.to_string_lossy().to_string();
+    let current_exe = std::env::current_exe()
+        .map_err(|e| format!("Cannot determine current executable path: {e}"))?
+        .to_string_lossy()
+        .to_string();
+
+    let script =
+        format!("\"{installer_str}\" /S & ping 127.0.0.1 -n 3 >nul & start \"\" \"{current_exe}\"");
+    std::process::Command::new("cmd")
+        .args(["/C", &script])
         .spawn()
-        .map_err(|e| format!("Failed to launch installer: {e}"))?;
-    // Exit so NSIS can replace the running binary
+        .map_err(|e| format!("Failed to launch silent installer: {e}"))?;
+    // Exit so NSIS can replace the running binary.
     std::process::exit(0);
 }
 

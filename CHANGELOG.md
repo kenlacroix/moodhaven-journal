@@ -5,6 +5,14 @@ All notable changes to MoodHaven Journal are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.8.1] — 2026-06-07
+
+### Security
+
+- **Update authenticity** — the in-app updater now verifies the minisign signature of a downloaded build (not just its SHA-256 checksum) before installing; a missing or invalid signature aborts the update. SHA-256 remains as an additional integrity check.
+- **Security-update prompt** — updates now carry a severity, and an install older than 1.8.0 sees a prominent, non-skippable "Security update — please install" banner (this is what carries pre-1.8.0 users to the encryption-at-rest fix).
+- **Encryption key released on lock** — locking the app now releases the keyed SQLCipher connection so the 256-bit key is wiped from memory on lock, not only on quit (found via the campaign's live memory-forensics test, E2). Unlock transparently re-opens and re-keys the database.
+
 ## [1.8.0] — 2026-06-07
 
 ### Added

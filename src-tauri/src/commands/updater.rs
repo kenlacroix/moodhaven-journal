@@ -12,14 +12,16 @@
 //! Security properties:
 //!   - HTTPS transport (system TLS) prevents casual MITM
 //!   - SHA-256 content verification catches corrupted/tampered downloads
+//!   - minisign signature verification proves authenticity (the bundle was
+//!     signed by the holder of the CI private key) — the actual trust anchor.
+//!     The public key is compiled in (`MINISIGN_PUBKEY`) so it cannot be
+//!     swapped at runtime. SHA-256 stays as an additional integrity check.
 //!   - Version gate: only `new > current` is accepted (no rollback)
 //!   - No user-supplied URLs are ever followed; all URLs come from the GitHub API
 //!     response (repo-owner/repo-name are hardcoded below)
-//!
-//! Future: add ed25519 signature verification alongside SHA-256 once CI
-//!         signing is set up (private key in GitHub Actions secrets, public
-//!         key hardcoded in this file).
 
+use base64::Engine as _;
+use minisign_verify::{PublicKey, Signature};
 use reqwest::header::{HeaderMap, HeaderValue, USER_AGENT};
 use serde::{Deserialize, Serialize};
 use std::io::Write as IoWrite;
@@ -39,6 +41,21 @@ const USER_AGENT_STRING: &str = concat!("MoodHaven/", env!("CARGO_PKG_VERSION"))
 
 // Maximum size of a downloaded update binary (200 MB)
 const MAX_UPDATE_BYTES: u64 = 200 * 1024 * 1024;
+
+// ── Authenticity: compiled-in minisign public key ─────────────────────────────
+// This is the base64-encoded minisign `.pub` file (the exact same value held in
+// `src-tauri/tauri.conf.json` → `plugins.updater.pubkey`). It is a compile-time
+// `const` so it cannot be swapped at runtime / via config. CI signs every bundle
+// with the matching private key (`TAURI_SIGNING_PRIVATE_KEY`) and uploads the
+// `<asset>.sig`. The updater downloads that `.sig` and verifies it against this
+// key before installing — minisign is the trust anchor; SHA-256 is integrity.
+const MINISIGN_PUBKEY: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDY2RDc3NzUyRTM4QUMwRjUKUldUMXdJcmpVbmZYWnVTL0RkRDRLaXlNVTMxVS95T0loRlVsd2tXQUxiNWNTYzZHcnpoNUNFNTcK";
+
+// ── Security-severity floor ───────────────────────────────────────────────────
+// Any running version below this is treated as a "security" update (the
+// plaintext-DB, pre-SQLCipher cohort). SQLCipher encryption-at-rest landed in
+// 1.8.0, so users below it must be prompted with a non-skippable banner.
+const SECURITY_FLOOR: (u64, u64, u64) = (1, 8, 0);
 
 // ── Platform detection ─────────────────────────────────────────────────────────
 
@@ -122,6 +139,9 @@ pub struct UpdateInfo {
     pub can_self_update: bool,
     /// Platform string for display
     pub platform: String,
+    /// Update urgency: "security" | "recommended" | "optional".
+    /// "security" updates are non-skippable in the UI.
+    pub severity: String,
 }
 
 #[derive(Serialize, Clone)]
@@ -182,6 +202,20 @@ fn parse_version(v: &str) -> (u64, u64, u64) {
 
 fn is_newer(candidate: &str, current: &str) -> bool {
     parse_version(candidate) > parse_version(current)
+}
+
+/// Classify update urgency from the currently-running version.
+///
+/// Rule: any version below the `SECURITY_FLOOR` (the pre-SQLCipher,
+/// plaintext-DB cohort) is told that the update is a **security** update.
+/// Everything else is "recommended". The frontend makes "security" banners
+/// non-skippable.
+fn compute_severity(current: &str) -> &'static str {
+    if parse_version(current) < SECURITY_FLOOR {
+        "security"
+    } else {
+        "recommended"
+    }
 }
 
 fn human_size(bytes: u64) -> String {
@@ -259,6 +293,70 @@ fn verify_sha256(path: &std::path::Path, expected: &str) -> Result<bool, String>
     }
 }
 
+/// Decode the compiled-in minisign public key.
+///
+/// `MINISIGN_PUBKEY` is the base64-encoded `.pub` file (the value Tauri stores
+/// in `tauri.conf.json`). We base64-decode it back into the two-line minisign
+/// file format, then parse it.
+fn load_pubkey() -> Result<PublicKey, String> {
+    let decoded = base64::engine::general_purpose::STANDARD
+        .decode(MINISIGN_PUBKEY)
+        .map_err(|e| format!("Invalid compiled-in public key (base64): {e}"))?;
+    let pub_str =
+        String::from_utf8(decoded).map_err(|e| format!("Invalid public key (utf8): {e}"))?;
+    PublicKey::decode(pub_str.trim())
+        .map_err(|e| format!("Invalid compiled-in public key (format): {e}"))
+}
+
+/// Verify a minisign signature over a downloaded file.
+///
+/// `sig_text` is the raw contents of the `<asset>.sig` file produced by CI.
+/// Returns `Ok(())` only when the signature is valid for `path` under the
+/// compiled-in public key. Any failure (bad key, malformed signature,
+/// mismatch) is an error — the caller must abort and delete the temp file.
+///
+/// Tauri's minisign signatures are prehashed (BLAKE2b), so legacy signatures
+/// are rejected (`allow_legacy = false`).
+fn verify_minisign(path: &std::path::Path, sig_text: &str) -> Result<(), String> {
+    let public_key = load_pubkey()?;
+    let signature =
+        Signature::decode(sig_text).map_err(|e| format!("Malformed signature file: {e}"))?;
+    let data = std::fs::read(path).map_err(|e| format!("Read error: {e}"))?;
+    public_key
+        .verify(&data, &signature, false)
+        .map_err(|e| format!("Signature verification failed: {e}"))
+}
+
+/// Download the `<asset>.sig` signature file for `asset_name` from the release.
+/// Returns the raw text, or an error if the `.sig` asset is absent or the
+/// download fails. A missing `.sig` is a hard error — we never install an
+/// unsigned update.
+async fn fetch_signature(
+    client: &reqwest::Client,
+    assets: &[GitHubAsset],
+    asset_name: &str,
+) -> Result<String, String> {
+    let sig_name = format!("{asset_name}.sig");
+    let sig_asset = assets
+        .iter()
+        .find(|a| a.name == sig_name)
+        .ok_or_else(|| format!("No signature ({sig_name}) found for this release"))?;
+    let resp = client
+        .get(&sig_asset.browser_download_url)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to download signature: {e}"))?;
+    if !resp.status().is_success() {
+        return Err(format!(
+            "Failed to download signature: HTTP {}",
+            resp.status()
+        ));
+    }
+    resp.text()
+        .await
+        .map_err(|e| format!("Failed to read signature: {e}"))
+}
+
 // ── Tauri commands ─────────────────────────────────────────────────────────────
 
 /// Check GitHub for a newer release. Returns UpdateInfo whether or not an
@@ -279,6 +377,7 @@ pub async fn check_for_update(app: AppHandle) -> Result<UpdateInfo, String> {
 
     if resp.status() == 404 {
         // No releases published yet
+        let severity = compute_severity(&current_version).to_string();
         return Ok(UpdateInfo {
             version: current_version.clone(),
             current_version,
@@ -289,6 +388,7 @@ pub async fn check_for_update(app: AppHandle) -> Result<UpdateInfo, String> {
             asset: None,
             can_self_update: CURRENT_OS != "other",
             platform: format!("{CURRENT_OS}/{CURRENT_ARCH}"),
+            severity,
         });
     }
 
@@ -328,6 +428,7 @@ pub async fn check_for_update(app: AppHandle) -> Result<UpdateInfo, String> {
         None
     };
 
+    let severity = compute_severity(&current_version).to_string();
     Ok(UpdateInfo {
         version: new_ver,
         current_version,
@@ -338,6 +439,7 @@ pub async fn check_for_update(app: AppHandle) -> Result<UpdateInfo, String> {
         asset,
         can_self_update,
         platform: format!("{CURRENT_OS}/{CURRENT_ARCH}"),
+        severity,
     })
 }
 
@@ -380,25 +482,34 @@ pub async fn download_and_install_update(
 
     let client = build_http_client()?;
 
-    // Resolve checksum: if the caller passed one, use it; otherwise fetch from checksums.txt
-    // (We re-fetch the release assets just for the checksum resolution)
+    // Fetch the release once — we need its asset list to resolve both the
+    // checksum (if the caller didn't pass one) and the minisign `.sig` URL.
+    let rel_url = format!("{GITHUB_API_BASE}/repos/{GITHUB_OWNER}/{GITHUB_REPO}/releases/latest");
+    let rel_resp = client
+        .get(&rel_url)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to fetch release metadata: {e}"))?;
+    if !rel_resp.status().is_success() {
+        return Err(format!(
+            "Failed to fetch release metadata: HTTP {}",
+            rel_resp.status()
+        ));
+    }
+    let release: GitHubRelease = rel_resp
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse release metadata: {e}"))?;
+
+    // Fetch the minisign signature up-front — a missing `.sig` is a hard error;
+    // we never install an unsigned update.
+    let signature_text = fetch_signature(&client, &release.assets, &asset_name).await?;
+
+    // Resolve checksum: if the caller passed one, use it; otherwise fetch from checksums.txt.
     let checksum = if !expected_checksum.is_empty() {
         expected_checksum.clone()
     } else {
-        // Try to pull checksums.txt from the same release
-        let rel_url =
-            format!("{GITHUB_API_BASE}/repos/{GITHUB_OWNER}/{GITHUB_REPO}/releases/latest");
-        let rel_resp = client
-            .get(&rel_url)
-            .send()
-            .await
-            .map_err(|e| e.to_string())?;
-        if rel_resp.status().is_success() {
-            let release: GitHubRelease = rel_resp.json().await.map_err(|e| e.to_string())?;
-            fetch_checksum(&client, &release.assets, &asset_name).await
-        } else {
-            String::new()
-        }
+        fetch_checksum(&client, &release.assets, &asset_name).await
     };
 
     // Stream the download to a temp file
@@ -459,7 +570,18 @@ pub async fn download_and_install_update(
                 .to_string(),
         );
     }
-    verify_sha256(&tmp_path, &checksum)?;
+    if let Err(e) = verify_sha256(&tmp_path, &checksum) {
+        let _ = std::fs::remove_file(&tmp_path);
+        return Err(e);
+    }
+
+    // Authenticity gate: verify the minisign signature against the compiled-in
+    // public key. This proves the bundle was signed by CI's private key — the
+    // actual trust anchor. Any failure aborts and deletes the temp file.
+    if let Err(e) = verify_minisign(&tmp_path, &signature_text) {
+        let _ = std::fs::remove_file(&tmp_path);
+        return Err(e);
+    }
 
     // Hand off to platform installer
     let install_result = install_update(&tmp_path, &asset_name);
@@ -733,5 +855,219 @@ abc123  target.exe
         assert!(is_newer("2.0.0", "1.9.9"));
         assert!(!is_newer("1.2.3", "1.2.3"));
         assert!(!is_newer("1.2.2", "1.2.3"));
+    }
+
+    // ── compute_severity (security-update gate) ───────────────────────────────
+
+    #[test]
+    fn compute_severity_flags_pre_security_floor_as_security() {
+        // Anything below 1.8.0 (the plaintext-DB cohort) is a security update.
+        assert_eq!(compute_severity("1.7.5"), "security");
+        assert_eq!(compute_severity("1.7.0"), "security");
+        assert_eq!(compute_severity("0.9.0"), "security");
+        assert_eq!(compute_severity("v1.6.0"), "security");
+    }
+
+    #[test]
+    fn compute_severity_at_or_above_floor_is_recommended() {
+        assert_eq!(compute_severity("1.8.0"), "recommended");
+        assert_eq!(compute_severity("1.8.1"), "recommended");
+        assert_eq!(compute_severity("2.0.0"), "recommended");
+    }
+
+    // ── minisign signature verification (authenticity trust anchor) ───────────
+    //
+    // These tests synthesize a real minisign keypair + prehashed signature so we
+    // exercise the same code path the production updater uses. The compiled-in
+    // `MINISIGN_PUBKEY` is a fixed CI key, so `verify_minisign` is parameterised
+    // here via a locally generated key for testability; the production wiring is
+    // covered by the integration of `load_pubkey()` + `verify()`.
+
+    use blake2::digest::consts::U64;
+    use blake2::Blake2b;
+    use ed25519_dalek::{Signer, SigningKey};
+
+    /// A self-contained minisign signing fixture mirroring `rsign`/`minisign`:
+    /// prehashed (BLAKE2b-512) ed25519 signatures, algorithm `ED` (0x45 0x44).
+    struct MinisignFixture {
+        pubkey_file: String,
+        signing_key: SigningKey,
+        key_id: [u8; 8],
+    }
+
+    impl MinisignFixture {
+        fn generate() -> Self {
+            // Deterministic-but-arbitrary key material for the test.
+            let secret_bytes: [u8; 32] = [7u8; 32];
+            let signing_key = SigningKey::from_bytes(&secret_bytes);
+            let verifying = signing_key.verifying_key();
+            let key_id: [u8; 8] = [0xA1, 0xB2, 0xC3, 0xD4, 0xE5, 0xF6, 0x07, 0x18];
+
+            // Public key file body: algo (ED) + key_id + 32-byte public key.
+            let mut pk_bin = Vec::with_capacity(42);
+            pk_bin.extend_from_slice(&[0x45, 0x64]); // "Ed" — minisign pubkey algo tag
+            pk_bin.extend_from_slice(&key_id);
+            pk_bin.extend_from_slice(verifying.as_bytes());
+            let pk_b64 = base64::engine::general_purpose::STANDARD.encode(&pk_bin);
+            let pubkey_file = format!("untrusted comment: minisign public key\n{pk_b64}\n");
+
+            MinisignFixture {
+                pubkey_file,
+                signing_key,
+                key_id,
+            }
+        }
+
+        /// Base64-encode the `.pub` file the way `tauri.conf.json` stores it.
+        fn pubkey_config_value(&self) -> String {
+            base64::engine::general_purpose::STANDARD.encode(self.pubkey_file.as_bytes())
+        }
+
+        /// Produce a valid prehashed `.sig` file for `data`.
+        fn sign(&self, data: &[u8]) -> String {
+            let prehash = <Blake2b<U64> as Digest>::digest(data);
+
+            let sig = self.signing_key.sign(&prehash);
+            let mut sig_blob = Vec::with_capacity(74);
+            sig_blob.extend_from_slice(&[0x45, 0x44]); // "ED" — prehashed algo tag
+            sig_blob.extend_from_slice(&self.key_id);
+            sig_blob.extend_from_slice(&sig.to_bytes());
+
+            let trusted_comment = "trusted comment: test fixture";
+            let comment_body = "test fixture"; // the part after "trusted comment: "
+            let mut global_input = Vec::new();
+            global_input.extend_from_slice(&sig.to_bytes());
+            global_input.extend_from_slice(comment_body.as_bytes());
+            let global_sig = self.signing_key.sign(&global_input);
+
+            let sig_b64 = base64::engine::general_purpose::STANDARD.encode(&sig_blob);
+            let global_b64 =
+                base64::engine::general_purpose::STANDARD.encode(global_sig.to_bytes());
+
+            format!(
+                "untrusted comment: minisign signature\n{sig_b64}\n{trusted_comment}\n{global_b64}\n"
+            )
+        }
+    }
+
+    /// Verify a downloaded file against an explicit pubkey-config value, reusing
+    /// the exact decode+verify logic of `verify_minisign` but with a test key.
+    fn verify_minisign_with_key(
+        path: &std::path::Path,
+        sig_text: &str,
+        pubkey_config: &str,
+    ) -> Result<(), String> {
+        let decoded = base64::engine::general_purpose::STANDARD
+            .decode(pubkey_config)
+            .map_err(|e| format!("pubkey base64: {e}"))?;
+        let pub_str = String::from_utf8(decoded).map_err(|e| format!("pubkey utf8: {e}"))?;
+        let public_key =
+            PublicKey::decode(pub_str.trim()).map_err(|e| format!("pubkey format: {e}"))?;
+        let signature =
+            Signature::decode(sig_text).map_err(|e| format!("Malformed signature file: {e}"))?;
+        let data = std::fs::read(path).map_err(|e| format!("Read error: {e}"))?;
+        public_key
+            .verify(&data, &signature, false)
+            .map_err(|e| format!("Signature verification failed: {e}"))
+    }
+
+    #[test]
+    fn verify_minisign_valid_signature_passes() {
+        let fx = MinisignFixture::generate();
+        let data = b"moodhaven verified update payload";
+        let sig = fx.sign(data);
+        let path = write_temp(data);
+
+        let result = verify_minisign_with_key(&path, &sig, &fx.pubkey_config_value());
+        let _ = std::fs::remove_file(&path);
+
+        assert!(result.is_ok(), "valid signature must verify: {result:?}");
+    }
+
+    #[test]
+    fn verify_minisign_tampered_payload_is_rejected() {
+        let fx = MinisignFixture::generate();
+        let data = b"original payload";
+        let sig = fx.sign(data);
+
+        // Flip a byte on disk — the signature no longer covers these bytes.
+        let mut tampered = data.to_vec();
+        tampered[0] ^= 0xFF;
+        let path = write_temp(&tampered);
+
+        let result = verify_minisign_with_key(&path, &sig, &fx.pubkey_config_value());
+        let _ = std::fs::remove_file(&path);
+
+        assert!(result.is_err(), "tampered payload must not verify");
+    }
+
+    #[test]
+    fn verify_minisign_tampered_signature_is_rejected() {
+        let fx = MinisignFixture::generate();
+        let data = b"payload with corrupted sig";
+        let mut sig = fx.sign(data);
+        // Corrupt the base64 signature body line (second line).
+        let mut lines: Vec<String> = sig.lines().map(|l| l.to_string()).collect();
+        // Flip a character in the signature blob to make it invalid but still decodable.
+        let body = &mut lines[1];
+        let ch = body.chars().next().unwrap();
+        let replacement = if ch == 'A' { 'B' } else { 'A' };
+        *body = format!("{replacement}{}", &body[1..]);
+        sig = lines.join("\n") + "\n";
+        let path = write_temp(data);
+
+        let result = verify_minisign_with_key(&path, &sig, &fx.pubkey_config_value());
+        let _ = std::fs::remove_file(&path);
+
+        assert!(result.is_err(), "tampered signature must not verify");
+    }
+
+    #[test]
+    fn verify_minisign_wrong_key_is_rejected() {
+        let signer = MinisignFixture::generate();
+        let data = b"signed by key A, verified with key B";
+        let sig = signer.sign(data);
+
+        // A different key (different secret material) must reject the signature.
+        let mut other = MinisignFixture::generate();
+        let other_secret: [u8; 32] = [9u8; 32];
+        other.signing_key = SigningKey::from_bytes(&other_secret);
+        // Rebuild the pub file for the other key, keeping the signer's key_id so
+        // we get past the key_id check and exercise the actual crypto rejection.
+        let verifying = other.signing_key.verifying_key();
+        let mut pk_bin = Vec::with_capacity(42);
+        pk_bin.extend_from_slice(&[0x45, 0x64]);
+        pk_bin.extend_from_slice(&signer.key_id);
+        pk_bin.extend_from_slice(verifying.as_bytes());
+        let pk_b64 = base64::engine::general_purpose::STANDARD.encode(&pk_bin);
+        let other_pub_file = format!("untrusted comment: minisign public key\n{pk_b64}\n");
+        let other_config =
+            base64::engine::general_purpose::STANDARD.encode(other_pub_file.as_bytes());
+
+        let path = write_temp(data);
+        let result = verify_minisign_with_key(&path, &sig, &other_config);
+        let _ = std::fs::remove_file(&path);
+
+        assert!(result.is_err(), "wrong key must not verify");
+    }
+
+    #[test]
+    fn verify_minisign_malformed_signature_is_rejected() {
+        let fx = MinisignFixture::generate();
+        let data = b"payload";
+        let path = write_temp(data);
+
+        // A `.sig` that isn't minisign-formatted at all.
+        let result = verify_minisign_with_key(&path, "not a signature", &fx.pubkey_config_value());
+        let _ = std::fs::remove_file(&path);
+
+        assert!(result.is_err(), "malformed signature must be rejected");
+    }
+
+    #[test]
+    fn load_pubkey_decodes_compiled_in_key() {
+        // The production compiled-in key must always parse.
+        let result = load_pubkey();
+        assert!(result.is_ok(), "compiled-in pubkey must decode: {result:?}");
     }
 }

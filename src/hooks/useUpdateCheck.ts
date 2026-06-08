@@ -47,8 +47,9 @@ export function useUpdateCheck(): UseUpdateCheckReturn {
     try {
       const info = await checkForUpdate();
       const skipped = updateSettings.skippedVersion;
-      // Suppress the banner if the user has skipped this exact version
-      if (info.is_available && skipped && skipped === info.version) {
+      // Suppress the banner if the user has skipped this exact version —
+      // EXCEPT security updates, which are non-skippable.
+      if (info.is_available && info.severity !== 'security' && skipped && skipped === info.version) {
         setUpdateInfo({ ...info, is_available: false });
       } else {
         setUpdateInfo(info);

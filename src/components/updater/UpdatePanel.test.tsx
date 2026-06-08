@@ -62,6 +62,7 @@ describe('UpdatePanel', () => {
       can_self_update: false,
       asset: null,
       platform: 'linux',
+      severity: 'recommended',
       ...overrides,
     };
   }

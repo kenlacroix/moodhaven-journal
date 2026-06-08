@@ -16,17 +16,22 @@ export function UpdateBanner({ hook, collapsed, onOpenSettings }: UpdateBannerPr
   const { updateInfo } = hook;
   if (!updateInfo?.is_available) return null;
 
+  const isSecurity = updateInfo.severity === 'security';
+
   return (
     <button
       type="button"
       onClick={onOpenSettings}
-      title={`${updateInfo.version} available — click to update`}
-      className={`w-full flex items-center gap-2 px-2 py-2 rounded-xl
-        bg-violet-50 dark:bg-violet-900/20
-        border border-violet-200 dark:border-violet-800
-        text-violet-600 dark:text-violet-400
-        hover:bg-violet-100 dark:hover:bg-violet-900/40
-        transition-colors group`}
+      title={
+        isSecurity
+          ? `Security update ${updateInfo.version} — click to install`
+          : `${updateInfo.version} available — click to update`
+      }
+      className={`w-full flex items-center gap-2 px-2 py-2 rounded-xl transition-colors group ${
+        isSecurity
+          ? 'bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-700 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/40'
+          : 'bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800 text-violet-600 dark:text-violet-400 hover:bg-violet-100 dark:hover:bg-violet-900/40'
+      }`}
     >
       {/* Up-arrow icon */}
       <svg
@@ -41,7 +46,7 @@ export function UpdateBanner({ hook, collapsed, onOpenSettings }: UpdateBannerPr
 
       {!collapsed && (
         <span className="text-xs font-medium truncate">
-          {updateInfo.version} available
+          {isSecurity ? 'Security update' : `${updateInfo.version} available`}
         </span>
       )}
     </button>

@@ -63,6 +63,7 @@ keyring = { version = "2", features = [] }
 mdns-sd = "0.11"
 flume = "0.11"
 if-addrs = "0.13"
+minisign-verify = "0.2.5"
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-shell = "2"
@@ -75,6 +76,9 @@ webkit2gtk = { version = "2.0", features = [] }
 
 [dev-dependencies]
 tempfile = "3"
+# Used only by updater signature tests to synthesize valid minisign fixtures
+# (prehashed = BLAKE2b-512 over the payload).
+blake2 = "0.10"
 
 [profile.dev]
 incremental = true

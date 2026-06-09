@@ -83,7 +83,7 @@ interface SidebarPromptsProps {
 }
 
 export function SidebarPrompts({ collapsed, updateHook, onNavigate }: SidebarPromptsProps) {
-  const { isBrowser } = usePlatform();
+  const { isBrowser, canPeerSync } = usePlatform();
 
   const [showSupportPrompt, setShowSupportPrompt] = useState(() => {
     try {
@@ -117,8 +117,8 @@ export function SidebarPrompts({ collapsed, updateHook, onNavigate }: SidebarPro
 
   return (
     <>
-      {/* Peer sync badge — desktop only */}
-      {!isBrowser && (
+      {/* Peer sync badge — desktop + Android only */}
+      {canPeerSync && (
         <div className="px-3 pb-1">
           <PeerSyncBadge
             collapsed={collapsed}

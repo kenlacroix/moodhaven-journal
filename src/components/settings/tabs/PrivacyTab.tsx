@@ -36,7 +36,7 @@ export function PrivacyTab({
   setAutoLockTimeout,
   sessionPassword = '',
 }: PrivacyTabProps) {
-  const { isAndroid, isBrowser, isDesktop } = usePlatform();
+  const { isAndroid, isBrowser, isDesktop, canHardwareKey } = usePlatform();
 
   const savedFocusRef = useRef<Element | null>(null);
   const totpDialogRef = useRef<HTMLDivElement>(null);
@@ -111,7 +111,7 @@ export function PrivacyTab({
         <PrivacyTwoFactor
           twoFactorStatus={twoFactorStatus}
           backupCodesCount={backupCodesCount}
-          isBrowser={isBrowser}
+          canHardwareKey={canHardwareKey}
           onSetupTotp={() => setShow2FASetup('totp')}
           onSetupWebAuthn={() => setShow2FASetup('webauthn')}
           onRegenerateBackupCodes={handleRegenerateBackupCodes}

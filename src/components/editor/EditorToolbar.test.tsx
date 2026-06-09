@@ -28,7 +28,7 @@ beforeEach(() => {
 
 describe('CollapsibleToolbar — iOS STT gate', () => {
   it('renders the mic button when isIOS is false and onMicClick is provided', () => {
-    mockUsePlatform.mockReturnValue({ isIOS: false, isAndroid: false, isMobile: false, isBrowser: false, isDesktop: true });
+    mockUsePlatform.mockReturnValue({ isIOS: false, isAndroid: false, isMobile: false, isBrowser: false, isDesktop: true, canPeerSync: true, canSTT: true, canHardwareKey: true });
     render(
       <CollapsibleToolbar
         {...baseProps}
@@ -41,7 +41,7 @@ describe('CollapsibleToolbar — iOS STT gate', () => {
   });
 
   it('does not render the mic button when isIOS is true, even with onMicClick provided', () => {
-    mockUsePlatform.mockReturnValue({ isIOS: true, isAndroid: false, isMobile: true, isBrowser: false, isDesktop: false });
+    mockUsePlatform.mockReturnValue({ isIOS: true, isAndroid: false, isMobile: true, isBrowser: false, isDesktop: false, canPeerSync: false, canSTT: false, canHardwareKey: false });
     render(
       <CollapsibleToolbar
         {...baseProps}
@@ -54,13 +54,13 @@ describe('CollapsibleToolbar — iOS STT gate', () => {
   });
 
   it('does not render the mic button when onMicClick is not provided, regardless of platform', () => {
-    mockUsePlatform.mockReturnValue({ isIOS: false, isAndroid: false, isMobile: false, isBrowser: false, isDesktop: true });
+    mockUsePlatform.mockReturnValue({ isIOS: false, isAndroid: false, isMobile: false, isBrowser: false, isDesktop: true, canPeerSync: true, canSTT: true, canHardwareKey: true });
     render(<CollapsibleToolbar {...baseProps} />);
     expect(screen.queryByRole('button', { name: 'Start dictation' })).not.toBeInTheDocument();
   });
 
   it('renders standard formatting buttons on iOS', () => {
-    mockUsePlatform.mockReturnValue({ isIOS: true, isAndroid: false, isMobile: true, isBrowser: false, isDesktop: false });
+    mockUsePlatform.mockReturnValue({ isIOS: true, isAndroid: false, isMobile: true, isBrowser: false, isDesktop: false, canPeerSync: false, canSTT: false, canHardwareKey: false });
     render(<CollapsibleToolbar {...baseProps} onMicClick={vi.fn()} />);
     expect(screen.getByRole('button', { name: 'Bold (Ctrl+B)' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Italic (Ctrl+I)' })).toBeInTheDocument();

@@ -65,7 +65,7 @@ export function GeneralTab({
   setHasSeenTutorial,
   setTimeCapsuleSettings,
 }: GeneralTabProps) {
-  const { isBrowser } = usePlatform();
+  const { canSTT } = usePlatform();
   const [sttDownloading, setSTTDownloading] = useState(false);
   const [sttDownloadError, setSTTDownloadError] = useState<string | null>(null);
   const [sttSidecarAvailable, setSTTSidecarAvailable] = useState<boolean | null>(null);
@@ -264,7 +264,7 @@ export function GeneralTab({
         )}
       </SettingSection>
 
-      {!isBrowser && <div ref={sttSectionRef}>
+      {canSTT && <div ref={sttSectionRef}>
         <SettingSection
           title="Speech to Text"
           description="Dictate journal entries using your voice"

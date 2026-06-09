@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { SettingSection } from '../SettingSection';
 import { useAppStore } from '../../../stores/appStore';
 import {
@@ -6,6 +6,11 @@ import {
   type ChangeProgress,
   type ChangeSummary,
 } from '../../../lib/services/changePasswordService';
+import {
+  isRecoveryKeyEnabled,
+  recoverPassword,
+  wrapPasswordForRecovery,
+} from '../../../lib/services/recoveryKeyService';
 
 interface PrivacyChangePasswordProps {
   sessionPassword: string;
@@ -36,10 +41,25 @@ export function PrivacyChangePassword({ sessionPassword }: PrivacyChangePassword
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');
   const [confirm, setConfirm] = useState('');
+  const [recoveryEnabled, setRecoveryEnabled] = useState(false);
+  const [recoveryKey, setRecoveryKey] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<ChangeProgress | null>(null);
   const [summary, setSummary] = useState<ChangeSummary | null>(null);
+
+  // When the form opens, learn whether a recovery key exists so we can offer to
+  // re-escrow it under the new password instead of silently invalidating it.
+  useEffect(() => {
+    if (!open) return;
+    let active = true;
+    isRecoveryKeyEnabled().then((v) => {
+      if (active) setRecoveryEnabled(v);
+    });
+    return () => {
+      active = false;
+    };
+  }, [open]);
 
   const strength = strengthOf(next);
   const canSubmit =
@@ -53,6 +73,7 @@ export function PrivacyChangePassword({ sessionPassword }: PrivacyChangePassword
     setCurrent('');
     setNext('');
     setConfirm('');
+    setRecoveryKey('');
     setError(null);
     setProgress(null);
   };
@@ -65,7 +86,20 @@ export function PrivacyChangePassword({ sessionPassword }: PrivacyChangePassword
     setBusy(true);
     setError(null);
     try {
-      const result = await runChangePassword(current, next, setProgress);
+      // If the user re-entered their recovery key, verify it opens the current password,
+      // then re-wrap the NEW password under it so the same key keeps working. The backend
+      // installs this blob inside its atomic flip; leaving it blank disables the stale key.
+      let recoveryBlob: string | undefined;
+      if (recoveryEnabled && recoveryKey.trim()) {
+        const recovered = await recoverPassword(recoveryKey.trim());
+        if (recovered !== current) {
+          setError('Recovery key is incorrect.');
+          setBusy(false);
+          return;
+        }
+        recoveryBlob = await wrapPasswordForRecovery(recoveryKey.trim(), next);
+      }
+      const result = await runChangePassword(current, next, setProgress, recoveryBlob);
       setSummary(result);
       reset();
     } catch (e) {
@@ -91,9 +125,12 @@ export function PrivacyChangePassword({ sessionPassword }: PrivacyChangePassword
             {summary.biometricCleared && (
               <li>Biometric unlock was cleared — re-enable it in Biometric Unlock.</li>
             )}
-            {!summary.recoveryKeyRegenerated && (
-              <li>Your recovery key is no longer valid — generate a new one in Privacy.</li>
-            )}
+            {recoveryEnabled &&
+              (summary.recoveryKeyRegenerated ? (
+                <li>Your recovery key still works — it now unlocks your new password.</li>
+              ) : (
+                <li>Your recovery key is no longer valid — generate a new one in Privacy.</li>
+              ))}
           </ul>
           <p className="text-slate-500 dark:text-slate-400">
             You&apos;ll be locked out now; unlock again with your <strong>new</strong> password.
@@ -176,6 +213,25 @@ export function PrivacyChangePassword({ sessionPassword }: PrivacyChangePassword
           )}
           {next && next === current && (
             <p className="text-xs text-rose-500">New password must differ from the current one.</p>
+          )}
+          {recoveryEnabled && (
+            <div className="space-y-1">
+              <input
+                type="text"
+                autoComplete="off"
+                autoCapitalize="characters"
+                spellCheck={false}
+                placeholder="Recovery key (optional)"
+                value={recoveryKey}
+                disabled={busy}
+                onChange={(e) => setRecoveryKey(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm font-mono"
+              />
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Enter your existing recovery key to keep it working with the new password. Leave
+                blank to disable it — you can generate a new one afterward.
+              </p>
+            </div>
           )}
           <p className="text-xs text-slate-500 dark:text-slate-400">
             This re-encrypts your whole journal — keep the app open until it finishes. It&apos;s safe

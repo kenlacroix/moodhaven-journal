@@ -125,13 +125,17 @@ const REKEY_BATCH = 100;
  * the verifier, and invalidate stale convenience factors. Throws (before any backend mutation)
  * if the old password fails to decrypt a blob.
  *
- * Recovery key: a previously-enabled recovery key wraps the OLD password and becomes stale, so
- * the backend disables it; the returned `ChangeSummary` flags this for the re-setup checklist.
+ * Recovery key: a previously-enabled recovery key wraps the OLD password and becomes stale. If
+ * the caller passes `recoveryBlob` (the new password re-wrapped under the user's re-entered
+ * recovery key, see `wrapPasswordForRecovery`), the backend installs it inside the atomic flip
+ * so the same recovery key keeps working. Otherwise the backend disables the stale key and the
+ * returned `ChangeSummary` flags it for the re-setup checklist.
  */
 export async function runChangePassword(
   oldPassword: string,
   newPassword: string,
-  onProgress?: (p: ChangeProgress) => void
+  onProgress?: (p: ChangeProgress) => void,
+  recoveryBlob?: string
 ): Promise<ChangeSummary> {
   // 1. Fetch raw blobs (encrypted; no plaintext crosses IPC).
   const entryRows = await invoke<EntryRekeyBlob[]>('get_entry_rekey_blobs');
@@ -175,6 +179,7 @@ export async function runChangePassword(
       newSaltB64: generateSaltB64(),
       entries,
       signals,
+      recoveryBlob,
     });
   } finally {
     unlisten();

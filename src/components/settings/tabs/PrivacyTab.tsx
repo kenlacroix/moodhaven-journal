@@ -112,7 +112,7 @@ export function PrivacyTab({
 
         <PrivacyPinUnlock sessionPassword={sessionPassword} />
 
-        <PrivacyChangePassword sessionPassword={sessionPassword} />
+        {!isBrowser && <PrivacyChangePassword sessionPassword={sessionPassword} />}
 
         <PrivacyTwoFactor
           twoFactorStatus={twoFactorStatus}

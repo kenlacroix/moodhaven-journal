@@ -80,6 +80,26 @@ export async function storeRecoveryKey(recoveryKey: string, password: string): P
 }
 
 /**
+ * Wrap a password under a recovery key and return the escrow blob as a JSON string —
+ * the exact shape stored in `recovery_key_encrypted_password`.
+ *
+ * Unlike storeRecoveryKey, this is pure: it does NOT write to settings. Change-password
+ * uses it to re-escrow the NEW password so the backend can install the blob inside its
+ * single atomic flip (writing it via set_setting here would land in the old-keyed live
+ * DB, outside the change's atomic window).
+ */
+export async function wrapPasswordForRecovery(
+  recoveryKey: string,
+  password: string
+): Promise<string> {
+  const result = await encrypt(password, normalizeKey(recoveryKey));
+  if (!result.success || !result.data) {
+    throw new Error('Failed to wrap password for recovery');
+  }
+  return JSON.stringify(result.data);
+}
+
+/**
  * Recover the password using the recovery key
  * @param recoveryKey - The recovery key
  * @returns The decrypted password, or null if invalid

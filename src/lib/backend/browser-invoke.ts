@@ -586,6 +586,13 @@ async function dispatch(command: string, p: Params): Promise<any> {
     case 'download_and_install_update':
       throw new Error('Auto-update requires the desktop app');
 
+    // Change master password re-encrypts the SQLCipher whole-DB layer and on-disk
+    // media — both desktop/Tauri-only. The browser build has no second encryption
+    // layer to rekey, so the feature is unavailable (UI is also gated in PrivacyTab).
+    case 'get_entry_rekey_blobs':
+    case 'change_master_password':
+      throw new Error('Changing your password requires the desktop app');
+
     case 'get_entry_timestamps': {
       const entries = await dbGetAllEntries();
       return entries.map((e) => ({ id: e.id, updatedAt: e.updated_at }));

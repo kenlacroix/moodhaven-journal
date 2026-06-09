@@ -195,6 +195,18 @@ action. The post-change checklist makes re-setup a 10-second task. Recovery key 
 auto-regenerating in-band (FE can compute the new wrapped blob from the known recovery code only if
 the user re-enters it — otherwise prompt to generate a fresh one and re-display it once).
 
+> **Implemented (2026-06-09):** recovery-key **re-escrow** now ships. When a recovery key is
+> enabled, the change-password modal offers an optional recovery-key field; if the user re-enters
+> it, the FE verifies it opens the current password, re-wraps the *new* password under it
+> (`wrapPasswordForRecovery`, pure — no `set_setting`), and passes the blob to
+> `change_master_password`, which installs it inside the atomic flip. Left blank → the stale key is
+> disabled and the checklist prompts regeneration (the original default). PIN/biometric remain
+> invalidate-and-prompt.
+>
+> **Browser/PWA:** `get_entry_rekey_blobs` / `change_master_password` are desktop/Tauri-only (no
+> SQLCipher layer or on-disk media to rekey in browser mode). The shim throws a clear
+> "requires the desktop app" error and `PrivacyTab` hides the section when `isBrowser`.
+
 (Approach B removes this problem entirely: those factors wrap the MDK, not the password, so they
 survive a change untouched.)
 

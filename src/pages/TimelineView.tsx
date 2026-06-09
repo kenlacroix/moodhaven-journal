@@ -284,6 +284,17 @@ export function TimelineView({ onSelectEntry, onNewEntry, onSealEntry, refreshTr
   const isAnyFilterActive =
     moodFilter !== null || dateRange !== 'all' || tagFilter !== null || debouncedQuery !== '' || activeBookId !== null;
 
+  // Precompute plain-text content previews once per entries load.
+  // The regex runs inside the virtual list render path on every scroll frame
+  // for all visible entries — caching it avoids repeated O(n) regex work.
+  const contentPreviews = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const entry of entries) {
+      map.set(entry.id, entry.content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim());
+    }
+    return map;
+  }, [entries]);
+
   // Pinned entries (always from full filtered list, not date-grouped)
   const [pinnedCollapsed, setPinnedCollapsed] = useState(false);
   const pinnedEntries = useMemo(
@@ -637,7 +648,7 @@ export function TimelineView({ onSelectEntry, onNewEntry, onSealEntry, refreshTr
                           </p>
                         )}
                         <p className="text-sm text-slate-500 dark:text-slate-400 line-clamp-2">
-                          {entry.content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120)}
+                          {(contentPreviews.get(entry.id) ?? '').slice(0, 120)}
                         </p>
                         {mediaByEntry.has(entry.id) && (() => {
                           const m = mediaByEntry.get(entry.id)!;
@@ -684,6 +695,7 @@ export function TimelineView({ onSelectEntry, onNewEntry, onSealEntry, refreshTr
       <VirtualEntryList
         groupedEntries={groupedEntries}
         mediaByEntry={mediaByEntry}
+        contentPreviews={contentPreviews}
         isAndroid={isAndroid}
         getDateHeader={getDateHeader}
         onSelectEntry={onSelectEntry}
@@ -718,6 +730,7 @@ export function TimelineView({ onSelectEntry, onNewEntry, onSealEntry, refreshTr
 interface VirtualEntryListProps {
   groupedEntries: Record<string, JournalEntry[]>;
   mediaByEntry: Map<string, { count: number; hasImages: boolean }>;
+  contentPreviews: Map<string, string>;
   isAndroid: boolean;
   getDateHeader: (date: string, sample: JournalEntry) => string;
   onSelectEntry: (id: string) => void;
@@ -730,6 +743,7 @@ interface VirtualEntryListProps {
 function VirtualEntryList({
   groupedEntries,
   mediaByEntry,
+  contentPreviews,
   isAndroid,
   getDateHeader,
   onSelectEntry,
@@ -930,7 +944,7 @@ function VirtualEntryList({
                   <h3 className="font-semibold text-slate-800 dark:text-slate-100 mb-1 truncate">{entry.title}</h3>
                 )}
                 <p className="text-sm font-normal text-slate-500 dark:text-slate-400 line-clamp-2">
-                  {entry.content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()}
+                  {contentPreviews.get(entry.id) ?? ''}
                 </p>
                 {entry.tags.length > 0 && (
                   <div className="flex flex-wrap gap-1.5 mt-2">

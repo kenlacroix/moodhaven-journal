@@ -5,40 +5,77 @@
  * Per UX spec: Writing is the primary action
  */
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, lazy, Suspense } from 'react';
 import { useAppBanners } from './hooks/useAppBanners';
-import { BreakoutWriterApp } from './components/breakout/BreakoutWriterApp';
 import { WritingView } from './pages/WritingView';
-import { TimelineView } from './pages/TimelineView';
-import { OnThisDayView } from './pages/OnThisDayView';
-import { InsightsView } from './pages/InsightsView';
-import { CalendarPage } from './pages/CalendarPage';
-import { SettingsPage } from './pages/SettingsPage';
-import { JournalOverviewPage } from './pages/JournalOverviewPage';
-import { StillView } from './modules/stillhaven';
-import { StillSessionsView } from './modules/stillhaven/components/StillSessionsView';
-import { useBooksStore } from './stores/booksStore';
 import { LockScreen } from './pages/LockScreen';
 import { SetupScreen } from './pages/SetupScreen';
 import { MainLayout, MobileLayout, type ViewType } from './components/layout';
 import { usePlatform } from './hooks/usePlatform';
-import { TutorialWizard } from './components/tutorial';
-import { SyncDetailsModal } from './components/sync/SyncDetailsModal';
+import { useBooksStore } from './stores/booksStore';
 import { useAppStore } from './stores/appStore';
 import { useSettingsStore } from './stores/settingsStore';
 import { useReminderScheduler } from './hooks/useReminderScheduler';
 import { useUpdateCheck } from './hooks/useUpdateCheck';
 import { useWearSignals } from './hooks/useWearSignals';
 import { usePeerSync } from './hooks/usePeerSync';
-import { WristLoopBanner } from './components/stillhaven/WristLoopBanner';
 import type { WristLoopTrigger } from './hooks/useWristLoop';
-import { PeerSyncWireframes } from './pages/PeerSyncWireframes';
 import { useTimeCapsule } from './hooks/useTimeCapsule';
-import { TimeCapsuleRevealModal } from './components/timecapsule/TimeCapsuleRevealModal';
-import { SealEntryModal } from './components/timecapsule/SealEntryModal';
 import { logger } from './lib/services/logger';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { WellnessDisclaimerScreen } from './components/WellnessDisclaimerScreen';
+
+// Lazy-loaded views — only bundled when first navigated to.
+// WritingView, LockScreen, and SetupScreen stay static (shown on every session).
+const BreakoutWriterApp = lazy(() =>
+  import('./components/breakout/BreakoutWriterApp').then((m) => ({ default: m.BreakoutWriterApp }))
+);
+const PeerSyncWireframes = lazy(() =>
+  import('./pages/PeerSyncWireframes').then((m) => ({ default: m.PeerSyncWireframes }))
+);
+const TimelineView = lazy(() =>
+  import('./pages/TimelineView').then((m) => ({ default: m.TimelineView }))
+);
+const OnThisDayView = lazy(() =>
+  import('./pages/OnThisDayView').then((m) => ({ default: m.OnThisDayView }))
+);
+const InsightsView = lazy(() =>
+  import('./pages/InsightsView').then((m) => ({ default: m.InsightsView }))
+);
+const CalendarPage = lazy(() =>
+  import('./pages/CalendarPage').then((m) => ({ default: m.CalendarPage }))
+);
+const SettingsPage = lazy(() =>
+  import('./pages/SettingsPage').then((m) => ({ default: m.SettingsPage }))
+);
+const JournalOverviewPage = lazy(() =>
+  import('./pages/JournalOverviewPage').then((m) => ({ default: m.JournalOverviewPage }))
+);
+const StillView = lazy(() =>
+  import('./modules/stillhaven').then((m) => ({ default: m.StillView }))
+);
+const StillSessionsView = lazy(() =>
+  import('./modules/stillhaven/components/StillSessionsView').then((m) => ({
+    default: m.StillSessionsView,
+  }))
+);
+const TutorialWizard = lazy(() =>
+  import('./components/tutorial').then((m) => ({ default: m.TutorialWizard }))
+);
+const SyncDetailsModal = lazy(() =>
+  import('./components/sync/SyncDetailsModal').then((m) => ({ default: m.SyncDetailsModal }))
+);
+const TimeCapsuleRevealModal = lazy(() =>
+  import('./components/timecapsule/TimeCapsuleRevealModal').then((m) => ({
+    default: m.TimeCapsuleRevealModal,
+  }))
+);
+const SealEntryModal = lazy(() =>
+  import('./components/timecapsule/SealEntryModal').then((m) => ({ default: m.SealEntryModal }))
+);
+const WristLoopBanner = lazy(() =>
+  import('./components/stillhaven/WristLoopBanner').then((m) => ({ default: m.WristLoopBanner }))
+);
 
 // Detect special dev modes outside the component so hooks order is stable.
 const IS_BREAKOUT = new URLSearchParams(window.location.search).get('mode') === 'writer';
@@ -46,8 +83,8 @@ const IS_PEERSYNC_WIREFRAMES = new URLSearchParams(window.location.search).get('
 
 /** Thin router: send special dev-mode URLs to isolated components with no hooks. */
 function App() {
-  if (IS_BREAKOUT) return <BreakoutWriterApp />;
-  if (IS_PEERSYNC_WIREFRAMES) return <PeerSyncWireframes />;
+  if (IS_BREAKOUT) return <Suspense fallback={null}><BreakoutWriterApp /></Suspense>;
+  if (IS_PEERSYNC_WIREFRAMES) return <Suspense fallback={null}><PeerSyncWireframes /></Suspense>;
   return <MainApp />;
 }
 
@@ -273,128 +310,132 @@ function MainApp() {
   const Layout = isAndroid ? MobileLayout : MainLayout;
   return (
     <ErrorBoundary>
-      <Layout
-        currentView={currentView}
-        onNavigate={handleNavigate}
-        onLock={lock}
-        onSelectEntry={handleSelectEntry}
-        onNewEntry={handleNewEntry}
-        onOpenSync={() => setShowSyncModal(true)}
-        onNavigateToJournalOverview={handleNavigateToJournalOverview}
-        updateHook={updateHook}
-      >
-        {/* Keyed wrapper replays fade animation on view change */}
-        <div key={currentView} className="h-full animate-view-enter">
-          {/* Writing View - calm writing space (default) */}
-          {currentView === 'writing' && (
-            <ErrorBoundary>
-              <WritingView
-                key={selectedEntryId ?? `new-${writingKey}`}
-                entryId={selectedEntryId}
-                initialHtml={handoffHtml}
-                onInitialHtmlConsumed={() => setHandoffHtml(null)}
-                onEntrySaved={() => {/* timeline refreshes on next navigation */}}
-                onNewEntry={handleNewEntry}
-                onNavigateToSTTSettings={() => handleNavigateToSettings('speech-to-text')}
-              />
-            </ErrorBoundary>
-          )}
+      {/* Suspense boundary covers all lazy-loaded views and modals.
+          Chunks load from disk in Tauri so the null fallback is invisible.
+          In the web build a brief blank is acceptable — views are navigated to. */}
+      <Suspense fallback={null}>
+        <Layout
+          currentView={currentView}
+          onNavigate={handleNavigate}
+          onLock={lock}
+          onSelectEntry={handleSelectEntry}
+          onNewEntry={handleNewEntry}
+          onOpenSync={() => setShowSyncModal(true)}
+          onNavigateToJournalOverview={handleNavigateToJournalOverview}
+          updateHook={updateHook}
+        >
+          {/* Keyed wrapper replays fade animation on view change */}
+          <div key={currentView} className="h-full animate-view-enter">
+            {/* Writing View - calm writing space (default) */}
+            {currentView === 'writing' && (
+              <ErrorBoundary>
+                <WritingView
+                  key={selectedEntryId ?? `new-${writingKey}`}
+                  entryId={selectedEntryId}
+                  initialHtml={handoffHtml}
+                  onInitialHtmlConsumed={() => setHandoffHtml(null)}
+                  onEntrySaved={() => {/* timeline refreshes on next navigation */}}
+                  onNewEntry={handleNewEntry}
+                  onNavigateToSTTSettings={() => handleNavigateToSettings('speech-to-text')}
+                />
+              </ErrorBoundary>
+            )}
 
-          {/* Timeline View - chronological entry list */}
-          {currentView === 'timeline' && (
-            <ErrorBoundary>
-              <TimelineView
-                onSelectEntry={handleSelectEntry}
-                onNewEntry={handleNewEntry}
-                onSealEntry={(id) => setSealingEntryId(id)}
-                refreshTrigger={timelineRefresh}
-              />
-            </ErrorBoundary>
-          )}
+            {/* Timeline View - chronological entry list */}
+            {currentView === 'timeline' && (
+              <ErrorBoundary>
+                <TimelineView
+                  onSelectEntry={handleSelectEntry}
+                  onNewEntry={handleNewEntry}
+                  onSealEntry={(id) => setSealingEntryId(id)}
+                  refreshTrigger={timelineRefresh}
+                />
+              </ErrorBoundary>
+            )}
 
-          {/* On This Day View */}
-          {currentView === 'onthisday' && (
-            <ErrorBoundary>
-              <OnThisDayView onSelectEntry={handleSelectEntry} />
-            </ErrorBoundary>
-          )}
+            {/* On This Day View */}
+            {currentView === 'onthisday' && (
+              <ErrorBoundary>
+                <OnThisDayView onSelectEntry={handleSelectEntry} />
+              </ErrorBoundary>
+            )}
 
-          {/* Insights View - AI insights + local analytics merged */}
-          {currentView === 'insights' && (
-            <ErrorBoundary>
-              <InsightsView onNavigateToSettings={handleNavigateToSettings} />
-            </ErrorBoundary>
-          )}
+            {/* Insights View - AI insights + local analytics merged */}
+            {currentView === 'insights' && (
+              <ErrorBoundary>
+                <InsightsView onNavigateToSettings={handleNavigateToSettings} />
+              </ErrorBoundary>
+            )}
 
-          {/* Calendar View */}
-          {currentView === 'calendar' && (
-            <ErrorBoundary>
-              <CalendarPage onSelectEntry={handleSelectEntry} />
-            </ErrorBoundary>
-          )}
+            {/* Calendar View */}
+            {currentView === 'calendar' && (
+              <ErrorBoundary>
+                <CalendarPage onSelectEntry={handleSelectEntry} />
+              </ErrorBoundary>
+            )}
 
-          {/* Journal Overview */}
-          {currentView === 'journalOverview' && journalOverviewBookId && (
-            <ErrorBoundary>
-              <JournalOverviewPage
-                bookId={journalOverviewBookId}
-                onViewEntries={() => handleNavigate('timeline')}
-                onBack={() => handleNavigate('timeline')}
-              />
-            </ErrorBoundary>
-          )}
+            {/* Journal Overview */}
+            {currentView === 'journalOverview' && journalOverviewBookId && (
+              <ErrorBoundary>
+                <JournalOverviewPage
+                  bookId={journalOverviewBookId}
+                  onViewEntries={() => handleNavigate('timeline')}
+                  onBack={() => handleNavigate('timeline')}
+                />
+              </ErrorBoundary>
+            )}
 
-          {/* StillHaven — somatic companion module (feature flag + user opt-in) */}
-          {currentView === 'still' && import.meta.env.VITE_FEATURE_STILL && stillhavenEnabled && (
-            <ErrorBoundary>
-              <StillView
-                onHandoff={(html) => {
-                  setHandoffHtml(html);
-                  setSelectedEntryId(null);
-                  setWritingKey((k) => k + 1);
-                  setCurrentView('writing');
-                }}
-              />
-            </ErrorBoundary>
-          )}
+            {/* StillHaven — somatic companion module (feature flag + user opt-in) */}
+            {currentView === 'still' && import.meta.env.VITE_FEATURE_STILL && stillhavenEnabled && (
+              <ErrorBoundary>
+                <StillView
+                  onHandoff={(html) => {
+                    setHandoffHtml(html);
+                    setSelectedEntryId(null);
+                    setWritingKey((k) => k + 1);
+                    setCurrentView('writing');
+                  }}
+                />
+              </ErrorBoundary>
+            )}
 
-          {/* StillHaven — session history + pattern tracking */}
-          {currentView === 'stillSessions' && import.meta.env.VITE_FEATURE_STILL && stillhavenEnabled && (
-            <ErrorBoundary>
-              <StillSessionsView onBack={() => setCurrentView('still')} />
-            </ErrorBoundary>
-          )}
-        </div>
-      </Layout>
+            {/* StillHaven — session history + pattern tracking */}
+            {currentView === 'stillSessions' && import.meta.env.VITE_FEATURE_STILL && stillhavenEnabled && (
+              <ErrorBoundary>
+                <StillSessionsView onBack={() => setCurrentView('still')} />
+              </ErrorBoundary>
+            )}
+          </div>
+        </Layout>
 
-      {showTutorial && <TutorialWizard onComplete={handleTutorialComplete} />}
-      {showSyncModal && <SyncDetailsModal onClose={() => setShowSyncModal(false)} onNavigateToSettings={() => handleNavigateToSettings()} />}
-      {showSettings && <SettingsPage updateHook={updateHook} onClose={() => setShowSettings(false)} />}
-      {pendingCapsule && sessionPassword && (
-        <TimeCapsuleRevealModal
-          capsule={pendingCapsule}
-          password={sessionPassword}
-          onReveal={async (id) => { await revealCapsule(id); setTimelineRefresh((n) => n + 1); }}
-          onWriteResponse={() => { dismissCapsule(); handleNewEntry(); }}
-          onDismiss={dismissCapsule}
-        />
-      )}
-      {watchTrigger && import.meta.env.VITE_FEATURE_STILL && stillhavenEnabled && (
-        <WristLoopBanner
-          trigger={watchTrigger}
-          onAccept={() => { setCurrentView('still'); setWatchTrigger(null); }}
-          onDismiss={() => setWatchTrigger(null)}
-        />
-      )}
+        {showTutorial && <TutorialWizard onComplete={handleTutorialComplete} />}
+        {showSyncModal && <SyncDetailsModal onClose={() => setShowSyncModal(false)} onNavigateToSettings={() => handleNavigateToSettings()} />}
+        {showSettings && <SettingsPage updateHook={updateHook} onClose={() => setShowSettings(false)} />}
+        {pendingCapsule && sessionPassword && (
+          <TimeCapsuleRevealModal
+            capsule={pendingCapsule}
+            password={sessionPassword}
+            onReveal={async (id) => { await revealCapsule(id); setTimelineRefresh((n) => n + 1); }}
+            onWriteResponse={() => { dismissCapsule(); handleNewEntry(); }}
+            onDismiss={dismissCapsule}
+          />
+        )}
+        {watchTrigger && import.meta.env.VITE_FEATURE_STILL && stillhavenEnabled && (
+          <WristLoopBanner
+            trigger={watchTrigger}
+            onAccept={() => { setCurrentView('still'); setWatchTrigger(null); }}
+            onDismiss={() => setWatchTrigger(null)}
+          />
+        )}
 
-      {sealingEntryId && (
-        <SealEntryModal
-          entryId={sealingEntryId}
-          defaultDays={defaultSealDays}
-          onSeal={() => { setSealingEntryId(null); setTimelineRefresh((n) => n + 1); }}
-          onCancel={() => setSealingEntryId(null)}
-        />
-      )}
+        {sealingEntryId && (
+          <SealEntryModal
+            entryId={sealingEntryId}
+            defaultDays={defaultSealDays}
+            onSeal={() => { setSealingEntryId(null); setTimelineRefresh((n) => n + 1); }}
+            onCancel={() => setSealingEntryId(null)}
+          />
+        )}
 
       {/* F7: Streak milestone toast */}
       {streakToast && (
@@ -445,6 +486,7 @@ function MainApp() {
           </button>
         </div>
       )}
+      </Suspense>
     </ErrorBoundary>
   );
 }

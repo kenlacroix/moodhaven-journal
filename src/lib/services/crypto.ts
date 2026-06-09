@@ -36,8 +36,12 @@ export interface CryptoResult<T> {
 function bufferToBase64(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
   let binary = '';
-  for (let i = 0; i < bytes.byteLength; i++) {
-    binary += String.fromCharCode(bytes[i]);
+  // Process in 8 KiB chunks: batch String.fromCharCode is ~4x faster than
+  // one-char-at-a-time concatenation, and chunking avoids call-stack limits
+  // on large export payloads.
+  const CHUNK = 8192;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
   }
   return btoa(binary);
 }

@@ -60,6 +60,24 @@ export default defineConfig({
     minify: !process.env.TAURI_ENV_DEBUG && !isWebBuild ? 'esbuild' : isWebBuild ? 'esbuild' : false,
     // Produce sourcemaps for debug builds
     sourcemap: !!process.env.TAURI_ENV_DEBUG,
+    rollupOptions: {
+      output: {
+        // Split heavy vendor libraries into stable chunks.
+        // Stable chunk names survive app-code changes, so browsers can cache
+        // vendor chunks across deploys without re-downloading unchanged code.
+        manualChunks(id) {
+          if (id.includes('node_modules/@tiptap') || id.includes('node_modules/prosemirror')) {
+            return 'vendor-tiptap';
+          }
+          if (id.includes('node_modules/react/') || id.includes('node_modules/react-dom/')) {
+            return 'vendor-react';
+          }
+          if (id.includes('node_modules/zustand/')) {
+            return 'vendor-zustand';
+          }
+        },
+      },
+    },
   },
 
   define: {

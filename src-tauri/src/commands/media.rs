@@ -193,27 +193,134 @@ pub(crate) fn reencrypt_mbmf(
     encrypt_to_mbmf(&plaintext, new_password)
 }
 
-/// Re-encrypt every media file on disk from the old password to the new one — the
-/// filesystem (non-transactional) half of `change_master_password` (§4.5, §8 "weakest
-/// link"). For each MBMF file: read → [`reencrypt_mbmf`] → write to a staging file →
-/// fsync → atomic rename over the original, recording per-file progress in the pending
-/// marker so a crash mid-sweep resumes from the next unfinished file.
-///
-/// SCAFFOLD: signature + contract are fixed (drives the `cmp_b2_mid_media_swap` boundary);
-/// the staging/rename/progress body is pending the implementation pass. Returns an explicit
-/// not-implemented error until then so it cannot run against real media.
-#[allow(dead_code)] // wired up by change_master_password in the implementation pass (§4.5)
-pub(crate) fn reencrypt_all_media(
-    _app: &AppHandle,
-    _old_password: &str,
-    _new_password: &str,
+/// Suffix appended to a media file's on-disk path while its re-encrypted copy is staged
+/// but not yet promoted over the original. A `<file>.rekeytmp` sibling is the on-disk
+/// record of "this file's NEW-password copy exists but the rename hasn't happened yet" —
+/// the discriminator both the keyless forward-finish and the rollback scan use.
+pub(crate) const STAGING_SUFFIX: &str = ".rekeytmp";
+
+/// Visit every staging file (`*.rekeytmp`) under `<app_data_dir>/media/`. Media live at
+/// `media/<entry_id>/<file>.enc`, so staging files are one directory deep; we walk the
+/// two-level tree without recursion. Taking `app_data_dir` (not an `AppHandle`) lets the
+/// db-layer crash recovery — which only has `self.path` — drive the same keyless finish.
+fn for_each_staging_file(app_data_dir: &Path, mut f: impl FnMut(&Path)) -> Result<(), String> {
+    let root = app_data_dir.join("media");
+    let Ok(entries) = std::fs::read_dir(&root) else {
+        return Ok(()); // no media dir yet → nothing staged
+    };
+    for entry in entries.flatten() {
+        let dir = entry.path();
+        if !dir.is_dir() {
+            continue;
+        }
+        if let Ok(files) = std::fs::read_dir(&dir) {
+            for file in files.flatten() {
+                let p = file.path();
+                if p.to_string_lossy().ends_with(STAGING_SUFFIX) {
+                    f(&p);
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Stage re-encryption of every media file from `old_password` to `new_password` — the
+/// KEYED, reversible first half of `change_master_password`'s media step (§4.5). For each
+/// `entry_media` row: read the MBMF bytes → [`reencrypt_mbmf`] → write to a `<file>.rekeytmp`
+/// staging sibling → fsync. Originals are left completely untouched, so a crash anywhere in
+/// here leaves only orphan staging files (cleaned by [`cleanup_media_staging`]) and the live
+/// data wholly on the old password. The actual swap is the keyless [`finish_media_renames`],
+/// run only AFTER the atomic DB flip. Returns the number of files staged. `progress(done,total)`
+/// is invoked after each file for the FE progress UI.
+pub(crate) fn stage_reencrypt_media(
+    app_data_dir: &Path,
+    db: &Database,
+    old_password: &str,
+    new_password: &str,
+    mut progress: impl FnMut(usize, usize),
 ) -> Result<usize, String> {
-    // TODO(change-password §4.5): enumerate media_attachments → for each file
-    // stage `reencrypt_mbmf(read, old, new)` → fsync → atomic rename → mark progress.
-    Err(
-        "reencrypt_all_media not yet implemented (active-plans/change-password.md §4.5)"
-            .to_string(),
-    )
+    // Snapshot the file list under a brief lock, then release it before touching the FS.
+    let rel_paths: Vec<String> = {
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        let mut stmt = conn
+            .prepare("SELECT enc_path FROM entry_media ORDER BY id ASC")
+            .map_err(|e| format!("prepare media list: {e}"))?;
+        let rows: Vec<String> = stmt
+            .query_map([], |row| row.get::<_, String>(0))
+            .map_err(|e| format!("query media list: {e}"))?
+            .filter_map(|r| r.ok())
+            .collect();
+        rows
+    };
+
+    let total = rel_paths.len();
+    for (i, rel) in rel_paths.iter().enumerate() {
+        let orig = abs_enc_path_in(app_data_dir, rel)?;
+        // A missing file is not fatal: the DB row may reference a file deleted out-of-band.
+        // Skip it rather than abort the whole change.
+        if !orig.exists() {
+            progress(i + 1, total);
+            continue;
+        }
+        let data = std::fs::read(&orig).map_err(|e| format!("read media {rel}: {e}"))?;
+        let reencrypted = reencrypt_mbmf(&data, old_password, new_password)?;
+        let staging = staging_path(&orig);
+        {
+            let mut f = std::fs::File::create(&staging)
+                .map_err(|e| format!("create staging {}: {e}", staging.display()))?;
+            use std::io::Write;
+            f.write_all(&reencrypted)
+                .map_err(|e| format!("write staging {}: {e}", staging.display()))?;
+            f.sync_all()
+                .map_err(|e| format!("fsync staging {}: {e}", staging.display()))?;
+        }
+        progress(i + 1, total);
+    }
+    Ok(total)
+}
+
+/// The `<file>.rekeytmp` staging sibling for an original media path.
+fn staging_path(orig: &Path) -> std::path::PathBuf {
+    let mut s = orig.as_os_str().to_os_string();
+    s.push(STAGING_SUFFIX);
+    std::path::PathBuf::from(s)
+}
+
+/// Promote every staged `*.rekeytmp` over its original — the KEYLESS, idempotent second half
+/// of the media step (§4.5), run only AFTER the atomic DB flip. Renames need no key (the
+/// staged bytes are already re-encrypted under the new password), so this is exactly the work
+/// startup recovery can finish unattended after a post-commit crash. Returns the count renamed.
+pub(crate) fn finish_media_renames(app_data_dir: &Path) -> Result<usize, String> {
+    let mut to_rename: Vec<std::path::PathBuf> = Vec::new();
+    for_each_staging_file(app_data_dir, |p| to_rename.push(p.to_path_buf()))?;
+    let mut n = 0usize;
+    for staging in to_rename {
+        let orig = staging
+            .to_string_lossy()
+            .strip_suffix(STAGING_SUFFIX)
+            .map(std::path::PathBuf::from)
+            .ok_or("staging path lost its suffix")?;
+        std::fs::rename(&staging, &orig)
+            .map_err(|e| format!("promote media {}: {e}", orig.display()))?;
+        n += 1;
+    }
+    Ok(n)
+}
+
+/// Delete every staged `*.rekeytmp` — the rollback when a change is abandoned BEFORE the DB
+/// flip (originals are still the live, old-password data). Keyless and idempotent. Returns the
+/// count removed.
+pub(crate) fn cleanup_media_staging(app_data_dir: &Path) -> Result<usize, String> {
+    let mut to_remove: Vec<std::path::PathBuf> = Vec::new();
+    for_each_staging_file(app_data_dir, |p| to_remove.push(p.to_path_buf()))?;
+    let mut n = 0usize;
+    for staging in to_remove {
+        if std::fs::remove_file(&staging).is_ok() {
+            n += 1;
+        }
+    }
+    Ok(n)
 }
 
 // ── Filesystem helpers ─────────────────────────────────────────────────────────
@@ -308,6 +415,19 @@ fn abs_enc_path(app: &AppHandle, rel_path: &str) -> Result<std::path::PathBuf, S
         return Err("Refusing to access path outside app data directory".to_string());
     }
     Ok(canonical)
+}
+
+/// Resolve a stored `enc_path` (e.g. `media/<entry>/<file>.enc`) against an explicit
+/// `app_data_dir`, rejecting `..` traversal — the `AppHandle`-free variant of
+/// [`abs_enc_path`] used by the change-password media staging and the db-layer crash
+/// recovery (which only have a directory path, not an `AppHandle`).
+fn abs_enc_path_in(app_data_dir: &Path, rel_path: &str) -> Result<std::path::PathBuf, String> {
+    use std::path::Component;
+    let joined = app_data_dir.join(rel_path);
+    if joined.components().any(|c| c == Component::ParentDir) {
+        return Err("Refusing to access media path with '..' components".to_string());
+    }
+    Ok(joined)
 }
 
 fn mime_from_filename(filename: &str) -> &'static str {

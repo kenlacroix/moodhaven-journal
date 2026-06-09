@@ -12,6 +12,7 @@
  * until the implementation pass, so this fails safely without mutating data.
  */
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import { decrypt, encrypt, type EncryptedData } from './crypto';
 
 /** A stored blob to re-key: its id plus the current (old-password) ciphertext envelope. */
@@ -63,11 +64,11 @@ export async function reKeyBatch(
 }
 
 /**
- * Drive the full change: re-key entries + signals in the frontend, then invoke the backend
- * to commit the inner txn, re-encrypt media + TOTP, and rekey the outer SQLCipher layer.
+ * Low-level invoke of the backend command with already-re-keyed blobs.
  *
- * TODO(§4): generate the new outer-key salt and the regenerated recovery-key blob, and
- * stream `reKeyBatch` in bounded batches with progress for large journals.
+ * Signals are stored as the full `JSON.stringify(EncryptedData)` envelope (see
+ * `signalService.ts`), so the payload we send must be that whole JSON string — sending only
+ * the ciphertext would drop the per-blob iv/salt and make every signal undecryptable.
  */
 export async function changeMasterPassword(params: {
   oldPassword: string;
@@ -82,7 +83,100 @@ export async function changeMasterPassword(params: {
     newPassword: params.newPassword,
     newSaltB64: params.newSaltB64,
     entries: params.entries.map((e) => ({ id: e.id, encryptedContent: e.encrypted })),
-    signals: params.signals.map((s) => ({ id: s.id, payload: s.encrypted.ciphertext })),
+    signals: params.signals.map((s) => ({ id: s.id, payload: JSON.stringify(s.encrypted) })),
     recoveryBlob: params.recoveryBlob ?? null,
   });
+}
+
+/** A raw entry blob (sealed entries included) returned by `get_entry_rekey_blobs`. */
+interface EntryRekeyBlob {
+  id: string;
+  encrypted_content: EncryptedData;
+}
+
+/** A raw signal row returned by `list_signals` (payload is a JSON EncryptedData envelope). */
+interface SignalRow {
+  id: string;
+  payload: string;
+}
+
+/** Generate a fresh base64 16-byte salt for the new outer SQLCipher key. */
+function generateSaltB64(): string {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  let s = '';
+  for (const b of bytes) s += String.fromCharCode(b);
+  return btoa(s);
+}
+
+/** Progress while re-keying / re-encrypting, for the modal's progress bar. */
+export interface ChangeProgress {
+  phase: 'entries' | 'signals' | 'media' | 'done';
+  done: number;
+  total: number;
+}
+
+const REKEY_BATCH = 100;
+
+/**
+ * Orchestrate the whole change end-to-end: fetch every encrypted blob (entries — sealed
+ * included — and signals), re-key them under the new password in bounded batches, then invoke
+ * the backend to atomically re-encrypt media + TOTP, rekey the outer SQLCipher layer, update
+ * the verifier, and invalidate stale convenience factors. Throws (before any backend mutation)
+ * if the old password fails to decrypt a blob.
+ *
+ * Recovery key: a previously-enabled recovery key wraps the OLD password and becomes stale, so
+ * the backend disables it; the returned `ChangeSummary` flags this for the re-setup checklist.
+ */
+export async function runChangePassword(
+  oldPassword: string,
+  newPassword: string,
+  onProgress?: (p: ChangeProgress) => void
+): Promise<ChangeSummary> {
+  // 1. Fetch raw blobs (encrypted; no plaintext crosses IPC).
+  const entryRows = await invoke<EntryRekeyBlob[]>('get_entry_rekey_blobs');
+  const signalRows = await invoke<SignalRow[]>('list_signals', {});
+
+  // 2. Re-key entries in bounded batches (memory-safe for large journals).
+  const entries: ReKeyed[] = [];
+  for (let i = 0; i < entryRows.length; i += REKEY_BATCH) {
+    const slice = entryRows
+      .slice(i, i + REKEY_BATCH)
+      .map((r) => ({ id: r.id, encrypted: r.encrypted_content }));
+    entries.push(...(await reKeyBatch(slice, oldPassword, newPassword)));
+    onProgress?.({ phase: 'entries', done: entries.length, total: entryRows.length });
+  }
+
+  // 3. Re-key signals (payload is a JSON EncryptedData envelope).
+  const signalTargets: ReKeyTarget[] = signalRows.map((r) => ({
+    id: r.id,
+    encrypted: JSON.parse(r.payload) as EncryptedData,
+  }));
+  const signals: ReKeyed[] = [];
+  for (let i = 0; i < signalTargets.length; i += REKEY_BATCH) {
+    const slice = signalTargets.slice(i, i + REKEY_BATCH);
+    signals.push(...(await reKeyBatch(slice, oldPassword, newPassword)));
+    onProgress?.({ phase: 'signals', done: signals.length, total: signalTargets.length });
+  }
+
+  // 4. Relay backend media-staging progress to the modal while the command runs.
+  const unlisten = await listen<{ phase: string; done?: number; total?: number }>(
+    'change-password-progress',
+    (e) => {
+      if (e.payload.phase === 'media') {
+        onProgress?.({ phase: 'media', done: e.payload.done ?? 0, total: e.payload.total ?? 0 });
+      }
+    }
+  );
+  try {
+    return await changeMasterPassword({
+      oldPassword,
+      newPassword,
+      newSaltB64: generateSaltB64(),
+      entries,
+      signals,
+    });
+  } finally {
+    unlisten();
+  }
 }

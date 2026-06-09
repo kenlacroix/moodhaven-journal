@@ -317,10 +317,23 @@ impl Database {
             return self.promote_pending_tmp(&tmp_path, &hex_key);
         }
 
+        // Interrupted change_master_password recovery: a `moodhaven_rekey.db` tmp means a
+        // password change crashed. recover_rekey_tmp promotes it (committed) or discards it
+        // (pre-commit), reusing the same key-verify-before-promote safety as the migration path.
+        let rekey_tmp = self.path.with_file_name("moodhaven_rekey.db");
+        if rekey_tmp.exists() {
+            return self.recover_rekey_tmp(&rekey_tmp, &hex_key);
+        }
+
         let new_conn = Self::open_keyed(&self.path, &hex_key)?;
         Self::run_pragmas_and_migrations(&new_conn)?;
-        let mut conn = self.conn.lock().map_err(|e| e.to_string())?;
-        *conn = new_conn;
+        {
+            let mut conn = self.conn.lock().map_err(|e| e.to_string())?;
+            *conn = new_conn;
+        }
+        // Finish the keyless tail of a change interrupted after its atomic flip but before the
+        // media renames / marker clear (e.g. crash after promote). No-op in the steady state.
+        self.finish_pending_password_change();
         Ok(())
     }
 
@@ -706,18 +719,226 @@ impl Database {
     /// crash boundaries so a crash leaves the DB either wholly on the old key (tmp
     /// discarded) or wholly on the new key (tmp promoted) — never a mix.
     ///
-    /// SCAFFOLD: signature + control flow are in place; the export/verify/promote body
-    /// is a draft pending the implementation pass and crash-replay validation
-    /// (`cmp_b3_post_media_pre_rekey` / `cmp_b4_post_rekey_pre_marker_clear`). Returns an
-    /// explicit not-implemented error until then so it cannot run against real data.
-    pub fn rekey_in_place(&self, new_key: &[u8; 32], new_salt_b64: &str) -> Result<(), String> {
-        let _hex_key = Zeroizing::new(hex::encode(new_key));
-        let _new_salt = new_salt_b64;
-        let _tmp_path = self.path.with_file_name("moodhaven_rekey.db");
-        // TODO(change-password §4.6): sqlcipher_export the old-keyed conn into _tmp_path
-        // under new_key, key-verify, write_db_state{encrypted:true, salt:new_salt_b64},
-        // Self::atomic_promote(&self.path, &_tmp_path), then reopen self.conn under new_key.
-        Err("rekey_in_place not yet implemented (active-plans/change-password.md §4.6)".to_string())
+    /// `apply_inner` runs inside the new-keyed tmp BEFORE it is promoted, re-encrypting the
+    /// per-field blobs (entries/signals/TOTP) and updating the verifier + recovery rows so the
+    /// tmp is fully self-consistent under the new password before it ever becomes live. A crash
+    /// before the [`write_db_state`] flip below leaves the tmp an orphan and the live DB wholly
+    /// on the old password; a crash after it recovers forward to the new DB (see
+    /// [`recover_rekey_tmp`]). This is the single atomic flip the crash-replay matrix proves.
+    pub fn rekey_in_place<F>(
+        &self,
+        new_key: &[u8; 32],
+        new_salt_b64: &str,
+        apply_inner: F,
+    ) -> Result<(), String>
+    where
+        F: FnOnce(&Connection) -> Result<(), String>,
+    {
+        let hex_key = Zeroizing::new(hex::encode(new_key));
+        let tmp_path = self.path.with_file_name("moodhaven_rekey.db");
+        let tmp_str = tmp_path.to_str().ok_or("non-UTF8 db path")?;
+        if tmp_str.contains('\'') {
+            return Err("Database path contains single quotes — cannot rekey".to_string());
+        }
+        let tmp_str = tmp_str.to_string();
+
+        // Clean any previous incomplete attempt (orphan tmp + its sidecars).
+        let _ = std::fs::remove_file(&tmp_path);
+        let _ = std::fs::remove_file(tmp_path.with_extension("db-wal"));
+        let _ = std::fs::remove_file(tmp_path.with_extension("db-shm"));
+
+        // 1. Export the live (OLD-keyed) DB into the NEW-keyed tmp. The live conn is held only
+        //    for this block; sqlcipher_export reads `main` and writes the attached encrypted db.
+        {
+            let conn = self.conn.lock().map_err(|e| e.to_string())?;
+            let _ = conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);");
+            let attach_sql = Zeroizing::new(format!(
+                "ATTACH DATABASE '{tmp_str}' AS rekeyed KEY \"x'{}'\";
+                 SELECT sqlcipher_export('rekeyed');
+                 DETACH DATABASE rekeyed;",
+                *hex_key
+            ));
+            conn.execute_batch(&attach_sql)
+                .map_err(|e| format!("sqlcipher_export (rekey): {e}"))?;
+        }
+
+        // 2. Open the new-keyed tmp and apply the inner re-encryption INSIDE it. The live DB is
+        //    still 100% on the old password and untouched, so a crash here leaves an incomplete
+        //    tmp + db_state.salt still old → an orphan, discarded on recovery → OLD.
+        {
+            let tmp_conn = Self::open_keyed(&tmp_path, &hex_key)?;
+            tmp_conn
+                .execute_batch("PRAGMA foreign_keys = ON;")
+                .map_err(|e| format!("rekey tmp pragmas: {e}"))?;
+            apply_inner(&tmp_conn)?;
+            tmp_conn
+                .execute_batch("SELECT count(*) FROM sqlite_master;")
+                .map_err(|_| "rekey tmp unreadable after inner updates".to_string())?;
+            let _ = tmp_conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);");
+            // tmp_conn drops here, flushing + releasing the handle before the promote.
+        }
+        crash_point!("cmp.tmp_built");
+
+        // 3. THE COMMIT POINT — write the new salt to db_state.json. Mirrors encrypt_in_place's
+        //    "encrypted:true" pre-write: from this instant the system is committed to the new
+        //    password, because the next unlock derives the new key (from this salt) and
+        //    `recover_rekey_tmp` key-verifies + promotes the already-built tmp. Written ONLY
+        //    after the tmp is fully built and verified above.
+        write_db_state(
+            &self.path,
+            &DbStateFile {
+                encrypted: true,
+                salt: Some(new_salt_b64.to_string()),
+            },
+        )?;
+        crash_point!("cmp.after_db_flip");
+
+        // 4. Release the live (old-keyed) connection so the handle is freed before the rename.
+        {
+            let mut conn = self.conn.lock().map_err(|e| e.to_string())?;
+            let placeholder =
+                Connection::open_in_memory().map_err(|e| format!("placeholder: {e}"))?;
+            *conn = placeholder;
+        }
+        // Drop the OLD live DB's stale WAL/SHM (retry for delayed Windows handle release).
+        for _ in 0..5 {
+            let wal_gone = std::fs::remove_file(self.path.with_extension("db-wal")).is_ok()
+                || !self.path.with_extension("db-wal").exists();
+            let shm_gone = std::fs::remove_file(self.path.with_extension("db-shm")).is_ok()
+                || !self.path.with_extension("db-shm").exists();
+            if wal_gone && shm_gone {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+        let _ = std::fs::remove_file(tmp_path.with_extension("db-wal"));
+        let _ = std::fs::remove_file(tmp_path.with_extension("db-shm"));
+
+        // 5. Atomically replace the live DB with the NEW-keyed tmp.
+        Self::atomic_promote(&self.path, &tmp_path)?;
+        crash_point!("cmp.after_promote");
+
+        // 6. Open the final keyed connection on the promoted file and adopt it.
+        let final_conn = Self::open_keyed(&self.path, &hex_key)?;
+        Self::run_pragmas_and_migrations(&final_conn)?;
+        {
+            let mut conn = self.conn.lock().map_err(|e| e.to_string())?;
+            *conn = final_conn;
+        }
+        Ok(())
+    }
+
+    /// New-salt of an in-flight `change_master_password`, read from the pending marker without
+    /// depending on the command-layer marker type. Used to decide, at recovery, whether the
+    /// change committed (db_state.salt already advanced to this value) or not.
+    fn pending_change_new_salt(&self) -> Option<String> {
+        let marker = self
+            .path
+            .with_file_name(crate::commands::change_password::PENDING_MARKER);
+        let txt = std::fs::read_to_string(&marker).ok()?;
+        let v: serde_json::Value = serde_json::from_str(&txt).ok()?;
+        v.get("new_salt_b64")?.as_str().map(|s| s.to_string())
+    }
+
+    /// Finish the KEYLESS tail of a `change_master_password` interrupted after its atomic DB
+    /// flip: promote any staged media (`*.rekeytmp`) over their originals and clear the pending
+    /// marker. Idempotent and key-free, so it is safe to run on every unlock — it no-ops when no
+    /// marker is present (the steady state).
+    fn finish_pending_password_change(&self) {
+        let marker = self
+            .path
+            .with_file_name(crate::commands::change_password::PENDING_MARKER);
+        if !marker.exists() {
+            return;
+        }
+        if let Some(dir) = self.path.parent() {
+            let _ = crate::commands::media::finish_media_renames(dir);
+        }
+        let _ = std::fs::remove_file(&marker);
+        log::info!("[change-password] finished interrupted change (media renames + marker clear)");
+    }
+
+    /// Recover an interrupted `change_master_password` that left a `moodhaven_rekey.db` tmp.
+    /// `hex_key` is derived (by `verify_password`) from the CURRENT db_state.salt:
+    ///
+    /// - **Committed** (db_state.salt == the marker's new salt): the flip happened; the tmp is
+    ///   the authoritative new-password DB. Key-verify it with the (new) key and promote it. A
+    ///   verify *failure* here means a WRONG new password, NOT an orphan — return an error and
+    ///   keep both files so a correct retry still completes (never discard committed data).
+    /// - **Pre-commit** (db_state.salt still the old salt): the tmp is a genuine orphan and the
+    ///   live DB is the intact old-password DB. Discard the tmp, roll back staged media, clear
+    ///   the marker, and open the live DB with the (old) key → OLD.
+    fn recover_rekey_tmp(&self, tmp_path: &Path, hex_key: &str) -> Result<(), String> {
+        let cur_salt = read_db_state(&self.path).salt;
+        let new_salt = self.pending_change_new_salt();
+        let committed = matches!((&cur_salt, &new_salt), (Some(c), Some(n)) if c == n);
+
+        if committed {
+            let keyed = Self::open_keyed(tmp_path, hex_key).map_err(|e| {
+                // Committed but the key does not open the new tmp → wrong (new) password.
+                // Do NOT discard: the change is committed and this is the live data.
+                format!("Your password was changed; please unlock with your NEW password. ({e})")
+            })?;
+            Self::run_pragmas_and_migrations(&keyed)?;
+            drop(keyed);
+            {
+                let mut conn = self.conn.lock().map_err(|e| e.to_string())?;
+                let placeholder =
+                    Connection::open_in_memory().map_err(|e| format!("placeholder: {e}"))?;
+                *conn = placeholder;
+            }
+            // Sweep the live DB's stale WAL/SHM and the tmp's sidecars before the rename.
+            for _ in 0..5 {
+                let wal_gone = std::fs::remove_file(self.path.with_extension("db-wal")).is_ok()
+                    || !self.path.with_extension("db-wal").exists();
+                let shm_gone = std::fs::remove_file(self.path.with_extension("db-shm")).is_ok()
+                    || !self.path.with_extension("db-shm").exists();
+                if wal_gone && shm_gone {
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
+            let _ = std::fs::remove_file(tmp_path.with_extension("db-wal"));
+            let _ = std::fs::remove_file(tmp_path.with_extension("db-shm"));
+
+            Self::atomic_promote(&self.path, tmp_path)?;
+            let final_conn = Self::open_keyed(&self.path, hex_key)?;
+            Self::run_pragmas_and_migrations(&final_conn)?;
+            {
+                let mut conn = self.conn.lock().map_err(|e| e.to_string())?;
+                *conn = final_conn;
+            }
+            log::info!("[change-password] promoted interrupted rekey tmp after key verification");
+            self.finish_pending_password_change();
+            Ok(())
+        } else {
+            // Pre-commit orphan: the live DB is the intact OLD DB and `hex_key` matches it.
+            let open_result = (|| -> Result<(), String> {
+                let new_conn = Self::open_keyed(&self.path, hex_key)?;
+                Self::run_pragmas_and_migrations(&new_conn)?;
+                let mut conn = self.conn.lock().map_err(|e| e.to_string())?;
+                *conn = new_conn;
+                Ok(())
+            })();
+            // The tmp + staged media + marker are genuine orphans in the pre-commit state, so
+            // they are safe to discard regardless of whether `hex_key` was the correct old
+            // password (a wrong password simply yields Err below and the user retries).
+            let _ = std::fs::remove_file(tmp_path);
+            let _ = std::fs::remove_file(tmp_path.with_extension("db-wal"));
+            let _ = std::fs::remove_file(tmp_path.with_extension("db-shm"));
+            if let Some(dir) = self.path.parent() {
+                let _ = crate::commands::media::cleanup_media_staging(dir);
+            }
+            let _ = std::fs::remove_file(
+                self.path
+                    .with_file_name(crate::commands::change_password::PENDING_MARKER),
+            );
+            log::warn!(
+                "[change-password] discarded orphan rekey tmp (pre-commit interruption) — \
+                 rolled back to the old password"
+            );
+            open_result
+        }
     }
 
     /// Returns true if db_state.json reports the database is SQLCipher-encrypted.

@@ -631,6 +631,7 @@ pub fn run() {
             commands::create_journal_entry,
             commands::get_journal_entry,
             commands::get_all_journal_entries,
+            commands::get_entry_rekey_blobs,
             commands::get_journal_entries_by_date,
             commands::get_entries_on_this_day,
             commands::update_journal_entry,

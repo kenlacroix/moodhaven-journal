@@ -31,6 +31,7 @@ commands.allow = [
   "create_journal_entry",
   "get_journal_entry",
   "get_all_journal_entries",
+  "get_entry_rekey_blobs",
   "get_journal_entries_by_date",
   "get_entries_on_this_day",
   "update_journal_entry",

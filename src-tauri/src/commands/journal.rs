@@ -203,6 +203,33 @@ pub fn get_all_journal_entries(
     db::get_all_entries(&db, limit)
 }
 
+/// One entry's id + raw encrypted blob, for the change-password re-key sweep.
+#[derive(Debug, serde::Serialize)]
+pub struct EntryRekeyBlob {
+    pub id: String,
+    pub encrypted_content: EncryptedContent,
+}
+
+/// Return the raw `encrypted_content` of EVERY entry — including SEALED time-capsule entries
+/// whose content `get_all_journal_entries` deliberately withholds. The frontend needs every
+/// per-field blob to re-encrypt under the new password during `change_master_password`;
+/// omitting sealed entries would leave them undecryptable after the change. Encrypted blobs
+/// only — no plaintext leaves the backend. Requires an unlocked session.
+#[tauri::command]
+pub fn get_entry_rekey_blobs(
+    db: State<'_, Database>,
+    lock: State<'_, AppLockState>,
+) -> Result<Vec<EntryRekeyBlob>, String> {
+    require_unlocked(&lock)?;
+    Ok(db::get_all_entry_blobs(&db)?
+        .into_iter()
+        .map(|(id, encrypted_content)| EntryRekeyBlob {
+            id,
+            encrypted_content,
+        })
+        .collect())
+}
+
 /// Get entries from the same calendar day (month+day) in previous years (On This Day).
 /// More efficient than fetching all entries and filtering in JS.
 #[tauri::command]

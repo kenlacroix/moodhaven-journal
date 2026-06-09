@@ -39,17 +39,23 @@ export function htmlToMarkdown(html: string): string {
   // Paragraphs
   md = md.replace(/<p[^>]*>(.*?)<\/p>/gi, '$1\n\n');
 
-  // Strip remaining tags
-  md = md.replace(/<[^>]+>/g, '');
+  // Strip remaining tags — loop until stable so overlapping brackets
+  // (e.g. `<scr<script>ipt>`) can't reassemble into a tag after one pass.
+  let prev: string;
+  do {
+    prev = md;
+    md = md.replace(/<[^>]+>/g, '');
+  } while (md !== prev);
 
-  // Decode common HTML entities
+  // Decode common HTML entities — `&amp;` last, so `&amp;lt;` does not
+  // double-unescape into `<`.
   md = md
-    .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
-    .replace(/&nbsp;/g, ' ');
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&');
 
   // Collapse 3+ newlines to 2
   md = md.replace(/\n{3,}/g, '\n\n');
@@ -60,17 +66,26 @@ export function htmlToMarkdown(html: string): string {
 /** Strip all HTML tags and return plain text. */
 export function htmlToPlainText(html: string): string {
   if (!html) return '';
-  return html
+  let text = html
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<p[^>]*>/gi, '')
-    .replace(/<\/p>/gi, '\n')
-    .replace(/<[^>]+>/g, '')
-    .replace(/&amp;/g, '&')
+    .replace(/<\/p>/gi, '\n');
+
+  // Strip tags until stable (see htmlToMarkdown for the overlap rationale).
+  let prev: string;
+  do {
+    prev = text;
+    text = text.replace(/<[^>]+>/g, '');
+  } while (text !== prev);
+
+  // Decode entities — `&amp;` last to avoid double-unescaping.
+  return text
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
     .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
     .trim();
 }
 

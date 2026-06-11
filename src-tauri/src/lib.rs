@@ -672,6 +672,7 @@ pub fn run() {
             commands::get_data_stats,
             commands::write_text_file,
             commands::exit_app,
+            commands::relaunch_app,
             commands::get_log_path,
             commands::open_log_folder,
             commands::set_log_level,

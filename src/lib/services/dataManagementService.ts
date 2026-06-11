@@ -26,6 +26,14 @@ export async function exitApp(): Promise<void> {
   return invoke<void>('exit_app');
 }
 
+/**
+ * Relaunch the application into its first-run state (used after factory reset).
+ * Desktop restarts the process; the browser build reloads the page.
+ */
+export async function relaunchApp(): Promise<void> {
+  return invoke<void>('relaunch_app');
+}
+
 /** Optional filters for selective export. All fields optional; absent = no filter. */
 export interface ExportFilter {
   tags?: string[];

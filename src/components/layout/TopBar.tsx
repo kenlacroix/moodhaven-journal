@@ -79,22 +79,33 @@ function IconBtn({
   title,
   active,
   children,
+  id,
+  ariaLabel,
+  ariaExpanded,
+  className = '',
 }: {
   onClick: () => void;
   title: string;
   active?: boolean;
   children: React.ReactNode;
+  id?: string;
+  ariaLabel?: string;
+  ariaExpanded?: boolean;
+  className?: string;
 }) {
   return (
     <button
       type="button"
+      id={id}
       onClick={onClick}
       title={title}
+      aria-label={ariaLabel}
+      aria-expanded={ariaExpanded}
       className={`p-2 rounded-lg transition-all duration-200 ${
         active
           ? 'text-violet-500 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/20'
           : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 active:scale-95'
-      }`}
+      } ${className}`}
     >
       {children}
     </button>
@@ -116,6 +127,9 @@ export function TopBar({ currentView, onLock, onSelectEntry, onNewEntry, onOpenB
   const distractionFree = useSettingsStore((s) => s.distractionFree);
   const theme = useSettingsStore((s) => s.settings.appearance.theme);
   const setTheme = useSettingsStore((s) => s.setTheme);
+  const appearanceDrawerOpen = useSettingsStore((s) => s.appearanceDrawerOpen);
+  const appearanceHintPulse = useSettingsStore((s) => s.appearanceHintPulse);
+  const toggleAppearanceDrawer = useSettingsStore((s) => s.toggleAppearanceDrawer);
 
   const { summary: healthSummary, isEnabled: ouraEnabled } = useOuraContext();
   const hasHealth = ouraEnabled && healthSummary && healthSummary.badges.length > 0;
@@ -176,9 +190,24 @@ export function TopBar({ currentView, onLock, onSelectEntry, onNewEntry, onOpenB
           </svg>
         </IconBtn>
 
-        {/* Focus + fullscreen + breakout menu — only when writing */}
+        {/* Writing appearance (typography/tint) + focus menu — only when writing */}
         {currentView === 'writing' && (
-          <FocusMenu onOpenBreakout={onOpenBreakout} />
+          <>
+            <IconBtn
+              id="writing-appearance-toggle"
+              onClick={toggleAppearanceDrawer}
+              title="Writing appearance (⌘,)"
+              ariaLabel="Writing appearance"
+              ariaExpanded={appearanceDrawerOpen}
+              active={appearanceDrawerOpen}
+              className={appearanceHintPulse ? 'drawer-hint-pulse' : ''}
+            >
+              <span className="w-5 h-5 flex items-center justify-center font-semibold leading-none select-none">
+                <span className="text-[15px]">A</span><span className="text-[11px]">a</span>
+              </span>
+            </IconBtn>
+            <FocusMenu onOpenBreakout={onOpenBreakout} />
+          </>
         )}
 
         {/* Divider */}

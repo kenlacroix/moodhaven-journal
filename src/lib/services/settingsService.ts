@@ -20,6 +20,27 @@ const SENSITIVE_PATHS = ['ai.openai.apiKey', 'webdav.password'] as const;
 
 const MARKER = '__enc_v1:';
 
+/** True for plain objects (not arrays, not null). */
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Recursively merge a stored blob over defaults so that nested keys absent from
+ * the blob (e.g. `appearance.writing` from a build that predates writing
+ * appearance) fall back to their defaults instead of being dropped. The stored
+ * value wins for primitives and arrays; only plain objects are merged.
+ */
+function deepMerge<T>(defaults: T, blob: Partial<T> | undefined): T {
+  if (!isPlainObject(blob)) return defaults;
+  const out: Record<string, unknown> = { ...(defaults as Record<string, unknown>) };
+  for (const [key, value] of Object.entries(blob)) {
+    const base = (defaults as Record<string, unknown>)[key];
+    out[key] = isPlainObject(base) && isPlainObject(value) ? deepMerge(base, value) : value;
+  }
+  return out as T;
+}
+
 /** Read a nested value from an object by dot-path. */
 function getByPath(obj: Record<string, unknown>, path: string): unknown {
   return path.split('.').reduce<unknown>((acc, key) => {
@@ -105,7 +126,7 @@ export async function loadSettings(password?: string): Promise<AppSettings> {
         await decryptSensitiveFields(blob, password);
         if (hadPlaintext) {
           // Re-save to encrypt the plaintext fields (fire-and-forget, non-blocking).
-          const settings = { ...createDefaultSettings(), ...(blob as Partial<AppSettings>) };
+          const settings = deepMerge(createDefaultSettings(), blob as Partial<AppSettings>);
           saveSettings(settings, password).catch(() => {});
         }
       } else {
@@ -117,7 +138,7 @@ export async function loadSettings(password?: string): Promise<AppSettings> {
           }
         }
       }
-      return { ...createDefaultSettings(), ...(blob as Partial<AppSettings>) };
+      return deepMerge(createDefaultSettings(), blob as Partial<AppSettings>);
     }
     return createDefaultSettings();
   } catch (error) {

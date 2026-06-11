@@ -62,6 +62,7 @@ commands.allow = [
   "get_data_stats",
   "write_text_file",
   "write_binary_file",
+  "read_text_file",
   "exit_app",
   "get_log_path",
   "open_log_folder",

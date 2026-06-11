@@ -112,10 +112,49 @@ write), `permissions/app-commands.toml` + `gen/schemas/acl-manifests.json` (ACL 
 Frontend: `lib/services/changePasswordService.ts` (begin/cancel + unbounded signal fetch),
 `lib/backend/browser-invoke.ts` (3 new cmds → desktop-only throw).
 
-## Then: live-test on Windows VM
+## Windows live-test — IN PROGRESS (resume here)
 
-Build the feature branch and empirically verify on `desktop-tplfj56` (via Kali jump host):
-old key cannot decrypt entries post-change; DB stays SQLCipher-encrypted; recovery re-escrow works;
-crash-safety via `scripts/crash-replay.sh`. **Add a targeted case:** write an entry from the
-breakout writer window mid-change and confirm it's still readable afterward (reproduces Fix 1 / the
-guard). Note: the installed v1.7.x build does NOT contain this feature — a source build is required.
+Goal: empirically verify on `desktop-tplfj56` (SSH via Kali jump host
+`ssh -J ken@kali.tail06c6c3.ts.net ken@desktop-tplfj56.tail06c6c3.ts.net`, PowerShell shell):
+old key can't decrypt post-change, DB stays SQLCipher ciphertext, salt rotated, no leftover
+`password_change.pending`/`moodhaven_rekey.db`, PIN/biometric cleared, recovery re-escrow correct,
+camelCase summary renders. Plus the TOCTOU repro: write from the breakout writer mid-change.
+
+**Done so far on the VM:**
+- Uninstalled the old MoodHaven **1.8.2** (no journal DB existed — only WebView2 cache — so nothing lost).
+- Transferred the branch via git bundle (no push) → fetched into `C:\Users\Ken\moodhaven-journal`,
+  checked out `feat/change-master-password-impl` @ `f6ed956`. (Prior branch `fix/security-pt6-acl-lockguard`
+  was `git stash`-ed first — `git stash pop` to restore it later.)
+- `cargo test --lib` on Windows got 5.3 min in (hundreds of crates OK) then failed — **environmental, not code**.
+- **`npm install` + `npm run build` succeeded** — `dist/` is built; `node_modules` present.
+
+**Two environmental blockers (both being worked around, neither is a code defect):**
+1. **OpenSSL needs Strawberry Perl + nmake.** SQLCipher (`rusqlite`→`libsqlite3-sys`→`openssl-sys`,
+   vendored) compiles OpenSSL from source. Needs `perl` + MSVC `nmake`. Git-for-Windows' msys perl
+   is too cut-down (fails in `config.pm`). MSVC `nmake` is available via `Enter-VsDevShell`
+   (VS BuildTools 2022 at `C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools`).
+2. **C: was full** (32 GB disk, 0.1 GB free). The **F: drive has ~11.7 GB free** — use it for the build.
+
+**VM state right now (clean):** C: target deleted (C: free ~1.7 GB); `F:\cargo-target`, `F:\temp`,
+`F:\dl` created; `dist/` + `node_modules` intact; Strawberry Perl NOT yet installed (the 5.40.0.1
+portable URL 404'd — get a valid portable-zip URL from https://strawberryperl.com/releases.html,
+e.g. a 5.38/5.32 `-64bit-portable.zip`).
+
+**Resume steps:**
+1. Download a valid Strawberry Perl **portable** zip to `F:\dl`, `Expand-Archive` to `F:\strawberry`
+   (perl ends up at `F:\strawberry\perl\bin\perl.exe`).
+2. Build (one PowerShell session): prepend `F:\strawberry\perl\bin` to PATH (before Git's perl);
+   `Enter-VsDevShell -VsInstallPath '<BuildTools>' -SkipAutomaticLocation -DevCmdArguments '-arch=x64'`;
+   set `$env:CARGO_TARGET_DIR='F:\cargo-target'` and `$env:TEMP=$env:TMP='F:\temp'` (C: too tight for
+   temp); `cd C:\Users\Ken\moodhaven-journal\src-tauri; cargo build` (debug; dist already built, so the
+   exe embeds the frontend). Output: `F:\cargo-target\debug\moodhaven-journal.exe`.
+3. Hand the exe path to the user to run **from their RDP session** (an SSH-launched GUI won't appear in
+   their session). They: create journal w/ known throwaway pw `oldpass123`, write 2-3 entries, optionally
+   set a PIN + Recovery Key, then Settings → Privacy → Change Password → `newpass456`; report both pws.
+4. Verify on-disk via SSH (see Goal). For the old-key-fails/new-key-opens crypto proof, derive PBKDF2(600k,
+   pw, salt-from-`db_state.json`) and try `PRAGMA key = "x'<hex>'"; SELECT count(*)` — mirror
+   `crash_probe.rs::keyed_sentinel_value`. App data dir: `C:\Users\Ken\AppData\Local\com.moodhaven.app`.
+
+Alternative if the VM build stays painful: trigger `.github/workflows/build.yml` (has `workflow_dispatch`,
+builds Windows) on the branch → download the NSIS installer artifact → install on the VM (needs the
+branch pushed; user said don't MERGE, hasn't spoken to push).

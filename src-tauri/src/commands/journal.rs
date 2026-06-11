@@ -300,10 +300,12 @@ pub fn delete_journal_entry(
 pub fn patch_entry_location_weather(
     db: State<Database>,
     lock: State<'_, AppLockState>,
+    rekey: State<'_, crate::RekeyInProgress>,
     id: String,
     location_weather: String,
 ) -> Result<(), String> {
     require_unlocked(&lock)?;
+    super::require_no_rekey(&rekey)?;
     db::patch_entry_location_weather(&db, &id, &location_weather)
 }
 
@@ -312,10 +314,12 @@ pub fn patch_entry_location_weather(
 pub fn patch_entry_pinned(
     db: State<Database>,
     lock: State<'_, AppLockState>,
+    rekey: State<'_, crate::RekeyInProgress>,
     id: String,
     pinned: bool,
 ) -> Result<(), String> {
     require_unlocked(&lock)?;
+    super::require_no_rekey(&rekey)?;
     db::patch_entry_pinned(&db, &id, pinned)
 }
 
@@ -324,10 +328,12 @@ pub fn patch_entry_pinned(
 pub fn patch_entry_status(
     db: State<Database>,
     lock: State<'_, AppLockState>,
+    rekey: State<'_, crate::RekeyInProgress>,
     id: String,
     status: String,
 ) -> Result<(), String> {
     require_unlocked(&lock)?;
+    super::require_no_rekey(&rekey)?;
     db::patch_entry_status(&db, &id, &status)
 }
 
@@ -336,10 +342,12 @@ pub fn patch_entry_status(
 pub fn link_journal_entry_to_session(
     db: State<Database>,
     lock: State<'_, AppLockState>,
+    rekey: State<'_, crate::RekeyInProgress>,
     entry_id: String,
     session_id: String,
 ) -> Result<(), String> {
     require_unlocked(&lock)?;
+    super::require_no_rekey(&rekey)?;
     db::link_journal_entry_to_session(&db, &entry_id, &session_id)
 }
 
@@ -348,10 +356,12 @@ pub fn link_journal_entry_to_session(
 pub fn sync_entry_tags(
     db: State<Database>,
     lock: State<'_, AppLockState>,
+    rekey: State<'_, crate::RekeyInProgress>,
     id: String,
     tags: Vec<String>,
 ) -> Result<(), String> {
     require_unlocked(&lock)?;
+    super::require_no_rekey(&rekey)?;
     db::sync_entry_tags(&db, &id, &tags)
 }
 

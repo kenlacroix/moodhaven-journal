@@ -59,9 +59,35 @@ pub fn read_db_state(db_path: &Path) -> DbStateFile {
 }
 
 fn write_db_state(db_path: &Path, state: &DbStateFile) -> Result<(), String> {
+    use std::io::Write;
     let path = db_state_path(db_path);
     let json = serde_json::to_string(state).map_err(|e| format!("serialize db_state: {e}"))?;
-    std::fs::write(&path, json).map_err(|e| format!("write db_state.json: {e}"))?;
+
+    // db_state.json is the commit signal for both encrypt_in_place and change_master_password,
+    // so it must be crash-durable: write to a temp, fsync its contents, then atomically rename
+    // over the live file and fsync the directory. A bare `fs::write` truncates-then-writes with
+    // no fsync, so a power loss can leave it empty (→ "unencrypted" → brick) or leave the salt
+    // unflushed while the promoted DB is already on the new key.
+    let tmp = path.with_extension("json.tmp");
+    {
+        let mut f = std::fs::File::create(&tmp).map_err(|e| format!("create db_state tmp: {e}"))?;
+        f.write_all(json.as_bytes())
+            .map_err(|e| format!("write db_state tmp: {e}"))?;
+        f.sync_all()
+            .map_err(|e| format!("fsync db_state tmp: {e}"))?;
+    }
+    // POSIX rename(2) replaces atomically; Windows rename fails if the dest exists, so clear it
+    // first (tiny window — acceptable on a platform with weaker durability guarantees anyway).
+    #[cfg(target_os = "windows")]
+    {
+        let _ = std::fs::remove_file(&path);
+    }
+    std::fs::rename(&tmp, &path).map_err(|e| format!("rename db_state.json: {e}"))?;
+    if let Some(dir) = path.parent() {
+        if let Ok(d) = std::fs::File::open(dir) {
+            let _ = d.sync_all();
+        }
+    }
     Ok(())
 }
 
@@ -777,6 +803,12 @@ impl Database {
             let _ = tmp_conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);");
             // tmp_conn drops here, flushing + releasing the handle before the promote.
         }
+        // Durability: force the NEW-keyed tmp to stable storage BEFORE the commit flips db_state
+        // to point at it. Without this, power loss could persist the salt flip while the tmp's
+        // contents are still in the page cache and lost → db_state=new with an unreadable tmp.
+        if let Ok(f) = std::fs::File::open(&tmp_path) {
+            let _ = f.sync_all();
+        }
         crash_point!("cmp.tmp_built");
 
         // 3. THE COMMIT POINT — write the new salt to db_state.json. Mirrors encrypt_in_place's
@@ -816,6 +848,12 @@ impl Database {
 
         // 5. Atomically replace the live DB with the NEW-keyed tmp.
         Self::atomic_promote(&self.path, &tmp_path)?;
+        // Make the promote durable so a power loss can't undo the rename.
+        if let Some(dir) = self.path.parent() {
+            if let Ok(d) = std::fs::File::open(dir) {
+                let _ = d.sync_all();
+            }
+        }
         crash_point!("cmp.after_promote");
 
         // 6. Open the final keyed connection on the promoted file and adopt it.

@@ -91,10 +91,23 @@ pub fn lock_app(
     db_key.clear();
     // Disarm any pending full-DB restore so an armed-then-locked device won't serve one.
     restore_arm.clear();
-    // Disarm the password-change write-gate (a lock cancels any in-flight change).
-    rekey.disarm();
     // Wipe any unconsumed writer-window password so plaintext never survives a lock.
     session_bridge.clear();
+
+    // If a `change_master_password` is mid-flight it OWNS the write-gate and the keyed
+    // connection. Disarming the gate here would re-open the write window, and releasing the
+    // key would swap the live connection out from under the running rekey (risking corruption
+    // or stranded rows). Leave both to the change's own completion — its `DisarmOnDrop` clears
+    // the gate and it installs the new-keyed connection. The session is still marked locked, so
+    // the UI locks; the brief key-in-memory window until the change finishes (seconds) is an
+    // acceptable trade against data loss.
+    if rekey.is_armed() {
+        log::warn!(
+            "[lock] change_master_password in flight — deferring write-gate disarm + key release"
+        );
+        return Ok(());
+    }
+    rekey.disarm();
     // Release the keyed SQLCipher connection so SQLCipher zeroes the raw 256-bit key it
     // held for the connection's lifetime — otherwise the key persists in the connection's
     // memory after lock and is recoverable from a process memory dump. No-op for an

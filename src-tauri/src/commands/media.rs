@@ -798,6 +798,7 @@ pub fn write_media_from_sync(
     app: AppHandle,
     db: State<'_, Database>,
     lock: State<'_, AppLockState>,
+    rekey: State<'_, crate::RekeyInProgress>,
     entry_id: String,
     media_id: String,
     filename: String,
@@ -807,6 +808,7 @@ pub fn write_media_from_sync(
     data_base64: String,
 ) -> Result<(), String> {
     require_unlocked(&lock)?;
+    super::require_no_rekey(&rekey)?;
     // `media_id` comes from an untrusted peer's media manifest and is interpolated
     // into the on-disk filename — validate it as a safe path component (same rules
     // as entry_id) to block traversal writes outside the media directory.

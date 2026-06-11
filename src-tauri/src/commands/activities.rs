@@ -61,10 +61,12 @@ pub async fn list_activities(
 pub async fn create_activity(
     db: tauri::State<'_, Database>,
     lock: State<'_, AppLockState>,
+    rekey: State<'_, crate::RekeyInProgress>,
     name: String,
     emoji: String,
 ) -> Result<Activity, String> {
     require_unlocked(&lock)?;
+    super::require_no_rekey(&rekey)?;
     let name = name.trim().to_lowercase();
     if name.is_empty() || name.len() > 50 {
         return Err("Activity name must be 1–50 characters".to_string());
@@ -143,10 +145,12 @@ pub async fn delete_activity(
 pub async fn sync_entry_activities(
     db: tauri::State<'_, Database>,
     lock: State<'_, AppLockState>,
+    rekey: State<'_, crate::RekeyInProgress>,
     entry_id: String,
     activity_ids: Vec<String>,
 ) -> Result<(), String> {
     require_unlocked(&lock)?;
+    super::require_no_rekey(&rekey)?;
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     conn.execute(
         "DELETE FROM entry_activities WHERE entry_id = ?1",

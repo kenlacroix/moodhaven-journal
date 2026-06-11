@@ -303,6 +303,27 @@ pub async fn change_master_password(
     let media_total = match pre {
         Ok(n) => n,
         Err(e) => {
+            // Distinguish pre- vs post-commit failure by the authoritative discriminator: has
+            // db_state.json's salt already advanced to the new salt? `rekey_in_place` crosses its
+            // commit point INTERNALLY (the salt flip), so a failure in its post-flip steps
+            // (placeholder swap / WAL sweep / promote / reopen) surfaces here as an Err even though
+            // the change is COMMITTED.
+            let committed = crate::db::get_db_path(&app)
+                .map(|p| {
+                    crate::db::read_db_state(&p).salt.as_deref() == Some(new_salt_b64.as_str())
+                })
+                .unwrap_or(false);
+            if committed {
+                // Post-commit failure. The change is done; the marker + staged media + rekey tmp
+                // MUST be preserved so the next unlock's startup recovery (recover_rekey_tmp /
+                // finish_pending_password_change) rolls the keyless tail forward. Deleting the
+                // marker here would make recovery mistake this for a pre-commit orphan and destroy
+                // the only NEW-keyed copy — a permanent brick. Surface a restart instruction.
+                return Err(format!(
+                    "Your password was changed, but finalizing was interrupted ({e}). \
+                     Restart the app and unlock with your NEW password."
+                ));
+            }
             // Pre-commit failure: the live DB was never modified. Tidy the in-flight state so the
             // still-running app is clean (a restart would otherwise roll back via recover_rekey_tmp).
             let _ = media::cleanup_media_staging(&app_data_dir);

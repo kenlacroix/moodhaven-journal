@@ -14,6 +14,33 @@ use zeroize::Zeroize;
 /// Sensitive Tauri commands check this state before executing.
 pub struct AppLockState(pub Mutex<bool>);
 
+/// True while a `change_master_password` is in flight (from `change_password_begin`, or the
+/// command's own self-arm, until it returns). Data-write commands refuse while armed so the
+/// frontend's re-key snapshot can't be invalidated by a concurrent write (the TOCTOU window
+/// between fetching blobs and the atomic flip). Cleared on `lock_app`.
+pub struct RekeyInProgress(pub std::sync::atomic::AtomicBool);
+
+impl RekeyInProgress {
+    pub fn new() -> Self {
+        RekeyInProgress(std::sync::atomic::AtomicBool::new(false))
+    }
+    pub fn arm(&self) {
+        self.0.store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+    pub fn disarm(&self) {
+        self.0.store(false, std::sync::atomic::Ordering::SeqCst);
+    }
+    pub fn is_armed(&self) -> bool {
+        self.0.load(std::sync::atomic::Ordering::SeqCst)
+    }
+}
+
+impl Default for RekeyInProgress {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Backend rate limiter for `verify_password`.
 ///
 /// Tracks consecutive failures and enforces a 30-second lockout after 5 failures.
@@ -547,6 +574,9 @@ pub fn run() {
             // Full-DB restore consent gate (armed explicitly by the serving user)
             app.manage(commands::peer_sync_engine::RestoreArmState::new());
 
+            // Password-change write-gate (blocks data writes while a re-key is in flight)
+            app.manage(RekeyInProgress::new());
+
             // STT model download state (cancellation tokens)
             app.manage(commands::DownloadState::default());
 
@@ -627,11 +657,14 @@ pub fn run() {
             commands::get_password_hash,
             commands::verify_password,
             commands::change_master_password,
+            commands::change_password_begin,
+            commands::change_password_cancel,
             // Journal entries
             commands::create_journal_entry,
             commands::get_journal_entry,
             commands::get_all_journal_entries,
             commands::get_entry_rekey_blobs,
+            commands::get_signal_rekey_blobs,
             commands::get_journal_entries_by_date,
             commands::get_entries_on_this_day,
             commands::update_journal_entry,

@@ -179,7 +179,9 @@ pub(crate) fn reencrypt_totp(
         return Ok(()); // legacy plaintext seed — leave for the disable/re-enable migration.
     }
 
-    let secret = decrypt_totp_secret(&stored, old_password)?;
+    // Hold the decrypted seed in a Zeroizing buffer so it is wiped from memory on drop rather
+    // than lingering in a plain String after the re-encrypt.
+    let secret = zeroize::Zeroizing::new(decrypt_totp_secret(&stored, old_password)?);
     let reencrypted = encrypt_totp_secret(&secret, new_password)?;
     conn.execute(
         "UPDATE two_factor_auth SET totp_secret = ?1, updated_at = datetime('now') WHERE id = 1",

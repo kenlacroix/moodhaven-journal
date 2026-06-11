@@ -84,12 +84,15 @@ pub fn lock_app(
     db: State<'_, Database>,
     session_bridge: State<'_, crate::commands::session_bridge::SessionBridge>,
     restore_arm: State<'_, crate::commands::peer_sync_engine::RestoreArmState>,
+    rekey: State<'_, crate::RekeyInProgress>,
 ) -> Result<(), String> {
     *lock.0.lock().map_err(|e| e.to_string())? = true;
     twofa.reset();
     db_key.clear();
     // Disarm any pending full-DB restore so an armed-then-locked device won't serve one.
     restore_arm.clear();
+    // Disarm the password-change write-gate (a lock cancels any in-flight change).
+    rekey.disarm();
     // Wipe any unconsumed writer-window password so plaintext never survives a lock.
     session_bridge.clear();
     // Release the keyed SQLCipher connection so SQLCipher zeroes the raw 256-bit key it

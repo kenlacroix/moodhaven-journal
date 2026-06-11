@@ -151,6 +151,7 @@ fn constant_time_eq(a: &str, b: &str) -> bool {
 pub fn create_journal_entry(
     db: State<Database>,
     lock: State<'_, AppLockState>,
+    rekey: State<'_, crate::RekeyInProgress>,
     id: String,
     encrypted_content: EncryptedContent,
     mood: i32,
@@ -160,6 +161,7 @@ pub fn create_journal_entry(
     word_count: Option<i32>,
 ) -> Result<JournalEntryRow, String> {
     require_unlocked(&lock)?;
+    super::require_no_rekey(&rekey)?;
     if !(1..=5).contains(&mood) {
         return Err("Mood must be between 1 and 5".to_string());
     }
@@ -258,6 +260,7 @@ pub fn get_journal_entries_by_date(
 pub fn update_journal_entry(
     db: State<Database>,
     lock: State<'_, AppLockState>,
+    rekey: State<'_, crate::RekeyInProgress>,
     id: String,
     encrypted_content: EncryptedContent,
     mood: i32,
@@ -265,6 +268,7 @@ pub fn update_journal_entry(
     word_count: Option<i32>,
 ) -> Result<JournalEntryRow, String> {
     require_unlocked(&lock)?;
+    super::require_no_rekey(&rekey)?;
     if !(1..=5).contains(&mood) {
         return Err("Mood must be between 1 and 5".to_string());
     }
@@ -282,9 +286,11 @@ pub fn update_journal_entry(
 pub fn delete_journal_entry(
     db: State<Database>,
     lock: State<'_, AppLockState>,
+    rekey: State<'_, crate::RekeyInProgress>,
     id: String,
 ) -> Result<bool, String> {
     require_unlocked(&lock)?;
+    super::require_no_rekey(&rekey)?;
     db::delete_entry(&db, &id)
 }
 

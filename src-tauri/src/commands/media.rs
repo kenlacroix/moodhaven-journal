@@ -465,11 +465,13 @@ pub fn save_media_attachment(
     app: AppHandle,
     db: State<'_, Database>,
     lock: State<'_, AppLockState>,
+    rekey: State<'_, crate::RekeyInProgress>,
     entry_id: String,
     file_path: String,
     password: String,
 ) -> Result<MediaAttachment, String> {
     require_unlocked(&lock)?;
+    super::require_no_rekey(&rekey)?;
     let src = Path::new(&file_path);
     let filename = src
         .file_name()

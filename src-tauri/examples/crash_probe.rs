@@ -19,6 +19,10 @@ use std::process::exit;
 
 const SENTINEL_ID: &str = "sentinel";
 const SENTINEL_VAL: &str = "precious-original-data";
+/// The value `cmd_cp_change`'s `apply_inner` rewrites the sentinel to — standing in for the
+/// per-field inner re-encryption. Lets the crash matrix prove the inner write commits/rolls back
+/// atomically with the salt-flip, not just the outer SQLCipher rekey.
+const SENTINEL_VAL_NEW: &str = "rekeyed-under-new-password";
 /// Constant salt so the three separate processes derive the same key from a password.
 const PROBE_SALT: &[u8] = b"moodhaven-crash-probe-salt-v1";
 /// change-password uses two distinct salts: the live DB starts under OLD, the rekey tmp under NEW.
@@ -176,6 +180,23 @@ fn cmd_verify(dir: &str, password: &str) -> ! {
 // .new_salt_b64` to decide commit. (The media-staging boundaries are covered by the Layer-A
 // matrix, cmp_b1/b2/b3.)
 
+/// The sentinel's `encrypted_content` as seen through `hex_key`, or None if the key can't open the
+/// DB. Lets cp-verify assert the exact inner value (old vs re-keyed), not just row presence.
+fn keyed_sentinel_value(path: &Path, hex_key: &str) -> Option<String> {
+    let c = Connection::open(path).ok()?;
+    if c.execute_batch(&format!("PRAGMA key = \"x'{hex_key}'\";"))
+        .is_err()
+    {
+        return None;
+    }
+    c.query_row(
+        "SELECT encrypted_content FROM journal_entries WHERE id = ?1",
+        [SENTINEL_ID],
+        |r| r.get::<_, String>(0),
+    )
+    .ok()
+}
+
 fn cmd_cp_seed(dir: &str, old_pw: &str) {
     let _ = std::fs::create_dir_all(dir);
     let path = db_path(dir);
@@ -213,8 +234,18 @@ fn cmd_cp_change(dir: &str, old_pw: &str, new_pw: &str) {
     let new_key = derive_key_with(new_pw, CP_NEW_SALT);
     // rekey_in_place fires crash_point!(...) at cmp.tmp_built / cmp.after_db_flip /
     // cmp.after_promote; if MH_CRASH_POINT is armed it parks there and this never returns.
-    db.rekey_in_place(&new_key, &new_salt_b64, |_conn| Ok(()))
-        .expect("cp-change: rekey_in_place");
+    // apply_inner performs a REAL inner re-write (sentinel → SENTINEL_VAL_NEW) so the kill matrix
+    // proves the inner per-field update commits/rolls back atomically with the salt-flip — not
+    // just the outer SQLCipher rekey (the no-op closure left the inner path untested under kill).
+    db.rekey_in_place(&new_key, &new_salt_b64, |conn| {
+        conn.execute(
+            "UPDATE journal_entries SET encrypted_content = ?1 WHERE id = ?2",
+            rusqlite::params![SENTINEL_VAL_NEW, SENTINEL_ID],
+        )
+        .map_err(|e| format!("cp-change inner update: {e}"))?;
+        Ok(())
+    })
+    .expect("cp-change: rekey_in_place");
     let _ = std::fs::remove_file(&marker); // keyless tail: clear marker on clean completion
     println!("change completed without hitting a crash point");
 }
@@ -234,22 +265,31 @@ fn cmd_cp_verify(dir: &str, old_pw: &str, new_pw: &str) -> ! {
     let _ = db.apply_key(&key); // promotes the rekey tmp (committed) or discards it (pre-commit)
     drop(db);
 
-    let old = keyed_has_sentinel(&path, &old_hex);
-    let new = keyed_has_sentinel(&path, &new_hex);
-    let (which, sentinel) = if committed {
-        ("new", new)
+    // Prove old-XOR-new AND that the inner re-write tracked the flip: committed ⇒ ONLY the new key
+    // opens and the sentinel holds the re-keyed value; pre-commit ⇒ ONLY the old key opens and the
+    // sentinel holds its original value. A surviving old-keyed DB with the new inner value (or vice
+    // versa) would mean the inner write and the salt-flip diverged — the exact mix we forbid.
+    let old_val = keyed_sentinel_value(&path, &old_hex);
+    let new_val = keyed_sentinel_value(&path, &new_hex);
+    let (which, ok) = if committed {
+        (
+            "new",
+            new_val.as_deref() == Some(SENTINEL_VAL_NEW) && old_val.is_none(),
+        )
     } else {
-        ("old", old)
+        (
+            "old",
+            old_val.as_deref() == Some(SENTINEL_VAL) && new_val.is_none(),
+        )
     };
-    let ok = sentinel && (old ^ new);
-    println!(
-        "recovered={which} sentinel={}",
-        if sentinel { "intact" } else { "LOST" }
-    );
+    println!("recovered={which} ok={ok} old={old_val:?} new={new_val:?}");
     if ok {
         exit(0);
     }
-    eprintln!("INVARIANT VIOLATED: old={old} new={new} (must be exactly one, sentinel intact)");
+    eprintln!(
+        "INVARIANT VIOLATED: committed={committed} old={old_val:?} new={new_val:?} \
+         (exactly one key must open, with the matching inner value)"
+    );
     exit(1);
 }
 

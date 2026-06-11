@@ -840,10 +840,18 @@ impl Database {
         v.get("new_salt_b64")?.as_str().map(|s| s.to_string())
     }
 
-    /// Finish the KEYLESS tail of a `change_master_password` interrupted after its atomic DB
-    /// flip: promote any staged media (`*.rekeytmp`) over their originals and clear the pending
-    /// marker. Idempotent and key-free, so it is safe to run on every unlock — it no-ops when no
-    /// marker is present (the steady state).
+    /// Finish the KEYLESS tail of a `change_master_password` interrupted with NO `moodhaven_rekey.db`
+    /// tmp present (the `recover_rekey_tmp` caller handles the tmp case). Idempotent and key-free,
+    /// so it is safe to run on every unlock — it no-ops when no marker is present (steady state).
+    ///
+    /// Commit-aware, because this is reachable in BOTH states:
+    /// - **Committed** (db_state.salt == the marker's new salt): the tmp was already promoted; the
+    ///   live DB is on the new password. Finish the keyless tail — promote any staged media and
+    ///   clear the stale biometric keyring credential (it wraps the OLD password).
+    /// - **Pre-commit** (salts differ, or unknown): a crash during media *staging*, before the tmp
+    ///   was built. The live DB is still on the OLD password, so the staged `*.rekeytmp` media MUST
+    ///   be discarded — promoting them over the originals would replace old-keyed files with
+    ///   new-keyed ones the live (old) key cannot read.
     fn finish_pending_password_change(&self) {
         let marker = self
             .path
@@ -851,11 +859,25 @@ impl Database {
         if !marker.exists() {
             return;
         }
+        let cur_salt = read_db_state(&self.path).salt;
+        let new_salt = self.pending_change_new_salt();
+        let committed = matches!((&cur_salt, &new_salt), (Some(c), Some(n)) if c == n);
         if let Some(dir) = self.path.parent() {
-            let _ = crate::commands::media::finish_media_renames(dir);
+            if committed {
+                let _ = crate::commands::media::finish_media_renames(dir);
+                // Biometric is an OS-keyring credential (not in the DB), so it isn't cleared by
+                // the rekey itself — clear it here so a crash-after-commit can't leave a stale
+                // credential that still yields the old password.
+                let _ = crate::commands::biometric::biometric_clear_session();
+            } else {
+                let _ = crate::commands::media::cleanup_media_staging(dir);
+            }
         }
         let _ = std::fs::remove_file(&marker);
-        log::info!("[change-password] finished interrupted change (media renames + marker clear)");
+        log::info!(
+            "[change-password] finished interrupted change (committed={committed}: media {}, marker clear)",
+            if committed { "promoted" } else { "rolled back" }
+        );
     }
 
     /// Recover an interrupted `change_master_password` that left a `moodhaven_rekey.db` tmp.

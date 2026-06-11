@@ -107,6 +107,7 @@ pub const PENDING_MARKER: &str = "password_change.pending";
 pub async fn change_master_password(
     db: State<'_, Database>,
     lock: State<'_, AppLockState>,
+    rekey: State<'_, crate::RekeyInProgress>,
     app: AppHandle,
     old_password: String,
     new_password: String,
@@ -116,6 +117,21 @@ pub async fn change_master_password(
     recovery_blob: Option<String>,
 ) -> Result<ChangeSummary, String> {
     require_unlocked(&lock)?;
+
+    // Hold the write-gate for the whole command (idempotent if the frontend already armed it via
+    // `change_password_begin` before fetching its re-key snapshot). Data-write commands refuse
+    // while armed, so a concurrent write can't strand a row under the old password. Disarmed on
+    // every return path, including early errors and panics, via the Drop guard below.
+    let rekey_guard: &crate::RekeyInProgress = rekey.inner();
+    rekey_guard.arm();
+    struct DisarmOnDrop<'a>(&'a crate::RekeyInProgress);
+    impl Drop for DisarmOnDrop<'_> {
+        fn drop(&mut self) {
+            self.0.disarm();
+        }
+    }
+    let _disarm = DisarmOnDrop(rekey_guard);
+
     let old_password = Zeroizing::new(old_password);
     let new_password = Zeroizing::new(new_password);
 
@@ -141,112 +157,171 @@ pub async fn change_master_password(
     let pin_was_enabled = read_setting(&db, "pin_enabled")?.as_deref() == Some("1");
     let recovery_regenerated = recovery_blob.is_some();
 
-    // Marker: from here, startup recovery (recover_rekey_tmp / finish_pending_password_change)
-    // owns the outcome. It carries only the new salt and per-file media progress — never key
-    // material (plan §"Startup crash recovery").
-    write_marker(
-        &marker_path,
-        &ChangePasswordPending {
-            phase: ChangePhase::InnerPending,
-            new_salt_b64: new_salt_b64.clone(),
-            media_done: Vec::new(),
-        },
-    )?;
-
-    // ── Phase 1: stage media (KEYED, reversible — originals untouched) ───────────────────
-    // Each file's NEW-password copy is written to a `<file>.rekeytmp` sibling; the keyless
-    // rename over the original happens only AFTER the atomic DB flip (Phase 3).
-    let media_total = media::stage_reencrypt_media(
-        &app_data_dir,
-        &db,
-        &old_password,
-        &new_password,
-        |done, total| {
-            let _ = app.emit(
-                "change-password-progress",
-                serde_json::json!({ "phase": "media", "done": done, "total": total }),
-            );
-        },
-    )?;
-    crash_point!("cmp.media_staged");
-
-    // ── Phases 2+3: build the NEW-keyed DB tmp with the inner re-encryption applied, then flip
-    // it over the live DB in one atomic promotion (rekey_in_place). The closure runs inside the
-    // not-yet-live tmp, so a crash before the flip leaves the live DB wholly on the old password.
     let entries_n = entries.len();
     let signals_n = signals.len();
-    db.rekey_in_place(&new_key, &new_salt_b64, |conn: &Connection| {
-        // Entries (per-field AES-GCM blobs the frontend re-encrypted under the new password).
-        for e in &entries {
-            let json = serde_json::to_string(&e.encrypted_content)
-                .map_err(|err| format!("serialize entry {}: {err}", e.id))?;
-            conn.execute(
-                "UPDATE journal_entries SET encrypted_content = ?1 WHERE id = ?2",
-                params![json, e.id],
-            )
-            .map_err(|err| format!("update entry {}: {err}", e.id))?;
-        }
-        // Signals (payload is the full JSON EncryptedData envelope — see signalService.ts).
-        for s in &signals {
-            conn.execute(
-                "UPDATE signals SET payload = ?1 WHERE id = ?2",
-                params![s.payload, s.id],
-            )
-            .map_err(|err| format!("update signal {}: {err}", s.id))?;
-        }
-        // TOTP seed (Rust holds both passwords). No-op if 2FA absent / legacy-plaintext.
-        reencrypt_totp(conn, &old_password, &new_password)?;
-        // Verifier hash + salt (consulted only on the legacy unencrypted path, but kept
-        // consistent — the encrypted path's real check is SQLCipher's MAC on the new key).
-        conn.execute(
-            "INSERT OR REPLACE INTO user_settings (id, password_hash, password_salt, updated_at)
-             VALUES (1, ?1, ?2, datetime('now'))",
-            params![new_verifier, new_salt_b64],
-        )
-        .map_err(|err| format!("update verifier: {err}"))?;
-        // Recovery key (key escrow). If the FE supplied a freshly-wrapped blob, install it;
-        // otherwise a previously-enabled recovery key now wraps the OLD password and is stale,
-        // so disable it (the post-change checklist prompts the user to regenerate).
-        match &recovery_blob {
-            Some(blob) => {
+
+    // ── Pre-commit (fallible; fully rolled back on error) ────────────────────────────────
+    // Everything up to and including the atomic salt-flip inside `rekey_in_place`. On ANY error
+    // here the live DB was never modified, so the `match` below tidies the in-flight marker +
+    // staged media and returns — leaving the running app exactly as it was. Returns the count of
+    // media files staged (for the summary).
+    let pre = (|| -> Result<usize, String> {
+        // Marker: from here, startup recovery (recover_rekey_tmp / finish_pending_password_change)
+        // owns the outcome. It carries only the new salt and per-file media progress — never key
+        // material (plan §"Startup crash recovery").
+        write_marker(
+            &marker_path,
+            &ChangePasswordPending {
+                phase: ChangePhase::InnerPending,
+                new_salt_b64: new_salt_b64.clone(),
+                media_done: Vec::new(),
+            },
+        )?;
+
+        // ── Stage media (KEYED, reversible — originals untouched) ────────────────────────
+        // Each file's NEW-password copy is written to a `<file>.rekeytmp` sibling; the keyless
+        // rename over the original happens only AFTER the atomic DB flip.
+        let media_total = media::stage_reencrypt_media(
+            &app_data_dir,
+            &db,
+            &old_password,
+            &new_password,
+            |done, total| {
+                let _ = app.emit(
+                    "change-password-progress",
+                    serde_json::json!({ "phase": "media", "done": done, "total": total }),
+                );
+            },
+        )?;
+        crash_point!("cmp.media_staged");
+
+        // ── Build the NEW-keyed DB tmp with the inner re-encryption applied, then flip it over
+        // the live DB in one atomic promotion (rekey_in_place). The closure runs inside the
+        // not-yet-live tmp, so a crash before the flip leaves the live DB wholly on the old pw.
+        db.rekey_in_place(&new_key, &new_salt_b64, |conn: &Connection| {
+            // Entries (per-field AES-GCM blobs the frontend re-encrypted under the new password).
+            for e in &entries {
+                let json = serde_json::to_string(&e.encrypted_content)
+                    .map_err(|err| format!("serialize entry {}: {err}", e.id))?;
                 conn.execute(
-                    "INSERT OR REPLACE INTO settings (key, value) VALUES (?1, ?2)",
-                    params![RECOVERY_BLOB_KEY, blob],
+                    "UPDATE journal_entries SET encrypted_content = ?1 WHERE id = ?2",
+                    params![json, e.id],
                 )
-                .map_err(|err| format!("update recovery blob: {err}"))?;
-                conn.execute(
-                    "INSERT OR REPLACE INTO settings (key, value) VALUES (?1, 'true')",
-                    params![RECOVERY_ENABLED_KEY],
-                )
-                .map_err(|err| format!("enable recovery: {err}"))?;
+                .map_err(|err| format!("update entry {}: {err}", e.id))?;
             }
-            None if recovery_was_enabled => {
+            // Signals (payload is the full JSON EncryptedData envelope — see signalService.ts).
+            for s in &signals {
                 conn.execute(
-                    "DELETE FROM settings WHERE key = ?1",
-                    params![RECOVERY_BLOB_KEY],
+                    "UPDATE signals SET payload = ?1 WHERE id = ?2",
+                    params![s.payload, s.id],
                 )
-                .map_err(|err| format!("clear recovery blob: {err}"))?;
-                conn.execute(
-                    "INSERT OR REPLACE INTO settings (key, value) VALUES (?1, 'false')",
-                    params![RECOVERY_ENABLED_KEY],
-                )
-                .map_err(|err| format!("disable recovery: {err}"))?;
+                .map_err(|err| format!("update signal {}: {err}", s.id))?;
             }
-            None => {}
+
+            // Completeness backstop. The tmp is a FULL export of the live DB, but only the
+            // frontend-supplied ids were re-encrypted above. If the DB holds more entry/signal
+            // rows than the frontend re-keyed — a write that slipped the write-gate, or an
+            // under-fetch — those surplus rows still carry OLD-password inner ciphertext inside
+            // the NEW-keyed DB and would be undecryptable. Abort: returning Err here discards the
+            // not-yet-promoted tmp and leaves the live DB wholly on the old password (no loss).
+            let entry_rows =
+                conn.query_row("SELECT count(*) FROM journal_entries", [], |r| {
+                    r.get::<_, i64>(0)
+                })
+                .map_err(|err| format!("count entries: {err}"))? as usize;
+            if entry_rows != entries.len() {
+                return Err(format!(
+                    "re-key incomplete: {entry_rows} entries present but {} re-encrypted — \
+                     aborting before any change to avoid data loss",
+                    entries.len()
+                ));
+            }
+            let signal_rows =
+                conn.query_row("SELECT count(*) FROM signals", [], |r| r.get::<_, i64>(0))
+                    .map_err(|err| format!("count signals: {err}"))? as usize;
+            if signal_rows != signals.len() {
+                return Err(format!(
+                    "re-key incomplete: {signal_rows} signals present but {} re-encrypted — \
+                     aborting before any change to avoid data loss",
+                    signals.len()
+                ));
+            }
+
+            // TOTP seed (Rust holds both passwords). No-op if 2FA absent / legacy-plaintext.
+            reencrypt_totp(conn, &old_password, &new_password)?;
+            // Verifier hash + salt (consulted only on the legacy unencrypted path, but kept
+            // consistent — the encrypted path's real check is SQLCipher's MAC on the new key).
+            conn.execute(
+                "INSERT OR REPLACE INTO user_settings (id, password_hash, password_salt, updated_at)
+                 VALUES (1, ?1, ?2, datetime('now'))",
+                params![new_verifier, new_salt_b64],
+            )
+            .map_err(|err| format!("update verifier: {err}"))?;
+            // Invalidate the PIN escrow INSIDE the atomic flip (it wraps the OLD password). Doing
+            // it here — not in the keyless tail — means a crash can never promote a committed DB
+            // that still contains a stale PIN yielding the old password.
+            for key in ["pin_salt", "pin_blob", "pin_enabled"] {
+                conn.execute("DELETE FROM settings WHERE key = ?1", params![key])
+                    .map_err(|err| format!("clear pin {key}: {err}"))?;
+            }
+            // Recovery key (key escrow). If the FE supplied a freshly-wrapped blob, install it;
+            // otherwise a previously-enabled recovery key now wraps the OLD password and is stale,
+            // so disable it (the post-change checklist prompts the user to regenerate).
+            match &recovery_blob {
+                Some(blob) => {
+                    conn.execute(
+                        "INSERT OR REPLACE INTO settings (key, value) VALUES (?1, ?2)",
+                        params![RECOVERY_BLOB_KEY, blob],
+                    )
+                    .map_err(|err| format!("update recovery blob: {err}"))?;
+                    conn.execute(
+                        "INSERT OR REPLACE INTO settings (key, value) VALUES (?1, 'true')",
+                        params![RECOVERY_ENABLED_KEY],
+                    )
+                    .map_err(|err| format!("enable recovery: {err}"))?;
+                }
+                None if recovery_was_enabled => {
+                    conn.execute(
+                        "DELETE FROM settings WHERE key = ?1",
+                        params![RECOVERY_BLOB_KEY],
+                    )
+                    .map_err(|err| format!("clear recovery blob: {err}"))?;
+                    conn.execute(
+                        "INSERT OR REPLACE INTO settings (key, value) VALUES (?1, 'false')",
+                        params![RECOVERY_ENABLED_KEY],
+                    )
+                    .map_err(|err| format!("disable recovery: {err}"))?;
+                }
+                None => {}
+            }
+            Ok(())
+        })?;
+
+        Ok(media_total)
+    })();
+
+    let media_total = match pre {
+        Ok(n) => n,
+        Err(e) => {
+            // Pre-commit failure: the live DB was never modified. Tidy the in-flight state so the
+            // still-running app is clean (a restart would otherwise roll back via recover_rekey_tmp).
+            let _ = media::cleanup_media_staging(&app_data_dir);
+            let _ = std::fs::remove_file(&marker_path);
+            return Err(e);
         }
-        Ok(())
-    })?;
+    };
     // db.conn is now the NEW-keyed connection; the live DB file is fully on the new password.
 
-    // ── Phase 4: KEYLESS tail (resumable by startup recovery if interrupted here) ──────────
-    let media_renamed = media::finish_media_renames(&app_data_dir)?;
+    // ── KEYLESS tail (committed; best-effort — startup recovery is the backstop) ───────────
+    // Past the commit we must NOT return Err: the change is done. Any leftover work here is
+    // keyless and idempotently finished by `finish_pending_password_change` on the next unlock if
+    // interrupted, so failures are swallowed rather than propagated (a propagated post-commit
+    // error would surface a false "failed" to a change that actually succeeded).
+    let media_renamed = media::finish_media_renames(&app_data_dir).unwrap_or(0);
     crash_point!("cmp.media_renamed");
 
-    // Invalidate stale convenience copies (§5). These wrap the OLD password and would simply
-    // fail after the change; clearing them is a UX nicety, not a correctness requirement.
-    if pin_was_enabled {
-        clear_pin(&db)?;
-    }
+    // Clear the biometric keyring credential (it wraps the OLD password). Keyless, so the
+    // committed-recovery path in `finish_pending_password_change` also clears it after a crash.
     let biometric_cleared = biometric_clear_session().is_ok();
 
     // Done — clear the marker (idempotent; startup recovery would also clear it).
@@ -264,6 +339,27 @@ pub async fn change_master_password(
         biometric_cleared,
         recovery_key_regenerated: recovery_regenerated,
     })
+}
+
+/// Arm the write-gate before the frontend fetches its re-key snapshot, so a concurrent write
+/// can't strand a row under the old password (the TOCTOU window between fetch and the atomic
+/// flip). Paired with `change_master_password` (which re-arms then disarms on completion) and
+/// `change_password_cancel` (if the frontend aborts before invoking the change). Cleared on lock.
+#[tauri::command]
+pub fn change_password_begin(
+    lock: State<'_, AppLockState>,
+    rekey: State<'_, crate::RekeyInProgress>,
+) -> Result<(), String> {
+    require_unlocked(&lock)?;
+    rekey.arm();
+    Ok(())
+}
+
+/// Disarm the write-gate when the frontend abandons a change before it commits.
+#[tauri::command]
+pub fn change_password_cancel(rekey: State<'_, crate::RekeyInProgress>) -> Result<(), String> {
+    rekey.disarm();
+    Ok(())
 }
 
 /// Derive the 256-bit outer SQLCipher key from the new password + new salt.
@@ -297,17 +393,6 @@ fn read_setting(db: &Database, key: &str) -> Result<Option<String>, String> {
     })
 }
 
-/// Delete the PIN escrow rows from the (post-change) DB — the wrapped copy now holds the OLD
-/// password and is unusable. Mirrors `pin_unlock::pin_disable`'s deletes.
-fn clear_pin(db: &Database) -> Result<(), String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
-    for key in ["pin_salt", "pin_blob", "pin_enabled"] {
-        conn.execute("DELETE FROM settings WHERE key = ?1", params![key])
-            .map_err(|e| format!("clear pin {key}: {e}"))?;
-    }
-    Ok(())
-}
-
 /// Serialize the pending marker to `{app_data}/password_change.pending`.
 fn write_marker(path: &std::path::Path, marker: &ChangePasswordPending) -> Result<(), String> {
     let json = serde_json::to_string(marker).map_err(|e| format!("serialize marker: {e}"))?;
@@ -315,7 +400,11 @@ fn write_marker(path: &std::path::Path, marker: &ChangePasswordPending) -> Resul
 }
 
 /// Summary returned to the frontend so it can show the post-change re-setup checklist (§6).
+/// `rename_all = "camelCase"` is required: Tauri does not camelCase command *return* values
+/// (only arguments), and the frontend `ChangeSummary` interface reads camelCase — without this
+/// every field arrives as `undefined` and the success screen / checklist render blank.
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ChangeSummary {
     pub entries_reencrypted: usize,
     pub signals_reencrypted: usize,
@@ -341,13 +430,24 @@ fn validate_change(db: &Database, old_password: &str, new_password: &str) -> Res
     if new_password.chars().count() < 8 {
         return Err("new password must be at least 8 characters".to_string());
     }
-    if let Some(settings) = crate::db::get_password_hash(db)? {
-        let salt = B64
-            .decode(&settings.password_salt)
-            .map_err(|e| format!("invalid stored salt: {e}"))?;
-        let computed = pbkdf2_b64(old_password, &salt)?;
-        if !constant_time_eq(&computed, &settings.password_hash) {
-            return Err("current password is incorrect".to_string());
+    match crate::db::get_password_hash(db)? {
+        Some(settings) => {
+            let salt = B64
+                .decode(&settings.password_salt)
+                .map_err(|e| format!("invalid stored salt: {e}"))?;
+            let computed = pbkdf2_b64(old_password, &salt)?;
+            if !constant_time_eq(&computed, &settings.password_hash) {
+                return Err("current password is incorrect".to_string());
+            }
+        }
+        None => {
+            // No stored verifier. Fail CLOSED on an encrypted install — a missing verifier row
+            // there is anomalous, and accepting any old password would let a caller re-key the
+            // DB without proving knowledge of the current password. (A pre-setup unencrypted
+            // install legitimately has no verifier, but change-password is unreachable there.)
+            if db.is_encrypted() {
+                return Err("cannot verify current password (no stored verifier)".to_string());
+            }
         }
     }
     Ok(())

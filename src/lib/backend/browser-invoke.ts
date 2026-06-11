@@ -590,6 +590,9 @@ async function dispatch(command: string, p: Params): Promise<any> {
     // media — both desktop/Tauri-only. The browser build has no second encryption
     // layer to rekey, so the feature is unavailable (UI is also gated in PrivacyTab).
     case 'get_entry_rekey_blobs':
+    case 'get_signal_rekey_blobs':
+    case 'change_password_begin':
+    case 'change_password_cancel':
     case 'change_master_password':
       throw new Error('Changing your password requires the desktop app');
 

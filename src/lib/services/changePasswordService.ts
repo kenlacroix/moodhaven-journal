@@ -137,51 +137,64 @@ export async function runChangePassword(
   onProgress?: (p: ChangeProgress) => void,
   recoveryBlob?: string
 ): Promise<ChangeSummary> {
-  // 1. Fetch raw blobs (encrypted; no plaintext crosses IPC).
-  const entryRows = await invoke<EntryRekeyBlob[]>('get_entry_rekey_blobs');
-  const signalRows = await invoke<SignalRow[]>('list_signals', {});
-
-  // 2. Re-key entries in bounded batches (memory-safe for large journals).
-  const entries: ReKeyed[] = [];
-  for (let i = 0; i < entryRows.length; i += REKEY_BATCH) {
-    const slice = entryRows
-      .slice(i, i + REKEY_BATCH)
-      .map((r) => ({ id: r.id, encrypted: r.encrypted_content }));
-    entries.push(...(await reKeyBatch(slice, oldPassword, newPassword)));
-    onProgress?.({ phase: 'entries', done: entries.length, total: entryRows.length });
-  }
-
-  // 3. Re-key signals (payload is a JSON EncryptedData envelope).
-  const signalTargets: ReKeyTarget[] = signalRows.map((r) => ({
-    id: r.id,
-    encrypted: JSON.parse(r.payload) as EncryptedData,
-  }));
-  const signals: ReKeyed[] = [];
-  for (let i = 0; i < signalTargets.length; i += REKEY_BATCH) {
-    const slice = signalTargets.slice(i, i + REKEY_BATCH);
-    signals.push(...(await reKeyBatch(slice, oldPassword, newPassword)));
-    onProgress?.({ phase: 'signals', done: signals.length, total: signalTargets.length });
-  }
-
-  // 4. Relay backend media-staging progress to the modal while the command runs.
-  const unlisten = await listen<{ phase: string; done?: number; total?: number }>(
-    'change-password-progress',
-    (e) => {
-      if (e.payload.phase === 'media') {
-        onProgress?.({ phase: 'media', done: e.payload.done ?? 0, total: e.payload.total ?? 0 });
-      }
-    }
-  );
+  // Arm the server-side write-gate BEFORE fetching the re-key snapshot, so a concurrent write
+  // (writer-window auto-save, voice-memo publish, incoming peer sync) can't strand a row under
+  // the old password between this fetch and the backend's atomic flip. The backend command
+  // disarms it on completion; the `finally` below disarms it if we throw first (idempotent).
+  await invoke('change_password_begin');
   try {
-    return await changeMasterPassword({
-      oldPassword,
-      newPassword,
-      newSaltB64: generateSaltB64(),
-      entries,
-      signals,
-      recoveryBlob,
-    });
+    // 1. Fetch raw blobs (encrypted; no plaintext crosses IPC). Signals use the unbounded
+    //    re-key fetch — `list_signals` caps at 1000 and would silently strand the rest.
+    const entryRows = await invoke<EntryRekeyBlob[]>('get_entry_rekey_blobs');
+    const signalRows = await invoke<SignalRow[]>('get_signal_rekey_blobs');
+
+    // 2. Re-key entries in bounded batches (memory-safe for large journals).
+    const entries: ReKeyed[] = [];
+    for (let i = 0; i < entryRows.length; i += REKEY_BATCH) {
+      const slice = entryRows
+        .slice(i, i + REKEY_BATCH)
+        .map((r) => ({ id: r.id, encrypted: r.encrypted_content }));
+      entries.push(...(await reKeyBatch(slice, oldPassword, newPassword)));
+      onProgress?.({ phase: 'entries', done: entries.length, total: entryRows.length });
+    }
+
+    // 3. Re-key signals (payload is a JSON EncryptedData envelope).
+    const signalTargets: ReKeyTarget[] = signalRows.map((r) => ({
+      id: r.id,
+      encrypted: JSON.parse(r.payload) as EncryptedData,
+    }));
+    const signals: ReKeyed[] = [];
+    for (let i = 0; i < signalTargets.length; i += REKEY_BATCH) {
+      const slice = signalTargets.slice(i, i + REKEY_BATCH);
+      signals.push(...(await reKeyBatch(slice, oldPassword, newPassword)));
+      onProgress?.({ phase: 'signals', done: signals.length, total: signalTargets.length });
+    }
+
+    // 4. Relay backend media-staging progress to the modal while the command runs.
+    const unlisten = await listen<{ phase: string; done?: number; total?: number }>(
+      'change-password-progress',
+      (e) => {
+        if (e.payload.phase === 'media') {
+          onProgress?.({ phase: 'media', done: e.payload.done ?? 0, total: e.payload.total ?? 0 });
+        }
+      }
+    );
+    try {
+      return await changeMasterPassword({
+        oldPassword,
+        newPassword,
+        newSaltB64: generateSaltB64(),
+        entries,
+        signals,
+        recoveryBlob,
+      });
+    } finally {
+      unlisten();
+    }
   } finally {
-    unlisten();
+    // Ensure the write-gate is released even if we threw before the backend command ran (or it
+    // failed). The backend command also disarms itself on success/failure — a redundant disarm
+    // is a no-op.
+    await invoke('change_password_cancel').catch(() => {});
   }
 }

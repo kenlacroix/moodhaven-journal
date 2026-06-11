@@ -290,3 +290,17 @@ describe('session lock gate (data commands — PT7 default-deny parity)', () => 
     await invoke('lock_app');
   });
 });
+
+// ---------------------------------------------------------------------------
+// pin_* — desktop-only stubs (no "unhandled command" warning in browser)
+// ---------------------------------------------------------------------------
+
+describe('PIN unlock browser stubs', () => {
+  it('pin_is_enabled returns false', async () => {
+    expect(await invoke<boolean>('pin_is_enabled')).toBe(false);
+  });
+
+  it('pin_unlock throws a desktop-only error', async () => {
+    await expect(invoke('pin_unlock', { pin: '1234' })).rejects.toThrow(/desktop app/);
+  });
+});

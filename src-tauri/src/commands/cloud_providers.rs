@@ -136,7 +136,43 @@ use super::{require_unlocked, KEYRING_SERVICE};
 pub(crate) const TOKEN_KEYRING_ACCOUNT: &str = "cloud-token-encryption-key";
 const TOKEN_MARKER: &str = "__tok_v1:";
 
+/// In-memory cloud-token key supplied by the platform's secure store.
+///
+/// On Android the OS keyring crate is unavailable, so the desktop fallback writes
+/// a bare 0600 key file. When present, this override (populated at startup from
+/// the AndroidKeyStore-backed `securekey` plugin via `cloud_set_token_key`) is
+/// preferred over both keyring and file — giving hardware-backed key-at-rest. If
+/// it is never set (bootstrap skipped/failed), resolution falls back to the
+/// existing keyring→file path, so no platform regresses.
+#[derive(Default)]
+pub struct CloudTokenKeyOverride(pub std::sync::Mutex<Option<Zeroizing<[u8; 32]>>>);
+
+/// Store the platform-provided cloud-token key for this session. Idempotent;
+/// validates the key is exactly 32 bytes of hex. Not lock-gated — it runs at
+/// startup before unlock and never touches journal data.
+#[tauri::command]
+pub fn cloud_set_token_key(
+    state: tauri::State<'_, CloudTokenKeyOverride>,
+    key_hex: String,
+) -> Result<(), String> {
+    let bytes = hex::decode(key_hex.trim()).map_err(|_| "invalid token key hex".to_string())?;
+    let arr = <[u8; 32]>::try_from(bytes.as_slice())
+        .map_err(|_| "token key must be 32 bytes".to_string())?;
+    let mut guard = state.0.lock().map_err(|e| e.to_string())?;
+    *guard = Some(Zeroizing::new(arr));
+    Ok(())
+}
+
 fn load_or_create_token_key(app: &AppHandle) -> Result<Zeroizing<[u8; 32]>, String> {
+    // Platform secure-store override (Android KeyStore) takes precedence.
+    if let Some(state) = app.try_state::<CloudTokenKeyOverride>() {
+        if let Ok(guard) = state.0.lock() {
+            if let Some(key) = guard.as_ref() {
+                return Ok(Zeroizing::new(**key));
+            }
+        }
+    }
+
     if let Ok(entry) = keyring::Entry::new(KEYRING_SERVICE, TOKEN_KEYRING_ACCOUNT) {
         if let Ok(hex) = entry.get_password().map(Zeroizing::new) {
             if let Ok(bytes) = hex::decode(hex.trim()) {

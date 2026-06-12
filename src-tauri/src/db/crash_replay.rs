@@ -667,4 +667,72 @@ mod change_master_password {
         assert_cmp(&db, Recovered::New, &new, &old_hex, &new_hex);
         let _ = std::fs::remove_dir_all(&base);
     }
+
+    // committed (db_state.salt=NEW) but the rekey tmp is truncated/corrupt — the B2 power-loss
+    // boundary where the salt flip reached disk but the tmp's contents did not. Recovery must
+    // NOT brick: it surfaces an error (so the user retries / a re-run finishes) and preserves
+    // BOTH the committed tmp and the marker rather than discarding the only new-keyed copy. The
+    // prior cmp_* matrix only ever built a VALID committed tmp, so this boundary was uncovered.
+    #[test]
+    fn cmp_committed_corrupt_tmp_no_brick() {
+        let base = fresh_dir("cmp_corrupt_tmp");
+        let db = base.join("moodhaven.db");
+        let (_old, _old_hex, new, _new_hex) = old_new_keys();
+
+        build_encrypted_live(&db, &_old_hex, OLD_SALT_B64);
+        write_state(&db, true, Some(NEW_SALT_B64)); // commit-point flip already durable
+                                                    // Truncated/garbage tmp: a valid SQLCipher header never landed.
+        std::fs::write(
+            db.with_file_name("moodhaven_rekey.db"),
+            b"not-a-sqlcipher-db",
+        )
+        .unwrap();
+        write_marker(&db);
+
+        let dbh = Database::new(db.to_path_buf()).expect("Database::new");
+        let res = dbh.apply_key(&new);
+        drop(dbh);
+
+        assert!(
+            res.is_err(),
+            "committed-but-corrupt tmp must surface an error, not silently succeed"
+        );
+        assert!(
+            db.with_file_name("moodhaven_rekey.db").exists(),
+            "committed recovery must NOT discard the tmp (it is the only new-keyed copy)"
+        );
+        assert!(
+            db.with_file_name(PENDING_MARKER).exists(),
+            "committed recovery must NOT clear the marker on failure (retry must stay committed)"
+        );
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    // The durable write_db_state (temp + fsync + atomic rename) must leave a readable, advanced
+    // state and no `.tmp` residue after a real rekey. Guards the B2 durability change from
+    // regressing into a half-written or orphaned-tmp db_state.json.
+    #[test]
+    fn rekey_leaves_no_db_state_tmp_residue() {
+        let base = fresh_dir("cmp_dbstate_residue");
+        let db_path = base.join("moodhaven.db");
+        let (old, old_hex, new, _new_hex) = old_new_keys();
+
+        build_encrypted_live(&db_path, &old_hex, OLD_SALT_B64);
+        let db = Database::new(db_path.clone()).expect("open");
+        db.apply_key(&old).expect("unlock old");
+        db.rekey_in_place(&new, NEW_SALT_B64, |_conn| Ok(()))
+            .expect("rekey");
+        drop(db);
+
+        assert_eq!(
+            read_db_state(&db_path).salt.as_deref(),
+            Some(NEW_SALT_B64),
+            "db_state must be readable + advanced after the durable write"
+        );
+        assert!(
+            !db_path.with_file_name("db_state.json.tmp").exists(),
+            "durable write must not leave a db_state.json.tmp behind"
+        );
+        let _ = std::fs::remove_dir_all(&base);
+    }
 }

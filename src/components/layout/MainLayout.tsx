@@ -49,7 +49,7 @@ export function MainLayout({ currentView, onNavigate, onLock, onSelectEntry, onN
       </div>
 
       {/* Right column: TopBar + main content */}
-      <div className="flex-1 flex flex-col overflow-hidden min-h-0">
+      <div className="flex-1 flex flex-col overflow-hidden min-h-0 min-w-0">
         <TopBar
           currentView={currentView}
           onLock={onLock}

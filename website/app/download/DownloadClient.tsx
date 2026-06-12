@@ -200,6 +200,14 @@ export default function DownloadClient({ release }: { release: LatestRelease | n
             {primaryAsset?.checksumVerified !== false && (
               <span className="inline-flex items-center gap-1 text-xs text-neutral-500 bg-neutral-100 px-2.5 py-1 rounded-full">✓ SHA-256 verified</span>
             )}
+            <a
+              href={release?.releaseUrl ?? "https://github.com/kenlacroix/moodhaven-journal/releases/latest"}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-xs text-neutral-500 bg-neutral-100 px-2.5 py-1 rounded-full hover:text-neutral-700 hover:bg-neutral-200 focus-visible:ring-1 focus-visible:ring-primary-700"
+            >
+              ✓ VirusTotal scanned
+            </a>
             <span className="inline-flex items-center gap-1 text-xs text-neutral-500 bg-neutral-100 px-2.5 py-1 rounded-full">✓ No account required</span>
             <span className="inline-flex items-center gap-1 text-xs text-neutral-500 bg-neutral-100 px-2.5 py-1 rounded-full">✓ MIT licensed</span>
           </div>
@@ -486,6 +494,59 @@ export default function DownloadClient({ release }: { release: LatestRelease | n
             )}
           </div>
         </section>
+
+        {/* Verify your download */}
+        <AnimatedReveal delay={0.25} className="mt-14">
+          <details className="group rounded-xl bg-neutral-50 ring-1 ring-neutral-200 p-5 text-left">
+            <summary className="cursor-pointer list-none flex items-center justify-between gap-2 text-sm font-semibold text-neutral-900 focus-visible:ring-2 focus-visible:ring-primary-700 rounded">
+              <span>Verify your download</span>
+              <span className="text-neutral-400 transition-transform duration-200 group-open:rotate-180" aria-hidden="true">⌄</span>
+            </summary>
+            <div className="mt-3 space-y-3 text-sm text-neutral-600 leading-relaxed">
+              <p>
+                MoodHaven isn&apos;t code-signed yet, so Windows SmartScreen may say
+                &quot;unknown publisher&quot; and macOS Gatekeeper may warn the build is
+                unverified. That&apos;s expected for an unsigned open-source app — not a sign
+                of tampering. Every release ships three independent ways to check the bytes
+                you downloaded:
+              </p>
+              <ul className="space-y-2 list-disc pl-5">
+                <li>
+                  <span className="font-medium text-neutral-800">SHA-256 checksums</span> —
+                  compare your file against{" "}
+                  <a
+                    href={release?.releaseUrl ?? "https://github.com/kenlacroix/moodhaven-journal/releases/latest"}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary-700 underline hover:text-primary-900"
+                  >
+                    checksums.txt
+                  </a>{" "}
+                  (<code className="text-xs">shasum -a 256</code> /{" "}
+                  <code className="text-xs">Get-FileHash</code>).
+                </li>
+                <li>
+                  <span className="font-medium text-neutral-800">Minisign signature</span> —
+                  each installer has a <code className="text-xs">.sig</code> signed with our
+                  release key — the same key the in-app updater verifies before installing.
+                </li>
+                <li>
+                  <span className="font-medium text-neutral-800">VirusTotal</span> — every
+                  release attaches{" "}
+                  <a
+                    href={release?.releaseUrl ?? "https://github.com/kenlacroix/moodhaven-journal/releases/latest"}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary-700 underline hover:text-primary-900"
+                  >
+                    virustotal.txt
+                  </a>{" "}
+                  linking a public multi-engine scan report for each installer.
+                </li>
+              </ul>
+            </div>
+          </details>
+        </AnimatedReveal>
 
         {/* Trust signals */}
         <AnimatedReveal delay={0.3} className="mt-14 text-center text-xs text-neutral-400 flex flex-wrap justify-center gap-3">

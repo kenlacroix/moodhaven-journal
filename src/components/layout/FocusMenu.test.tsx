@@ -25,7 +25,7 @@ beforeEach(() => {
 
 describe('FocusMenu — iOS breakout gate', () => {
   it('shows the Breakout writer button when isIOS is false', async () => {
-    mockUsePlatform.mockReturnValue({ isIOS: false, isAndroid: false, isMobile: false, isBrowser: false, isDesktop: true });
+    mockUsePlatform.mockReturnValue({ isIOS: false, isAndroid: false, isMobile: false, isBrowser: false, isDesktop: true, canPeerSync: true, canSTT: true, canHardwareKey: true });
     render(<FocusMenu onOpenBreakout={vi.fn()} />);
 
     await userEvent.click(screen.getByTitle('Focus & window options'));
@@ -34,7 +34,7 @@ describe('FocusMenu — iOS breakout gate', () => {
   });
 
   it('does not show the Breakout writer button when isIOS is true', async () => {
-    mockUsePlatform.mockReturnValue({ isIOS: true, isAndroid: false, isMobile: true, isBrowser: false, isDesktop: false });
+    mockUsePlatform.mockReturnValue({ isIOS: true, isAndroid: false, isMobile: true, isBrowser: false, isDesktop: false, canPeerSync: false, canSTT: false, canHardwareKey: false });
     render(<FocusMenu onOpenBreakout={vi.fn()} />);
 
     await userEvent.click(screen.getByTitle('Focus & window options'));
@@ -43,7 +43,7 @@ describe('FocusMenu — iOS breakout gate', () => {
   });
 
   it('still shows Focus mode and Fullscreen on iOS', async () => {
-    mockUsePlatform.mockReturnValue({ isIOS: true, isAndroid: false, isMobile: true, isBrowser: false, isDesktop: false });
+    mockUsePlatform.mockReturnValue({ isIOS: true, isAndroid: false, isMobile: true, isBrowser: false, isDesktop: false, canPeerSync: false, canSTT: false, canHardwareKey: false });
     render(<FocusMenu onOpenBreakout={vi.fn()} />);
 
     await userEvent.click(screen.getByTitle('Focus & window options'));

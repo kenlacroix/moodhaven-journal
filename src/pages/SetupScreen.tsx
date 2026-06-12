@@ -93,14 +93,16 @@ export function SetupScreen() {
   const nearbyPeers = usePeerSyncStore((s) => s.nearbyPeers);
   const isDiscovering = usePeerSyncStore((s) => s.isDiscovering);
   const trustedDevices = usePeerSyncStore((s) => s.trustedDevices);
-  const { isBrowser } = usePlatform();
+  const { canPeerSync } = usePlatform();
 
-  const browserFilter = (s: StepConfig) =>
-    !isBrowser || (s.id !== 'devices' && s.id !== 'sync_from_peer');
+  // Peer-sync setup steps only apply where peer sync runs (desktop + Android);
+  // hidden in the browser build and on iOS (no reliable mDNS).
+  const peerSyncFilter = (s: StepConfig) =>
+    canPeerSync || (s.id !== 'devices' && s.id !== 'sync_from_peer');
 
   const STEPS = (() => {
-    if (setupMode === 'sync') return SYNC_STEPS.filter(browserFilter);
-    if (isAdvanced) return FRESH_STEPS.filter(browserFilter);
+    if (setupMode === 'sync') return SYNC_STEPS.filter(peerSyncFilter);
+    if (isAdvanced) return FRESH_STEPS.filter(peerSyncFilter);
     return BASIC_STEPS;
   })();
 

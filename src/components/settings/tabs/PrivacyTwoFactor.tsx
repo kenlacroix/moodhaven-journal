@@ -6,7 +6,7 @@ import { totpNeedsReencryption } from '../../../lib/services/twoFactorService';
 interface PrivacyTwoFactorProps {
   twoFactorStatus: TwoFactorStatus | null;
   backupCodesCount: number;
-  isBrowser: boolean;
+  canHardwareKey: boolean;
   onSetupTotp: () => void;
   onSetupWebAuthn: () => void;
   onRegenerateBackupCodes: () => void;
@@ -16,7 +16,7 @@ interface PrivacyTwoFactorProps {
 export function PrivacyTwoFactor({
   twoFactorStatus,
   backupCodesCount,
-  isBrowser,
+  canHardwareKey,
   onSetupTotp,
   onSetupWebAuthn,
   onRegenerateBackupCodes,
@@ -95,7 +95,7 @@ export function PrivacyTwoFactor({
                     Add Authenticator App
                   </button>
                 )}
-                {twoFactorStatus.method !== 'webauthn' && !isBrowser && (
+                {twoFactorStatus.method !== 'webauthn' && canHardwareKey && (
                   <button
                     type="button"
                     onClick={onSetupWebAuthn}
@@ -147,7 +147,7 @@ export function PrivacyTwoFactor({
               </svg>
             </button>
 
-            {!isBrowser && (
+            {canHardwareKey && (
               <button
                 type="button"
                 onClick={onSetupWebAuthn}

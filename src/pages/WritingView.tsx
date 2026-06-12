@@ -261,7 +261,7 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
   const showPrompts = useSettingsStore((s) => s.settings.journal.showPrompts);
   const distractionFree = useSettingsStore((s) => s.distractionFree);
   const writingAppearance = useSettingsStore((s) => s.settings.appearance.writing);
-  const { isAndroid, isBrowser } = usePlatform();
+  const { isAndroid, isDesktop } = usePlatform();
   const isMobileViewport = useIsMobile();
   const isMobile = isAndroid || isMobileViewport;
   const setDistractionFree = useSettingsStore((s) => s.setDistractionFree);
@@ -275,7 +275,7 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
   // D-003: voice memos from watch companion (desktop only)
   const { memos: watchMemos, transcribing: memoTranscribing } = useWearVoiceMemos({
     model: sttModel,
-    enabled: !isBrowser && !isAndroid && sttEnabled,
+    enabled: isDesktop && sttEnabled,
   });
   const autoLocationWeather = useSettingsStore((s) => s.settings.journal.autoLocationWeather);
   const autoTitle = useSettingsStore((s) => s.settings.journal.autoTitle ?? false);
@@ -1624,7 +1624,7 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
       )}
 
       {/* D-003: Watch voice memos panel — desktop only */}
-      {!isBrowser && !isAndroid && (
+      {isDesktop && (
         <WearVoiceMemoPanel
           memos={watchMemos}
           transcribing={memoTranscribing}

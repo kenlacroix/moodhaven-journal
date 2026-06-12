@@ -27,13 +27,14 @@ export function AboutTab({
   handleLogLevelChange,
   setModuleLogLevel,
 }: AboutTabProps) {
-  const { isBrowser, isIOS } = usePlatform();
+  const { isBrowser, isIOS, isDesktop } = usePlatform();
   const [moduleOverridesOpen, setModuleOverridesOpen] = useState(false);
   return (
     <div id="panel-about" role="tabpanel" aria-labelledby="tab-about" className="space-y-6">
 
-      {/* Updates section — App Store handles updates on iOS */}
-      {!isIOS && (
+      {/* Updates section — desktop only: the in-app updater downloads a native
+          installer (no-op in the browser/PWA; the App Store handles iOS/Android). */}
+      {isDesktop && (
         <SettingSection
           title="Updates"
           description="Keep MoodHaven Journal up to date"

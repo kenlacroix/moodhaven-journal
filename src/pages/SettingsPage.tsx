@@ -173,9 +173,12 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
   const scrollToSection = useSettingsStore((s) => s.scrollToSection);
   const setScrollToSection = useSettingsStore((s) => s.setScrollToSection);
 
-  const { isAndroid } = usePlatform();
+  const { isAndroid, canSTT } = usePlatform();
   const isMobileViewport = useIsMobile();
   const isMobile = isAndroid || isMobileViewport;
+  // Hide the Speech-to-Text tab where the whisper.cpp sidecar can't run (browser / mobile);
+  // its in-General section is already gated by `canSTT`, so the dedicated tab follows suit.
+  const visibleTabs = useMemo(() => TABS.filter((t) => t.id !== 'speech' || canSTT), [canSTT]);
   const [activeTab, setActiveTab] = useState<SettingsTab>('general');
   const [mobileScreen, setMobileScreen] = useState<'list' | 'detail'>('list');
   const [searchQuery, setSearchQuery] = useState('');
@@ -431,13 +434,13 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
   const matchedTab = useMemo(() => {
     if (!searchQuery.trim()) return null;
     const query = searchQuery.toLowerCase();
-    for (const tab of TABS) {
+    for (const tab of visibleTabs) {
       if (tab.keywords.some(kw => kw.includes(query))) {
         return tab.id;
       }
     }
     return null;
-  }, [searchQuery]);
+  }, [searchQuery, visibleTabs]);
 
   useEffect(() => {
     if (matchedTab) {
@@ -457,15 +460,15 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    const currentIndex = TABS.findIndex(t => t.id === activeTab);
+    const currentIndex = visibleTabs.findIndex(t => t.id === activeTab);
     if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
       e.preventDefault();
-      const nextIndex = (currentIndex + 1) % TABS.length;
-      setActiveTab(TABS[nextIndex].id);
+      const nextIndex = (currentIndex + 1) % visibleTabs.length;
+      setActiveTab(visibleTabs[nextIndex].id);
     } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
       e.preventDefault();
-      const prevIndex = (currentIndex - 1 + TABS.length) % TABS.length;
-      setActiveTab(TABS[prevIndex].id);
+      const prevIndex = (currentIndex - 1 + visibleTabs.length) % visibleTabs.length;
+      setActiveTab(visibleTabs[prevIndex].id);
     }
   };
 
@@ -662,7 +665,7 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
   }
 
   if (isMobile) {
-    const activeTabConfig = TABS.find(t => t.id === activeTab);
+    const activeTabConfig = visibleTabs.find(t => t.id === activeTab);
     return (
       <>
         <div className="fixed inset-0 z-50 bg-white dark:bg-slate-900 flex flex-col">
@@ -685,7 +688,7 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
 
               {/* Category list */}
               <div className="flex-1 overflow-y-auto">
-                {TABS.map((tab) => (
+                {visibleTabs.map((tab) => (
                   <button
                     key={tab.id}
                     type="button"
@@ -862,7 +865,7 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
               role="tablist"
               onKeyDown={handleKeyDown}
             >
-              {TABS.map((tab) => (
+              {visibleTabs.map((tab) => (
                 <button
                   key={tab.id}
                   id={`tab-${tab.id}`}

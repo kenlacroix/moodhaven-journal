@@ -749,6 +749,7 @@ pub fn run() {
             commands::mark_sync_log_synced,
             // Voice memos (Wear OS audio recordings)
             commands::store_voice_memo,
+            commands::store_voice_memo_bytes,
             commands::list_voice_memos,
             commands::get_voice_memo,
             commands::delete_voice_memo,

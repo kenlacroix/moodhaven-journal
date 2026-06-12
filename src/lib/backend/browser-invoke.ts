@@ -679,6 +679,8 @@ async function dispatch(command: string, p: Params): Promise<any> {
     case 'link_voice_memo_to_entry':
     case 'transcribe_voice_memo':
     case 'store_voice_memo':
+    // Phone voice capture is desktop/Tauri-only; no-op in the browser build.
+    case 'store_voice_memo_bytes':
       return null;
     case 'publish_voice_memo_draft':
       throw new Error('publish_voice_memo_draft not supported in browser mode');

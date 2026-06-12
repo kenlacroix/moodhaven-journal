@@ -57,33 +57,48 @@ cap, path-traversal guard) and verifies SHA-256 against `checksums.txt`, but:
 
 → Source: `research-upgrade-mechanism.md`
 
-### P0 — Test-automation gaps (cheap, lands in existing CI `cargo test`)
-- **Upgrade-migration E2E (highest-value gap):** no test proves an old-version profile opens
-  under the new binary with data intact and the plaintext→SQLCipher migration succeeding —
-  the single riskiest release-time path (data loss). Add a Rust integration fixture (seed a
-  plaintext N-1 DB → run N startup+`unlock_app` → assert encrypted + rows decrypt) in CI; add
-  the real-binary upgrade round-trip + crash-replay (SIGKILL mid-export) to the live-lab harness.
-- **Updater integrity unit tests (cheap):** `verify_sha256` / `fetch_checksum` have zero tests.
-  Add `#[test]`s: good hash passes, flipped byte fails, missing `checksums.txt` → unverified
-  (not failed), >200 MB rejected.
-- **Password-mismatch sync invariant (cheap):** documented "no corruption" but not asserted —
-  two temp DBs, different keys, run upsert, assert no crash/corruption.
+### P0 — Test-automation gaps (cheap, lands in existing CI `cargo test`) ✅ DONE
+**Status:** all three sub-items landed in the CI `cargo test` lane (207 lib tests green).
+- **Upgrade-migration E2E (highest-value gap):** ✅ DONE — `db::sqlcipher_key_tests`
+  `encrypt_in_place_migrates_plaintext_to_ciphertext_at_rest` seeds a pre-1.8.0 plaintext
+  profile, drives the real one-time `encrypt_in_place` migration, and asserts the on-disk
+  bytes are no longer a `SQLite format 3` header (the PT8 SQLCipher-inert regression guard),
+  rows survive, and unkeyed/wrong-key opens fail at rest;
+  `migrated_profile_reopens_and_decrypts_on_next_launch` proves the migrated profile reopens
+  unkeyed on the next launch and the first `apply_key` restores read access. The real-binary
+  upgrade round-trip + crash-replay (SIGKILL mid-export) remain a **live-lab** item.
+- **Updater integrity unit tests (cheap):** ✅ DONE (pre-existing) — `updater::tests` covers
+  `verify_sha256` (good/uppercase/tampered/wrong/empty-unverified/missing-file),
+  `parse_checksum_for_asset`, the version gate, `compute_severity`, and full minisign
+  authenticity incl. the base64-decoded-form release contract. (The >200 MB cap is enforced
+  inline in `download_and_install_update`, not a standalone fn — not unit-testable without
+  HTTP mocking; covered structurally.)
+- **Password-mismatch sync invariant (cheap):** ✅ DONE (pre-existing) — `conflict.rs`
+  `password_mismatch_blob_is_stored_verbatim_without_corruption` asserts the engine stores
+  foreign-key ciphertext byte-for-byte with no crash/corruption.
 
 → Source: `research-test-plan.md`
 
 ### P1 — Code-signing phases (cost-gated; removes "unknown publisher" / Gatekeeper blocks)
 Phased, in order. **Skip EV** — since March 2024 it no longer buys instant SmartScreen trust and
 requires a business entity.
-1. **Phase 0 ($0, ~1h):** keep minisign + checksums (done); add a "Verify your download" README/
-   site section + unsigned-build disclaimer; optional Linux GPG detached `.asc` sigs.
+1. **Phase 0 ($0, ~1h) ✅ DONE:** keep minisign + checksums (done); "Verify your download" section
+   added to README + website download page (`DownloadClient.tsx`) with the unsigned-build /
+   SmartScreen-Gatekeeper disclaimer, the minisign verify command + pubkey, and the VirusTotal link.
+   Optional Linux GPG detached `.asc` sigs not done (minisign covers authenticity). Decision
+   (2026-06-08): code signing deferred on cost; VirusTotal auto-submission is the interim AV story.
 2. **Phase 1 — Windows via Azure Trusted Signing (~$10/mo, highest ROI):** individual-eligible
    (self-employed US/CA), no USB token, Microsoft-trusted root, Tauri `signCommand` + `dotnet sign`.
    Removes "unknown publisher" instantly; SmartScreen reputation accrues organically with the same cert.
 3. **Phase 2 — macOS Developer ID + notarize + staple ($99/yr):** the only path past Gatekeeper
    ("damaged / can't be opened"); CI scaffolding (`APPLE_*` env block) is already stubbed in
    `build.yml` — uncomment + add secrets + real Team ID.
-4. **Phase 3 — reactive AV (as-needed):** VirusTotal each release; submit false positives to the
-   specific flagging vendors (Microsoft MSRC first). Signed binaries clear far faster.
+4. **Phase 3 — reactive AV (as-needed) ⏳ AUTOMATED:** the `build.yml` `update-manifest` job now
+   runs `scripts/submit-virustotal.cjs` (needs the `VT_API_KEY` repo secret) — submits each desktop
+   installer to VirusTotal post-build and attaches `virustotal.txt` (per-asset hash-based report
+   links) to the release. Non-fatal + throttled for the free public tier (4/min, 500/day;
+   non-commercial use only). Still manual when needed: submit false positives to the specific
+   flagging vendors (Microsoft MSRC first). Signed binaries clear far faster.
 
 → Source: `research-av-signing.md`
 
@@ -159,3 +174,120 @@ The three blog pcap exhibit placeholders depend on a live PT9/PT10 capture run.
 | `blog-final-technical.md` | Canonical technical blog post (10 rounds, `<details>` toggles, front-matter data block) | drafted |
 | `blog-final-nontechnical.md` | Derived non-technical blog post ("broke my own app ten times") | drafted |
 | `personal-site-security-post.md` | Personal-site version ("Red-Teaming My Own Encrypted Journaling App, Ten Rounds Deep") | drafted |
+
+---
+
+## 4. Product Roadmap Additions (Gemini external-review reconciliation, 2026-06-08)
+
+An external AI review (Google search AI) was run against the project and reconciled against the
+codebase as source of truth. **~70% of its SWOT was stale** — it modeled a pre-1.7 architecture
+and was wrong on storage (claimed IndexedDB/LocalStorage; desktop is **SQLite + SQLCipher** with
+per-entry AES-GCM), mobile ("PWA wrapper"; we have **native Tauri v2 iOS + Android** scaffolded),
+sync ("manual S3 buckets"; we have **WebDAV + Dropbox/GDrive OAuth PKCE**), recovery ("none";
+we ship a **24-char recovery key** + PIN + biometric), local AI ("impossible"; we ship **Ollama**),
+repo health ("no CONTRIBUTING / no CI crypto tests"; both exist — `CONTRIBUTING.md`, `pentest.yml`),
+and decryption ("monolithic DB load"; entries are **already per-row**, lazily decrypted).
+
+**Dropped outright:** CRDT (Yjs/Automerge) — overkill for single-user multi-device; LWW + field-merge
+is correct (reconsider only if real-time collab ever appears). On-device WebGPU/ONNX LLM — redundant
+with the existing Ollama path. Chunked decryption — already effectively done. React Native/Expo rewrite —
+directly contradicts the decided Tauri-v2-iOS approach (reuses all ~150 Rust commands).
+
+The four items below survived reconciliation as genuine, net-new value. Decided with owner 2026-06-08.
+
+### P1 — BYO-Cloud folder sync (the "storage blindness" fix) — PRIMARY sync story ✅ DESKTOP SHIPPED (PR #149)
+**Status:** **Desktop slice shipped** (PR #149). New `read_text_file` Rust command (shares
+`write_text_file`'s sensitive-path guard via `guard_user_file_path`); `'byocloud'` storage backend +
+`byocloud {folderPath, lastSyncAt}` settings/store/defaults; `byoCloudService` (pickSyncFolder /
+byoCloudUpload via `exportWithMedia` / byoCloudDownload via `encryptedImport`); SyncTab folder-picker +
+Back up / Restore UI; browser shim throws for `read_text_file`. Mobile (Android SAF tree-URI, iOS
+security-scoped bookmark) remains a **spike-first** item — not yet built.
+
+**Decision:** make **file-provider folder sync** the primary/default cloud-sync path; keep the existing
+OAuth Dropbox/GDrive code as a secondary "power user" option (it stays as-is, real credentials when
+convenient — no longer the headline).
+
+The insight the OAuth path missed: instead of registering an OAuth app and writing to a hidden
+app-folder, write the **same encrypted `.moodhaven` blob the export path already produces** into a
+**user-picked folder** that happens to live in iCloud Drive / Google Drive / Dropbox / OneDrive.
+The OS sync client handles propagation for free — no server, no OAuth registration, no per-provider
+API. Lower friction, fewer moving parts, and it works with *any* folder-syncing service the user
+already has.
+
+- **Desktop:** ✅ DONE (PR #149) — filesystem path chosen via `tauri-plugin-dialog` folder picker;
+  path persisted in settings; write/read `moodhaven-backup.moodhaven` there. Reuses `export_data`/`import_data`.
+- **Android:** Storage Access Framework — persisted tree URI (`takePersistableUriPermission`). **Verify**
+  whether `tauri-plugin-fs` + dialog expose a persistable tree URI on Android, or whether a small
+  native plugin is needed. Do not assume; spike first.
+- **iOS:** `UIDocumentPickerViewController` directory pick + **security-scoped bookmark** persisted
+  across launches; iCloud Drive folders are reachable this way. **Verify** Tauri dialog/fs coverage;
+  may need a thin Swift plugin for the bookmark.
+- **Conflict:** same LWW-by-`updated_at` merge as peer sync; `import_data` already dedups. Add an
+  on-foreground "newer backup detected — import?" check (manual in v1; auto-sync later).
+- **Sequencing:** lands cleanly inside the `ios-app-v2-0.md` Phase 1 work — see the BYO-Cloud sub-phase
+  added there. Benefits desktop + Android immediately, not just iOS.
+
+→ Cross-ref: `active-plans/ios-app-v2-0.md` Phase 1.
+
+### P1 — PDF Emergency Recovery Kit
+We already generate a 24-char key-escrow recovery key (`recoveryKeyService.ts`), but only as a
+one-time on-screen code — easy to lose, easy to skip. Package it as a printable/exportable **PDF
+emergency kit**: app name + date, the recovery-key groups in large monospace, a "what this is / how
+to use it / store it offline" section, and an explicit warning that it bypasses the password. High
+trust-per-hour; pairs naturally with the security-posture story.
+
+- Generate client-side (no key material leaves the device). Reuse the existing `make-pdf`/print path
+  or render to a printable HTML view → "Save as PDF".
+- **Add, do not replace** the on-screen code (keep both flows). Offer the PDF at recovery-key setup
+  *and* later via Settings → Privacy.
+- Never persist the generated PDF automatically — hand it to the user's save dialog only.
+
+### P2 — Media compression pipeline
+Confirmed gap: `media.rs` stores attachment **originals uncompressed** (only a 400×400 JPEG thumbnail
+is produced on read). Add a client-side **compress → WebP (or capped JPEG) before encrypt** step in
+the media ingest path so the encrypted DB/blobs stay lean. Minor for a text-first journal, but cheap
+insurance against multi-MB photo bloat.
+
+- Prefer Rust-side `image` crate (already a dep — used for thumbnails) to resize/recompress on
+  `save_media_attachment` *before* encryption, OR a WASM/Canvas pass in the frontend. Pick whichever
+  avoids decoding twice. Cap longest edge (~2048px) + quality target; keep an EXIF-strip for privacy.
+- Strip location/EXIF metadata during recompress (privacy win, fits the threat model).
+
+### P2 — PWA storage-persistence guard (web build only)
+The browser/PWA build can have its IndexedDB evicted under storage pressure. Cheap mitigation:
+call `navigator.storage.persist()` on first unlock in web mode, surface the granted/denied state,
+and add an "export a backup" nudge when persistence is denied. Desktop/native are unaffected (real
+filesystem) — this is strictly a web-target hardening.
+
+### P2/LOW — Peer-sync "big picture" gap cluster (track + close)
+Already-known peer-sync residuals, grouped here so they close as a set rather than drifting:
+- **Restore salt transfer** — full-DB restore streams the SQLCipher file but not the source's
+  `db_state.json` salt; a restored device can fail first-unlock key derivation until fixed
+  (architecture.md / peer-sync-security.md "known gap").
+- **Recovery-key promote re-verify** — the recovery-key promote path does not yet re-verify the
+  derived key against the stored hash.
+- **Per-device restore-arm scoping** — arm is one-shot + TTL + clear-on-lock, but not yet scoped to
+  a specific requesting device (deferred LOW in §2).
+
+→ These are the only legitimate "peer gaps" the external review gestured at; everything else it said
+about peers was already covered by the v1.8.0 consent-gate + auth work.
+
+---
+
+### Reconciliation summary — disposition table
+
+| Item | Source | Disposition | Where it lives |
+|---|---|---|---|
+| BYO-Cloud folder sync | Gemini (refined) | **DESKTOP SHIPPED (PR #149)** — mobile spike pending | §4 P1 + `ios-app-v2-0.md` Ph1 |
+| OAuth Dropbox/GDrive | existing | Keep as secondary | `ios-app-v2-0.md` Ph1 (creds when convenient) |
+| PDF Recovery Kit | Gemini + owner | **BUILD** | §4 P1 |
+| Media compression | Gemini (confirmed gap) | **BUILD** | §4 P2 |
+| PWA persistence guard | Gemini (web only) | **BUILD** | §4 P2 |
+| Peer-sync gap cluster | existing residuals | **TRACK + close as set** | §4 P2/LOW |
+| Native mobile (iOS/Android) | existing | In progress | `ios-app-v2-0.md` |
+| CRDT sync | Gemini | **DROP** (LWW is correct) | — |
+| On-device WebGPU/ONNX LLM | Gemini | **DROP** (Ollama exists) | — |
+| Chunked decryption | Gemini | **DROP** (already per-row) | — |
+| React Native/Expo rewrite | Gemini | **DROP** (Tauri-v2 decided) | — |
+| CONTRIBUTING / CI crypto tests | Gemini | **DONE** (stale claim) | repo |
+| Local LLM "needed" | Gemini | **DONE** (Ollama) | `aiService.ts` |

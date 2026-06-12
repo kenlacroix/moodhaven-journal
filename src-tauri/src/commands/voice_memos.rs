@@ -133,6 +133,7 @@ pub fn store_voice_memo(
 ///
 /// Gated by `require_unlocked`: unlike the Wear bridge this is a deliberate
 /// user action inside an unlocked session.
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub fn store_voice_memo_bytes(
     app: AppHandle,

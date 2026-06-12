@@ -44,8 +44,9 @@ change-password #155) — `/qa` drives the web build and can't exercise them.
 2. **Decide #143 vs #145** (both edit `Cargo.lock`): merge #143 now (smaller, green)
    **or** keep the #145 superset and close #143. Don't merge both. Coordination
    notes posted on both.
-3. **Configure `VT_API_KEY`** repo secret for #148 (owner action; safe to skip —
-   the step no-ops without it).
+3. **`VT_API_KEY`** repo secret is already configured. When #148 merges, **verify
+   the virus-scan feature runs** (VT submit + the download-verification surface)
+   instead of no-opping.
 4. **#155 `UNSTABLE`** confirmed: no failing/pending checks — non-required check only.
 5. **Rebase #154** onto current main (baseline stale: ~1,283 vs current ~1,512 tests).
 
@@ -93,14 +94,18 @@ CI go green before the next merge.
 
 ---
 
+## 🚫 HELD — do NOT merge (owner-gated, android, needs on-device vetting)
+
+- **#163** android on-device voice-memo capture (Slice 1) — `worktree-android-voice-capture`.
+- **#164** voice-memo peer-sync phase / transcription round-trip (Slice 2) — `worktree-android-voice-sync`.
+
+Both converted to **draft** and excluded from all waves until the owner verifies
+them on-device. Do not slot into the merge order. Re-evaluate only on owner's say-so.
+
 ## Incoming PRs (slot on arrival)
 
-- **#163 android voice-capture Slice 1** (branch `worktree-android-voice-capture`) —
-  frontend + a Rust `store_voice_memo_bytes` command. Slot in **Wave 2** (mobile
-  UI) after #161; watch for lib.rs registration + WritingView/mobile-layout overlap
-  with #160/#161. Re-run conflict check when opened.
-- Any further android/iOS PRs: same — re-run the hot-file conflict check and place
-  in the matching wave.
+- Any further android/iOS PRs beyond #163/#164: re-run the hot-file conflict check
+  and place in the matching wave (or HOLD if owner-gated).
 
 ---
 

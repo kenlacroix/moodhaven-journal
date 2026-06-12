@@ -142,3 +142,12 @@ export async function isRecoveryKeyEnabled(): Promise<boolean> {
   }
 }
 
+/**
+ * Disable the recovery key: delete the escrowed password blob and mark recovery disabled.
+ * After this the old recovery key no longer unlocks anything.
+ */
+export async function disableRecoveryKey(): Promise<void> {
+  await invoke('delete_setting', { key: RECOVERY_KEY_ENCRYPTED_PASSWORD_SETTING });
+  await invoke('set_setting', { key: RECOVERY_KEY_ENABLED_SETTING, value: 'false' });
+}
+

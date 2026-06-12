@@ -112,7 +112,43 @@ write), `permissions/app-commands.toml` + `gen/schemas/acl-manifests.json` (ACL 
 Frontend: `lib/services/changePasswordService.ts` (begin/cancel + unbounded signal fetch),
 `lib/backend/browser-invoke.ts` (3 new cmds → desktop-only throw).
 
-## Windows live-test — IN PROGRESS (resume here)
+## Windows live-test — ✅ PASSED (2026-06-12, CI build 0ec4bb0)
+
+Verified on a real Windows install (NSIS from CI), DB pulled to Linux and inspected with throwaway
+SQLCipher tools (`src-tauri/examples/{verify_key,inspect_db,recover_check}.rs`, untracked):
+
+- **Outer SQLCipher rekey:** new password opens the DB; OLD password `OPEN_FAIL` (both old and new
+  salt); `db_state.json` salt rotated each change; file stays ciphertext.
+- **Inner per-field AES-GCM rekey:** a real entry blob decrypted to plaintext under the NEW password
+  (`INNER_DECRYPT_OK`) — proving the inner layer was re-keyed, not just the outer container.
+- **No data loss:** 3/3 entries intact and readable.
+- **PIN cleared** by the change (`pin_*` settings absent); **verifier rotated** to the new password.
+- **Atomic completion:** no `password_change.pending`, no `moodhaven_rekey.db`, no staged `*.rekeytmp`.
+- **Recovery-key re-escrow:** `recover_check` decrypted the escrow blob with the recovery key to the
+  NEW password (`matches_db_password=true`), `recovery_key_enabled=true` — the "keep it working" claim.
+- **Summary UI** rendered real counts (the camelCase return fix), confirmed in-app.
+
+### NEW findings surfaced by the live test
+
+1. **HIGH ship-blocker (FIXED, `0ec4bb0`)** — `ReencryptedEntry`/`ReencryptedSignal` lacked
+   `#[serde(rename_all="camelCase")]`. Tauri camelCases top-level command args but NOT nested struct
+   fields, so the FE's `encryptedContent` failed to deserialize and `change_master_password` was
+   rejected *before its body ran* — "Failed to change password" on every attempt. The feature never
+   worked end-to-end before this live run. (Mirrors `ExportFilter` which has the attr.)
+2. **MED (FIXED, `0ec4bb0`)** — `PrivacyChangePassword` masked the real error: Tauri rejects a command
+   with the Rust `Err(String)` as a *string* (not an `Error`), so the catch always hit the generic
+   fallback. Now surfaces the string.
+3. **MED UX (NOT fixed)** — recovery-key setup exists ONLY in the setup wizard
+   (`src/components/setup/RecoveryStep.tsx`); there is no Settings → Privacy control to add/regenerate
+   one. Yet `PrivacyChangePassword.tsx` ("generate a new one in Privacy") and
+   `docs/howto-getting-started.md` ("save one later via Settings → Privacy") both point at a control
+   that doesn't exist. Needs a Privacy-tab recovery-key section, or the copy corrected.
+
+VM was cleaned afterward (test build uninstalled, throwaway journal wiped, transferred files removed).
+
+---
+
+### (historical) original live-test plan
 
 Goal: empirically verify on `desktop-tplfj56` (SSH via Kali jump host
 `ssh -J ken@kali.tail06c6c3.ts.net ken@desktop-tplfj56.tail06c6c3.ts.net`, PowerShell shell):

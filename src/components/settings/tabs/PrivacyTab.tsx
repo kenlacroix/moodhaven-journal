@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import type { RefObject } from 'react';
 import type { AppSettings } from '../../../types/settings';
 import type { TwoFactorStatus } from '../../../types/twoFactor';
 import { usePlatform } from '../../../hooks/usePlatform';
@@ -22,6 +23,7 @@ interface PrivacyTabProps {
   handleExport: () => void;
   setAutoLockTimeout: (v: number) => void;
   sessionPassword?: string;
+  transparencyRef?: RefObject<HTMLDivElement>;
 }
 
 export function PrivacyTab({
@@ -35,6 +37,7 @@ export function PrivacyTab({
   handleExport,
   setAutoLockTimeout,
   sessionPassword = '',
+  transparencyRef,
 }: PrivacyTabProps) {
   const { isAndroid, isBrowser, isDesktop } = usePlatform();
 
@@ -125,7 +128,7 @@ export function PrivacyTab({
           handleExport={handleExport}
         />
 
-        <TransparencySection settings={settings} isBrowser={isBrowser} />
+        <TransparencySection settings={settings} isBrowser={isBrowser} sectionRef={transparencyRef} />
       </div>
 
       {/* 2FA Setup Modal - TOTP */}

@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import type { Ref } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import type { AppSettings } from '../../../types/settings';
 import { SettingSection } from '../SettingSection';
@@ -31,9 +32,10 @@ function PrivacyStatRow({
 interface TransparencySectionProps {
   settings: AppSettings;
   isBrowser: boolean;
+  sectionRef?: Ref<HTMLDivElement>;
 }
 
-export function TransparencySection({ settings, isBrowser }: TransparencySectionProps) {
+export function TransparencySection({ settings, isBrowser, sectionRef }: TransparencySectionProps) {
   const [isExporting, setIsExporting] = useState(false);
 
   const cloudSync = settings.storage.type === 'webdav';
@@ -73,6 +75,7 @@ export function TransparencySection({ settings, isBrowser }: TransparencySection
   }, [isBrowser, cloudSync, aiEnabled, peerSync, sttLayer]);
 
   return (
+    <div ref={sectionRef} className="scroll-mt-4">
     <SettingSection
       title="Transparency"
       description="What MoodHaven does and does not do with your data"
@@ -159,5 +162,6 @@ export function TransparencySection({ settings, isBrowser }: TransparencySection
         </button>
       )}
     </SettingSection>
+    </div>
   );
 }

@@ -82,6 +82,7 @@ function IconBtn({
   id,
   ariaLabel,
   ariaExpanded,
+  ariaKeyshortcuts,
   className = '',
 }: {
   onClick: () => void;
@@ -91,6 +92,7 @@ function IconBtn({
   id?: string;
   ariaLabel?: string;
   ariaExpanded?: boolean;
+  ariaKeyshortcuts?: string;
   className?: string;
 }) {
   return (
@@ -101,6 +103,7 @@ function IconBtn({
       title={title}
       aria-label={ariaLabel}
       aria-expanded={ariaExpanded}
+      aria-keyshortcuts={ariaKeyshortcuts}
       className={`p-2 rounded-lg transition-all duration-200 ${
         active
           ? 'text-violet-500 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/20'
@@ -199,6 +202,7 @@ export function TopBar({ currentView, onLock, onSelectEntry, onNewEntry, onOpenB
               title="Writing appearance (⌘,)"
               ariaLabel="Writing appearance"
               ariaExpanded={appearanceDrawerOpen}
+              ariaKeyshortcuts="Meta+, Control+,"
               active={appearanceDrawerOpen}
               className={appearanceHintPulse ? 'drawer-hint-pulse' : ''}
             >

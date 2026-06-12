@@ -972,7 +972,25 @@ export function LockScreen() {
                   onPointerUp={cancelHold}
                   onPointerLeave={cancelHold}
                   onPointerCancel={cancelHold}
+                  // Keyboard parity: hold Enter/Space to erase (ignore auto-repeat so the
+                  // hold timer starts once); releasing the key cancels — mirrors the pointer
+                  // gesture so the escape hatch is reachable without a mouse.
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      if (e.repeat) return;
+                      e.preventDefault();
+                      startHold();
+                    }
+                  }}
+                  onKeyUp={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      cancelHold();
+                    }
+                  }}
+                  onBlur={cancelHold}
                   disabled={isErasing || eraseConfirmText !== 'ERASE'}
+                  aria-label="Erase all data — press and hold for 2.5 seconds to confirm"
                   className="relative flex-1 py-3 overflow-hidden bg-rose-600 hover:bg-rose-700 disabled:bg-rose-300 dark:disabled:bg-rose-800 text-white font-medium rounded-xl transition-colors flex items-center justify-center gap-2 select-none"
                 >
                   {/* Hold-progress fill */}
@@ -981,7 +999,7 @@ export function LockScreen() {
                     className="absolute inset-y-0 left-0 bg-rose-800/60"
                     style={{ width: `${holdProgress * 100}%` }}
                   />
-                  <span className="relative flex items-center justify-center gap-2">
+                  <span role="status" aria-live="polite" className="relative flex items-center justify-center gap-2">
                     {isErasing ? (
                       <>
                         <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />

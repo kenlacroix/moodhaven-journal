@@ -83,9 +83,16 @@ export async function listAllMedia(): Promise<MediaAttachment[]> {
 /**
  * Decrypt a media file to a temp location and open it with the system viewer.
  * The temp file is automatically deleted after 60 seconds.
+ *
+ * Desktop opens the file in the Rust command and returns an empty string. Android
+ * has no native launcher, so Rust returns the temp path and we fire an
+ * ACTION_VIEW intent via the `opener` plugin (FileProvider).
  */
 export async function openMedia(mediaId: string, password: string): Promise<void> {
-  return invoke('open_media_attachment', { mediaId, password });
+  const path = await invoke<string>('open_media_attachment', { mediaId, password });
+  if (path) {
+    await invoke('plugin:opener|openFile', { path });
+  }
 }
 
 /**

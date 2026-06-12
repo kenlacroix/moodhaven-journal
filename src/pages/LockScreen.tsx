@@ -587,6 +587,9 @@ export function LockScreen() {
                   disabled={isLoading || lockedOut}
                   className="input"
                 />
+                <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">
+                  Using a password manager? Save your MoodHaven password as a login item and paste it here — autofill can't reach this window.
+                </p>
               </div>
 
               {error && (

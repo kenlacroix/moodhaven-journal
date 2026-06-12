@@ -46,7 +46,12 @@ const RECOVERY_ENABLED_KEY: &str = "recovery_key_enabled";
 const RECOVERY_BLOB_KEY: &str = "recovery_key_encrypted_password";
 
 /// One re-encrypted journal entry blob produced by the frontend under the NEW password.
+/// `rename_all = "camelCase"` is REQUIRED: Tauri camelCases top-level command *argument* names
+/// but NOT nested struct fields, and the frontend sends `encryptedContent`. Without this, serde
+/// fails to deserialize the `entries` argument ("missing field `encrypted_content`") and the
+/// whole command rejects before its body runs. (Mirrors `ExportFilter` in data_management.rs.)
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ReencryptedEntry {
     pub id: String,
     pub encrypted_content: EncryptedContent,
@@ -54,6 +59,7 @@ pub struct ReencryptedEntry {
 
 /// One re-encrypted signal payload produced by the frontend under the NEW password.
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ReencryptedSignal {
     pub id: String,
     /// AES-256-GCM ciphertext payload (opaque string, as stored in `signals.payload`).

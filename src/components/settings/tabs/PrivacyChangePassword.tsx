@@ -103,7 +103,11 @@ export function PrivacyChangePassword({ sessionPassword }: PrivacyChangePassword
       setSummary(result);
       reset();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to change password.');
+      // Tauri rejects a command with the Rust `Err(String)` as a plain string (not an Error),
+      // so surface that string directly — otherwise the real cause is hidden behind a generic message.
+      setError(
+        typeof e === 'string' ? e : e instanceof Error ? e.message : 'Failed to change password.'
+      );
     } finally {
       setBusy(false);
     }

@@ -52,7 +52,7 @@ export function CollapsibleToolbar({
   quickCapture = false,
   onToggleQuickCapture,
 }: CollapsibleToolbarProps) {
-  const { isIOS } = usePlatform();
+  const { isDesktop } = usePlatform();
   const [formatState, setFormatState] = useState<Record<string, boolean>>({});
   const toolbarPanelRef = useRef<HTMLDivElement>(null);
 
@@ -195,8 +195,9 @@ export function CollapsibleToolbar({
             onClick={onEmojiClick}
           />
 
-          {/* Speech-to-text: quick capture toggle + mic button — sidecar unavailable on iOS */}
-          {onMicClick && !isIOS && (
+          {/* Speech-to-text: quick capture toggle + mic button — whisper sidecar is
+              desktop-only (absent on iOS/Android; no sidecar in the browser build) */}
+          {onMicClick && isDesktop && (
             <>
               <TBDivider />
               {onToggleQuickCapture && (

@@ -2,10 +2,12 @@
  * BottomTabBar — 5-tab Android navigation bar.
  *
  * Tabs: Write | Journal | Insights | Calendar | More
- * "More" opens an overlay sheet: On This Day, Settings, Sync, Lock
+ * "More" opens an overlay sheet: On This Day, StillHaven (when enabled),
+ * Settings, Sync, Lock
  */
 
 import { useState } from 'react';
+import { useSettingsStore } from '../../stores/settingsStore';
 import type { ViewType } from './Sidebar';
 
 interface Tab {
@@ -60,6 +62,16 @@ const ICON_LOCK = (
     <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
   </svg>
 );
+const ICON_STILL = (
+  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5c.75-3 3.75-6 8.25-6s7.5 3 8.25 6M3.75 13.5c-.75 3 .75 5.25 3 6s4.5.75 5.25.75 3.75.25 5.25-.75 3.75-3 3-6M3.75 13.5h16.5" />
+  </svg>
+);
+const ICON_SESSIONS = (
+  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" />
+  </svg>
+);
 
 const TABS: Tab[] = [
   { id: 'writing',   label: 'Write',    icon: ICON_WRITE },
@@ -78,8 +90,14 @@ interface BottomTabBarProps {
 
 export function BottomTabBar({ currentView, onNavigate, onLock, onOpenSync }: BottomTabBarProps) {
   const [showMore, setShowMore] = useState(false);
+  const stillhavenEnabled = useSettingsStore((s) => s.settings.wellness?.stillhavenEnabled ?? false);
+  const showStill = import.meta.env.VITE_FEATURE_STILL && stillhavenEnabled;
 
-  const isMoreActive = currentView === 'onthisday' || currentView === 'settings';
+  const isMoreActive =
+    currentView === 'onthisday' ||
+    currentView === 'settings' ||
+    currentView === 'still' ||
+    currentView === 'stillSessions';
 
   const handleTab = (id: ViewType | 'more') => {
     if (id === 'more') {
@@ -112,6 +130,24 @@ export function BottomTabBar({ currentView, onNavigate, onLock, onOpenSync }: Bo
                   {ICON_ONTHISDAY}
                   <span className="font-medium">On This Day</span>
                 </button>
+                {showStill && (
+                  <>
+                    <button
+                      onClick={() => { setShowMore(false); onNavigate('still'); }}
+                      className="w-full flex items-center gap-3 px-3 py-3.5 rounded-xl text-left text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 active:bg-slate-100 dark:active:bg-slate-700 transition-colors min-h-[52px]"
+                    >
+                      {ICON_STILL}
+                      <span className="font-medium">StillHaven</span>
+                    </button>
+                    <button
+                      onClick={() => { setShowMore(false); onNavigate('stillSessions'); }}
+                      className="w-full flex items-center gap-3 px-3 py-3.5 rounded-xl text-left text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 active:bg-slate-100 dark:active:bg-slate-700 transition-colors min-h-[52px]"
+                    >
+                      {ICON_SESSIONS}
+                      <span className="font-medium">Sessions</span>
+                    </button>
+                  </>
+                )}
                 <button
                   onClick={() => { setShowMore(false); onNavigate('settings'); }}
                   className="w-full flex items-center gap-3 px-3 py-3.5 rounded-xl text-left text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 active:bg-slate-100 dark:active:bg-slate-700 transition-colors min-h-[52px]"

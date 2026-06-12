@@ -183,6 +183,7 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
 
   const sttSectionRef = useRef<HTMLDivElement>(null);
   const aiSectionRef = useRef<HTMLDivElement>(null);
+  const transparencyRef = useRef<HTMLDivElement>(null);
 
   const [exportMatchCount, setExportMatchCount] = useState<number | null>(null);
   const [exportTags, setExportTags] = useState<string[]>([]);
@@ -254,6 +255,12 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
     } else if (scrollToSection === 'privacy') {
       setActiveTab('privacy');
       setScrollToSection(null);
+    } else if (scrollToSection === 'privacy-checkup') {
+      setActiveTab('privacy');
+      setScrollToSection(null);
+      setTimeout(() => {
+        transparencyRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 100);
     } else if (scrollToSection === 'health') {
       setActiveTab('health');
       setScrollToSection(null);
@@ -509,6 +516,7 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
           handleExport={handleExport}
           setAutoLockTimeout={setAutoLockTimeout}
           sessionPassword={getSessionPassword() ?? ''}
+          transparencyRef={transparencyRef}
         />
       )}
       {activeTab === 'sync' && (

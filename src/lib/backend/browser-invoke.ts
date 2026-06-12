@@ -478,6 +478,15 @@ async function dispatch(command: string, p: Params): Promise<any> {
       return null;
     }
 
+    // PIN unlock — not supported in browser build (no OS-backed secure storage)
+    case 'pin_is_enabled':
+      return false;
+    case 'pin_setup':
+    case 'pin_disable':
+      return undefined;
+    case 'pin_unlock':
+      throw new Error('PIN unlock requires the desktop app');
+
     // -----------------------------------------------------------------------
     // Unsupported in browser — Tauri-only features
     // -----------------------------------------------------------------------

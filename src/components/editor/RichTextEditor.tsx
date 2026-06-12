@@ -112,6 +112,10 @@ export function RichTextEditor({
           keepMarks: true,
           keepAttributes: false,
         },
+        // StarterKit v3 bundles Link + Underline; disable so the explicitly
+        // configured extensions below win (avoids duplicate-name warning).
+        link: false,
+        underline: false,
       }),
       Underline,
       TaskList,

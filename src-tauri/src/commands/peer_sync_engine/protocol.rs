@@ -159,6 +159,11 @@ pub enum Msg {
         signals: Vec<SyncMeta>,
         /// Settings manifest: only whitelisted keys; updated_at for LWW.
         settings: Vec<SyncMeta>,
+        /// Voice memos manifest: id + updated_at for LWW. `#[serde(default)]` so
+        /// pre-voice-memo peers (which omit it) still deserialize — they simply
+        /// exchange no memos.
+        #[serde(default)]
+        voice_memos: Vec<SyncMeta>,
     },
     // ── Entry phase ──
     Entry {
@@ -200,6 +205,20 @@ pub enum Msg {
         sent: usize,
     },
     SettingsAck {
+        recv: usize,
+    },
+    // ── Voice memos phase ──
+    /// A voice memo plus its audio bytes (base64). The audio is opaque to the
+    /// sync engine; the receiver writes it to its own voice_memos/<id>.wav and
+    /// sets its own local file_path (never the peer's).
+    VoiceMemo {
+        row: SyncVoiceMemoRow,
+        audio_base64: String,
+    },
+    VoiceMemosDone {
+        sent: usize,
+    },
+    VoiceMemosAck {
         recv: usize,
     },
     // ── Full restore protocol ──
@@ -263,4 +282,24 @@ pub struct SyncSignalRow {
     pub source: String,
     pub payload: String,
     pub created_at: String,
+}
+
+/// Voice memo row transmitted over the wire during sync.
+/// `file_path` is intentionally omitted — it is device-local; each device
+/// derives its own from the memo id. LWW on `updated_at`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SyncVoiceMemoRow {
+    pub id: String,
+    pub timestamp: String,
+    pub duration_ms: i64,
+    pub health_json: Option<String>,
+    pub transcription: Option<String>,
+    pub entry_id: Option<String>,
+    pub source: String,
+    pub created_at: String,
+    pub context: Option<String>,
+    pub inferred_mood: Option<i64>,
+    pub book_id: String,
+    pub reviewed: i64,
+    pub updated_at: String,
 }

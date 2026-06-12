@@ -295,13 +295,13 @@ pub fn patch_voice_memo_context(
 
     if let Some(ref lw) = location_weather_json {
         conn.execute(
-            "UPDATE voice_memos SET context = ?1, health_json = ?2 WHERE id = ?3",
+            "UPDATE voice_memos SET context = ?1, health_json = ?2, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id = ?3",
             params![context, lw, id],
         )
         .map_err(|e| format!("Failed to patch context: {}", e))?;
     } else {
         conn.execute(
-            "UPDATE voice_memos SET context = ?1 WHERE id = ?2",
+            "UPDATE voice_memos SET context = ?1, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id = ?2",
             params![context, id],
         )
         .map_err(|e| format!("Failed to patch context: {}", e))?;
@@ -327,7 +327,7 @@ pub fn patch_voice_memo_mood(
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
     conn.execute(
-        "UPDATE voice_memos SET inferred_mood = ?1 WHERE id = ?2",
+        "UPDATE voice_memos SET inferred_mood = ?1, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id = ?2",
         params![inferred_mood, id],
     )
     .map_err(|e| format!("Failed to patch inferred_mood: {}", e))?;
@@ -383,7 +383,7 @@ pub fn publish_voice_memo_draft(
         .map_err(|e| format!("Failed to insert journal entry: {}", e))?;
 
         conn.execute(
-            "UPDATE voice_memos SET entry_id = ?1, reviewed = 1 WHERE id = ?2",
+            "UPDATE voice_memos SET entry_id = ?1, reviewed = 1, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id = ?2",
             params![entry_id, id],
         )
         .map_err(|e| format!("Failed to update voice memo: {}", e))?;

@@ -452,6 +452,19 @@ export function LockScreen() {
           return;
         }
 
+        // Re-verify the recovered password against the stored hash before promoting it.
+        // The recovery key only decrypts an escrowed copy of the password; a corrupted
+        // escrow blob could decrypt cleanly yet yield the wrong password. Without this
+        // check the 2FA branch promotes it via finalizeUnlock (which skips verify_password),
+        // silently unlocking with a key that cannot decrypt entries.
+        const recoveredValid = await verifyUserPassword(recoveredPassword);
+        if (!recoveredValid) {
+          setRecoveryKeyInput('');
+          setIsLoading(false);
+          setError('Recovery key valid but escrow corrupted — derived password does not match.');
+          return;
+        }
+
         // Check if 2FA is enabled
         if (twoFactorStatus?.enabled) {
           // Store the recovered password for use after 2FA verification

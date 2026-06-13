@@ -97,3 +97,5 @@ REPO-HEALTH-*.md
 # Python bytecode
 __pycache__/
 *.pyc
+
+src-tauri/binaries

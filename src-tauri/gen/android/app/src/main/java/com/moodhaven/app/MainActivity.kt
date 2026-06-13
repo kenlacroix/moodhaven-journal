@@ -17,6 +17,7 @@ class MainActivity : TauriActivity() {
     installSplashScreen()
     getPluginManager().load(null, "biometric", BiometricPlugin(this), "{}")
     getPluginManager().load(null, "wear", WearPlugin(this), "{}")
+    getPluginManager().load(null, "opener", OpenerPlugin(this), "{}")
     acquireMulticastLock()
     enableEdgeToEdge()
     super.onCreate(savedInstanceState)

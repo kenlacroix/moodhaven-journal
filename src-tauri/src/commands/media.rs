@@ -638,6 +638,12 @@ pub fn list_entry_media(
 
 /// Decrypt a media file to a temp location and open it with the system viewer.
 /// The temp file is automatically deleted after 60 seconds.
+///
+/// Returns the temp file path **on Android only** (empty string on desktop). On
+/// desktop the OS viewer is launched here; Android has no `Command` launcher, so
+/// the frontend opens the returned path via the `opener` plugin (ACTION_VIEW +
+/// FileProvider). The temp file lives under the app cache dir, which the
+/// FileProvider already exposes via `cache-path` in `file_paths.xml`.
 #[tauri::command]
 pub fn open_media_attachment(
     app: AppHandle,
@@ -645,7 +651,7 @@ pub fn open_media_attachment(
     lock: State<'_, AppLockState>,
     media_id: String,
     password: String,
-) -> Result<(), String> {
+) -> Result<String, String> {
     require_unlocked(&lock)?;
     let (enc_path, filename) = {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
@@ -667,33 +673,43 @@ pub fn open_media_attachment(
     std::fs::write(&temp_path, &plaintext).map_err(|e| format!("Write temp file: {}", e))?;
 
     // Open with platform default viewer
-    let _temp_str = temp_path.to_str().ok_or("Non-UTF8 temp path")?.to_string();
+    let temp_str = temp_path.to_str().ok_or("Non-UTF8 temp path")?.to_string();
 
     #[cfg(target_os = "macos")]
     std::process::Command::new("open")
-        .arg(&_temp_str)
+        .arg(&temp_str)
         .spawn()
         .map_err(|e| format!("open: {}", e))?;
 
     #[cfg(target_os = "windows")]
     std::process::Command::new("cmd")
-        .args(["/c", "start", "", &_temp_str])
+        .args(["/c", "start", "", &temp_str])
         .spawn()
         .map_err(|e| format!("start: {}", e))?;
 
     #[cfg(target_os = "linux")]
     std::process::Command::new("xdg-open")
-        .arg(&_temp_str)
+        .arg(&temp_str)
         .spawn()
         .map_err(|e| format!("xdg-open: {}", e))?;
 
-    // Auto-cleanup after 10 s
+    // Desktop launchers already opened the file; Android hands the path back to
+    // the frontend, which fires an ACTION_VIEW intent via the opener plugin.
+    #[cfg(target_os = "android")]
+    let result_path = temp_str;
+    #[cfg(not(target_os = "android"))]
+    let result_path = {
+        let _ = temp_str;
+        String::new()
+    };
+
+    // Auto-cleanup — long enough for a viewer (or the Android app chooser) to read.
     std::thread::spawn(move || {
-        std::thread::sleep(std::time::Duration::from_secs(10));
+        std::thread::sleep(std::time::Duration::from_secs(60));
         let _ = std::fs::remove_file(&temp_path);
     });
 
-    Ok(())
+    Ok(result_path)
 }
 
 /// Decrypt an image attachment and return a base64-encoded JPEG thumbnail

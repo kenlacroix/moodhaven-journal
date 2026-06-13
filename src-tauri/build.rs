@@ -84,7 +84,9 @@ fn main() {
     // Tauri looks up plugin commands under the plugin's own namespace, not __app-acl__.
     // The permission definitions are read from permissions/wear/**/*.toml.
     tauri_build::try_build(
-        tauri_build::Attributes::new().plugin("wear", tauri_build::InlinedPlugin::new()),
+        tauri_build::Attributes::new()
+            .plugin("wear", tauri_build::InlinedPlugin::new())
+            .plugin("opener", tauri_build::InlinedPlugin::new()),
     )
     .expect("failed to run tauri-build");
 }

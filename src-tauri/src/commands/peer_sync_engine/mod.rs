@@ -408,14 +408,17 @@ fn do_full_restore_client(app: &AppHandle, peer_device_id: &str, host: &str) -> 
         &Msg::Hello {
             did: my_identity.device_id.clone(),
             eph_pub: Some(my_eph_pub_hex),
+            features: local_features(),
         },
     )?;
 
+    // Restore path has no feature-gated phases, so OK features are ignored here.
     let (server_name, server_eph_pub, server_challenge) = match read_msg(&mut stream)? {
         Msg::Ok {
             name,
             eph_pub,
             challenge,
+            ..
         } => (name, eph_pub, challenge),
         Msg::NotTrusted { server_device_id } => {
             // Auto-revoke stale trust entry.
@@ -619,8 +622,12 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
 
     // Step 1: Read HELLO (plaintext)
     let hello = read_msg(&mut stream)?;
-    let (client_device_id, client_eph_pub) = match hello {
-        Msg::Hello { did, eph_pub } => (did, eph_pub),
+    let (client_device_id, client_eph_pub, client_features) = match hello {
+        Msg::Hello {
+            did,
+            eph_pub,
+            features,
+        } => (did, eph_pub, features),
         other => return Err(format!("Expected HELLO, got: {other:?}")),
     };
 
@@ -672,6 +679,7 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
             name: my_identity.device_name.clone(),
             eph_pub: Some(my_eph_pub_hex),
             challenge: Some(challenge_hex),
+            features: local_features(),
         },
     )?;
 
@@ -1151,59 +1159,67 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
         },
     )?;
 
-    // ── Voice memos phase ──────────────────────────────────────────────────────
-
-    let vm_to_send = {
-        let db = app
-            .try_state::<Database>()
-            .ok_or_else(|| "No DB state".to_string())?;
-        let conn = db.conn.lock().map_err(|e| e.to_string())?;
-        db_get_voice_memos_full(&conn, &need_voice_memos_by_client)?
-    };
-    let mut voice_memos_sent = 0usize;
-    for (row, file_path) in vm_to_send {
-        match read_voice_memo_audio_b64(app, &file_path) {
-            Ok(audio_base64) => {
-                write_msg_enc(&mut stream, &key, &Msg::VoiceMemo { row, audio_base64 })?;
-                voice_memos_sent += 1;
-            }
-            Err(e) => log::warn!("[sync] Server: skip voice memo {} — {e}", row.id),
-        }
-    }
-    write_msg_enc(
-        &mut stream,
-        &key,
-        &Msg::VoiceMemosDone {
-            sent: voice_memos_sent,
-        },
-    )?;
-
+    // ── Voice memos phase (only when BOTH peers advertise `voice_memos`) ─────────
+    // `recv_voice_memos` is declared outside the gate so the apply transaction
+    // below still has it in scope when the phase is skipped (the peer is an older
+    // build that omits the feature, so we stay on the legacy message sequence).
     let mut recv_voice_memos: Vec<(SyncVoiceMemoRow, String)> = Vec::new();
-    loop {
-        match read_msg_enc(&mut stream, &key)? {
-            Msg::VoiceMemo { row, audio_base64 } => {
-                if recv_voice_memos.len() >= need_voice_memos_by_me.len() + 1000 {
-                    return Err("Sync protocol error: unexpected voice memo count".into());
+    let mut voice_memos_sent = 0usize;
+    if client_features.iter().any(|f| f == FEATURE_VOICE_MEMOS) {
+        let vm_to_send = {
+            let db = app
+                .try_state::<Database>()
+                .ok_or_else(|| "No DB state".to_string())?;
+            let conn = db.conn.lock().map_err(|e| e.to_string())?;
+            db_get_voice_memos_full(&conn, &need_voice_memos_by_client)?
+        };
+        for (row, file_path) in vm_to_send {
+            match read_voice_memo_audio_b64(app, &file_path) {
+                Ok(audio_base64) => {
+                    write_msg_enc(&mut stream, &key, &Msg::VoiceMemo { row, audio_base64 })?;
+                    voice_memos_sent += 1;
                 }
-                recv_voice_memos.push((row, audio_base64));
+                Err(e) => log::warn!("[sync] Server: skip voice memo {} — {e}", row.id),
             }
-            Msg::VoiceMemosDone { sent } => {
-                log::info!(
-                    "[sync] Server: client sent {sent} voice memos, we received {}",
-                    recv_voice_memos.len()
-                );
-                break;
-            }
-            other => return Err(format!("Unexpected msg in voice memos recv: {other:?}")),
         }
+        write_msg_enc(
+            &mut stream,
+            &key,
+            &Msg::VoiceMemosDone {
+                sent: voice_memos_sent,
+            },
+        )?;
+
+        loop {
+            match read_msg_enc(&mut stream, &key)? {
+                Msg::VoiceMemo { row, audio_base64 } => {
+                    if recv_voice_memos.len() >= need_voice_memos_by_me.len() + 1000 {
+                        return Err("Sync protocol error: unexpected voice memo count".into());
+                    }
+                    recv_voice_memos.push((row, audio_base64));
+                }
+                Msg::VoiceMemosDone { sent } => {
+                    log::info!(
+                        "[sync] Server: client sent {sent} voice memos, we received {}",
+                        recv_voice_memos.len()
+                    );
+                    break;
+                }
+                other => return Err(format!("Unexpected msg in voice memos recv: {other:?}")),
+            }
+        }
+        write_msg_enc(
+            &mut stream,
+            &key,
+            &Msg::VoiceMemosAck {
+                recv: recv_voice_memos.len(),
+            },
+        )?;
+    } else {
+        log::info!(
+            "[sync] peer does not advertise `{FEATURE_VOICE_MEMOS}` — skipping voice memo phase"
+        );
     }
-    write_msg_enc(
-        &mut stream,
-        &key,
-        &Msg::VoiceMemosAck {
-            recv: recv_voice_memos.len(),
-        },
-    )?;
 
     // Apply all received data in one atomic transaction — TCP drop before COMMIT
     // leaves the DB untouched; partial state is impossible.
@@ -1464,16 +1480,20 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
         &Msg::Hello {
             did: my_identity.device_id.clone(),
             eph_pub: Some(my_eph_pub_hex),
+            features: local_features(),
         },
     )?;
 
-    // Step 2: Read OK (plaintext) — server includes eph_pub and HELLO challenge.
-    let (server_name, server_eph_pub, server_challenge) = match read_msg(&mut stream)? {
+    // Step 2: Read OK (plaintext) — server includes eph_pub, HELLO challenge, and
+    // its advertised protocol features (used to gate the voice-memo phase below).
+    let (server_name, server_eph_pub, server_challenge, server_features) = match read_msg(&mut stream)?
+    {
         Msg::Ok {
             name,
             eph_pub,
             challenge,
-        } => (name, eph_pub, challenge),
+            features,
+        } => (name, eph_pub, challenge, features),
         Msg::NotTrusted { server_device_id } => {
             // The server no longer has us in its trusted list — auto-revoke it
             // from our side so both devices are in sync without manual intervention.
@@ -1920,68 +1940,76 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
         }
     }
 
-    // ── Voice memos phase ──────────────────────────────────────────────────────
-
-    // Receive voice memos from server — collect, apply after close
+    // ── Voice memos phase (only when BOTH peers advertise `voice_memos`) ─────────
+    // `recv_voice_memos` is declared outside the gate so the apply transaction
+    // below still has it in scope when the phase is skipped (peer is an older build
+    // that omits the feature, so we stay on the legacy message sequence).
     let mut recv_voice_memos: Vec<(SyncVoiceMemoRow, String)> = Vec::new();
-    loop {
-        match read_msg_enc(&mut stream, &key)? {
-            Msg::VoiceMemo { row, audio_base64 } => {
-                if recv_voice_memos.len() >= need_voice_memos_by_me.len() + 1000 {
-                    return Err("Sync protocol error: unexpected voice memo count".into());
-                }
-                recv_voice_memos.push((row, audio_base64));
-            }
-            Msg::VoiceMemosDone { sent } => {
-                log::info!(
-                    "[sync] Client: server sent {sent} voice memos, we received {}",
-                    recv_voice_memos.len()
-                );
-                break;
-            }
-            other => return Err(format!("Unexpected msg in voice memos recv: {other:?}")),
-        }
-    }
-
-    // Send voice memos server needs
-    let vm_to_send = {
-        let db = app
-            .try_state::<Database>()
-            .ok_or_else(|| "No DB state".to_string())?;
-        let conn = db.conn.lock().map_err(|e| e.to_string())?;
-        db_get_voice_memos_full(&conn, &need_voice_memos_by_server)?
-    };
     let mut voice_memos_sent = 0usize;
-    for (row, file_path) in vm_to_send {
-        match read_voice_memo_audio_b64(app, &file_path) {
-            Ok(audio_base64) => {
-                write_msg_enc(&mut stream, &key, &Msg::VoiceMemo { row, audio_base64 })?;
-                voice_memos_sent += 1;
+    if server_features.iter().any(|f| f == FEATURE_VOICE_MEMOS) {
+        // Receive voice memos from server — collect, apply after close
+        loop {
+            match read_msg_enc(&mut stream, &key)? {
+                Msg::VoiceMemo { row, audio_base64 } => {
+                    if recv_voice_memos.len() >= need_voice_memos_by_me.len() + 1000 {
+                        return Err("Sync protocol error: unexpected voice memo count".into());
+                    }
+                    recv_voice_memos.push((row, audio_base64));
+                }
+                Msg::VoiceMemosDone { sent } => {
+                    log::info!(
+                        "[sync] Client: server sent {sent} voice memos, we received {}",
+                        recv_voice_memos.len()
+                    );
+                    break;
+                }
+                other => return Err(format!("Unexpected msg in voice memos recv: {other:?}")),
             }
-            Err(e) => log::warn!("[sync] Client: skip voice memo {} — {e}", row.id),
         }
-    }
-    write_msg_enc(
-        &mut stream,
-        &key,
-        &Msg::VoiceMemosDone {
-            sent: voice_memos_sent,
-        },
-    )?;
 
-    // Read VOICE_MEMOS_ACK (tolerate EOF — server closes write-half after this)
-    match read_msg_enc(&mut stream, &key) {
-        Ok(Msg::VoiceMemosAck { recv }) => {
-            log::info!("[sync] Client: server confirmed receipt of {recv} voice memos");
+        // Send voice memos server needs
+        let vm_to_send = {
+            let db = app
+                .try_state::<Database>()
+                .ok_or_else(|| "No DB state".to_string())?;
+            let conn = db.conn.lock().map_err(|e| e.to_string())?;
+            db_get_voice_memos_full(&conn, &need_voice_memos_by_server)?
+        };
+        for (row, file_path) in vm_to_send {
+            match read_voice_memo_audio_b64(app, &file_path) {
+                Ok(audio_base64) => {
+                    write_msg_enc(&mut stream, &key, &Msg::VoiceMemo { row, audio_base64 })?;
+                    voice_memos_sent += 1;
+                }
+                Err(e) => log::warn!("[sync] Client: skip voice memo {} — {e}", row.id),
+            }
         }
-        Ok(other) => {
-            log::info!("[sync] Client: unexpected message after VOICE_MEMOS_DONE: {other:?}");
+        write_msg_enc(
+            &mut stream,
+            &key,
+            &Msg::VoiceMemosDone {
+                sent: voice_memos_sent,
+            },
+        )?;
+
+        // Read VOICE_MEMOS_ACK (tolerate EOF — server closes write-half after this)
+        match read_msg_enc(&mut stream, &key) {
+            Ok(Msg::VoiceMemosAck { recv }) => {
+                log::info!("[sync] Client: server confirmed receipt of {recv} voice memos");
+            }
+            Ok(other) => {
+                log::info!("[sync] Client: unexpected message after VOICE_MEMOS_DONE: {other:?}");
+            }
+            Err(e) => {
+                log::info!(
+                    "[sync] Client: VOICE_MEMOS_ACK read ended early ({e}), treating as success"
+                );
+            }
         }
-        Err(e) => {
-            log::info!(
-                "[sync] Client: VOICE_MEMOS_ACK read ended early ({e}), treating as success"
-            );
-        }
+    } else {
+        log::info!(
+            "[sync] peer does not advertise `{FEATURE_VOICE_MEMOS}` — skipping voice memo phase"
+        );
     }
 
     // Close both halves promptly.

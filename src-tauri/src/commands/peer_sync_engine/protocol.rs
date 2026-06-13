@@ -3,6 +3,19 @@
 use crate::db::JournalEntryRow;
 use serde::{Deserialize, Serialize};
 
+// ── Protocol features ─────────────────────────────────────────────────────────
+
+/// Feature flag advertised in the HELLO/OK handshake when a peer supports the
+/// voice-memo sync phase. The phase only runs when BOTH peers advertise it, so a
+/// device on this build syncing with an older peer (which omits the flag) skips
+/// the phase entirely and the connection stays on the legacy message sequence.
+pub const FEATURE_VOICE_MEMOS: &str = "voice_memos";
+
+/// The protocol features this build supports, advertised in HELLO and OK.
+pub fn local_features() -> Vec<String> {
+    vec![FEATURE_VOICE_MEMOS.to_string()]
+}
+
 // ── Port formula ──────────────────────────────────────────────────────────────
 
 /// Derive the sync port from a device_id.
@@ -71,13 +84,45 @@ mod tests {
         let msg = Msg::Hello {
             did: "dev-001".into(),
             eph_pub: None,
+            features: Vec::new(),
         };
         let json = serde_json::to_string(&msg).unwrap();
         assert!(
             !json.contains("eph_pub"),
             "absent eph_pub must be omitted from JSON"
         );
+        assert!(
+            !json.contains("features"),
+            "empty features must be omitted from JSON (back-compat with old peers)"
+        );
         assert!(json.contains("dev-001"));
+    }
+
+    #[test]
+    fn msg_hello_omits_features_decodes_to_empty() {
+        // An older peer's HELLO has no `features` key; it must deserialize with an
+        // empty feature list so we skip feature-gated phases against it.
+        let json = r#"{"t":"hello","did":"old-peer"}"#;
+        match serde_json::from_str::<Msg>(json).unwrap() {
+            Msg::Hello { features, .. } => assert!(features.is_empty()),
+            _ => panic!("wrong variant"),
+        }
+    }
+
+    #[test]
+    fn msg_hello_round_trips_features() {
+        let msg = Msg::Hello {
+            did: "dev-003".into(),
+            eph_pub: None,
+            features: local_features(),
+        };
+        let back: Msg = serde_json::from_str(&serde_json::to_string(&msg).unwrap()).unwrap();
+        match back {
+            Msg::Hello { features, .. } => {
+                assert!(features.iter().any(|f| f == FEATURE_VOICE_MEMOS))
+            }
+            _ => panic!("wrong variant"),
+        }
     }
 
     #[test]
@@ -85,6 +130,7 @@ mod tests {
         let msg = Msg::Hello {
             did: "dev-002".into(),
             eph_pub: Some("deadbeef".into()),
+            features: Vec::new(),
         };
         let json = serde_json::to_string(&msg).unwrap();
         assert!(json.contains("deadbeef"));
@@ -131,6 +177,12 @@ pub enum Msg {
         /// Absent in pre-v2 peers — falls back to static key derivation.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         eph_pub: Option<String>,
+        /// Optional protocol-feature advertisement (e.g. `"voice_memos"`). Peers
+        /// that predate a feature omit it, so a phase is only run when BOTH sides
+        /// advertise it — see `FEATURE_VOICE_MEMOS`. `#[serde(default)]` keeps
+        /// older peers (which omit the field) deserializing.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        features: Vec<String>,
     },
     Ok {
         name: String,
@@ -141,6 +193,9 @@ pub enum Msg {
         /// containing Ed25519(b"moodhaven-hello-auth-v1:" || nonce_bytes).
         #[serde(default, skip_serializing_if = "Option::is_none")]
         challenge: Option<String>,
+        /// Protocol-feature advertisement (see `Hello::features`).
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        features: Vec<String>,
     },
     /// Client response to the server's HELLO challenge.
     /// signature = hex(Ed25519_sign(b"moodhaven-hello-auth-v1:" || challenge_bytes))

@@ -86,7 +86,8 @@ fn main() {
     tauri_build::try_build(
         tauri_build::Attributes::new()
             .plugin("wear", tauri_build::InlinedPlugin::new())
-            .plugin("opener", tauri_build::InlinedPlugin::new()),
+            .plugin("opener", tauri_build::InlinedPlugin::new())
+            .plugin("securekey", tauri_build::InlinedPlugin::new()),
     )
     .expect("failed to run tauri-build");
 }

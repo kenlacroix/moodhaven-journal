@@ -383,6 +383,9 @@ pub fn run() {
         // Registers the Android-native OpenerPlugin so `invoke('plugin:opener|*')`
         // routes to the Kotlin OpenerPlugin (system viewer via ACTION_VIEW intent).
         .plugin(tauri::plugin::Builder::<_, ()>::new("opener").build())
+        // Registers the Android-native SecureKeyPlugin so `invoke('plugin:securekey|*')`
+        // routes to the Kotlin SecureKeyPlugin (AndroidKeyStore-backed cloud token key).
+        .plugin(tauri::plugin::Builder::<_, ()>::new("securekey").build())
         .setup(|app| {
             // If a full-restore pending file exists, verify its SHA-256 checksum then
             // swap it in before opening the DB.  This prevents a tampered pending

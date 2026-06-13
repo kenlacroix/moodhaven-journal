@@ -229,6 +229,7 @@ commands.allow = [
   "cloud_provider_disconnect",
   "cloud_provider_refresh_token",
   "cloud_provider_available",
+  "cloud_set_token_key",
 ]
 
 [[permission]]

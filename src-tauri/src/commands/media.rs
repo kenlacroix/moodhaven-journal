@@ -439,8 +439,9 @@ const MAX_IMAGE_EDGE: u32 = 2048;
 const JPEG_QUALITY: u8 = 82;
 
 /// Recompress an image before encryption: downscale to [`MAX_IMAGE_EDGE`] on the longest
-/// side and re-encode in the *same* format. Encoding from decoded raw pixels also strips
-/// EXIF/GPS metadata (a privacy win that fits the threat model). Format is preserved so the
+/// side and re-encode in the *same* format. When recompression happens, encoding from decoded
+/// raw pixels also strips EXIF/GPS metadata (a best-effort privacy win — the pass-through
+/// cases below keep the original bytes, metadata included). Format is preserved so the
 /// stored filename, extension, and MIME type stay correct — JPEG→JPEG (quality-capped),
 /// PNG→PNG (lossless).
 ///

@@ -7,6 +7,7 @@
 
 import { useEffect, useState, useCallback, lazy, Suspense } from 'react';
 import { useAppBanners } from './hooks/useAppBanners';
+import { useStoragePersistence } from './hooks/useStoragePersistence';
 import { BreakoutWriterApp } from './components/breakout/BreakoutWriterApp';
 
 // Views are lazy-loaded: only the initial WritingView is preloaded; all others
@@ -59,6 +60,7 @@ function App() {
 function MainApp() {
   const { isUnlocked, isInitialized, checkInitialization, lock, sessionPassword } = useAppStore();
   const loadSettings = useSettingsStore((s) => s.loadSettings);
+  const setScrollToSection = useSettingsStore((s) => s.setScrollToSection);
   const hasSeenTutorial = useSettingsStore((s) => s.settings.tutorial?.hasSeenTutorial);
   const hasSeenDisclaimer = useSettingsStore((s) => s.settings.wellness?.hasSeenDisclaimer ?? true);
   const stillhavenEnabled = useSettingsStore((s) => s.settings.wellness?.stillhavenEnabled ?? false);
@@ -131,6 +133,12 @@ function MainApp() {
     onThisDayOldestYear,
     dismissOnThisDay,
   } = useAppBanners(isUnlocked && !!sessionPassword);
+
+  // Browser/PWA only: request durable IndexedDB storage once per session; nudge a
+  // backup if the browser denies it (eviction would lose the journal).
+  const { showBackupNudge, dismissBackupNudge } = useStoragePersistence(
+    isUnlocked && !!sessionPassword
+  );
 
   useEffect(() => {
     const init = async () => {
@@ -474,6 +482,36 @@ function MainApp() {
           <button
             type="button"
             onClick={dismissOnThisDay}
+            aria-label="Dismiss"
+            className="flex-shrink-0 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      )}
+
+      {/* Browser/PWA: durable storage denied — nudge an encrypted backup */}
+      {showBackupNudge && (
+        <div className="fixed bottom-5 left-5 z-50 flex items-start gap-3 px-4 py-3 rounded-xl bg-white dark:bg-slate-800 border border-amber-300 dark:border-amber-700 shadow-lg max-w-xs animate-slide-up" role="alert">
+          <span className="text-base mt-0.5">⚠️</span>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-slate-800 dark:text-slate-100">Back up your journal</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              This browser may clear MoodHaven's stored data when disk space runs low. Export an encrypted backup to be safe.
+            </p>
+            <button
+              type="button"
+              onClick={() => { dismissBackupNudge(); setScrollToSection('export'); handleNavigate('settings'); }}
+              className="mt-1.5 text-xs font-medium text-violet-600 dark:text-violet-400 hover:underline"
+            >
+              Back up now
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={dismissBackupNudge}
             aria-label="Dismiss"
             className="flex-shrink-0 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
           >

@@ -13,6 +13,7 @@ export default defineConfig({
     css: false,
     coverage: {
       provider: 'v8',
+      reporter: ['text', 'lcov'],
       include: ['src/lib/**', 'src/stores/**', 'src/components/**'],
       exclude: ['src/test/**', 'src/**/*.test.*'],
     },

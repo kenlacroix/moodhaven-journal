@@ -11,6 +11,7 @@
 <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-22c55e?style=flat-square" alt="License"></a>
 <a href="https://github.com/kenlacroix/moodhaven-journal/stargazers"><img src="https://img.shields.io/github/stars/kenlacroix/moodhaven-journal?style=flat-square&color=f59e0b" alt="GitHub Stars"></a>
 <a href="https://github.com/kenlacroix/moodhaven-journal/actions/workflows/test.yml"><img src="https://img.shields.io/github/actions/workflow/status/kenlacroix/moodhaven-journal/test.yml?style=flat-square&label=tests" alt="Tests"></a>
+<a href="https://sonarcloud.io/summary/new_code?id=kenlacroix_moodhaven-journal"><img src="https://sonarcloud.io/api/project_badges/measure?project=kenlacroix_moodhaven-journal&metric=alert_status" alt="Quality Gate Status"></a>
 <a href="#installation"><img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Web-0ea5e9?style=flat-square" alt="Platform"></a>
 <a href="#watch--phone-companion-beta"><img src="https://img.shields.io/badge/companion-Wear%20OS%20%7C%20Android-f97316?style=flat-square" alt="Companion"></a>
 <a href="https://tauri.app"><img src="https://img.shields.io/badge/built%20with-Tauri%202-ffd866?style=flat-square" alt="Built with Tauri"></a>

@@ -7,8 +7,8 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 class MainActivity : TauriActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     installSplashScreen()
-    pluginManager.load(null, "biometric", BiometricPlugin(this), "{}")
-    pluginManager.load(null, "wear", WearPlugin(this), "{}")
+    getPluginManager().load(null, "biometric", BiometricPlugin(this), "{}")
+    getPluginManager().load(null, "wear", WearPlugin(this), "{}")
     enableEdgeToEdge()
     super.onCreate(savedInstanceState)
   }

@@ -385,12 +385,14 @@ pub fn get_wellbeing_context(db: &Database) -> Result<WellbeingContext, String> 
         )
         .ok();
 
-    // Yesterday's mood average and entry count
+    // Yesterday's mood average and entry count. `created_at` is stored UTC, but
+    // `yesterday` is the user's LOCAL date — compare on the entry's local date
+    // (`'localtime'`) so an evening entry isn't mis-bucketed across the UTC boundary.
     let (yesterday_mood_avg, yesterday_entry_count): (Option<f64>, i32) = conn
         .query_row(
             "SELECT AVG(CAST(mood AS REAL)), COUNT(*)
              FROM journal_entries
-             WHERE date(created_at) = ?1",
+             WHERE date(created_at, 'localtime') = ?1",
             params![yesterday],
             |r| Ok((r.get(0)?, r.get::<_, i32>(1)?)),
         )
@@ -400,7 +402,7 @@ pub fn get_wellbeing_context(db: &Database) -> Result<WellbeingContext, String> 
     let streak_days: i32 = {
         let mut stmt = conn
             .prepare(
-                "SELECT DISTINCT date(created_at) as d
+                "SELECT DISTINCT date(created_at, 'localtime') as d
                  FROM journal_entries
                  ORDER BY d DESC
                  LIMIT 1000",
@@ -659,9 +661,14 @@ mod tests {
 
     fn insert_entry_yesterday(db: &Database, id: &str, mood: i32) {
         let conn = db.conn.lock().unwrap();
+        // Store LOCAL yesterday-at-noon as a UTC timestamp (created_at is UTC). Noon avoids
+        // any date-boundary ambiguity, and `date(created_at,'localtime')` maps it back to the
+        // user's local yesterday — matching get_wellbeing_context's local-date comparison.
         conn.execute(
             "INSERT INTO journal_entries (id, mood, created_at, updated_at)
-             VALUES (?1, ?2, date('now','-1 day') || 'T12:00:00', date('now','-1 day') || 'T12:00:00')",
+             VALUES (?1, ?2,
+                 datetime(date('now','localtime','-1 day') || ' 12:00:00', 'utc'),
+                 datetime(date('now','localtime','-1 day') || ' 12:00:00', 'utc'))",
             params![id, mood],
         )
         .unwrap();

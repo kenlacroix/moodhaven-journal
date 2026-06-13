@@ -63,7 +63,8 @@ use protocol::*;
 
 use chrono::Utc;
 use serde::Serialize;
-use std::net::{TcpListener, TcpStream, ToSocketAddrs};
+use socket2::{Domain, Protocol as SockProtocol, Socket, Type as SockType};
+use std::net::{SocketAddr, TcpListener, TcpStream, ToSocketAddrs};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     mpsc, Mutex,
@@ -1874,14 +1875,31 @@ pub fn peer_start_sync_server(
     let identity = get_or_create_device_identity(&app)?;
     let port = sync_port_for_device(&identity.device_id);
 
-    // Bind listener
-    let listener = TcpListener::bind(format!("0.0.0.0:{port}"))
+    // Bind listener with SO_REUSEADDR. Without it, a re-bind fails with
+    // "Address already in use" while sockets from the previous sync session sit in
+    // TIME_WAIT (~60s) — which happens constantly on Android, where the app is
+    // killed and relaunched often, leaving the peer-sync server unable to start and
+    // breaking all sync until the kernel clears TIME_WAIT.
+    let addr: SocketAddr = format!("0.0.0.0:{port}")
+        .parse()
+        .map_err(|e| format!("parse sync addr: {e}"))?;
+    let socket = Socket::new(Domain::IPV4, SockType::STREAM, Some(SockProtocol::TCP))
+        .map_err(|e| format!("create sync socket: {e}"))?;
+    socket
+        .set_reuse_address(true)
+        .map_err(|e| format!("set SO_REUSEADDR: {e}"))?;
+    socket
+        .bind(&addr.into())
         .map_err(|e| format!("bind sync server on port {port}: {e}"))?;
+    socket
+        .listen(128)
+        .map_err(|e| format!("listen sync server on port {port}: {e}"))?;
+    let listener: TcpListener = socket.into();
     listener
         .set_nonblocking(true)
         .map_err(|e| format!("set nonblocking: {e}"))?;
 
-    log::info!("[sync] Server bound on port {port}");
+    log::info!("[sync] Server bound on port {port} (SO_REUSEADDR)");
 
     let (stop_tx, stop_rx) = mpsc::sync_channel(1);
     let app_clone = app.clone();

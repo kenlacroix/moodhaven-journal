@@ -847,6 +847,7 @@ pub fn run() {
             commands::cloud_provider_status,
             commands::cloud_provider_disconnect,
             commands::cloud_provider_refresh_token,
+            commands::cloud_provider_available,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

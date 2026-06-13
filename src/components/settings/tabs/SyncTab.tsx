@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import type { AppSettings, StorageBackend } from '../../../types/settings';
 import { SettingSection } from '../SettingSection';
 import { SettingSelect } from '../SettingSelect';
@@ -6,6 +6,7 @@ import { SettingInput } from '../SettingInput';
 import { testConnection as testWebDAVConnection } from '../../../lib/services/webdavService';
 import {
   cloudProviderAuthStart,
+  cloudProviderAvailable,
   cloudProviderDisconnect,
   syncUpload,
   syncDownload,
@@ -41,6 +42,23 @@ export function SyncTab({
   const [isConnecting, setIsConnecting] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState<{ text: string; error: boolean } | null>(null);
+  // Managed providers are gated behind compile-time creds; show "coming soon"
+  // rather than a dead-end connect button while they're placeholders.
+  const [providerReady, setProviderReady] = useState({ dropbox: true, gdrive: true });
+
+  useEffect(() => {
+    let active = true;
+    Promise.all([cloudProviderAvailable('dropbox'), cloudProviderAvailable('gdrive')])
+      .then(([dropbox, gdrive]) => {
+        if (active) setProviderReady({ dropbox, gdrive });
+      })
+      .catch(() => {
+        if (active) setProviderReady({ dropbox: false, gdrive: false });
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const clearMessage = useCallback(() => setSyncMessage(null), []);
 
@@ -191,8 +209,8 @@ export function SyncTab({
           options={[
             { value: 'local', label: 'Local only' },
             { value: 'byocloud', label: 'Sync folder (iCloud/Drive/Dropbox)' },
-            { value: 'dropbox', label: 'Dropbox' },
-            { value: 'gdrive', label: 'Google Drive' },
+            { value: 'dropbox', label: providerReady.dropbox ? 'Dropbox' : 'Dropbox (coming soon)' },
+            { value: 'gdrive', label: providerReady.gdrive ? 'Google Drive' : 'Google Drive (coming soon)' },
             { value: 'webdav', label: 'WebDAV' },
           ]}
           onChange={(v) => setStorageType(v as StorageBackend)}
@@ -329,6 +347,11 @@ export function SyncTab({
                     Disconnect
                   </button>
                 </>
+              ) : cloudProviderKey && !providerReady[cloudProviderKey] ? (
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  {providerLabel} sync is coming soon. For now, use <strong>WebDAV</strong> or a{' '}
+                  <strong>sync folder</strong> to back up across devices.
+                </p>
               ) : (
                 <button
                   type="button"

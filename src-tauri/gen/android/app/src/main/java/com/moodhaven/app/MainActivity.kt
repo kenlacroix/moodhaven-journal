@@ -18,6 +18,7 @@ class MainActivity : TauriActivity() {
     getPluginManager().load(null, "biometric", BiometricPlugin(this), "{}")
     getPluginManager().load(null, "wear", WearPlugin(this), "{}")
     getPluginManager().load(null, "opener", OpenerPlugin(this), "{}")
+    getPluginManager().load(null, "securekey", SecureKeyPlugin(this), "{}")
     acquireMulticastLock()
     enableEdgeToEdge()
     super.onCreate(savedInstanceState)

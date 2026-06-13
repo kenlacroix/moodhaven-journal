@@ -383,6 +383,9 @@ pub fn run() {
         // Registers the Android-native OpenerPlugin so `invoke('plugin:opener|*')`
         // routes to the Kotlin OpenerPlugin (system viewer via ACTION_VIEW intent).
         .plugin(tauri::plugin::Builder::<_, ()>::new("opener").build())
+        // Registers the Android-native SecureKeyPlugin so `invoke('plugin:securekey|*')`
+        // routes to the Kotlin SecureKeyPlugin (AndroidKeyStore-backed cloud token key).
+        .plugin(tauri::plugin::Builder::<_, ()>::new("securekey").build())
         .setup(|app| {
             // If a full-restore pending file exists, verify its SHA-256 checksum then
             // swap it in before opening the DB.  This prevents a tampered pending
@@ -582,6 +585,9 @@ pub fn run() {
 
             // STT model download state (cancellation tokens)
             app.manage(commands::DownloadState::default());
+
+            // Cloud-token key override (Android KeyStore-backed; see cloud_providers)
+            app.manage(commands::cloud_providers::CloudTokenKeyOverride::default());
 
             // Sweep leftover preview temp files from previous sessions
             let _ = commands::sweep_preview_temp(app.handle().clone());
@@ -848,6 +854,7 @@ pub fn run() {
             commands::cloud_provider_upload_blob,
             commands::cloud_provider_download_blob,
             commands::cloud_provider_status,
+            commands::cloud_set_token_key,
             commands::cloud_provider_disconnect,
             commands::cloud_provider_refresh_token,
             commands::cloud_provider_available,

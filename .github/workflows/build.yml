@@ -61,25 +61,30 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # cmake_extra carries a baseline-ISA flag set on every x86-64 target so the
+          # whisper-cli sidecar runs on processors without AVX2/FMA/BMI2 (older CPUs,
+          # Pentium/Celeron, many virtualised CPUs). Without it ggml defaults to AVX2
+          # on x86-64 and the sidecar dies with an illegal-instruction fault. SSE4.2 is
+          # kept (universal since ~2010). arm64 uses NEON and is unaffected.
           - platform: Linux (x86_64)
             os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
             whisper_binary: whisper-x86_64-unknown-linux-gnu
-            cmake_extra: ""
+            cmake_extra: "-DGGML_AVX=OFF -DGGML_AVX2=OFF -DGGML_FMA=OFF -DGGML_F16C=OFF -DGGML_BMI2=OFF"
             cross: false
 
           - platform: Windows (x86_64)
             os: windows-latest
             target: x86_64-pc-windows-msvc
             whisper_binary: whisper-x86_64-pc-windows-msvc.exe
-            cmake_extra: ""
+            cmake_extra: "-DGGML_AVX=OFF -DGGML_AVX2=OFF -DGGML_FMA=OFF -DGGML_F16C=OFF -DGGML_BMI2=OFF"
             cross: false
 
           - platform: macOS (x86_64)
             os: macos-latest
             target: x86_64-apple-darwin
             whisper_binary: whisper-x86_64-apple-darwin
-            cmake_extra: "-DCMAKE_OSX_ARCHITECTURES=x86_64"
+            cmake_extra: "-DCMAKE_OSX_ARCHITECTURES=x86_64 -DGGML_AVX=OFF -DGGML_AVX2=OFF -DGGML_FMA=OFF -DGGML_F16C=OFF -DGGML_BMI2=OFF"
             cross: false
 
           - platform: macOS (Apple Silicon)
@@ -132,7 +137,7 @@ jobs:
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5.0.5
         with:
           path: src-tauri/binaries/${{ matrix.whisper_binary }}
-          key: whisper-${{ matrix.whisper_binary }}-v1.7.4
+          key: whisper-${{ matrix.whisper_binary }}-v1.7.4-baseline-isa
 
       - name: Build whisper-cli sidecar
         if: steps.whisper_cache.outputs.cache-hit != 'true'

@@ -470,6 +470,37 @@ pub async fn stt_delete_model(app: AppHandle, filename: String) -> Result<(), St
     Ok(())
 }
 
+/// Detect the failure that occurs when the whisper.cpp sidecar runs on a CPU
+/// lacking the SIMD instructions it was compiled for: the process dies with an
+/// illegal-instruction fault before producing any output. Surfacing a clear
+/// message lets the UI explain that transcription isn't supported on this
+/// processor instead of a generic "Whisper failed: exit code …".
+///
+/// - Windows reports `STATUS_ILLEGAL_INSTRUCTION` (0xC000001D) or
+///   `STATUS_PRIVILEGED_INSTRUCTION` (0xC0000096) as the process exit code.
+/// - Unix kills the process with `SIGILL`; tauri-plugin-shell surfaces signal
+///   death as `code == None`. A genuine SIMD fault crashes before whisper writes
+///   its init banner, so we additionally require empty output to avoid
+///   misclassifying ordinary non-zero exits.
+pub(crate) fn cpu_unsupported_message(
+    code: Option<i32>,
+    stdout: &[u8],
+    stderr: &[u8],
+) -> Option<String> {
+    const STATUS_ILLEGAL_INSTRUCTION: i32 = -1_073_741_795; // 0xC000001D
+    const STATUS_PRIVILEGED_INSTRUCTION: i32 = -1_073_741_674; // 0xC0000096
+    let illegal = matches!(
+        code,
+        Some(STATUS_ILLEGAL_INSTRUCTION) | Some(STATUS_PRIVILEGED_INSTRUCTION)
+    ) || (cfg!(unix) && code.is_none() && stdout.is_empty() && stderr.is_empty());
+
+    illegal.then(|| {
+        "Speech-to-text isn't supported on this device's processor. It requires a \
+         CPU with SSE4.2 (most processors from 2010 onward). Transcription was skipped."
+            .to_string()
+    })
+}
+
 /// Transcribe audio using whisper.cpp sidecar
 #[command]
 pub async fn stt_transcribe(
@@ -534,6 +565,11 @@ pub async fn stt_transcribe(
     let _ = fs::remove_file(&audio_path);
 
     if !output.status.success() {
+        if let Some(msg) =
+            cpu_unsupported_message(output.status.code(), &output.stdout, &output.stderr)
+        {
+            return Err(msg);
+        }
         let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
         let detail = if !stderr.trim().is_empty() {
@@ -635,6 +671,11 @@ pub async fn stt_transcribe_timestamped(
 
     if !output.status.success() {
         let _ = fs::remove_file(&json_path);
+        if let Some(msg) =
+            cpu_unsupported_message(output.status.code(), &output.stdout, &output.stderr)
+        {
+            return Err(msg);
+        }
         let stderr = String::from_utf8_lossy(&output.stderr);
         // Fall back gracefully: return plain text from stdout if available
         let plain_text = String::from_utf8_lossy(&output.stdout).trim().to_string();
@@ -815,5 +856,29 @@ mod tests {
         assert!(model_url("evil.sh").is_err());
         assert!(model_url("../../moodhaven.db").is_err());
         assert!(model_url("ggml-base.en.bin.malicious").is_err());
+    }
+
+    #[test]
+    fn cpu_unsupported_detects_windows_illegal_instruction() {
+        // STATUS_ILLEGAL_INSTRUCTION / STATUS_PRIVILEGED_INSTRUCTION, empty output.
+        assert!(cpu_unsupported_message(Some(-1_073_741_795), b"", b"").is_some());
+        assert!(cpu_unsupported_message(Some(-1_073_741_674), b"", b"").is_some());
+    }
+
+    #[test]
+    fn cpu_unsupported_ignores_normal_failures() {
+        // An ordinary non-zero exit with a diagnostic is a real error, not a CPU fault.
+        assert!(cpu_unsupported_message(Some(1), b"", b"error: bad model").is_none());
+        // Success with output is never flagged.
+        assert!(cpu_unsupported_message(Some(0), b"hello", b"").is_none());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn cpu_unsupported_detects_unix_signal_death() {
+        // SIGILL with no output (crash before whisper logs its banner).
+        assert!(cpu_unsupported_message(None, b"", b"").is_some());
+        // But a process that logged before dying is treated as an ordinary failure.
+        assert!(cpu_unsupported_message(None, b"", b"loading model").is_none());
     }
 }

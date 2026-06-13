@@ -543,7 +543,7 @@ function calculateStreaks(metadataList: EntryMetadata[]): {
   currentStreak: number;
   longestStreak: number;
 } {
-  const dates = [...new Set(metadataList.map((m) => m.date))].sort().reverse();
+  const dates = [...new Set(metadataList.map((m) => m.date))].sort((a, b) => a.localeCompare(b)).reverse();
   return calculateStreaksFromDates(dates);
 }
 
@@ -565,7 +565,7 @@ export function calculateGratitudeStreak(entries: JournalEntry[]): {
         .map((e) => new Date(e.created_at).toISOString().split('T')[0])
     ),
   ]
-    .sort()
+    .sort((a, b) => a.localeCompare(b))
     .reverse();
 
   return calculateStreaksFromDates(gratitudeDates);

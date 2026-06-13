@@ -76,6 +76,12 @@ replay_boundary() {
   # Run parked at this boundary; kill once it signals readiness. The brace group's stderr is
   # dropped so the shell's async "Killed" job notice (expected) doesn't pollute the exhibit.
   local killed="TIMEOUT" pid status
+  # change_master_password re-derives keys (600k-iter PBKDF2) and re-encrypts media before it
+  # can park at a boundary, so it needs a far longer readiness budget than the migrate path.
+  # On a loaded CI runner the old fixed ~10s window expired before the real kill -9 landed,
+  # scoring the boundary as TIMEOUT (a false failure) even though recovery rolled back cleanly.
+  local budget=200                    # ~10s — migrate boundaries park almost immediately
+  [ "$kind" = "cp" ] && budget=1200   # ~60s — cp does heavy crypto before reaching its park point
   {
     if [ "$kind" = "cp" ]; then
       MH_CRASH_POINT="$b" MH_CRASH_READY="$ready" "$BIN" cp-change "$dir" "$PW" "$NEWPW" >/dev/null 2>&1 &
@@ -83,7 +89,7 @@ replay_boundary() {
       MH_CRASH_POINT="$b" MH_CRASH_READY="$ready" "$BIN" migrate "$dir" "$PW" >/dev/null 2>&1 &
     fi
     pid=$!
-    for _ in $(seq 1 200); do      # ~10s
+    for _ in $(seq 1 "$budget"); do   # budget set above: migrate ~10s, cp ~60s
       if [ -f "$ready" ]; then
         kill -9 "$pid" 2>/dev/null
         wait "$pid"; status=$?

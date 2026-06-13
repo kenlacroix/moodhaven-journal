@@ -141,6 +141,7 @@ commands.allow = [
   "mark_sync_log_synced",
   # Voice memos (Wear OS audio recordings)
   "store_voice_memo",
+  "store_voice_memo_bytes",
   "list_voice_memos",
   "get_voice_memo",
   "delete_voice_memo",

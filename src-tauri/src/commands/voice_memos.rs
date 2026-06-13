@@ -254,6 +254,13 @@ pub async fn transcribe_voice_memo(
         .map_err(|e| format!("transcribe_voice_memo: whisper exec failed: {}", e))?;
 
     if !output.status.success() {
+        if let Some(msg) = crate::commands::speech_to_text::cpu_unsupported_message(
+            output.status.code(),
+            &output.stdout,
+            &output.stderr,
+        ) {
+            return Err(msg);
+        }
         let stderr = String::from_utf8_lossy(&output.stderr);
         return Err(format!("transcribe_voice_memo: whisper error: {}", stderr));
     }

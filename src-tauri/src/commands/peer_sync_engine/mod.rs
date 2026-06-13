@@ -1124,6 +1124,16 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
         let db = app
             .try_state::<Database>()
             .ok_or_else(|| "No DB state".to_string())?;
+        // Refuse to write while a password change is re-keying the DB. A write landing between
+        // the change's snapshot and its atomic flip would be encrypted under the old password and
+        // stranded undecryptable in the new-keyed DB. The peer retains its rows and re-syncs after.
+        if app
+            .try_state::<crate::RekeyInProgress>()
+            .map(|r| r.is_armed())
+            .unwrap_or(false)
+        {
+            return Err("sync deferred: a password change is re-keying the database".to_string());
+        }
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
         conn.execute_batch("BEGIN IMMEDIATE")
             .map_err(|e| format!("sync tx begin: {e}"))?;
@@ -1730,6 +1740,16 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
         let db = app
             .try_state::<Database>()
             .ok_or_else(|| "No DB state".to_string())?;
+        // Refuse to write while a password change is re-keying the DB. A write landing between
+        // the change's snapshot and its atomic flip would be encrypted under the old password and
+        // stranded undecryptable in the new-keyed DB. The peer retains its rows and re-syncs after.
+        if app
+            .try_state::<crate::RekeyInProgress>()
+            .map(|r| r.is_armed())
+            .unwrap_or(false)
+        {
+            return Err("sync deferred: a password change is re-keying the database".to_string());
+        }
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
         conn.execute_batch("BEGIN IMMEDIATE")
             .map_err(|e| format!("sync tx begin: {e}"))?;

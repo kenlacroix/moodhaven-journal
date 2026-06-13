@@ -368,51 +368,371 @@ mod migration {
     }
 }
 
-// ── Forward-looking change_master_password matrix (placeholders) ─────────────
+// ── change_master_password matrix (single atomic flip, keyless tail) ──────────
 //
-// One #[ignore]d stub per future boundary from active-plans/change-password.md §4. They
-// name the boundary and its expected old-XOR-new outcome BEFORE the feature exists; the
-// change-password PR drops `crash_point!`s at these boundaries and un-ignores each test.
+// The change reorders the plan's sketch into the only crash-safe shape (decision
+// 2026-06-09): all KEY-requiring work — staging media to `*.rekeytmp` + building the
+// new-keyed `moodhaven_rekey.db` with the inner blobs re-encrypted — happens BEFORE one
+// atomic commit point (the db_state.json salt flip + tmp promotion), and everything after
+// is KEYLESS (rename staged media, clear marker) so startup recovery finishes it forward
+// with no password. The single discriminator recovery uses is `db_state.salt == marker
+// .new_salt_b64`: equal ⇒ committed ⇒ roll forward to NEW; not equal ⇒ pre-commit ⇒ roll
+// back to OLD. The invariant is the same as the migration matrix: old XOR new, never a mix.
 mod change_master_password {
-    const PENDING: &str = "pending change_master_password (active-plans/change-password.md)";
+    use super::*;
+    use crate::commands::change_password::PENDING_MARKER;
 
-    // Inner txn (entries + signals + TOTP + verifier) not yet committed: SQLite rolled it
-    // back → data is wholly on the OLD password (outer + inner). Recover = old.
-    #[test]
-    #[ignore = "pending change_master_password (active-plans/change-password.md)"]
-    fn cmp_b0_inner_txn_pre_commit_recovers_old() {
-        unimplemented!("{PENDING} — expected recovered=old (txn rolled back)");
+    /// base64("old-salt") / base64("new-salt") — the db_state salts that gate commit.
+    const OLD_SALT_B64: &str = "b2xkLXNhbHQ=";
+    const NEW_SALT_B64: &str = "bmV3LXNhbHQ=";
+
+    /// Two distinct deterministic 32-byte keys: the OLD outer key the live DB starts under,
+    /// and the NEW outer key the rekey tmp is built under.
+    fn old_new_keys() -> ([u8; 32], String, [u8; 32], String) {
+        let (old, old_hex) = test_key();
+        let mut new = [0u8; 32];
+        for (i, b) in new.iter_mut().enumerate() {
+            *b = (i as u8).wrapping_mul(11).wrapping_add(3);
+        }
+        let new_hex = hex::encode(new);
+        (old, old_hex, new, new_hex)
     }
 
-    // Inner txn committed (inner layer on NEW password) but media/rekey not started: the
-    // pending marker drives resume forward → recover = new.
-    #[test]
-    #[ignore = "pending change_master_password (active-plans/change-password.md)"]
-    fn cmp_b1_post_commit_pre_media_recovers_new() {
-        unimplemented!("{PENDING} — expected recovered=new (resume media + rekey)");
+    /// Build the live `moodhaven.db` as a real SQLCipher DB keyed with `hex_key`, serving the
+    /// sentinel row, with `db_state{encrypted:true, salt:salt_b64}`.
+    fn build_encrypted_live(db_path: &Path, hex_key: &str, salt_b64: &str) {
+        seed_plaintext_db(db_path);
+        inject_valid_tmp(db_path, hex_key); // exports plaintext → moodhaven_enc.db (keyed)
+        std::fs::rename(db_path.with_file_name("moodhaven_enc.db"), db_path).expect("promote live");
+        let _ = std::fs::remove_file(db_path.with_extension("db-wal"));
+        let _ = std::fs::remove_file(db_path.with_extension("db-shm"));
+        write_state(db_path, true, Some(salt_b64));
     }
 
-    // Crash mid media-file swap: per-file progress in the marker lets recovery resume the
-    // remaining files, then finish the rekey → recover = new.
-    #[test]
-    #[ignore = "pending change_master_password (active-plans/change-password.md)"]
-    fn cmp_b2_mid_media_swap_recovers_new() {
-        unimplemented!("{PENDING} — expected recovered=new (resume from media progress)");
+    /// Produce a complete, valid `moodhaven_rekey.db` keyed with `hex_new` (the fully-built
+    /// new-password tmp a change creates before the flip). Seeded from an isolated scratch dir
+    /// so it never touches the target profile's `db_state.json`.
+    fn make_rekey_tmp(db_path: &Path, hex_new: &str) {
+        let scratch_dir = db_path.with_file_name("scratch_seed");
+        let _ = std::fs::remove_dir_all(&scratch_dir);
+        std::fs::create_dir_all(&scratch_dir).expect("scratch dir");
+        let scratch = scratch_dir.join("moodhaven.db");
+        seed_plaintext_db(&scratch);
+
+        let tmp = db_path.with_file_name("moodhaven_rekey.db");
+        let _ = std::fs::remove_file(&tmp);
+        let tmp_str = tmp.to_str().unwrap();
+        let c = Connection::open(&scratch).expect("open scratch");
+        c.execute_batch(&format!(
+            "ATTACH DATABASE '{tmp_str}' AS r KEY \"x'{hex_new}'\";
+             SELECT sqlcipher_export('r');
+             DETACH DATABASE r;"
+        ))
+        .expect("export rekey tmp");
+        drop(c);
+        let _ = std::fs::remove_dir_all(&scratch_dir);
     }
 
-    // All media re-encrypted, outer SQLCipher rekey not yet applied: resume the rekey from
-    // the marker (new salt recorded) → recover = new.
-    #[test]
-    #[ignore = "pending change_master_password (active-plans/change-password.md)"]
-    fn cmp_b3_post_media_pre_rekey_recovers_new() {
-        unimplemented!("{PENDING} — expected recovered=new (resume outer rekey)");
+    /// Write the pending-change marker carrying the NEW salt (the commit discriminator).
+    fn write_marker(db_path: &Path) {
+        let json = format!(
+            r#"{{"phase":"inner_pending","new_salt_b64":"{NEW_SALT_B64}","media_done":[]}}"#
+        );
+        std::fs::write(db_path.with_file_name(PENDING_MARKER), json).expect("write marker");
     }
 
-    // Rekey applied, pending marker not yet cleared: clearing the marker is idempotent →
-    // recover = new.
+    /// Stage a media file: original `note.enc` (old bytes) + its `note.enc.rekeytmp` sibling
+    /// (new bytes), one entry-dir deep under `media/`. Returns the original path.
+    fn put_staged_media(db_path: &Path) -> std::path::PathBuf {
+        let mdir = db_path.with_file_name("media").join("entryX");
+        std::fs::create_dir_all(&mdir).expect("media dir");
+        let orig = mdir.join("note.enc");
+        std::fs::write(&orig, b"OLD-ORIGINAL").expect("write orig");
+        std::fs::write(mdir.join("note.enc.rekeytmp"), b"NEW-STAGED").expect("write staging");
+        orig
+    }
+
+    /// True if a `*.rekeytmp` staging file still exists anywhere under `media/`.
+    fn any_staging_left(db_path: &Path) -> bool {
+        let root = db_path.with_file_name("media");
+        let Ok(dirs) = std::fs::read_dir(&root) else {
+            return false;
+        };
+        for d in dirs.flatten() {
+            if let Ok(files) = std::fs::read_dir(d.path()) {
+                for f in files.flatten() {
+                    if f.path().to_string_lossy().ends_with(".rekeytmp") {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    }
+
+    /// Drive the REAL recovery (`Database::new` + `apply_key`) and assert the invariant:
+    /// exactly one of {old-keyed, new-keyed} serves the sentinel, the rekey tmp + marker are
+    /// gone, and no media staging file is left dangling.
+    fn assert_cmp(db_path: &Path, expect: Recovered, key: &[u8; 32], old_hex: &str, new_hex: &str) {
+        let db = Database::new(db_path.to_path_buf()).expect("Database::new on recovery");
+        db.apply_key(key).expect("apply_key recovery");
+        drop(db);
+
+        assert!(
+            !db_path.with_file_name("moodhaven_rekey.db").exists(),
+            "rekey tmp must be resolved away"
+        );
+        assert!(
+            !db_path.with_file_name(PENDING_MARKER).exists(),
+            "pending marker must be cleared"
+        );
+        assert!(
+            !any_staging_left(db_path),
+            "no media staging file may dangle"
+        );
+
+        match expect {
+            Recovered::Old => {
+                assert!(
+                    keyed_has_sentinel(db_path, old_hex),
+                    "recovered=old: OLD key must serve the sentinel"
+                );
+                assert!(
+                    !keyed_has_sentinel(db_path, new_hex),
+                    "recovered=old: NEW key must NOT open (mixed state)"
+                );
+            }
+            Recovered::New => {
+                assert!(
+                    keyed_has_sentinel(db_path, new_hex),
+                    "recovered=new: NEW key must serve the sentinel"
+                );
+                assert!(
+                    !keyed_has_sentinel(db_path, old_hex),
+                    "recovered=new: OLD key must NOT open (mixed state)"
+                );
+            }
+        }
+    }
+
+    // b0 — crash BEFORE the commit (media staged + new tmp built, db_state.salt still OLD).
+    // The marker's new salt ≠ db_state.salt → pre-commit → discard the orphan tmp, roll back
+    // staged media, open the intact OLD live DB. Recover = OLD.
     #[test]
-    #[ignore = "pending change_master_password (active-plans/change-password.md)"]
-    fn cmp_b4_post_rekey_pre_marker_clear_recovers_new() {
-        unimplemented!("{PENDING} — expected recovered=new (idempotent marker clear)");
+    fn cmp_b0_pre_commit_recovers_old() {
+        let base = fresh_dir("cmp_b0");
+        let db = base.join("moodhaven.db");
+        let (old, old_hex, _new, new_hex) = old_new_keys();
+
+        build_encrypted_live(&db, &old_hex, OLD_SALT_B64);
+        make_rekey_tmp(&db, &new_hex);
+        write_marker(&db);
+        let orig = put_staged_media(&db);
+
+        assert_cmp(&db, Recovered::Old, &old, &old_hex, &new_hex);
+        assert_eq!(
+            std::fs::read(&orig).unwrap(),
+            b"OLD-ORIGINAL",
+            "rollback must preserve the original media bytes"
+        );
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    // b1 — crash just AFTER the commit (db_state.salt flipped to NEW), before the tmp was
+    // promoted: live DB still OLD-keyed, complete new-keyed tmp present. marker.new == db_state
+    // .salt → committed → key-verify + promote the tmp, then rename staged media. Recover = NEW.
+    #[test]
+    fn cmp_b1_post_commit_pre_promote_recovers_new() {
+        let base = fresh_dir("cmp_b1");
+        let db = base.join("moodhaven.db");
+        let (_old, old_hex, new, new_hex) = old_new_keys();
+
+        build_encrypted_live(&db, &old_hex, OLD_SALT_B64);
+        write_state(&db, true, Some(NEW_SALT_B64)); // the commit-point flip
+        make_rekey_tmp(&db, &new_hex);
+        write_marker(&db);
+        let orig = put_staged_media(&db);
+
+        assert_cmp(&db, Recovered::New, &new, &old_hex, &new_hex);
+        assert_eq!(
+            std::fs::read(&orig).unwrap(),
+            b"NEW-STAGED",
+            "roll-forward must promote the staged media bytes"
+        );
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    // b2 — crash AFTER the tmp was promoted (live DB now NEW-keyed, no tmp), before the media
+    // renames: marker present, staging present. No tmp → open the live NEW DB, then the keyless
+    // tail finishes the media renames and clears the marker. Recover = NEW.
+    #[test]
+    fn cmp_b2_post_promote_pre_media_rename_recovers_new() {
+        let base = fresh_dir("cmp_b2");
+        let db = base.join("moodhaven.db");
+        let (_old, old_hex, new, new_hex) = old_new_keys();
+
+        build_encrypted_live(&db, &new_hex, NEW_SALT_B64); // already promoted to new
+        write_marker(&db);
+        let orig = put_staged_media(&db);
+
+        assert_cmp(&db, Recovered::New, &new, &old_hex, &new_hex);
+        assert_eq!(
+            std::fs::read(&orig).unwrap(),
+            b"NEW-STAGED",
+            "tail must finish the media rename"
+        );
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    // b3 — crash AFTER the media renames, before the marker clear: live NEW DB, no staging, no
+    // tmp, marker still present. The tail simply clears the marker (idempotent). Recover = NEW.
+    #[test]
+    fn cmp_b3_post_media_rename_pre_marker_clear_recovers_new() {
+        let base = fresh_dir("cmp_b3");
+        let db = base.join("moodhaven.db");
+        let (_old, old_hex, new, new_hex) = old_new_keys();
+
+        build_encrypted_live(&db, &new_hex, NEW_SALT_B64);
+        write_marker(&db);
+        // Media already renamed: original holds the new bytes, no .rekeytmp sibling.
+        let mdir = db.with_file_name("media").join("entryX");
+        std::fs::create_dir_all(&mdir).unwrap();
+        std::fs::write(mdir.join("note.enc"), b"NEW-STAGED").unwrap();
+
+        assert_cmp(&db, Recovered::New, &new, &old_hex, &new_hex);
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    // Happy path (no crash): rekey_in_place exports the live OLD DB into a NEW-keyed tmp,
+    // applies the inner re-encryption in the tmp, flips db_state, and promotes — leaving the
+    // DB readable ONLY under the new key, with the inner update visible, and the old key dead.
+    #[test]
+    fn rekey_in_place_happy_path_flips_old_to_new() {
+        let base = fresh_dir("cmp_happy");
+        let db_path = base.join("moodhaven.db");
+        let (old, old_hex, new, new_hex) = old_new_keys();
+
+        build_encrypted_live(&db_path, &old_hex, OLD_SALT_B64);
+        let db = Database::new(db_path.clone()).expect("open");
+        db.apply_key(&old).expect("unlock old");
+
+        db.rekey_in_place(&new, NEW_SALT_B64, |conn| {
+            conn.execute(
+                "UPDATE journal_entries SET encrypted_content = ?1 WHERE id = ?2",
+                rusqlite::params!["REKEYED-CONTENT", SENTINEL_ID],
+            )
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+        })
+        .expect("rekey");
+        drop(db);
+
+        // New key reads the inner-updated row; old key is dead; db_state advanced.
+        let new_val = Database::open_keyed(&db_path, &new_hex)
+            .and_then(|c| {
+                c.query_row(
+                    "SELECT encrypted_content FROM journal_entries WHERE id = ?1",
+                    [SENTINEL_ID],
+                    |r| r.get::<_, String>(0),
+                )
+                .map_err(|e| e.to_string())
+            })
+            .expect("new key must open the rekeyed DB");
+        assert_eq!(
+            new_val, "REKEYED-CONTENT",
+            "inner update must be visible under new key"
+        );
+        assert!(
+            Database::open_keyed(&db_path, &old_hex).is_err(),
+            "old key must no longer open the rekeyed DB"
+        );
+        assert_eq!(
+            read_db_state(&db_path).salt.as_deref(),
+            Some(NEW_SALT_B64),
+            "db_state salt must advance to the new salt"
+        );
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    // b4 — only the marker is left (everything else done): the tail clears it. Recover = NEW.
+    #[test]
+    fn cmp_b4_marker_only_recovers_new() {
+        let base = fresh_dir("cmp_b4");
+        let db = base.join("moodhaven.db");
+        let (_old, old_hex, new, new_hex) = old_new_keys();
+
+        build_encrypted_live(&db, &new_hex, NEW_SALT_B64);
+        write_marker(&db);
+
+        assert_cmp(&db, Recovered::New, &new, &old_hex, &new_hex);
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    // committed (db_state.salt=NEW) but the rekey tmp is truncated/corrupt — the B2 power-loss
+    // boundary where the salt flip reached disk but the tmp's contents did not. Recovery must
+    // NOT brick: it surfaces an error (so the user retries / a re-run finishes) and preserves
+    // BOTH the committed tmp and the marker rather than discarding the only new-keyed copy. The
+    // prior cmp_* matrix only ever built a VALID committed tmp, so this boundary was uncovered.
+    #[test]
+    fn cmp_committed_corrupt_tmp_no_brick() {
+        let base = fresh_dir("cmp_corrupt_tmp");
+        let db = base.join("moodhaven.db");
+        let (_old, _old_hex, new, _new_hex) = old_new_keys();
+
+        build_encrypted_live(&db, &_old_hex, OLD_SALT_B64);
+        write_state(&db, true, Some(NEW_SALT_B64)); // commit-point flip already durable
+                                                    // Truncated/garbage tmp: a valid SQLCipher header never landed.
+        std::fs::write(
+            db.with_file_name("moodhaven_rekey.db"),
+            b"not-a-sqlcipher-db",
+        )
+        .unwrap();
+        write_marker(&db);
+
+        let dbh = Database::new(db.to_path_buf()).expect("Database::new");
+        let res = dbh.apply_key(&new);
+        drop(dbh);
+
+        assert!(
+            res.is_err(),
+            "committed-but-corrupt tmp must surface an error, not silently succeed"
+        );
+        assert!(
+            db.with_file_name("moodhaven_rekey.db").exists(),
+            "committed recovery must NOT discard the tmp (it is the only new-keyed copy)"
+        );
+        assert!(
+            db.with_file_name(PENDING_MARKER).exists(),
+            "committed recovery must NOT clear the marker on failure (retry must stay committed)"
+        );
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    // The durable write_db_state (temp + fsync + atomic rename) must leave a readable, advanced
+    // state and no `.tmp` residue after a real rekey. Guards the B2 durability change from
+    // regressing into a half-written or orphaned-tmp db_state.json.
+    #[test]
+    fn rekey_leaves_no_db_state_tmp_residue() {
+        let base = fresh_dir("cmp_dbstate_residue");
+        let db_path = base.join("moodhaven.db");
+        let (old, old_hex, new, _new_hex) = old_new_keys();
+
+        build_encrypted_live(&db_path, &old_hex, OLD_SALT_B64);
+        let db = Database::new(db_path.clone()).expect("open");
+        db.apply_key(&old).expect("unlock old");
+        db.rekey_in_place(&new, NEW_SALT_B64, |_conn| Ok(()))
+            .expect("rekey");
+        drop(db);
+
+        assert_eq!(
+            read_db_state(&db_path).salt.as_deref(),
+            Some(NEW_SALT_B64),
+            "db_state must be readable + advanced after the durable write"
+        );
+        assert!(
+            !db_path.with_file_name("db_state.json.tmp").exists(),
+            "durable write must not leave a db_state.json.tmp behind"
+        );
+        let _ = std::fs::remove_dir_all(&base);
     }
 }

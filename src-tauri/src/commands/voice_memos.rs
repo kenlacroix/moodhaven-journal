@@ -346,6 +346,7 @@ pub fn patch_voice_memo_mood(
 pub fn publish_voice_memo_draft(
     db: State<Database>,
     lock: State<'_, AppLockState>,
+    rekey: State<'_, crate::RekeyInProgress>,
     id: String,
     encrypted_content: serde_json::Value,
     mood: i64,
@@ -355,6 +356,7 @@ pub fn publish_voice_memo_draft(
     if lock.is_locked() {
         return Err("Session is locked".to_string());
     }
+    super::require_no_rekey(&rekey)?;
     if !(1..=5).contains(&mood) {
         return Err("mood must be 1–5".to_string());
     }

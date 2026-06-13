@@ -7,6 +7,11 @@ export interface PostStaticMeta {
 }
 
 export const POST_STATIC_META: Record<string, PostStaticMeta> = {
+  "what-happens-when-you-change-your-password": {
+    title: "What Changing Your Password Actually Does — and Why It's Safe to Interrupt",
+    excerpt:
+      "In MoodHaven your password isn't stored anywhere — it's the key that unlocks everything. So changing it re-encrypts your whole journal. Here's what that means, and why an interrupted change always rolls back cleanly to your old password.",
+  },
   "stress-testing-the-privacy-in-your-journal": {
     title: "How We Stress-Tested the Privacy in Your Journal — Ten Rounds of Attacks",
     excerpt:

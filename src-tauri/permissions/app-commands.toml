@@ -18,6 +18,8 @@ commands.allow = [
   "lock_app",
   # Change master password (requires unlock; re-encrypts all data)
   "change_master_password",
+  "change_password_begin",
+  "change_password_cancel",
   # PIN unlock (pin_is_enabled + pin_unlock are pre-auth; pin_setup + pin_disable require unlock)
   "pin_is_enabled",
   "pin_setup",
@@ -31,6 +33,8 @@ commands.allow = [
   "create_journal_entry",
   "get_journal_entry",
   "get_all_journal_entries",
+  "get_entry_rekey_blobs",
+  "get_signal_rekey_blobs",
   "get_journal_entries_by_date",
   "get_entries_on_this_day",
   "update_journal_entry",

@@ -1,6 +1,27 @@
-import { generateRecoveryKey } from './recoveryKeyService';
+// @vitest-environment node
+import { generateRecoveryKey, wrapPasswordForRecovery } from './recoveryKeyService';
+import { decrypt, type EncryptedData } from './crypto';
 
 describe('recoveryKeyService', () => {
+  describe('wrapPasswordForRecovery', () => {
+    it('produces an escrow blob that the recovery key (dashes/case-insensitive) decrypts', async () => {
+      const key = generateRecoveryKey();
+      const blob = await wrapPasswordForRecovery(key, 'new-master-pw');
+      const parsed = JSON.parse(blob) as EncryptedData;
+      // Recovery codes are normalized (dashes stripped, uppercased) before use as the key.
+      const dec = await decrypt(parsed, key.replace(/-/g, '').toUpperCase());
+      expect(dec.success).toBe(true);
+      expect(dec.data).toBe('new-master-pw');
+    });
+
+    it('does not decrypt under the wrong recovery key', async () => {
+      const blob = await wrapPasswordForRecovery(generateRecoveryKey(), 'pw');
+      const parsed = JSON.parse(blob) as EncryptedData;
+      const dec = await decrypt(parsed, 'WRONGWRONGWRONGWRONGWRON');
+      expect(dec.success).toBe(false);
+    });
+  });
+
   describe('generateRecoveryKey', () => {
     it('uses crypto.getRandomValues, not Math.random', () => {
       const spy = vi.spyOn(crypto, 'getRandomValues');

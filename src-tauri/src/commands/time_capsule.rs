@@ -24,11 +24,13 @@ pub struct MoodDelta {
 pub fn seal_entry(
     db: State<Database>,
     lock: State<'_, AppLockState>,
+    rekey: State<'_, crate::RekeyInProgress>,
     id: String,
     unlock_at: String,
     capsule_type: String,
 ) -> Result<(), String> {
     require_unlocked(&lock)?;
+    super::require_no_rekey(&rekey)?;
     if !["letter", "vault"].contains(&capsule_type.as_str()) {
         return Err(format!("Invalid capsule_type: {capsule_type}"));
     }
@@ -170,9 +172,11 @@ pub fn get_due_capsules(
 pub fn unseal_entry(
     db: State<Database>,
     lock: State<'_, AppLockState>,
+    rekey: State<'_, crate::RekeyInProgress>,
     id: String,
 ) -> Result<(), String> {
     require_unlocked(&lock)?;
+    super::require_no_rekey(&rekey)?;
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
     let rows = conn

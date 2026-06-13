@@ -9,6 +9,7 @@ import { PrivacyAutoLock } from './PrivacyAutoLock';
 import { PrivacyBiometric } from './PrivacyBiometric';
 import { PrivacyPinUnlock } from './PrivacyPinUnlock';
 import { PrivacyChangePassword } from './PrivacyChangePassword';
+import { PrivacyRecoveryKey } from './PrivacyRecoveryKey';
 import { PrivacyTwoFactor } from './PrivacyTwoFactor';
 import { PrivacyDataManagement } from './PrivacyDataManagement';
 import { TransparencySection } from './PrivacyTransparency';
@@ -112,7 +113,9 @@ export function PrivacyTab({
 
         <PrivacyPinUnlock sessionPassword={sessionPassword} />
 
-        <PrivacyChangePassword sessionPassword={sessionPassword} />
+        {!isBrowser && <PrivacyChangePassword sessionPassword={sessionPassword} />}
+
+        <PrivacyRecoveryKey sessionPassword={sessionPassword} />
 
         <PrivacyTwoFactor
           twoFactorStatus={twoFactorStatus}

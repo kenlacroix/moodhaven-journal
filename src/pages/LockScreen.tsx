@@ -9,7 +9,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { useAppStore } from '../stores/appStore';
 import { get2FAStatus } from '../lib/services/twoFactorService';
 import { verifyUserPassword } from '../lib/services/journalService';
-import { factoryReset, exitApp } from '../lib/services/dataManagementService';
+import { factoryReset, relaunchApp } from '../lib/services/dataManagementService';
 import { recoverPassword, isRecoveryKeyEnabled } from '../lib/services/recoveryKeyService';
 import { pinIsEnabled, pinUnlock } from '../lib/services/pinUnlockService';
 import {
@@ -55,6 +55,9 @@ export function LockScreen() {
   const [verifiedPassword, setVerifiedPassword] = useState<string | null>(null);
   const [eraseConfirmText, setEraseConfirmText] = useState('');
   const [isErasing, setIsErasing] = useState(false);
+  const [holdProgress, setHoldProgress] = useState(0);
+  const holdRafRef = useRef<number | null>(null);
+  const holdStartRef = useRef<number>(0);
   const [recoveryKeyInput, setRecoveryKeyInput] = useState('');
   const [hasRecoveryKey, setHasRecoveryKey] = useState(false);
 
@@ -318,12 +321,43 @@ export function LockScreen() {
       setIsErasing(false);
       return;
     }
-    // Reset succeeded — exit so the app restarts into first-run. A failure here is
-    // not a reset failure (data is already wiped), so don't report it as one.
-    await exitApp().catch((err) =>
-      logger.warn('exit_app after reset failed', { error: String(err) }),
+    // Reset succeeded — relaunch into first-run. A failure here is not a reset
+    // failure (data is already wiped), so don't report it as one.
+    await relaunchApp().catch((err) =>
+      logger.warn('relaunch_app after reset failed', { error: String(err) }),
     );
   }, [eraseConfirmText]);
+
+  // Hold-to-confirm for the destructive erase: typing ERASE arms it, but the
+  // final wipe only fires after a deliberate ~2.5s press-and-hold. Defeats a
+  // casual "type erase + click" without requiring the password (which would
+  // break this forgot-password escape hatch).
+  const HOLD_MS = 2500;
+  const cancelHold = useCallback(() => {
+    if (holdRafRef.current !== null) {
+      cancelAnimationFrame(holdRafRef.current);
+      holdRafRef.current = null;
+    }
+    setHoldProgress(0);
+  }, []);
+
+  const startHold = useCallback(() => {
+    if (eraseConfirmText !== 'ERASE' || isErasing) return;
+    holdStartRef.current = performance.now();
+    const tick = (now: number) => {
+      const progress = Math.min(1, (now - holdStartRef.current) / HOLD_MS);
+      setHoldProgress(progress);
+      if (progress >= 1) {
+        holdRafRef.current = null;
+        void handleEraseAndReset();
+        return;
+      }
+      holdRafRef.current = requestAnimationFrame(tick);
+    };
+    holdRafRef.current = requestAnimationFrame(tick);
+  }, [eraseConfirmText, isErasing, handleEraseAndReset]);
+
+  useEffect(() => () => cancelHold(), [cancelHold]);
 
   // Handle PIN unlock submission
   const handlePinSubmit = useCallback(
@@ -380,10 +414,11 @@ export function LockScreen() {
 
   // Cancel erase flow
   const handleEraseCancel = useCallback(() => {
+    cancelHold();
     setStep('password');
     setEraseConfirmText('');
     setError(null);
-  }, []);
+  }, [cancelHold]);
 
   // Handle recovery key unlock
   const handleRecoveryKeySubmit = useCallback(
@@ -933,18 +968,49 @@ export function LockScreen() {
                 </button>
                 <button
                   type="button"
-                  onClick={handleEraseAndReset}
+                  onPointerDown={startHold}
+                  onPointerUp={cancelHold}
+                  onPointerLeave={cancelHold}
+                  onPointerCancel={cancelHold}
+                  // Keyboard parity: hold Enter/Space to erase (ignore auto-repeat so the
+                  // hold timer starts once); releasing the key cancels — mirrors the pointer
+                  // gesture so the escape hatch is reachable without a mouse.
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      if (e.repeat) return;
+                      e.preventDefault();
+                      startHold();
+                    }
+                  }}
+                  onKeyUp={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      cancelHold();
+                    }
+                  }}
+                  onBlur={cancelHold}
                   disabled={isErasing || eraseConfirmText !== 'ERASE'}
-                  className="flex-1 py-3 bg-rose-600 hover:bg-rose-700 disabled:bg-rose-300 dark:disabled:bg-rose-800 text-white font-medium rounded-xl transition-colors flex items-center justify-center gap-2"
+                  aria-label="Erase all data — press and hold for 2.5 seconds to confirm"
+                  className="relative flex-1 py-3 overflow-hidden bg-rose-600 hover:bg-rose-700 disabled:bg-rose-300 dark:disabled:bg-rose-800 text-white font-medium rounded-xl transition-colors flex items-center justify-center gap-2 select-none"
                 >
-                  {isErasing ? (
-                    <>
-                      <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      Erasing...
-                    </>
-                  ) : (
-                    'Erase & Start Fresh'
-                  )}
+                  {/* Hold-progress fill */}
+                  <span
+                    aria-hidden
+                    className="absolute inset-y-0 left-0 bg-rose-800/60"
+                    style={{ width: `${holdProgress * 100}%` }}
+                  />
+                  <span role="status" aria-live="polite" className="relative flex items-center justify-center gap-2">
+                    {isErasing ? (
+                      <>
+                        <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        Erasing...
+                      </>
+                    ) : holdProgress > 0 ? (
+                      'Keep holding…'
+                    ) : (
+                      'Hold to Erase'
+                    )}
+                  </span>
                 </button>
               </div>
             </div>

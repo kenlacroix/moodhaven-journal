@@ -193,6 +193,15 @@ pub fn exit_app(db_key: State<'_, DbKeyState>) {
     std::process::exit(0);
 }
 
+/// Relaunch the application (used after factory reset to return to first-run).
+/// Clears the in-memory DB key, then restarts the process so it reinitializes
+/// from the now-empty data directory and lands on the setup wizard.
+#[tauri::command]
+pub fn relaunch_app(app: AppHandle, db_key: State<'_, DbKeyState>) {
+    db_key.clear();
+    app.restart();
+}
+
 /// Factory reset - wipe all app data and return to first-run state.
 /// Intentionally does NOT require unlock — this is the "forgot password / erase
 /// everything" escape hatch and must work from the lock screen.

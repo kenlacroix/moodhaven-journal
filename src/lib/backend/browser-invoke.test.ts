@@ -304,3 +304,34 @@ describe('PIN unlock browser stubs', () => {
     await expect(invoke('pin_unlock', { pin: '1234' })).rejects.toThrow(/desktop app/);
   });
 });
+
+// ---------------------------------------------------------------------------
+// factory_reset — forgot-password escape hatch (must work while locked)
+// ---------------------------------------------------------------------------
+
+describe('invoke("factory_reset")', () => {
+  it('clears all stores even while locked', async () => {
+    await dbSetSetting('password_hash', 'somehash');
+    await dbCreateEntry({
+      id: 'e1',
+      encrypted_content: { iv: 'i', data: 'd', salt: 's' },
+      mood: 3,
+      privacy_mode: 0,
+      location_weather: null,
+      book_id: 'default',
+      pinned: 0,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+      tags: [],
+      sealed_until: null,
+      capsule_type: null,
+      linked_original_id: null,
+      unsealed_at: null,
+      status: null,
+    });
+    await invoke('lock_app');
+    await expect(invoke<boolean>('factory_reset')).resolves.toBe(true);
+    expect(await dbGetSetting('password_hash')).toBeNull();
+    expect(await invoke('get_all_journal_entries').catch(() => 'locked')).toBe('locked');
+  });
+});

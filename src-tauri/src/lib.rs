@@ -580,6 +580,9 @@ pub fn run() {
             // STT model download state (cancellation tokens)
             app.manage(commands::DownloadState::default());
 
+            // Cloud-token key override (Android KeyStore-backed; see cloud_providers)
+            app.manage(commands::cloud_providers::CloudTokenKeyOverride::default());
+
             // Sweep leftover preview temp files from previous sessions
             let _ = commands::sweep_preview_temp(app.handle().clone());
 
@@ -845,6 +848,7 @@ pub fn run() {
             commands::cloud_provider_upload_blob,
             commands::cloud_provider_download_blob,
             commands::cloud_provider_status,
+            commands::cloud_set_token_key,
             commands::cloud_provider_disconnect,
             commands::cloud_provider_refresh_token,
         ])

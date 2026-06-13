@@ -172,6 +172,17 @@ function MainApp() {
     }
   }, [isUnlocked, settingsLoadedForSession, hasSeenTutorial, showDisclaimer]);
 
+  // Android: bootstrap the hardware-backed cloud-token key once at startup so
+  // OAuth tokens encrypt under AndroidKeyStore, not the bare 0600 fallback file.
+  useEffect(() => {
+    if (!isAndroid) return;
+    import('./lib/services/cloudProvidersService').then(({ bootstrapAndroidCloudTokenKey }) => {
+      bootstrapAndroidCloudTokenKey().catch((err) =>
+        logger.warn('Cloud token key bootstrap failed:', { error: String(err) })
+      );
+    });
+  }, [isAndroid]);
+
   // Helper: run a silent background sync (no UI feedback — fire and forget)
   const runBackgroundSync = useCallback(() => {
     if (!isUnlocked || storageType !== 'webdav' || !webdavConfig?.url || !sessionPassword) return;

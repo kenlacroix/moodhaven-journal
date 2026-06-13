@@ -256,6 +256,7 @@ pub fn get_journal_entries_by_date(
 }
 
 /// Update an existing journal entry
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub fn update_journal_entry(
     db: State<Database>,

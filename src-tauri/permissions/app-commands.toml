@@ -228,6 +228,9 @@ commands.allow = [
   "cloud_provider_status",
   "cloud_provider_disconnect",
   "cloud_provider_refresh_token",
+  "cloud_provider_available",
+  "cloud_set_token_key",
+  "store_voice_memo_bytes",
 ]
 
 [[permission]]

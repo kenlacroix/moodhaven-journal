@@ -1,0 +1,13 @@
+# SecureKey plugin permissions (Android-native SecureKeyPlugin)
+# Allows the TypeScript layer to invoke the Kotlin SecureKeyPlugin via
+# window.__TAURI_INTERNALS__.invoke('plugin:securekey|commandName', args).
+
+[[permission]]
+identifier = "allow-securekey-get-cloud-token-key"
+description = "Allow fetching the AndroidKeyStore-backed cloud-token encryption key."
+commands.allow = ["getCloudTokenKey"]
+
+[default]
+permissions = [
+  "allow-securekey-get-cloud-token-key",
+]

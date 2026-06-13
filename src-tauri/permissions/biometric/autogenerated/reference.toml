@@ -1,0 +1,13 @@
+# Biometric plugin permissions (Android-native BiometricPlugin)
+# Allows the TypeScript layer to invoke the Kotlin BiometricPlugin via
+# window.__TAURI_INTERNALS__.invoke('plugin:biometric|commandName', args).
+
+[[permission]]
+identifier = "allow-biometric"
+description = "Allow Android biometric unlock plugin commands."
+commands.allow = ["isAvailable", "isEnrolled", "enroll", "authenticate", "unenroll"]
+
+[default]
+permissions = [
+  "allow-biometric",
+]

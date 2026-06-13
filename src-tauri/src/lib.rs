@@ -377,9 +377,13 @@ pub fn run() {
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
-        // Registers the Android-native WearPlugin so Tauri's IPC router can route
-        // `invoke('plugin:wear|*')` calls to the Kotlin WearPlugin via pluginManager.
+        // Registers the Android-native Kotlin plugins so Tauri's IPC router can
+        // route `invoke('plugin:<name>|*')` calls to them via the pluginManager.
+        // Each empty Rust Builder is a no-op on desktop and a bridge on Android.
         .plugin(tauri::plugin::Builder::<_, ()>::new("wear").build())
+        .plugin(tauri::plugin::Builder::<_, ()>::new("biometric").build())
+        .plugin(tauri::plugin::Builder::<_, ()>::new("opener").build())
+        .plugin(tauri::plugin::Builder::<_, ()>::new("securekey").build())
         .setup(|app| {
             // If a full-restore pending file exists, verify its SHA-256 checksum then
             // swap it in before opening the DB.  This prevents a tampered pending

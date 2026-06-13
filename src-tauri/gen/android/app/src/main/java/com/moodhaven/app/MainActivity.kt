@@ -15,10 +15,10 @@ class MainActivity : TauriActivity() {
 
   override fun onCreate(savedInstanceState: Bundle?) {
     installSplashScreen()
-    pluginManager.load(null, "biometric", BiometricPlugin(this), "{}")
-    pluginManager.load(null, "wear", WearPlugin(this), "{}")
-    pluginManager.load(null, "opener", OpenerPlugin(this), "{}")
-    pluginManager.load(null, "securekey", SecureKeyPlugin(this), "{}")
+    getPluginManager().load(null, "biometric", BiometricPlugin(this), "{}")
+    getPluginManager().load(null, "wear", WearPlugin(this), "{}")
+    getPluginManager().load(null, "opener", OpenerPlugin(this), "{}")
+    getPluginManager().load(null, "securekey", SecureKeyPlugin(this), "{}")
     acquireMulticastLock()
     enableEdgeToEdge()
     super.onCreate(savedInstanceState)

@@ -24,6 +24,9 @@
     "wear:allow-wear-check-connection",
     "wear:allow-wear-bridge-signal",
     "wear:allow-wear-flush-buffer",
-    "wear:allow-wear-send-feedback"
+    "wear:allow-wear-send-feedback",
+    "biometric:allow-biometric",
+    "opener:allow-opener-open-file",
+    "securekey:allow-securekey-get-cloud-token-key"
   ]
 }

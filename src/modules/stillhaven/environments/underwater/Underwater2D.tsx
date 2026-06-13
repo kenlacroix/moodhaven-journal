@@ -24,6 +24,8 @@ import React, {
 } from 'react';
 import { useBilateralEngine } from '../../hooks/useBilateralEngine';
 import type { Side } from '../../engine/bilateralEngine';
+import { REDUCED_MOTION, rand } from '../canvasUtils';
+import { SessionChrome } from '../SessionChrome';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -56,15 +58,8 @@ const RAY_HEIGHT_RATIO = 0.30;
 const RAY_WIDTH_RATIO = 0.08;
 const RAY_ANGLE_DEG = 20;
 const SAND_START = 0.90;
-const REDUCED_MOTION = typeof window !== 'undefined'
-  ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  : false;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function rand(min: number, max: number): number {
-  return min + Math.random() * (max - min);
-}
 
 function makeFish(canvasW: number, canvasH: number, staggerX = false): Fish {
   return {
@@ -184,14 +179,6 @@ function drawParticle(ctx: CanvasRenderingContext2D, p: Particle): void {
   ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
   ctx.fillStyle = `rgba(255,255,255,${p.opacity.toFixed(3)})`;
   ctx.fill();
-}
-
-// ─── Format elapsed seconds ───────────────────────────────────────────────────
-
-function formatElapsed(secs: number): string {
-  const m = Math.floor(secs / 60);
-  const s = secs % 60;
-  return `${m}:${String(s).padStart(2, '0')}`;
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -355,54 +342,15 @@ export function Underwater2D({ onEnd, onPause, onResume, isAdapting = false }: P
         style={{ touchAction: 'none' }}
       />
 
-      {/* Elapsed timer — top-left, always visible */}
-      <div className="absolute top-4 left-5 select-none pointer-events-none flex items-center gap-2">
-        <span className="text-white/60 text-sm tabular-nums font-medium">
-          {formatElapsed(elapsedSeconds)}
-        </span>
-        {isAdapting && (
-          <span
-            className="w-1.5 h-1.5 rounded-full bg-white/50 animate-pulse"
-            title="Session adapting to biometrics"
-          />
-        )}
-      </div>
-
-      {/* Paused overlay */}
-      {isPaused && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50">
-          <p className="text-white/90 text-sm mb-4 font-medium tracking-wide">Paused</p>
-          <button
-            onClick={handleResume}
-            className="px-6 py-2.5 rounded-full bg-white/20 border border-white/30 text-white text-sm font-medium hover:bg-white/30 transition-colors"
-          >
-            Resume
-          </button>
-        </div>
-      )}
-
-      {/* Always-visible control bar */}
-      <div className="absolute bottom-0 inset-x-0 h-20 flex items-center justify-between px-6 bg-gradient-to-t from-black/50 to-transparent">
-        {/* Pause button */}
-        {!isPaused && isRunning ? (
-          <button
-            onClick={handlePause}
-            className="px-4 py-1.5 rounded-full border border-white/30 text-white/70 text-sm hover:bg-white/10 transition-colors"
-          >
-            Pause
-          </button>
-        ) : (
-          <div />
-        )}
-
-        {/* End session — always visible */}
-        <button
-          onClick={handleEnd}
-          className="px-5 py-2 rounded-full bg-white/15 border border-white/30 text-white/90 text-sm font-medium hover:bg-white/25 transition-colors"
-        >
-          End session
-        </button>
-      </div>
+      <SessionChrome
+        elapsedSeconds={elapsedSeconds}
+        isAdapting={isAdapting}
+        isPaused={isPaused}
+        isRunning={isRunning}
+        onPause={handlePause}
+        onResume={handleResume}
+        onEnd={handleEnd}
+      />
     </div>
   );
 }

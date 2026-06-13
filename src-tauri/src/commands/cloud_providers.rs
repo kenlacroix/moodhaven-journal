@@ -43,6 +43,19 @@ const DROPBOX_APP_KEY: &str = "DROPBOX_APP_KEY_PLACEHOLDER";
 const GOOGLE_CLIENT_ID: &str = "GOOGLE_CLIENT_ID_PLACEHOLDER";
 const GOOGLE_CLIENT_SECRET: &str = "GOOGLE_CLIENT_SECRET_PLACEHOLDER";
 
+/// Whether a managed cloud provider has real OAuth credentials compiled in.
+/// Returns false while the app ships with `*_PLACEHOLDER` creds, so the UI can
+/// mark Dropbox / Google Drive "coming soon" instead of offering a dead-end
+/// connect button. Auto-corrects once real credentials are baked in.
+#[tauri::command]
+pub fn cloud_provider_available(provider: String) -> bool {
+    match provider.as_str() {
+        "dropbox" => DROPBOX_APP_KEY != "DROPBOX_APP_KEY_PLACEHOLDER",
+        "gdrive" => GOOGLE_CLIENT_ID != "GOOGLE_CLIENT_ID_PLACEHOLDER",
+        _ => true,
+    }
+}
+
 // ============================================================================
 // Setting key helpers
 // ============================================================================

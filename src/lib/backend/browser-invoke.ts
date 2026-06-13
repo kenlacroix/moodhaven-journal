@@ -729,6 +729,10 @@ async function dispatch(command: string, p: Params): Promise<any> {
     case 'get_activity_stats':
       return dbGetActivityStats();
 
+    // Managed cloud providers don't run in the browser build.
+    case 'cloud_provider_available':
+      return false;
+
     default:
       console.warn(`[browser-invoke] unhandled command: ${command}`, p);
       return null;

@@ -19,6 +19,15 @@ export async function cloudProviderAuthStart(provider: 'dropbox' | 'gdrive'): Pr
   return invoke('cloud_provider_auth_start', { provider });
 }
 
+/**
+ * Whether a managed provider has real OAuth credentials compiled in. False while
+ * the build ships placeholder creds, so the UI can show "coming soon" instead of
+ * a dead-end connect button.
+ */
+export async function cloudProviderAvailable(provider: 'dropbox' | 'gdrive'): Promise<boolean> {
+  return invoke<boolean>('cloud_provider_available', { provider });
+}
+
 async function cloudProviderUploadBlob(
   provider: 'dropbox' | 'gdrive',
   blob: string,

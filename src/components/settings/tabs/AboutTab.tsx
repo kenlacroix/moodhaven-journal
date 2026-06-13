@@ -147,22 +147,26 @@ export function AboutTab({
                 )}
               </div>
 
-              <div className="flex items-center justify-between py-3 border-b border-slate-100 dark:border-slate-700">
-                <p className="text-slate-700 dark:text-slate-200">Log File</p>
-                <button
-                  onClick={() => {
-                    if (logPath) {
-                      invoke('open_log_folder').catch((e: unknown) => {
-                        logger.error('open_log_folder failed', { err: String(e) });
-                      });
-                    }
-                  }}
-                  disabled={!logPath}
-                  className="px-3 py-1 text-sm rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                >
-                  Open Log Folder
-                </button>
-              </div>
+              {/* "Open Log Folder" only works on desktop — Android/iOS have no
+                  OS file-manager launcher, so the button would silently no-op. */}
+              {isDesktop && (
+                <div className="flex items-center justify-between py-3 border-b border-slate-100 dark:border-slate-700">
+                  <p className="text-slate-700 dark:text-slate-200">Log File</p>
+                  <button
+                    onClick={() => {
+                      if (logPath) {
+                        invoke('open_log_folder').catch((e: unknown) => {
+                          logger.error('open_log_folder failed', { err: String(e) });
+                        });
+                      }
+                    }}
+                    disabled={!logPath}
+                    className="px-3 py-1 text-sm rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Open Log Folder
+                  </button>
+                </div>
+              )}
             </>
           )}
 

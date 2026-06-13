@@ -257,6 +257,9 @@ export function SettingsPage({ updateHook, onClose }: SettingsPageProps) {
     } else if (scrollToSection === 'sync') {
       setActiveTab('sync');
       setScrollToSection(null);
+    } else if (scrollToSection === 'export') {
+      setActiveTab('export');
+      setScrollToSection(null);
     } else if (scrollToSection === 'privacy') {
       setActiveTab('privacy');
       setScrollToSection(null);

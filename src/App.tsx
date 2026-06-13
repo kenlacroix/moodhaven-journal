@@ -60,6 +60,7 @@ function App() {
 function MainApp() {
   const { isUnlocked, isInitialized, checkInitialization, lock, sessionPassword } = useAppStore();
   const loadSettings = useSettingsStore((s) => s.loadSettings);
+  const setScrollToSection = useSettingsStore((s) => s.setScrollToSection);
   const hasSeenTutorial = useSettingsStore((s) => s.settings.tutorial?.hasSeenTutorial);
   const hasSeenDisclaimer = useSettingsStore((s) => s.settings.wellness?.hasSeenDisclaimer ?? true);
   const stillhavenEnabled = useSettingsStore((s) => s.settings.wellness?.stillhavenEnabled ?? false);
@@ -502,7 +503,7 @@ function MainApp() {
             </p>
             <button
               type="button"
-              onClick={() => { dismissBackupNudge(); handleNavigate('settings'); }}
+              onClick={() => { dismissBackupNudge(); setScrollToSection('export'); handleNavigate('settings'); }}
               className="mt-1.5 text-xs font-medium text-violet-600 dark:text-violet-400 hover:underline"
             >
               Back up now

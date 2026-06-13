@@ -224,6 +224,7 @@ commands.allow = [
   "cloud_provider_status",
   "cloud_provider_disconnect",
   "cloud_provider_refresh_token",
+  "cloud_provider_available",
 ]
 
 [[permission]]

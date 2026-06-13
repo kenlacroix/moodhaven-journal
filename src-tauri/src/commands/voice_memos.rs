@@ -342,6 +342,7 @@ pub fn patch_voice_memo_mood(
 /// - Returns the created journal entry as JSON.
 ///
 /// DB mutex is acquired and released before any further work — no cross-await holding.
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub fn publish_voice_memo_draft(
     db: State<Database>,

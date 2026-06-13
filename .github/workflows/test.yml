@@ -43,7 +43,9 @@ jobs:
         run: bash scripts/check-versions.sh
 
       - name: npm audit (high/critical only)
-        run: npm audit --audit-level=high
+        # Audit production deps only — esbuild/vite are build-time tooling whose
+        # advisories (dev-server RCE / file-read) never reach the shipped Tauri binary.
+        run: npm audit --omit=dev --audit-level=high
 
       - name: TypeScript type-check
         run: npm run typecheck

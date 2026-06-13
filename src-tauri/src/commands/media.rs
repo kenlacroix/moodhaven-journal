@@ -430,6 +430,65 @@ fn abs_enc_path_in(app_data_dir: &Path, rel_path: &str) -> Result<std::path::Pat
     Ok(joined)
 }
 
+// ── Image compression ───────────────────────────────────────────────────────────
+
+/// Longest-edge cap (px) applied to stored images. A journal is text-first; full-res
+/// phone photos (4000px+) bloat the encrypted store with no viewing benefit.
+const MAX_IMAGE_EDGE: u32 = 2048;
+/// JPEG quality for re-encoded photos — visually lossless at typical viewing sizes.
+const JPEG_QUALITY: u8 = 82;
+
+/// Recompress an image before encryption: downscale to [`MAX_IMAGE_EDGE`] on the longest
+/// side and re-encode in the *same* format. When recompression happens, encoding from decoded
+/// raw pixels also strips EXIF/GPS metadata (a best-effort privacy win — the pass-through
+/// cases below keep the original bytes, metadata included). Format is preserved so the
+/// stored filename, extension, and MIME type stay correct — JPEG→JPEG (quality-capped),
+/// PNG→PNG (lossless).
+///
+/// Returns `None` to mean "store the original unchanged": the MIME type isn't a format we
+/// recompress (GIF may be animated, WebP is already efficient, non-images), decoding fails,
+/// or the recompressed bytes wouldn't be smaller — we never inflate the stored blob.
+fn compress_image(data: &[u8], mime_type: &str) -> Option<Vec<u8>> {
+    let fmt = match mime_type {
+        "image/jpeg" => image::ImageFormat::Jpeg,
+        "image/png" => image::ImageFormat::Png,
+        _ => return None,
+    };
+
+    let img = image::load_from_memory_with_format(data, fmt).ok()?;
+    let scaled = if img.width().max(img.height()) > MAX_IMAGE_EDGE {
+        // thumbnail() preserves aspect ratio and fits within the box.
+        img.thumbnail(MAX_IMAGE_EDGE, MAX_IMAGE_EDGE)
+    } else {
+        img
+    };
+
+    let mut out: Vec<u8> = Vec::new();
+    match fmt {
+        image::ImageFormat::Jpeg => {
+            use image::codecs::jpeg::JpegEncoder;
+            use image::ExtendedColorType;
+            let rgb = scaled.to_rgb8();
+            JpegEncoder::new_with_quality(&mut out, JPEG_QUALITY)
+                .encode(
+                    rgb.as_raw(),
+                    rgb.width(),
+                    rgb.height(),
+                    ExtendedColorType::Rgb8,
+                )
+                .ok()?;
+        }
+        image::ImageFormat::Png => {
+            scaled
+                .write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png)
+                .ok()?;
+        }
+        _ => return None,
+    }
+
+    (out.len() < data.len()).then_some(out)
+}
+
 fn mime_from_filename(filename: &str) -> &'static str {
     let ext = Path::new(filename)
         .extension()
@@ -497,6 +556,14 @@ pub fn save_media_attachment(
 
     let plaintext =
         std::fs::read(src).map_err(|e| format!("Failed to read '{}': {}", filename, e))?;
+
+    // Recompress images (downscale + re-encode in the same format) before encryption.
+    // Shrinks the encrypted store and strips EXIF/GPS metadata; falls back to the original
+    // bytes for non-images, undecodable input, or when compression wouldn't save space.
+    let plaintext = match compress_image(&plaintext, &mime_type) {
+        Some(compressed) => compressed,
+        None => plaintext,
+    };
     let size_bytes = plaintext.len() as i64;
 
     let encrypted = encrypt_to_mbmf(&plaintext, &password)?;
@@ -925,5 +992,68 @@ mod tests {
     #[test]
     fn path_traversal_rejected() {
         assert!(validate_entry_id("evil/../../../etc/passwd").is_err());
+    }
+
+    // ── compress_image ──────────────────────────────────────────────────────────
+
+    use super::{compress_image, MAX_IMAGE_EDGE};
+
+    /// Build a deterministic gradient image and encode it in `fmt`. A gradient (vs a flat
+    /// fill) gives JPEG/PNG real content to compress, so size comparisons are meaningful.
+    fn gradient_encoded(w: u32, h: u32, fmt: image::ImageFormat) -> Vec<u8> {
+        let img = image::RgbImage::from_fn(w, h, |x, y| {
+            image::Rgb([(x % 256) as u8, (y % 256) as u8, ((x + y) % 256) as u8])
+        });
+        let dynimg = image::DynamicImage::ImageRgb8(img);
+        let mut out = Vec::new();
+        dynimg
+            .write_to(&mut std::io::Cursor::new(&mut out), fmt)
+            .unwrap();
+        out
+    }
+
+    #[test]
+    fn compress_returns_none_for_non_image_mime() {
+        assert!(compress_image(b"%PDF-1.4 not an image", "application/pdf").is_none());
+    }
+
+    #[test]
+    fn compress_returns_none_for_animated_or_efficient_formats() {
+        // GIF (possibly animated) and WebP are intentionally passed through untouched.
+        let data = gradient_encoded(64, 64, image::ImageFormat::Png);
+        assert!(compress_image(&data, "image/gif").is_none());
+        assert!(compress_image(&data, "image/webp").is_none());
+    }
+
+    #[test]
+    fn compress_returns_none_for_undecodable_bytes() {
+        assert!(compress_image(b"\xff\xd8\xff not really a jpeg", "image/jpeg").is_none());
+    }
+
+    #[test]
+    fn compress_downscales_large_jpeg_to_cap() {
+        let big = gradient_encoded(4000, 3000, image::ImageFormat::Jpeg);
+        let out = compress_image(&big, "image/jpeg").expect("large jpeg should compress");
+        assert!(out.len() < big.len(), "compressed must be smaller");
+        let decoded = image::load_from_memory(&out).unwrap();
+        assert!(decoded.width().max(decoded.height()) <= MAX_IMAGE_EDGE);
+    }
+
+    #[test]
+    fn compress_downscales_large_png_to_cap() {
+        let big = gradient_encoded(4000, 2000, image::ImageFormat::Png);
+        let out = compress_image(&big, "image/png").expect("large png should compress");
+        assert!(out.len() < big.len(), "compressed must be smaller");
+        let decoded = image::load_from_memory(&out).unwrap();
+        assert!(decoded.width().max(decoded.height()) <= MAX_IMAGE_EDGE);
+    }
+
+    #[test]
+    fn compress_never_inflates() {
+        // A small already-compressed image must not be replaced with larger bytes.
+        let small = gradient_encoded(48, 48, image::ImageFormat::Jpeg);
+        if let Some(out) = compress_image(&small, "image/jpeg") {
+            assert!(out.len() < small.len());
+        }
     }
 }

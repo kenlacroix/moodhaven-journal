@@ -33,6 +33,7 @@ const SyncDetailsModal = lazy(() => import('./components/sync/SyncDetailsModal')
 import { useAppStore } from './stores/appStore';
 import { useSettingsStore } from './stores/settingsStore';
 import { useReminderScheduler } from './hooks/useReminderScheduler';
+import { useAutoLock } from './hooks/useAutoLock';
 import { useUpdateCheck } from './hooks/useUpdateCheck';
 import { useWearSignals } from './hooks/useWearSignals';
 import { usePeerSync } from './hooks/usePeerSync';
@@ -94,6 +95,10 @@ function MainApp() {
 
   // Schedule reminder notifications (hook checks enabled state internally)
   useReminderScheduler();
+
+  // Enforce auto-lock timeout + clear-clipboard-on-lock privacy settings.
+  // Hook is inert unless unlocked AND autoLockTimeout > 0.
+  useAutoLock();
 
   // Update check — runs once per session after settings are loaded, respects 24h gate
   const updateHook = useUpdateCheck();

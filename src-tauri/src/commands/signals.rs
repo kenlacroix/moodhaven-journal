@@ -19,6 +19,7 @@ const VALID_SOURCES: &[&str] = &["wear_os", "oura", "manual", "stillhaven"];
 const MAX_PAYLOAD_BYTES: usize = 10_240; // 10 KB — mood_tap payloads are tiny; cap tightened for safety
 
 /// Create a new encrypted signal
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub fn create_signal(
     db: State<Database>,

@@ -777,18 +777,20 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
         return do_serve_restore(app, &mut stream, &key, &client_device_id, &client_name);
     }
 
-    let (client_entries, client_books, client_signals, client_settings) = match first_msg {
-        Msg::Manifest {
-            entries,
-            books,
-            signals,
-            settings,
-        } => (entries, books, signals, settings),
-        other => return Err(format!("Expected MANIFEST from client, got: {other:?}")),
-    };
+    let (client_entries, client_books, client_signals, client_settings, client_voice_memos) =
+        match first_msg {
+            Msg::Manifest {
+                entries,
+                books,
+                signals,
+                settings,
+                voice_memos,
+            } => (entries, books, signals, settings, voice_memos),
+            other => return Err(format!("Expected MANIFEST from client, got: {other:?}")),
+        };
 
     // Step 4: Get our manifest (lock DB, then drop)
-    let (my_entries, my_books, my_signals, my_settings) = {
+    let (my_entries, my_books, my_signals, my_settings, my_voice_memos) = {
         let db = app
             .try_state::<Database>()
             .ok_or_else(|| "No DB state".to_string())?;
@@ -798,6 +800,7 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
             db_get_books_manifest(&conn)?,
             db_get_signals_manifest(&conn)?,
             db_get_settings_manifest(&conn)?,
+            db_get_voice_memos_manifest(&conn)?,
         )
     };
 
@@ -810,6 +813,7 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
             books: my_books.clone(),
             signals: my_signals.clone(),
             settings: my_settings.clone(),
+            voice_memos: my_voice_memos.clone(),
         },
     )?;
 
@@ -918,6 +922,37 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
                 .unwrap_or(true)
         })
         .map(|s| s.id.clone())
+        .collect();
+
+    // Voice memo diffs (LWW per id, same pattern as books)
+    let client_vm_map: std::collections::HashMap<&str, &str> = client_voice_memos
+        .iter()
+        .map(|m| (m.id.as_str(), m.updated_at.as_str()))
+        .collect();
+    let need_voice_memos_by_client: Vec<String> = my_voice_memos
+        .iter()
+        .filter(|m| {
+            client_vm_map
+                .get(m.id.as_str())
+                .map(|&cat| m.updated_at.as_str() > cat)
+                .unwrap_or(true)
+        })
+        .map(|m| m.id.clone())
+        .collect();
+
+    let my_vm_map: std::collections::HashMap<&str, &str> = my_voice_memos
+        .iter()
+        .map(|m| (m.id.as_str(), m.updated_at.as_str()))
+        .collect();
+    let need_voice_memos_by_me: Vec<String> = client_voice_memos
+        .iter()
+        .filter(|m| {
+            my_vm_map
+                .get(m.id.as_str())
+                .map(|&mat| m.updated_at.as_str() > mat)
+                .unwrap_or(true)
+        })
+        .map(|m| m.id.clone())
         .collect();
 
     // ── Entry phase ──────────────────────────────────────────────────────────
@@ -1116,6 +1151,60 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
         },
     )?;
 
+    // ── Voice memos phase ──────────────────────────────────────────────────────
+
+    let vm_to_send = {
+        let db = app
+            .try_state::<Database>()
+            .ok_or_else(|| "No DB state".to_string())?;
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        db_get_voice_memos_full(&conn, &need_voice_memos_by_client)?
+    };
+    let mut voice_memos_sent = 0usize;
+    for (row, file_path) in vm_to_send {
+        match read_voice_memo_audio_b64(app, &file_path) {
+            Ok(audio_base64) => {
+                write_msg_enc(&mut stream, &key, &Msg::VoiceMemo { row, audio_base64 })?;
+                voice_memos_sent += 1;
+            }
+            Err(e) => log::warn!("[sync] Server: skip voice memo {} — {e}", row.id),
+        }
+    }
+    write_msg_enc(
+        &mut stream,
+        &key,
+        &Msg::VoiceMemosDone {
+            sent: voice_memos_sent,
+        },
+    )?;
+
+    let mut recv_voice_memos: Vec<(SyncVoiceMemoRow, String)> = Vec::new();
+    loop {
+        match read_msg_enc(&mut stream, &key)? {
+            Msg::VoiceMemo { row, audio_base64 } => {
+                if recv_voice_memos.len() >= need_voice_memos_by_me.len() + 1000 {
+                    return Err("Sync protocol error: unexpected voice memo count".into());
+                }
+                recv_voice_memos.push((row, audio_base64));
+            }
+            Msg::VoiceMemosDone { sent } => {
+                log::info!(
+                    "[sync] Server: client sent {sent} voice memos, we received {}",
+                    recv_voice_memos.len()
+                );
+                break;
+            }
+            other => return Err(format!("Unexpected msg in voice memos recv: {other:?}")),
+        }
+    }
+    write_msg_enc(
+        &mut stream,
+        &key,
+        &Msg::VoiceMemosAck {
+            recv: recv_voice_memos.len(),
+        },
+    )?;
+
     // Apply all received data in one atomic transaction — TCP drop before COMMIT
     // leaves the DB untouched; partial state is impossible.
     // Count actual upserts (not total received) so ack/log reflect new-or-updated rows only.
@@ -1176,6 +1265,9 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
         settings_received = set_count;
     }
 
+    // Voice memos apply outside the SQL tx (audio file I/O can't be transactional).
+    let voice_memos_received = apply_recv_voice_memos(app, &recv_voice_memos)?;
+
     // Close write-half cleanly — all phases complete.
     let _ = stream.shutdown(std::net::Shutdown::Write);
 
@@ -1190,8 +1282,12 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
         db_set_peer_sync_at(&conn, &client_device_id, &now)?;
     }
 
-    let total_sent = entries_sent + books_sent + signals_sent + settings_sent;
-    let total_received = entries_received + books_received + signals_received + settings_received;
+    let total_sent = entries_sent + books_sent + signals_sent + settings_sent + voice_memos_sent;
+    let total_received = entries_received
+        + books_received
+        + signals_received
+        + settings_received
+        + voice_memos_received;
 
     let _ = app.emit(
         "peer:sync_complete",
@@ -1208,6 +1304,8 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
             "receivedSignals": signals_received,
             "sentSettings": settings_sent,
             "receivedSettings": settings_received,
+            "sentVoiceMemos": voice_memos_sent,
+            "receivedVoiceMemos": voice_memos_received,
             "at": now,
         }),
     );
@@ -1215,9 +1313,78 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
     log::info!(
         "[sync] Server: sync with {client_device_id} complete — \
          entries {entries_sent}/{entries_received}, books {books_sent}/{books_received}, \
-         signals {signals_sent}/{signals_received}, settings {settings_sent}/{settings_received}"
+         signals {signals_sent}/{signals_received}, settings {settings_sent}/{settings_received}, \
+         voice_memos {voice_memos_sent}/{voice_memos_received}"
     );
     Ok(())
+}
+
+/// Read a voice memo's audio file and base64-encode it for transport.
+fn read_voice_memo_audio_b64(app: &AppHandle, file_path: &str) -> Result<String, String> {
+    use base64::Engine as _;
+    let abs = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("app_data_dir: {e}"))?
+        .join(file_path);
+    let bytes = std::fs::read(&abs).map_err(|e| format!("read voice memo audio: {e}"))?;
+    Ok(base64::engine::general_purpose::STANDARD.encode(&bytes))
+}
+
+/// Apply voice memos received from a peer: write each audio file locally, then
+/// upsert its metadata (LWW). File I/O can't live inside the SQL transaction, so
+/// voice memos apply separately from entries/books/signals/settings; each row is
+/// idempotent (LWW) so a partial apply self-heals on the next sync. Returns the
+/// number of rows inserted or updated.
+fn apply_recv_voice_memos(
+    app: &AppHandle,
+    memos: &[(SyncVoiceMemoRow, String)],
+) -> Result<usize, String> {
+    use base64::Engine as _;
+    if memos.is_empty() {
+        return Ok(0);
+    }
+    let db = app
+        .try_state::<Database>()
+        .ok_or_else(|| "No DB state".to_string())?;
+    let dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("app_data_dir: {e}"))?
+        .join("voice_memos");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("create voice_memos dir: {e}"))?;
+
+    let mut count = 0usize;
+    for (row, audio_b64) in memos {
+        // `id` becomes the audio filename — reject path traversal from a peer.
+        if crate::commands::voice_memos::validate_incoming_filename(&row.id).is_err() {
+            log::warn!("[sync] rejecting voice memo with unsafe id {:?}", row.id);
+            continue;
+        }
+        let filename = format!("{}.wav", row.id);
+        let dest = dir.join(&filename);
+        if dest.parent() != Some(dir.as_path()) {
+            log::warn!("[sync] voice memo id escapes dir: {:?}", row.id);
+            continue;
+        }
+        let rel_path = format!("voice_memos/{filename}");
+        let bytes = match base64::engine::general_purpose::STANDARD.decode(audio_b64.as_bytes()) {
+            Ok(b) => b,
+            Err(e) => {
+                log::warn!("[sync] voice memo {} base64 decode: {e}", row.id);
+                continue;
+            }
+        };
+        if let Err(e) = std::fs::write(&dest, &bytes) {
+            log::warn!("[sync] write voice memo {} audio: {e}", row.id);
+            continue;
+        }
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        if db_upsert_voice_memo(&conn, row, &rel_path)? {
+            count += 1;
+        }
+    }
+    Ok(count)
 }
 
 fn handle_sync_connection(app: AppHandle, stream: TcpStream) {
@@ -1372,7 +1539,7 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
     );
 
     // Step 3: Get our manifest (lock DB, then drop)
-    let (my_entries, my_books, my_signals, my_settings) = {
+    let (my_entries, my_books, my_signals, my_settings, my_voice_memos) = {
         let db = app
             .try_state::<Database>()
             .ok_or_else(|| "No DB state".to_string())?;
@@ -1382,6 +1549,7 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
             db_get_books_manifest(&conn)?,
             db_get_signals_manifest(&conn)?,
             db_get_settings_manifest(&conn)?,
+            db_get_voice_memos_manifest(&conn)?,
         )
     };
 
@@ -1394,18 +1562,20 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
             books: my_books.clone(),
             signals: my_signals.clone(),
             settings: my_settings.clone(),
+            voice_memos: my_voice_memos.clone(),
         },
     )?;
 
     // Step 5: Read server's MANIFEST
-    let (server_entries, server_books, server_signals, server_settings) =
+    let (server_entries, server_books, server_signals, server_settings, server_voice_memos) =
         match read_msg_enc(&mut stream, &key)? {
             Msg::Manifest {
                 entries,
                 books,
                 signals,
                 settings,
-            } => (entries, books, signals, settings),
+                voice_memos,
+            } => (entries, books, signals, settings, voice_memos),
             other => return Err(format!("Expected MANIFEST from server, got: {other:?}")),
         };
 
@@ -1515,6 +1685,37 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
                 .unwrap_or(true)
         })
         .map(|s| s.id.clone())
+        .collect();
+
+    // Voice memo diffs (LWW per id)
+    let my_vm_map: std::collections::HashMap<&str, &str> = my_voice_memos
+        .iter()
+        .map(|m| (m.id.as_str(), m.updated_at.as_str()))
+        .collect();
+    let need_voice_memos_by_me: Vec<String> = server_voice_memos
+        .iter()
+        .filter(|m| {
+            my_vm_map
+                .get(m.id.as_str())
+                .map(|&mat| m.updated_at.as_str() > mat)
+                .unwrap_or(true)
+        })
+        .map(|m| m.id.clone())
+        .collect();
+
+    let server_vm_map: std::collections::HashMap<&str, &str> = server_voice_memos
+        .iter()
+        .map(|m| (m.id.as_str(), m.updated_at.as_str()))
+        .collect();
+    let need_voice_memos_by_server: Vec<String> = my_voice_memos
+        .iter()
+        .filter(|m| {
+            server_vm_map
+                .get(m.id.as_str())
+                .map(|&sat| m.updated_at.as_str() > sat)
+                .unwrap_or(true)
+        })
+        .map(|m| m.id.clone())
         .collect();
 
     // ── Entry phase ──────────────────────────────────────────────────────────
@@ -1729,6 +1930,70 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
         }
     }
 
+    // ── Voice memos phase ──────────────────────────────────────────────────────
+
+    // Receive voice memos from server — collect, apply after close
+    let mut recv_voice_memos: Vec<(SyncVoiceMemoRow, String)> = Vec::new();
+    loop {
+        match read_msg_enc(&mut stream, &key)? {
+            Msg::VoiceMemo { row, audio_base64 } => {
+                if recv_voice_memos.len() >= need_voice_memos_by_me.len() + 1000 {
+                    return Err("Sync protocol error: unexpected voice memo count".into());
+                }
+                recv_voice_memos.push((row, audio_base64));
+            }
+            Msg::VoiceMemosDone { sent } => {
+                log::info!(
+                    "[sync] Client: server sent {sent} voice memos, we received {}",
+                    recv_voice_memos.len()
+                );
+                break;
+            }
+            other => return Err(format!("Unexpected msg in voice memos recv: {other:?}")),
+        }
+    }
+
+    // Send voice memos server needs
+    let vm_to_send = {
+        let db = app
+            .try_state::<Database>()
+            .ok_or_else(|| "No DB state".to_string())?;
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        db_get_voice_memos_full(&conn, &need_voice_memos_by_server)?
+    };
+    let mut voice_memos_sent = 0usize;
+    for (row, file_path) in vm_to_send {
+        match read_voice_memo_audio_b64(app, &file_path) {
+            Ok(audio_base64) => {
+                write_msg_enc(&mut stream, &key, &Msg::VoiceMemo { row, audio_base64 })?;
+                voice_memos_sent += 1;
+            }
+            Err(e) => log::warn!("[sync] Client: skip voice memo {} — {e}", row.id),
+        }
+    }
+    write_msg_enc(
+        &mut stream,
+        &key,
+        &Msg::VoiceMemosDone {
+            sent: voice_memos_sent,
+        },
+    )?;
+
+    // Read VOICE_MEMOS_ACK (tolerate EOF — server closes write-half after this)
+    match read_msg_enc(&mut stream, &key) {
+        Ok(Msg::VoiceMemosAck { recv }) => {
+            log::info!("[sync] Client: server confirmed receipt of {recv} voice memos");
+        }
+        Ok(other) => {
+            log::info!("[sync] Client: unexpected message after VOICE_MEMOS_DONE: {other:?}");
+        }
+        Err(e) => {
+            log::info!(
+                "[sync] Client: VOICE_MEMOS_ACK read ended early ({e}), treating as success"
+            );
+        }
+    }
+
     // Close both halves promptly.
     let _ = stream.shutdown(std::net::Shutdown::Both);
 
@@ -1792,6 +2057,9 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
         settings_received = set_count;
     }
 
+    // Voice memos apply outside the SQL tx (audio file I/O can't be transactional).
+    let voice_memos_received = apply_recv_voice_memos(app, &recv_voice_memos)?;
+
     // ── Finalise ─────────────────────────────────────────────────────────────
 
     let now = Utc::now().format("%Y-%m-%dT%H:%M:%S").to_string();
@@ -1803,8 +2071,12 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
         db_set_peer_sync_at(&conn, peer_device_id, &now)?;
     }
 
-    let total_sent = entries_sent + books_sent + signals_sent + settings_sent;
-    let total_received = entries_received + books_received + signals_received + settings_received;
+    let total_sent = entries_sent + books_sent + signals_sent + settings_sent + voice_memos_sent;
+    let total_received = entries_received
+        + books_received
+        + signals_received
+        + settings_received
+        + voice_memos_received;
 
     let _ = app.emit(
         "peer:sync_complete",
@@ -1821,6 +2093,8 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
             "receivedSignals": signals_received,
             "sentSettings": settings_sent,
             "receivedSettings": settings_received,
+            "sentVoiceMemos": voice_memos_sent,
+            "receivedVoiceMemos": voice_memos_received,
             "at": now,
         }),
     );
@@ -1828,7 +2102,8 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
     log::info!(
         "[sync] Client: sync with {peer_device_id} complete — \
          entries {entries_sent}/{entries_received}, books {books_sent}/{books_received}, \
-         signals {signals_sent}/{signals_received}, settings {settings_sent}/{settings_received}"
+         signals {signals_sent}/{signals_received}, settings {settings_sent}/{settings_received}, \
+         voice_memos {voice_memos_sent}/{voice_memos_received}"
     );
     Ok(())
 }

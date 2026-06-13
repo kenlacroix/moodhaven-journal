@@ -1355,6 +1355,17 @@ impl Database {
             [],
         );
 
+        // Runtime migration: updated_at for LWW peer sync of voice memos.
+        // Stored as RFC 3339 UTC (…Z) so the sync engine's parse_peer_timestamp
+        // accepts it. Backfill existing rows from created_at/timestamp.
+        let _ = conn.execute("ALTER TABLE voice_memos ADD COLUMN updated_at TEXT", []);
+        let _ = conn.execute(
+            "UPDATE voice_memos
+                SET updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', COALESCE(created_at, timestamp))
+                WHERE updated_at IS NULL",
+            [],
+        );
+
         // Ensure settings table exists early so the sync engine can query it.
         conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS settings (

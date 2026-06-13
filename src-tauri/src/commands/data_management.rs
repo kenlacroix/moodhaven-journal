@@ -843,20 +843,13 @@ pub async fn import_data(app: AppHandle, data: String) -> Result<i32, String> {
     Ok(imported_count)
 }
 
-/// Write text to a file and verify it was written correctly.
-/// Used instead of the FS plugin which has scope restrictions on user-selected paths.
-/// Rejects paths that traverse into sensitive system or shell-config locations.
-#[tauri::command]
-pub async fn write_text_file(
-    path: String,
-    contents: String,
-    lock: State<'_, AppLockState>,
-) -> Result<u64, String> {
-    require_unlocked(&lock)?;
-    let file_path = std::path::Path::new(&path);
+/// Canonicalize a user-selected path and reject any that traverse into sensitive
+/// system or shell-config locations. Shared by `write_text_file` and `read_text_file`
+/// so both honor the identical guard. For not-yet-existing files the parent is
+/// canonicalized and the filename re-joined.
+fn guard_user_file_path(path: &str) -> Result<std::path::PathBuf, String> {
+    let file_path = std::path::Path::new(path);
 
-    // Resolve to an absolute, canonical path (resolves `..` components).
-    // If the file doesn't exist yet, canonicalize the parent instead.
     let canonical = if file_path.exists() {
         file_path
             .canonicalize()
@@ -870,8 +863,8 @@ pub async fn write_text_file(
         return Err("Invalid path".to_string());
     };
 
-    // Block writes to sensitive system and shell-config paths using component-based
-    // matching so that ".ssh" in a directory name elsewhere does not false-match.
+    // Block sensitive system and shell-config paths using component-based matching so
+    // that ".ssh" in a directory name elsewhere does not false-match.
     // Lowercased for case-insensitive matching on Windows.
     let blocked_by_component = canonical.components().any(|c| {
         let name = c.as_os_str().to_str().unwrap_or("").to_lowercase();
@@ -913,11 +906,25 @@ pub async fn write_text_file(
 
     if blocked_by_component || blocked_by_prefix || blocked_by_filename {
         return Err(format!(
-            "Writing to '{}' is not permitted",
+            "Access to '{}' is not permitted",
             canonical.display()
         ));
     }
 
+    Ok(canonical)
+}
+
+/// Write text to a file and verify it was written correctly.
+/// Used instead of the FS plugin which has scope restrictions on user-selected paths.
+/// Rejects paths that traverse into sensitive system or shell-config locations.
+#[tauri::command]
+pub async fn write_text_file(
+    path: String,
+    contents: String,
+    lock: State<'_, AppLockState>,
+) -> Result<u64, String> {
+    require_unlocked(&lock)?;
+    let canonical = guard_user_file_path(&path)?;
     let file_path = canonical.as_path();
 
     // Ensure parent directory exists
@@ -945,6 +952,19 @@ pub async fn write_text_file(
     }
 
     Ok(written_size)
+}
+
+/// Read a UTF-8 text file from a user-selected path. Honors the same path guard as
+/// `write_text_file`. Used by BYO-Cloud folder sync to read back the encrypted backup
+/// blob from a user-picked sync folder (one the OS keeps mirrored to iCloud/Drive/etc.).
+#[tauri::command]
+pub async fn read_text_file(path: String, lock: State<'_, AppLockState>) -> Result<String, String> {
+    require_unlocked(&lock)?;
+    let canonical = guard_user_file_path(&path)?;
+    if !canonical.exists() {
+        return Err(format!("File does not exist: {}", canonical.display()));
+    }
+    fs::read_to_string(&canonical).map_err(|e| format!("Failed to read file: {}", e))
 }
 
 /// Get database statistics for export info

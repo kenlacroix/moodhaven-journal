@@ -38,7 +38,7 @@ npm run tauri ios init
 The iOS app needs a cloud sync story before it's useful (LAN peer sync won't be the iOS primary path). Ship the sync improvements first, then the iOS shell, then the UI responsiveness work.
 
 ```
-Phase 1: Cloud sync (Dropbox + Google Drive)   ← IN PROGRESS (feat/cloud-sync-phase1)
+Phase 1: Cloud sync — 1a BYO-Cloud folder sync (PRIMARY) + 1b OAuth (secondary, coded)
 Phase 2: Tauri iOS project setup               ← 1-2 days, mostly config
 Phase 3: Mobile-responsive React UI            ← IN PROGRESS (BottomTabBar + useIsMobile foundation)
 Phase 4: iOS-specific adaptations              ← feature scoping, flags, edge cases
@@ -47,11 +47,48 @@ Phase 5: iOS-only additions (v2.1+)            ← HealthKit, Face ID, Widgets
 
 ---
 
-## Phase 1 — Cloud Sync: Dropbox + Google Drive
+## Phase 1 — Cloud Sync
+
+> **Direction change (2026-06-08, owner-decided):** **BYO-Cloud folder sync is now the PRIMARY/default
+> sync story.** The OAuth Dropbox/GDrive work below stays as a secondary "power user" option (code is
+> done; wire real credentials when convenient — no longer the headline). Rationale + full reconciliation:
+> `active-plans/post-1.8.0-roadmap.md` §4. The external review correctly flagged that OAuth app-folder
+> sync is higher-friction than necessary.
+
+### Phase 1a — BYO-Cloud folder sync (PRIMARY)
+
+Instead of registering an OAuth app and writing to a hidden app-folder, write the **same encrypted
+`.moodhaven` blob `export_data` already produces** into a **user-picked folder** that happens to sit
+inside iCloud Drive / Google Drive / Dropbox / OneDrive. The OS sync client propagates it for free —
+no server, no OAuth registration, no per-provider API, works with any folder-syncing service the user
+already has.
+
+```
+export_data(password) → encrypted .moodhaven blob
+    ↓  write to user-chosen synced folder
+[ iCloud Drive / Google Drive / Dropbox / OneDrive folder ]  (OS handles propagation)
+    ↓  other device reads from the same folder
+import_data(blob, password) → LWW merge into local SQLite
+```
+
+| Platform | Folder access mechanism | Verify before building |
+|----------|------------------------|------------------------|
+| Desktop | `tauri-plugin-dialog` folder picker → plain path persisted in settings | — (trivial) |
+| Android | Storage Access Framework: persisted tree URI (`takePersistableUriPermission`) | Does `tauri-plugin-fs`+dialog expose a persistable tree URI, or is a thin native plugin needed? **Spike first.** |
+| iOS | `UIDocumentPickerViewController` directory pick + **security-scoped bookmark** persisted across launches | Tauri dialog/fs coverage of security-scoped bookmarks; may need a small Swift plugin. **Spike first.** |
+
+- **Conflict:** same LWW-by-`updated_at` as peer sync; `import_data` already dedups. Add an
+  on-foreground "newer backup detected — import?" check (manual in v1; auto-sync later).
+- **New commands (indicative):** `folder_sync_set_target` (store path/URI/bookmark),
+  `folder_sync_upload`, `folder_sync_download`, `folder_sync_status`, `folder_sync_clear`.
+- Do **not** assume plugin support for persistent mobile folder permissions — spike the Android SAF
+  tree-URI and iOS security-scoped bookmark paths before committing the mobile UI.
+
+### Phase 1b — OAuth Dropbox + Google Drive (SECONDARY, already coded)
 
 ### Context
 
-WebDAV is correct and should remain available. The gap: most users don't run a WebDAV server. Adding Dropbox and Google Drive gives users sync via services they already have, with zero infrastructure to manage. The encrypted blob format (`.moodhaven`) doesn't change — these providers are just new transport layers.
+WebDAV is correct and should remain available. Adding Dropbox and Google Drive gives users sync via services they already have. The encrypted blob format (`.moodhaven`) doesn't change — these providers are just new transport layers. **Now secondary** to folder sync (above); the code in `cloud_providers.rs` is complete but credentials are compile-time placeholders — wire real app credentials when convenient.
 
 ### Architecture
 

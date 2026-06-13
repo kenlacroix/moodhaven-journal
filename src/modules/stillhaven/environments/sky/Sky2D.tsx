@@ -15,6 +15,8 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import { useBilateralEngine } from '../../hooks/useBilateralEngine';
 import type { Side } from '../../engine/bilateralEngine';
+import { REDUCED_MOTION, rand } from '../canvasUtils';
+import { SessionChrome } from '../SessionChrome';
 
 interface Cloud {
   x: number;
@@ -42,12 +44,6 @@ const RAY_RISE = 0.95;
 const RAY_DECAY = 0.05;
 const RAY_HEIGHT_RATIO = 0.55;  // taller — from horizon up
 const RAY_WIDTH_RATIO = 0.10;
-const REDUCED_MOTION =
-  typeof window !== 'undefined'
-    ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    : false;
-
-function rand(min: number, max: number) { return min + Math.random() * (max - min); }
 
 function makeCloud(w: number, h: number, stagger = false): Cloud {
   return {
@@ -156,10 +152,6 @@ function drawStar(ctx: CanvasRenderingContext2D, star: Star, dt: number) {
   ctx.fill();
 }
 
-function formatElapsed(secs: number) {
-  return `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
-}
-
 interface Props { onEnd: () => void; onPause: () => void; onResume: () => void; isAdapting?: boolean; }
 
 export function Sky2D({ onEnd, onPause, onResume, isAdapting = false }: Props): React.JSX.Element {
@@ -265,24 +257,15 @@ export function Sky2D({ onEnd, onPause, onResume, isAdapting = false }: Props): 
     <div className="relative w-full h-full overflow-hidden bg-[#080B1A]">
       <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" style={{ touchAction: 'none' }} />
 
-      <div className="absolute top-4 left-5 select-none pointer-events-none flex items-center gap-2">
-        <span className="text-white/60 text-sm tabular-nums font-medium">{formatElapsed(elapsedSeconds)}</span>
-        {isAdapting && <span className="w-1.5 h-1.5 rounded-full bg-white/50 animate-pulse" title="Session adapting to biometrics" />}
-      </div>
-
-      {isPaused && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50">
-          <p className="text-white/90 text-sm mb-4 font-medium tracking-wide">Paused</p>
-          <button onClick={handleResume} className="px-6 py-2.5 rounded-full bg-white/20 border border-white/30 text-white text-sm font-medium hover:bg-white/30 transition-colors">Resume</button>
-        </div>
-      )}
-
-      <div className="absolute bottom-0 inset-x-0 h-20 flex items-center justify-between px-6 bg-gradient-to-t from-black/50 to-transparent">
-        {!isPaused && isRunning ? (
-          <button onClick={handlePause} className="px-4 py-1.5 rounded-full border border-white/30 text-white/70 text-sm hover:bg-white/10 transition-colors">Pause</button>
-        ) : <div />}
-        <button onClick={handleEnd} className="px-5 py-2 rounded-full bg-white/15 border border-white/30 text-white/90 text-sm font-medium hover:bg-white/25 transition-colors">End session</button>
-      </div>
+      <SessionChrome
+        elapsedSeconds={elapsedSeconds}
+        isAdapting={isAdapting}
+        isPaused={isPaused}
+        isRunning={isRunning}
+        onPause={handlePause}
+        onResume={handleResume}
+        onEnd={handleEnd}
+      />
     </div>
   );
 }

@@ -42,7 +42,11 @@ struct PersistedIdentity {
 }
 
 fn detect_device_type() -> &'static str {
-    "desktop"
+    if cfg!(any(target_os = "android", target_os = "ios")) {
+        "phone"
+    } else {
+        "desktop"
+    }
 }
 
 fn default_device_name() -> String {
@@ -59,6 +63,14 @@ fn default_device_name() -> String {
 
 /// Try to load the Ed25519 seed from the OS keyring.
 /// Returns Some(seed) on success, None if not found or keyring unavailable.
+#[cfg(target_os = "android")]
+fn try_load_from_keyring() -> Option<[u8; 32]> {
+    // The `keyring` crate has no working Android backend; the peer key is
+    // persisted in peer_key.bin instead (see try_store_in_keyring).
+    None
+}
+
+#[cfg(not(target_os = "android"))]
 fn try_load_from_keyring() -> Option<[u8; 32]> {
     let entry = keyring::Entry::new(KEYRING_SERVICE, KEYRING_ACCOUNT).ok()?;
     let hex_str = entry.get_password().ok()?;
@@ -68,6 +80,14 @@ fn try_load_from_keyring() -> Option<[u8; 32]> {
 
 /// Try to store the Ed25519 seed in the OS keyring.
 /// Returns true on success, false if the keyring is unavailable.
+#[cfg(target_os = "android")]
+fn try_store_in_keyring(_seed: &[u8; 32]) -> bool {
+    // No working Android keyring backend — force the peer_key.bin file fallback
+    // so the device identity is stable across launches.
+    false
+}
+
+#[cfg(not(target_os = "android"))]
 fn try_store_in_keyring(seed: &[u8; 32]) -> bool {
     let Ok(entry) = keyring::Entry::new(KEYRING_SERVICE, KEYRING_ACCOUNT) else {
         return false;

@@ -200,14 +200,16 @@ export default function DownloadClient({ release }: { release: LatestRelease | n
             {primaryAsset?.checksumVerified !== false && (
               <span className="inline-flex items-center gap-1 text-xs text-neutral-500 bg-neutral-100 px-2.5 py-1 rounded-full">✓ SHA-256 verified</span>
             )}
-            <a
-              href={release?.releaseUrl ?? "https://github.com/kenlacroix/moodhaven-journal/releases/latest"}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-xs text-neutral-500 bg-neutral-100 px-2.5 py-1 rounded-full hover:text-neutral-700 hover:bg-neutral-200 focus-visible:ring-1 focus-visible:ring-primary-700"
-            >
-              ✓ VirusTotal scanned
-            </a>
+            {release?.virusTotalUrl && (
+              <a
+                href={release.virusTotalUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-xs text-neutral-500 bg-neutral-100 px-2.5 py-1 rounded-full hover:text-neutral-700 hover:bg-neutral-200 focus-visible:ring-1 focus-visible:ring-primary-700"
+              >
+                ✓ VirusTotal scanned
+              </a>
+            )}
             <span className="inline-flex items-center gap-1 text-xs text-neutral-500 bg-neutral-100 px-2.5 py-1 rounded-full">✓ No account required</span>
             <span className="inline-flex items-center gap-1 text-xs text-neutral-500 bg-neutral-100 px-2.5 py-1 rounded-full">✓ MIT licensed</span>
           </div>

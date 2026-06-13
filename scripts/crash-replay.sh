@@ -31,6 +31,16 @@ BOUNDARIES=(
   encrypt.after_rename
 )
 
+# Pending: change_master_password boundaries (active-plans/change-password.md §4, §7). The
+# orchestrator already fires these crash_point!s; wiring them here needs a `change-password`
+# subcommand in crash_probe.rs that seeds entries/signals/media/TOTP and parks at each. Until
+# then they are covered by the Layer-A placeholders (db::crash_replay cmp_b0..b4, #[ignore]d).
+#   cmp.before_inner_commit   -> recover OLD
+#   cmp.after_inner_commit    -> recover NEW
+#   cmp.mid_media             -> recover NEW
+#   cmp.before_rekey          -> recover NEW
+#   cmp.after_rekey           -> recover NEW
+
 echo "==> building crash_probe (debug)"
 ( cd "$TAURI_DIR" && cargo build --example crash_probe ) || {
   echo "build failed"; exit 1;

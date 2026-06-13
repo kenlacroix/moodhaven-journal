@@ -626,6 +626,7 @@ pub fn run() {
             commands::store_password_hash,
             commands::get_password_hash,
             commands::verify_password,
+            commands::change_master_password,
             // Journal entries
             commands::create_journal_entry,
             commands::get_journal_entry,

@@ -693,6 +693,33 @@ impl Database {
         Ok(())
     }
 
+    /// Rekey the outer SQLCipher layer to a new password-derived key — the final,
+    /// irreversible step of `change_master_password` (active-plans/change-password.md §4
+    /// step 6). By the time this runs the inner per-field blobs have already been
+    /// re-encrypted under the new password and committed (the inner txn), and the media
+    /// files have been re-encrypted; only the whole-file SQLCipher key is still old.
+    ///
+    /// Structure mirrors `encrypt_in_place`: export the live (old-keyed) DB into a new
+    /// tmp file keyed with `new_key`, key-verify it, write the new salt, then
+    /// `atomic_promote` the tmp over the original and reopen under the new key. The
+    /// orchestrator brackets this call with the `cmp.before_rekey` / `cmp.after_rekey`
+    /// crash boundaries so a crash leaves the DB either wholly on the old key (tmp
+    /// discarded) or wholly on the new key (tmp promoted) — never a mix.
+    ///
+    /// SCAFFOLD: signature + control flow are in place; the export/verify/promote body
+    /// is a draft pending the implementation pass and crash-replay validation
+    /// (`cmp_b3_post_media_pre_rekey` / `cmp_b4_post_rekey_pre_marker_clear`). Returns an
+    /// explicit not-implemented error until then so it cannot run against real data.
+    pub fn rekey_in_place(&self, new_key: &[u8; 32], new_salt_b64: &str) -> Result<(), String> {
+        let _hex_key = Zeroizing::new(hex::encode(new_key));
+        let _new_salt = new_salt_b64;
+        let _tmp_path = self.path.with_file_name("moodhaven_rekey.db");
+        // TODO(change-password §4.6): sqlcipher_export the old-keyed conn into _tmp_path
+        // under new_key, key-verify, write_db_state{encrypted:true, salt:new_salt_b64},
+        // Self::atomic_promote(&self.path, &_tmp_path), then reopen self.conn under new_key.
+        Err("rekey_in_place not yet implemented (active-plans/change-password.md §4.6)".to_string())
+    }
+
     /// Returns true if db_state.json reports the database is SQLCipher-encrypted.
     pub fn is_encrypted(&self) -> bool {
         read_db_state(&self.path).encrypted

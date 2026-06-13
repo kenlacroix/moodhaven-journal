@@ -58,6 +58,7 @@ import type { VoiceMemo } from '../lib/services/voiceMemoService';
 import { deleteVoiceMemo } from '../lib/services/voiceMemoService';
 import { useWellbeingContext } from '../hooks/useWellbeingContext';
 import { WellbeingCard } from '../components/wellbeing/WellbeingCard';
+import { MobileVoiceCapture } from '../components/voice-memo/MobileVoiceCapture';
 
 interface WritingViewProps {
   entryId?: string | null;
@@ -934,6 +935,10 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
               </button>
             )}
           </div>
+
+          {/* Mobile voice memo capture — phone substitute for inline dictation.
+               Recorded untranscribed; transcribed later on a paired desktop. */}
+          <MobileVoiceCapture />
         </div>
 
         {/* ── Writing area ────────────────────────────────────────────────────────

@@ -18,6 +18,7 @@
 
 use crate::db::{self, Database, VoiceMemoRow};
 use crate::AppLockState;
+use base64::{engine::general_purpose::STANDARD, Engine};
 use rusqlite::params;
 use tauri::{AppHandle, Manager, State};
 
@@ -118,6 +119,69 @@ pub fn store_voice_memo(
         health_json.as_deref(),
         &rel_path,
         "watch",
+    )
+}
+
+/// Persist a voice memo recorded on this device (phone on-device capture) directly
+/// from raw audio bytes, bypassing the `voice_memos_incoming/` staging hop used by
+/// the Wear bridge.
+///
+/// The whisper sidecar is desktop-only, so a phone-captured memo is stored with no
+/// transcription and waits to be transcribed on a paired desktop after sync. Audio
+/// is 16 kHz mono WAV (produced by `useAudioRecorder`); whisper-cli accepts WAV, so
+/// `transcribe_voice_memo` works on it unchanged once it reaches a desktop.
+///
+/// Gated by `require_unlocked`: unlike the Wear bridge this is a deliberate
+/// user action inside an unlocked session.
+#[allow(clippy::too_many_arguments)]
+#[tauri::command]
+pub fn store_voice_memo_bytes(
+    app: AppHandle,
+    db: State<Database>,
+    lock: State<'_, AppLockState>,
+    id: String,
+    timestamp: String,
+    duration_ms: i64,
+    health_json: Option<String>,
+    audio_base64: String,
+) -> Result<VoiceMemoRow, String> {
+    require_unlocked(&lock)?;
+
+    if id.is_empty() {
+        return Err("store_voice_memo_bytes: id must not be empty".to_string());
+    }
+    // `id` is interpolated into the destination filename — reject path separators.
+    validate_incoming_filename(&id)
+        .map_err(|e| format!("store_voice_memo_bytes: invalid id: {e}"))?;
+
+    let bytes = STANDARD
+        .decode(audio_base64.as_bytes())
+        .map_err(|e| format!("store_voice_memo_bytes: base64 decode: {e}"))?;
+    if bytes.is_empty() {
+        return Err("store_voice_memo_bytes: audio is empty".to_string());
+    }
+
+    let dest_dir = voice_memos_dir(&app)?;
+    let dest_filename = format!("{}.wav", id);
+    let dest = dest_dir.join(&dest_filename);
+    let rel_path = format!("voice_memos/{}", dest_filename);
+
+    // Defense in depth: ensure the resolved destination stays inside voice_memos/.
+    if dest.parent() != Some(dest_dir.as_path()) {
+        return Err("store_voice_memo_bytes: id escapes voice_memos directory".to_string());
+    }
+
+    std::fs::write(&dest, &bytes)
+        .map_err(|e| format!("store_voice_memo_bytes: write failed: {e}"))?;
+
+    db::create_voice_memo(
+        &db,
+        &id,
+        &timestamp,
+        duration_ms,
+        health_json.as_deref(),
+        &rel_path,
+        "phone",
     )
 }
 

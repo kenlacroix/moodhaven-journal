@@ -1,5 +1,6 @@
 import {
   storeVoiceMemo,
+  storeVoiceMemoBytes,
   listVoiceMemos,
   getVoiceMemo,
   deleteVoiceMemo,
@@ -77,6 +78,44 @@ describe('storeVoiceMemo', () => {
     };
     await storeVoiceMemo(params);
     expect(mockInvoke).toHaveBeenCalledWith('store_voice_memo', params);
+  });
+});
+
+describe('storeVoiceMemoBytes', () => {
+  it('invokes store_voice_memo_bytes with healthJson null when omitted', async () => {
+    mockInvoke.mockResolvedValue(fakeMemo);
+    const result = await storeVoiceMemoBytes(
+      'id1',
+      '2026-06-12T10:00:00Z',
+      4200,
+      'BASE64==',
+    );
+    expect(mockInvoke).toHaveBeenCalledWith('store_voice_memo_bytes', {
+      id: 'id1',
+      timestamp: '2026-06-12T10:00:00Z',
+      durationMs: 4200,
+      healthJson: null,
+      audioBase64: 'BASE64==',
+    });
+    expect(result).toEqual(fakeMemo);
+  });
+
+  it('forwards healthJson when provided', async () => {
+    mockInvoke.mockResolvedValue(fakeMemo);
+    await storeVoiceMemoBytes(
+      'id2',
+      '2026-06-12T11:00:00Z',
+      5000,
+      'AUDIO==',
+      '{"hr":72}',
+    );
+    expect(mockInvoke).toHaveBeenCalledWith('store_voice_memo_bytes', {
+      id: 'id2',
+      timestamp: '2026-06-12T11:00:00Z',
+      durationMs: 5000,
+      healthJson: '{"hr":72}',
+      audioBase64: 'AUDIO==',
+    });
   });
 });
 

@@ -46,6 +46,17 @@ function formatCountdown(ms: number): string {
   return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 }
 
+/**
+ * Yield until the browser has painted one frame, so a just-set loading state is
+ * visible before heavy/awaited work begins. Double rAF: the first callback runs
+ * before paint, the second resolves after that frame has painted.
+ */
+function nextPaint(): Promise<void> {
+  return new Promise<void>((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  });
+}
+
 export function LockScreen() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -218,6 +229,9 @@ export function LockScreen() {
 
       setError(null);
       setIsLoading(true);
+      // Let the "Verifying…" state paint before the (potentially slow) verify
+      // round-trip, so the button gives immediate feedback on press.
+      await nextPaint();
 
       try {
         // First verify the password
@@ -367,6 +381,8 @@ export function LockScreen() {
 
       setPinLoading(true);
       setPinError(null);
+      // Paint the loading state before the decrypt round-trip (see nextPaint).
+      await nextPaint();
 
       try {
         const decryptedPassword = await pinUnlock(pinInput);

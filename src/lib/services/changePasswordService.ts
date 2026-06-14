@@ -125,6 +125,14 @@ const REKEY_BATCH = 100;
  * the verifier, and invalidate stale convenience factors. Throws (before any backend mutation)
  * if the old password fails to decrypt a blob.
  *
+ * Account encryption salt: the stable per-account PBKDF2 salt (`encryption_salt`, installed in
+ * crypto.ts at unlock via initAccountEncryption) is intentionally PRESERVED across a password
+ * change. It is neither rotated nor cleared here: the derived field-encryption key already
+ * changes because the password changes, and reKeyBatch's encrypt() re-stamps every blob with
+ * this same salt — so after the change all entries stay on the account salt and the one-PBKDF2-
+ * per-session cache benefit survives. Rotating the salt would force a fresh per-entry re-key on
+ * the next unlock for no security gain.
+ *
  * Recovery key: a previously-enabled recovery key wraps the OLD password and becomes stale. If
  * the caller passes `recoveryBlob` (the new password re-wrapped under the user's re-entered
  * recovery key, see `wrapPasswordForRecovery`), the backend installs it inside the atomic flip

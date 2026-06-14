@@ -420,6 +420,86 @@ pub fn get_entries_on_this_day(db: &Database) -> Result<Vec<JournalEntryRow>, St
     Ok(entries)
 }
 
+/// Replace ONLY an entry's `encrypted_content`, preserving its existing `updated_at`.
+///
+/// Used by the change-password / master-key re-encryption sweep: every entry's blob is
+/// re-encrypted under the new key, but this is a transparent re-encryption — the logical
+/// content is unchanged, so the entry must NOT be re-dated. Bumping `updated_at` would
+/// re-propagate every entry over peer sync and reorder the timeline.
+///
+/// The `update_entry_timestamp` trigger fires `AFTER UPDATE ... WHEN NEW.updated_at = OLD.updated_at`,
+/// so any ordinary UPDATE that leaves `updated_at` untouched (or writes back the same value)
+/// would still trip the trigger and bump the timestamp to `now`. To preserve the original
+/// value we drop the trigger, perform the write, and recreate it — all inside one transaction
+/// so the trigger is never missing for any concurrent writer.
+pub fn patch_entry_encrypted_content(
+    db: &Database,
+    id: &str,
+    encrypted_content: &EncryptedContent,
+    expected_updated_at: &str,
+) -> Result<bool, String> {
+    let mut conn = db.conn.lock().map_err(|e| e.to_string())?;
+
+    let content_json = serde_json::to_string(encrypted_content)
+        .map_err(|e| format!("JSON serialization failed: {}", e))?;
+
+    let tx = conn
+        .transaction()
+        .map_err(|e| format!("begin transaction: {}", e))?;
+
+    // Confirm the entry exists before mutating anything.
+    let exists: bool = tx
+        .query_row(
+            "SELECT 1 FROM journal_entries WHERE id = ?1",
+            params![id],
+            |_| Ok(()),
+        )
+        .map(|_| true)
+        .or_else(|e| match e {
+            rusqlite::Error::QueryReturnedNoRows => Ok(false),
+            other => Err(format!("lookup entry: {}", other)),
+        })?;
+    if !exists {
+        return Err("Entry not found".to_string());
+    }
+
+    // Drop the auto-bump trigger so the content write does not advance updated_at,
+    // then recreate it identically (matching the runtime-migrated definition in db/mod.rs).
+    tx.execute("DROP TRIGGER IF EXISTS update_entry_timestamp", [])
+        .map_err(|e| format!("drop trigger: {}", e))?;
+
+    // Compare-and-swap on updated_at: only re-write content if the row has not
+    // changed since the caller snapshotted it. This closes a TOCTOU window where a
+    // background re-encryption sweep could otherwise overwrite a concurrent user
+    // edit with stale plaintext (the dropped trigger would hide the loss from LWW).
+    // A mismatch (row edited) affects 0 rows → returns false; the row is left intact.
+    let affected = tx
+        .execute(
+            "UPDATE journal_entries SET encrypted_content = ?1 \
+             WHERE id = ?2 AND updated_at = ?3",
+            params![content_json, id, expected_updated_at],
+        )
+        .map_err(|e| format!("Failed to patch encrypted_content: {}", e))?;
+
+    tx.execute_batch(
+        "CREATE TRIGGER update_entry_timestamp
+             AFTER UPDATE ON journal_entries
+             FOR EACH ROW
+             WHEN NEW.updated_at = OLD.updated_at
+         BEGIN
+             UPDATE journal_entries
+             SET updated_at = strftime('%Y-%m-%dT%H:%M:%S', 'now', 'localtime')
+             WHERE id = OLD.id;
+         END;",
+    )
+    .map_err(|e| format!("recreate trigger: {}", e))?;
+
+    tx.commit()
+        .map_err(|e| format!("commit transaction: {}", e))?;
+
+    Ok(affected > 0)
+}
+
 /// Update an entry's content
 pub fn update_entry(
     db: &Database,

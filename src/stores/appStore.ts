@@ -16,6 +16,17 @@ import {
   devBypassUnlock,
 } from '../lib/services/journalService';
 import { seedDevEntries } from '../lib/devSeed';
+import { migrateEntriesToAccountSalt } from '../lib/services/encryptionMigration';
+
+/**
+ * Kick off the account-salt re-encryption sweep in the background. Fire-and-forget: never
+ * awaited on the unlock-transition path so it cannot delay the UI; errors are swallowed.
+ */
+function startEncryptionMigration(): void {
+  migrateEntriesToAccountSalt().catch((error) => {
+    logger.warn('Encryption migration sweep failed (non-fatal):', { error: String(error) });
+  });
+}
 
 interface AppState {
   // Authentication
@@ -77,6 +88,7 @@ export const useAppStore = create<AppState>((set) => ({
       // Auto-unlock after setup
       const unlocked = await unlockJournal(password);
       set({ isInitialized: true, isUnlocked: unlocked, sessionPassword: unlocked ? password : null });
+      if (unlocked) startEncryptionMigration();
       return true;
     } catch (error) {
       logger.error('Failed to initialize:', { error: String(error) });
@@ -90,6 +102,7 @@ export const useAppStore = create<AppState>((set) => ({
       const success = await unlockJournal(password);
       if (success) {
         set({ isUnlocked: true, sessionPassword: password });
+        startEncryptionMigration();
       }
       return success;
     } catch (error) {
@@ -106,6 +119,7 @@ export const useAppStore = create<AppState>((set) => ({
       const success = await finalizeUnlockService(password);
       if (success) {
         set({ isUnlocked: true, sessionPassword: password });
+        startEncryptionMigration();
       }
       return success;
     } catch (error) {

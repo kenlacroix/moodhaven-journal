@@ -552,3 +552,138 @@ pub fn delete_entry(db: &Database, id: &str) -> Result<bool, String> {
 
     Ok(rows_affected > 0)
 }
+
+#[cfg(test)]
+mod patch_encrypted_content_tests {
+    use super::*;
+    use rusqlite::Connection;
+    use std::sync::Mutex;
+
+    /// In-memory DB with the journal_entries table and the same auto-bump
+    /// `update_entry_timestamp` trigger the runtime migration installs, so the
+    /// drop/recreate dance in patch_entry_encrypted_content is exercised faithfully.
+    fn test_db() -> Database {
+        let conn = Connection::open_in_memory().expect("in-memory DB");
+        conn.execute_batch(
+            "CREATE TABLE journal_entries (
+                id                TEXT PRIMARY KEY,
+                encrypted_content TEXT NOT NULL,
+                mood              INTEGER NOT NULL DEFAULT 3,
+                privacy_mode      INTEGER NOT NULL DEFAULT 0,
+                location_weather  TEXT,
+                book_id           TEXT NOT NULL DEFAULT 'default',
+                pinned            INTEGER NOT NULL DEFAULT 0,
+                created_at        TEXT NOT NULL DEFAULT '2026-01-01T00:00:00',
+                updated_at        TEXT NOT NULL DEFAULT '2026-01-01T00:00:00'
+            );
+            CREATE TRIGGER update_entry_timestamp
+                AFTER UPDATE ON journal_entries
+                FOR EACH ROW
+                WHEN NEW.updated_at = OLD.updated_at
+            BEGIN
+                UPDATE journal_entries
+                SET updated_at = strftime('%Y-%m-%dT%H:%M:%S', 'now', 'localtime')
+                WHERE id = OLD.id;
+            END;",
+        )
+        .expect("create schema");
+        Database {
+            conn: Mutex::new(conn),
+            path: std::path::PathBuf::new(),
+        }
+    }
+
+    fn blob(salt: &str) -> EncryptedContent {
+        EncryptedContent {
+            ciphertext: "ct".into(),
+            iv: "iv".into(),
+            salt: salt.into(),
+            version: 1,
+        }
+    }
+
+    fn insert_entry(db: &Database, id: &str, updated_at: &str) {
+        let conn = db.conn.lock().unwrap();
+        let content = serde_json::to_string(&blob("OLD")).unwrap();
+        conn.execute(
+            "INSERT INTO journal_entries (id, encrypted_content, updated_at) VALUES (?1, ?2, ?3)",
+            params![id, content, updated_at],
+        )
+        .unwrap();
+    }
+
+    fn read_content_and_updated_at(db: &Database, id: &str) -> (String, String) {
+        let conn = db.conn.lock().unwrap();
+        conn.query_row(
+            "SELECT encrypted_content, updated_at FROM journal_entries WHERE id = ?1",
+            params![id],
+            |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn updates_content_and_preserves_updated_at() {
+        let db = test_db();
+        insert_entry(&db, "e1", "2026-03-03T12:00:00");
+
+        let changed =
+            patch_entry_encrypted_content(&db, "e1", &blob("NEW"), "2026-03-03T12:00:00").unwrap();
+        assert!(changed, "CAS matched → returns true");
+
+        let (content, updated_at) = read_content_and_updated_at(&db, "e1");
+        let stored: EncryptedContent = serde_json::from_str(&content).unwrap();
+        assert_eq!(stored.salt, "NEW", "content was re-written");
+        assert_eq!(
+            updated_at, "2026-03-03T12:00:00",
+            "updated_at preserved — trigger did not bump it"
+        );
+    }
+
+    #[test]
+    fn cas_mismatch_is_a_noop_and_returns_false() {
+        let db = test_db();
+        insert_entry(&db, "e1", "2026-03-03T12:00:00");
+
+        // Caller's snapshot is stale (row was edited to a different updated_at).
+        let changed =
+            patch_entry_encrypted_content(&db, "e1", &blob("NEW"), "1999-01-01T00:00:00").unwrap();
+        assert!(!changed, "no row matched the CAS predicate → false");
+
+        let (content, updated_at) = read_content_and_updated_at(&db, "e1");
+        let stored: EncryptedContent = serde_json::from_str(&content).unwrap();
+        assert_eq!(stored.salt, "OLD", "content left intact on CAS mismatch");
+        assert_eq!(updated_at, "2026-03-03T12:00:00", "updated_at untouched");
+    }
+
+    #[test]
+    fn missing_id_returns_entry_not_found() {
+        let db = test_db();
+        let err = patch_entry_encrypted_content(&db, "ghost", &blob("NEW"), "2026-01-01T00:00:00")
+            .unwrap_err();
+        assert_eq!(err, "Entry not found");
+    }
+
+    #[test]
+    fn trigger_is_restored_after_patch() {
+        // After a patch (which drops + recreates the trigger), an ordinary content-only
+        // UPDATE that re-writes the same updated_at must still auto-bump it.
+        let db = test_db();
+        insert_entry(&db, "e1", "2026-03-03T12:00:00");
+        patch_entry_encrypted_content(&db, "e1", &blob("NEW"), "2026-03-03T12:00:00").unwrap();
+
+        {
+            let conn = db.conn.lock().unwrap();
+            conn.execute(
+                "UPDATE journal_entries SET mood = 5, updated_at = updated_at WHERE id = 'e1'",
+                [],
+            )
+            .unwrap();
+        }
+        let (_content, updated_at) = read_content_and_updated_at(&db, "e1");
+        assert_ne!(
+            updated_at, "2026-03-03T12:00:00",
+            "trigger fired on a normal update → timestamp bumped"
+        );
+    }
+}

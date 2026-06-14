@@ -33,6 +33,9 @@ export class Command {
 export const dialogOpen = async () => null;
 export const save = async () => null;
 
+// plugin-fs (no-op; the Android content-URI read path is desktop/Tauri-only)
+export const readFile = async (_path: string): Promise<Uint8Array> => new Uint8Array();
+
 // plugin-notification
 export const sendNotification = (_opts: any) => {};
 export const isPermissionGranted = async () => false;

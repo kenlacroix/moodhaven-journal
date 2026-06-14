@@ -37,6 +37,27 @@ use crate::AppLockState;
 
 const MAX_MEDIA_BYTES: u64 = 500 * 1024 * 1024; // 500 MB hard cap
 
+/// Reject a frontend-supplied filename that isn't a bare name.
+/// Defense-in-depth before the name reaches any path join: no separators, no `..`.
+fn reject_unsafe_filename(filename: &str) -> Result<(), String> {
+    if filename.contains('/') || filename.contains('\\') || filename.contains("..") {
+        return Err("Invalid filename".to_string());
+    }
+    Ok(())
+}
+
+/// Reject media larger than the hard cap, mirroring the path-based command.
+fn enforce_media_size_limit(len: usize) -> Result<(), String> {
+    if len as u64 > MAX_MEDIA_BYTES {
+        return Err(format!(
+            "File too large ({} MB, max {} MB)",
+            len as u64 / (1024 * 1024),
+            MAX_MEDIA_BYTES / (1024 * 1024)
+        ));
+    }
+    Ok(())
+}
+
 use super::require_unlocked;
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -624,9 +645,7 @@ pub fn save_media_attachment_bytes(
 
     // Defense-in-depth: `filename` comes from the frontend, so reject anything
     // that isn't a bare filename before it reaches path joins.
-    if filename.contains('/') || filename.contains('\\') || filename.contains("..") {
-        return Err("Invalid filename".to_string());
-    }
+    reject_unsafe_filename(&filename)?;
 
     let extension = Path::new(&filename)
         .extension()
@@ -640,13 +659,7 @@ pub fn save_media_attachment_bytes(
         .map_err(|e| format!("Invalid base64 media data: {e}"))?;
 
     // Enforce the same size limit as the path-based command.
-    if plaintext.len() as u64 > MAX_MEDIA_BYTES {
-        return Err(format!(
-            "File too large ({} MB, max {} MB)",
-            plaintext.len() as u64 / (1024 * 1024),
-            MAX_MEDIA_BYTES / (1024 * 1024)
-        ));
-    }
+    enforce_media_size_limit(plaintext.len())?;
 
     // Recompress images (downscale + re-encode in the same format) before encryption.
     // Shrinks the encrypted store and strips EXIF/GPS metadata; falls back to the original
@@ -1162,5 +1175,47 @@ mod tests {
         if let Some(out) = compress_image(&small, "image/jpeg") {
             assert!(out.len() < small.len());
         }
+    }
+
+    // ── save_media_attachment_bytes guards ───────────────────────────────────────
+
+    use super::{enforce_media_size_limit, reject_unsafe_filename, MAX_MEDIA_BYTES};
+
+    #[test]
+    fn bytes_filename_plain_name_accepted() {
+        assert!(reject_unsafe_filename("photo.jpg").is_ok());
+        assert!(reject_unsafe_filename("my report 2026.pdf").is_ok());
+    }
+
+    #[test]
+    fn bytes_filename_forward_slash_rejected() {
+        assert!(reject_unsafe_filename("a/b.jpg").is_err());
+        assert!(reject_unsafe_filename("/etc/passwd").is_err());
+    }
+
+    #[test]
+    fn bytes_filename_backslash_rejected() {
+        assert!(reject_unsafe_filename("a\\b.jpg").is_err());
+        assert!(reject_unsafe_filename("..\\secret").is_err());
+    }
+
+    #[test]
+    fn bytes_filename_dot_dot_rejected() {
+        assert!(reject_unsafe_filename("..").is_err());
+        assert!(reject_unsafe_filename("evil..jpg").is_err());
+    }
+
+    #[test]
+    fn bytes_size_within_limit_accepted() {
+        assert!(enforce_media_size_limit(0).is_ok());
+        assert!(enforce_media_size_limit(1024).is_ok());
+        assert!(enforce_media_size_limit(MAX_MEDIA_BYTES as usize).is_ok());
+    }
+
+    #[test]
+    fn bytes_size_over_limit_rejected() {
+        let err = enforce_media_size_limit(MAX_MEDIA_BYTES as usize + 1)
+            .expect_err("oversized payload must be rejected");
+        assert!(err.contains("too large"), "got: {err}");
     }
 }

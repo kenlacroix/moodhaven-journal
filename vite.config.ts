@@ -40,6 +40,7 @@ export default defineConfig({
           '@tauri-apps/plugin-log': resolve(__dirname, 'src/lib/backend/browser-stubs.ts'),
           '@tauri-apps/plugin-shell': resolve(__dirname, 'src/lib/backend/browser-stubs.ts'),
           '@tauri-apps/plugin-dialog': resolve(__dirname, 'src/lib/backend/browser-stubs.ts'),
+          '@tauri-apps/plugin-fs': resolve(__dirname, 'src/lib/backend/browser-stubs.ts'),
           '@tauri-apps/plugin-notification': resolve(__dirname, 'src/lib/backend/browser-stubs.ts'),
           '@tauri-apps/api/window': resolve(__dirname, 'src/lib/backend/browser-stubs.ts'),
           '@tauri-apps/api/event': resolve(__dirname, 'src/lib/backend/browser-stubs.ts'),

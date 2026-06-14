@@ -766,6 +766,7 @@ pub fn run() {
             commands::oura_backfill,
             // Media attachments
             commands::save_media_attachment,
+            commands::save_media_attachment_bytes,
             commands::list_entry_media,
             commands::list_all_media,
             commands::open_media_attachment,

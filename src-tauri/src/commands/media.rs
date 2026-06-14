@@ -602,6 +602,96 @@ pub fn save_media_attachment(
     })
 }
 
+/// Attach a file to an entry from in-memory base64 bytes.
+/// Used on Android, where the system file picker returns a non-readable
+/// `content://` URI rather than a filesystem path; the frontend reads the bytes
+/// and passes them as base64. Mirrors `save_media_attachment` but decodes bytes
+/// instead of reading from disk.
+#[tauri::command]
+pub fn save_media_attachment_bytes(
+    app: AppHandle,
+    db: State<'_, Database>,
+    lock: State<'_, AppLockState>,
+    rekey: State<'_, crate::RekeyInProgress>,
+    entry_id: String,
+    filename: String,
+    data_base64: String,
+    password: String,
+) -> Result<MediaAttachment, String> {
+    require_unlocked(&lock)?;
+    super::require_no_rekey(&rekey)?;
+
+    // Defense-in-depth: `filename` comes from the frontend, so reject anything
+    // that isn't a bare filename before it reaches path joins.
+    if filename.contains('/') || filename.contains('\\') || filename.contains("..") {
+        return Err("Invalid filename".to_string());
+    }
+
+    let extension = Path::new(&filename)
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("bin")
+        .to_ascii_lowercase();
+    let mime_type = mime_from_filename(&filename).to_string();
+
+    let plaintext = STANDARD
+        .decode(data_base64.as_bytes())
+        .map_err(|e| format!("Invalid base64 media data: {e}"))?;
+
+    // Enforce the same size limit as the path-based command.
+    if plaintext.len() as u64 > MAX_MEDIA_BYTES {
+        return Err(format!(
+            "File too large ({} MB, max {} MB)",
+            plaintext.len() as u64 / (1024 * 1024),
+            MAX_MEDIA_BYTES / (1024 * 1024)
+        ));
+    }
+
+    // Recompress images (downscale + re-encode in the same format) before encryption.
+    // Shrinks the encrypted store and strips EXIF/GPS metadata; falls back to the original
+    // bytes for non-images, undecodable input, or when compression wouldn't save space.
+    let plaintext = match compress_image(&plaintext, &mime_type) {
+        Some(compressed) => compressed,
+        None => plaintext,
+    };
+    let size_bytes = plaintext.len() as i64;
+
+    let encrypted = encrypt_to_mbmf(&plaintext, &password)?;
+    drop(plaintext);
+
+    let media_id = Uuid::new_v4().to_string();
+    let enc_filename = format!("{}.{}.enc", media_id, extension);
+    let media_dir = get_media_dir(&app, &entry_id)?;
+    let enc_abs = media_dir.join(&enc_filename);
+
+    std::fs::write(&enc_abs, &encrypted)
+        .map_err(|e| format!("Failed to write encrypted file: {}", e))?;
+
+    let rel_path = format!("media/{}/{}", entry_id, enc_filename);
+    let created_at = chrono::Local::now().format("%Y-%m-%dT%H:%M:%S").to_string();
+
+    {
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        conn.execute(
+            "INSERT INTO entry_media \
+             (id, entry_id, filename, mime_type, size_bytes, enc_path, created_at) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![media_id, entry_id, filename, mime_type, size_bytes, rel_path, created_at],
+        )
+        .map_err(|e| format!("DB insert failed: {}", e))?;
+    }
+
+    Ok(MediaAttachment {
+        id: media_id,
+        entry_id,
+        filename,
+        mime_type,
+        size_bytes,
+        enc_path: rel_path,
+        created_at,
+    })
+}
+
 /// Return all media attachments for a journal entry, ordered by creation time.
 #[tauri::command]
 pub fn list_entry_media(

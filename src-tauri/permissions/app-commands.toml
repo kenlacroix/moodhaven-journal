@@ -117,6 +117,7 @@ commands.allow = [
   "oura_backfill",
   # Media attachments
   "save_media_attachment",
+  "save_media_attachment_bytes",
   "list_entry_media",
   "list_all_media",
   "open_media_attachment",
@@ -266,6 +267,7 @@ commands.allow = [
   "get_app_version",
   # Media
   "save_media_attachment",
+  "save_media_attachment_bytes",
   "list_entry_media",
   "open_media_attachment",
   "get_media_thumbnail",

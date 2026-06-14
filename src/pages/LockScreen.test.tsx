@@ -327,6 +327,57 @@ describe('LockScreen — PIN lockout: countdown expiry re-enables input', () => 
   }, 15000);
 });
 
+describe('LockScreen — password submit: paint-yield + unlock', () => {
+  beforeEach(() => {
+    // pin_is_enabled returns false on mount → stay on password step
+    mockInvoke.mockResolvedValue(false);
+    mockUnlock.mockResolvedValue(true);
+  });
+
+  it('shows "Verifying…" loading state then calls unlock on the password path', async () => {
+    const { verifyUserPassword } = await import('../lib/services/journalService');
+    vi.mocked(verifyUserPassword).mockResolvedValue(true);
+
+    render(<LockScreen />);
+
+    const input = await screen.findByLabelText(/^password$/i);
+    await userEvent.type(input, 'correct horse');
+
+    const submit = screen.getByRole('button', { name: /continue/i });
+    await userEvent.click(submit);
+
+    // nextPaint() yields a painted frame before verify; the button flips to the
+    // loading state. Assert the "Verifying…" label appears.
+    await waitFor(() => {
+      expect(screen.getByText(/verifying/i)).toBeInTheDocument();
+    });
+
+    // The verify round-trip runs, then unlock() is called with the password.
+    await waitFor(() => {
+      expect(verifyUserPassword).toHaveBeenCalledWith('correct horse');
+    });
+    await waitFor(() => {
+      expect(mockUnlock).toHaveBeenCalledWith('correct horse');
+    });
+  });
+
+  it('does not call unlock and surfaces an error on an incorrect password', async () => {
+    const { verifyUserPassword } = await import('../lib/services/journalService');
+    vi.mocked(verifyUserPassword).mockResolvedValueOnce(false);
+
+    render(<LockScreen />);
+
+    const input = await screen.findByLabelText(/^password$/i);
+    await userEvent.type(input, 'wrongpass');
+    await userEvent.click(screen.getByRole('button', { name: /continue/i }));
+
+    await waitFor(() => {
+      expect(verifyUserPassword).toHaveBeenCalledWith('wrongpass');
+    });
+    expect(mockUnlock).not.toHaveBeenCalled();
+  });
+});
+
 describe('LockScreen — recovery key: corrupted escrow guard', () => {
   it('rejects a recovered password that does not match the stored hash (with 2FA enabled)', async () => {
     const { recoverPassword, isRecoveryKeyEnabled } = await import(

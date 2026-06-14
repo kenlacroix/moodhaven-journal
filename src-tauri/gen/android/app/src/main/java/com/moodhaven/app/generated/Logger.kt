@@ -83,7 +83,7 @@ class Logger {
     }
 
     private fun shouldLog(): Boolean {
-      return false
+      return BuildConfig.DEBUG
     }
   }
 }

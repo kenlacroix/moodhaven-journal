@@ -6,6 +6,7 @@ import android.os.Bundle
 import android.util.Log
 import androidx.activity.enableEdgeToEdge
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import app.tauri.plugin.PluginManager
 
 class MainActivity : TauriActivity() {
   // Held for the app's lifetime so mdns-sd can receive multicast peer-discovery
@@ -15,13 +16,22 @@ class MainActivity : TauriActivity() {
 
   override fun onCreate(savedInstanceState: Bundle?) {
     installSplashScreen()
+    super.onCreate(savedInstanceState)
+    // The generated TauriActivity for this project omits the codegen's
+    // `PluginManager.onActivityCreate(this)` call, so the Tauri PluginManager's
+    // startActivityForResultLauncher is never registered. Any plugin that opens a
+    // system activity for a result — e.g. tauri-plugin-dialog's file picker —
+    // then throws "lateinit property startActivityForResultLauncher has not been
+    // initialized" and silently fails to launch. Register it here (idempotent: the
+    // manager guards on `activity.isInitialized`). Custom plugins are loaded after
+    // super.onCreate() so the activity/launcher are set up first.
+    PluginManager.onActivityCreate(this)
     getPluginManager().load(null, "biometric", BiometricPlugin(this), "{}")
     getPluginManager().load(null, "wear", WearPlugin(this), "{}")
     getPluginManager().load(null, "opener", OpenerPlugin(this), "{}")
     getPluginManager().load(null, "securekey", SecureKeyPlugin(this), "{}")
     acquireMulticastLock()
     enableEdgeToEdge()
-    super.onCreate(savedInstanceState)
   }
 
   private fun acquireMulticastLock() {

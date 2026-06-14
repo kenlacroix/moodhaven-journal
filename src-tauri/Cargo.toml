@@ -26,6 +26,7 @@ hardware-key = ["dep:ctap-hid-fido2", "dep:argon2"]
 [dependencies]
 tauri = { version = "2", features = [] }
 tauri-plugin-log = "2"
+socket2 = "0.5"
 log = "0.4"
 tauri-plugin-shell = "2"
 tauri-plugin-notification = "2"
@@ -74,6 +75,14 @@ tauri-plugin-shell = "2"
 [target.'cfg(target_os = "linux")'.dependencies]
 webkit2gtk = { version = "2.0", features = [] }
 
+# Hardware SHA for PBKDF2 (verify_password) on ARM. sha2's `asm` feature enables
+# the aarch64 ARMv8 SHA backend, which uses core::arch intrinsics (NOT the external
+# sha2-asm crate) gated behind a runtime cpufeatures check — fast on phones with
+# the crypto extensions, soft fallback otherwise. Scoped to aarch64 so x86_64
+# (esp. Windows MSVC) does NOT pull sha2-asm, whose x86 assembly fails to build there.
+[target.'cfg(target_arch = "aarch64")'.dependencies]
+sha2 = { version = "0.10", features = ["asm"] }
+
 [dev-dependencies]
 tempfile = "3"
 # Used only by updater signature tests to synthesize valid minisign fixtures
@@ -82,6 +91,20 @@ blake2 = "0.10"
 
 [profile.dev]
 incremental = true
+
+# Optimize the password-hashing crates even in debug builds. verify_password runs
+# PBKDF2-HMAC-SHA256 600,000 iterations; at the dev default opt-level 0 this takes
+# ~15s on a phone, so unlocking a debug APK feels broken. Optimizing just these
+# crates (the app crate stays unoptimized for fast incremental compiles) brings it
+# back to sub-second. Release builds are unaffected (they already use opt-level "s").
+[profile.dev.package.sha2]
+opt-level = 3
+[profile.dev.package.pbkdf2]
+opt-level = 3
+[profile.dev.package.hmac]
+opt-level = 3
+[profile.dev.package.digest]
+opt-level = 3
 
 [profile.release]
 codegen-units = 1

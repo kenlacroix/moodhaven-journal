@@ -282,6 +282,26 @@ pub fn update_journal_entry(
     db::update_entry(&db, &id, &encrypted_content, mood, pm, word_count)
 }
 
+/// Replace ONLY an entry's encrypted content, preserving its `updated_at`.
+///
+/// Used by the change-master-password re-encryption sweep: each entry's blob is re-encrypted
+/// under the new key without changing its logical content, so the timestamp must NOT advance
+/// (otherwise peer sync re-propagates every entry and the timeline reorders). Mirrors the
+/// lock/rekey guards of `update_journal_entry`.
+#[tauri::command]
+pub fn patch_entry_encrypted_content(
+    db: State<Database>,
+    lock: State<'_, AppLockState>,
+    rekey: State<'_, crate::RekeyInProgress>,
+    id: String,
+    encrypted_content: EncryptedContent,
+    expected_updated_at: String,
+) -> Result<bool, String> {
+    require_unlocked(&lock)?;
+    super::require_no_rekey(&rekey)?;
+    db::patch_entry_encrypted_content(&db, &id, &encrypted_content, &expected_updated_at)
+}
+
 /// Delete a journal entry
 #[tauri::command]
 pub fn delete_journal_entry(

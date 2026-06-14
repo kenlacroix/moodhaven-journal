@@ -38,6 +38,7 @@ commands.allow = [
   "get_journal_entries_by_date",
   "get_entries_on_this_day",
   "update_journal_entry",
+  "patch_entry_encrypted_content",
   "delete_journal_entry",
   "patch_entry_location_weather",
   "patch_entry_pinned",

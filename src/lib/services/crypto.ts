@@ -97,6 +97,44 @@ export function clearKeyCache(): void {
   sessionKeyCache.clear();
 }
 
+// Stable per-account PBKDF2 salt.
+//
+// When set, encrypt() uses this salt for *every* message instead of a fresh
+// random salt per call.  Because deriveKey()'s session cache is keyed on
+// (salt, password), a stable salt means only ONE PBKDF2-600k derivation runs
+// per session — every subsequent encrypt reuses the cached key.  With a random
+// per-call salt, every encrypt was a cache miss → a full 600k derivation.
+//
+// Security: this is safe.  The per-message IV is still random (see encrypt()),
+// so AES-GCM never reuses a (key, nonce) pair.  PBKDF2 salt reuse across
+// messages that share a key is standard and expected — the salt only needs to
+// be unique per (password → key) derivation, not per message.
+//
+// decrypt() intentionally does NOT read this value: it reads each blob's own
+// embedded `salt` field, so historical per-entry-salt data and entries synced
+// from other devices (which may carry different salts) still decrypt correctly.
+let accountSalt: Uint8Array | null = null;
+
+/**
+ * Set the stable per-account PBKDF2 salt used by encrypt().
+ * @param saltBase64 - Base64-encoded salt; must decode to exactly SALT_LENGTH bytes.
+ * @throws if the salt does not decode to SALT_LENGTH bytes.
+ */
+export function setAccountSalt(saltBase64: string): void {
+  const bytes = new Uint8Array(base64ToBuffer(saltBase64));
+  if (bytes.length !== SALT_LENGTH) {
+    throw new Error(
+      `Account salt must decode to ${SALT_LENGTH} bytes, got ${bytes.length}`
+    );
+  }
+  accountSalt = bytes;
+}
+
+/** Clear the stable account salt (call alongside clearKeyCache() on lock). */
+export function clearAccountSalt(): void {
+  accountSalt = null;
+}
+
 /**
  * Constant-time string comparison to prevent timing-based hash oracle attacks.
  * Returns true only if a and b are equal in length and content.
@@ -172,8 +210,11 @@ export async function encrypt(
       return { success: false, error: 'Plaintext and password are required' };
     }
 
-    // Generate random salt and IV
-    const salt = generateRandomBytes(SALT_LENGTH);
+    // Use the stable per-account salt when set so deriveKey()'s session cache
+    // hits and only one PBKDF2-600k runs per session; otherwise fall back to a
+    // fresh random salt (e.g. first-run/setup, before the account salt exists).
+    // The IV is ALWAYS random per message so AES-GCM never reuses (key, nonce).
+    const salt = accountSalt ?? generateRandomBytes(SALT_LENGTH);
     const iv = generateRandomBytes(IV_LENGTH);
 
     // Derive key from password

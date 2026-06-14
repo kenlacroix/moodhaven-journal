@@ -310,6 +310,7 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
   const isNewEntry = !entryId;
   const isEditorEmpty = !contentText.trim();
   const wordCount = contentText.trim() ? contentText.trim().split(/\s+/).length : 0;
+  const wordsLabel = `${wordCount} ${wordCount === 1 ? 'word' : 'words'}`;
   const charCount = contentText.length;
   /** Reading time shown at ≥200 words; null below that threshold */
   const readingTime = getReadingTime(wordCount);
@@ -989,13 +990,14 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
         </div>
 
         {/* Media strip */}
-        {attachments.length > 0 && (
+        {(attachments.length > 0 || isAttaching) && (
           <div className="flex-shrink-0 px-5">
             <MediaAttachmentStrip
               attachments={attachments}
               thumbnails={thumbnails}
               onOpen={handleOpenMedia}
               onDelete={handleDeleteMedia}
+              isAttaching={isAttaching}
             />
           </div>
         )}
@@ -1035,7 +1037,7 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
                   <span className={`text-xs mr-2 transition-colors duration-300 ${
                     wcFlash ? 'wc-flash text-emerald-500 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500'
                   }`}>
-                    {wordCount}w
+                    {wordsLabel}
                   </span>
                 )}
                 <button
@@ -1050,13 +1052,18 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
               <>
                 <button
                   onClick={handleAttach}
-                  disabled={!savedEntryIdRef.current || !sessionPassword}
-                  title="Attach"
+                  disabled={!savedEntryIdRef.current || !sessionPassword || isAttaching}
+                  title={isAttaching ? 'Attaching…' : 'Attach'}
+                  aria-busy={isAttaching}
                   className="w-10 h-10 flex items-center justify-center rounded-xl text-slate-400 dark:text-slate-500 disabled:opacity-30 active:bg-black/5 active:scale-95 transition-all"
                 >
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94A3 3 0 1119.5 7.372L8.552 18.32m.009-.01l-.01.01m5.699-9.941l-7.81 7.81a1.5 1.5 0 002.112 2.13" />
-                  </svg>
+                  {isAttaching ? (
+                    <span className="w-5 h-5 border-2 border-violet-400/40 border-t-violet-500 rounded-full motion-safe:animate-spin" />
+                  ) : (
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94A3 3 0 1119.5 7.372L8.552 18.32m.009-.01l-.01.01m5.699-9.941l-7.81 7.81a1.5 1.5 0 002.112 2.13" />
+                    </svg>
+                  )}
                 </button>
 
                 <button
@@ -1093,12 +1100,12 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
                           : 'text-slate-400 dark:text-slate-500'
                   }`}>
                     {wcFlash
-                      ? `${wordCount}w ✦`
+                      ? `${wordsLabel} ✦`
                       : isSaving
                         ? 'Saving…'
                         : lastSavedAt
-                          ? `${wordCount}w · ✓`
-                          : `${wordCount}w`}
+                          ? `Saved · ${wordsLabel}`
+                          : wordsLabel}
                   </span>
                 )}
 
@@ -1343,14 +1350,19 @@ export function WritingView({ entryId, onEntrySaved, onNewEntry: _onNewEntry, on
                   <button
                     type="button"
                     onClick={handleAttach}
-                    disabled={!savedEntryIdRef.current || !sessionPassword}
-                    title={!savedEntryIdRef.current ? 'Write a few words first to enable attachments' : 'Attach files'}
+                    disabled={!savedEntryIdRef.current || !sessionPassword || isAttaching}
+                    title={!savedEntryIdRef.current ? 'Write a few words first to enable attachments' : isAttaching ? 'Attaching…' : 'Attach files'}
+                    aria-busy={isAttaching}
                     className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-slate-400 dark:text-slate-500 hover:text-violet-600 dark:hover:text-violet-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-slate-400 dark:disabled:hover:text-slate-500"
                   >
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94A3 3 0 1119.5 7.372L8.552 18.32m.009-.01l-.01.01m5.699-9.941l-7.81 7.81a1.5 1.5 0 002.112 2.13" />
-                    </svg>
-                    <span className="hidden sm:inline text-[11px]">Attach</span>
+                    {isAttaching ? (
+                      <span className="w-3.5 h-3.5 border-2 border-violet-400/40 border-t-violet-500 rounded-full motion-safe:animate-spin" />
+                    ) : (
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94A3 3 0 1119.5 7.372L8.552 18.32m.009-.01l-.01.01m5.699-9.941l-7.81 7.81a1.5 1.5 0 002.112 2.13" />
+                      </svg>
+                    )}
+                    <span className="hidden sm:inline text-[11px]">{isAttaching ? 'Attaching…' : 'Attach'}</span>
                   </button>
 
                   {/* Tag manager button */}

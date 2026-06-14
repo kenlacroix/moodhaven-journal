@@ -35,7 +35,7 @@ interface AppState {
   // Actions
   checkInitialization: () => Promise<void>;
   initialize: (password: string) => Promise<boolean>;
-  unlock: (password: string) => Promise<boolean>;
+  unlock: (password: string, alreadyVerified?: boolean) => Promise<boolean>;
   finalizeUnlock: (password: string) => Promise<boolean>;
   lock: () => void;
   setTheme: (theme: 'light' | 'dark' | 'system') => void;
@@ -84,10 +84,11 @@ export const useAppStore = create<AppState>((set) => ({
     }
   },
 
-  // Unlock with password
-  unlock: async (password: string) => {
+  // Unlock with password. `alreadyVerified` skips a redundant verify_password
+  // PBKDF2 when the caller (lock screen) has already verified this password.
+  unlock: async (password: string, alreadyVerified = false) => {
     try {
-      const success = await unlockJournal(password);
+      const success = await unlockJournal(password, alreadyVerified);
       if (success) {
         set({ isUnlocked: true, sessionPassword: password });
       }

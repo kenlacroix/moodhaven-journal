@@ -1221,65 +1221,14 @@ fn do_handle_sync_connection(app: &AppHandle, mut stream: TcpStream) -> Result<(
         );
     }
 
-    // Apply all received data in one atomic transaction — TCP drop before COMMIT
-    // leaves the DB untouched; partial state is impossible.
-    // Count actual upserts (not total received) so ack/log reflect new-or-updated rows only.
-    let (entries_received, books_received, signals_received, settings_received);
-    {
-        let db = app
-            .try_state::<Database>()
-            .ok_or_else(|| "No DB state".to_string())?;
-        // Refuse to write while a password change is re-keying the DB. A write landing between
-        // the change's snapshot and its atomic flip would be encrypted under the old password and
-        // stranded undecryptable in the new-keyed DB. The peer retains its rows and re-syncs after.
-        if app
-            .try_state::<crate::RekeyInProgress>()
-            .map(|r| r.is_armed())
-            .unwrap_or(false)
-        {
-            return Err("sync deferred: a password change is re-keying the database".to_string());
-        }
-        let conn = db.conn.lock().map_err(|e| e.to_string())?;
-        conn.execute_batch("BEGIN IMMEDIATE")
-            .map_err(|e| format!("sync tx begin: {e}"))?;
-        let mut e_count = 0usize;
-        let mut b_count = 0usize;
-        let mut s_count = 0usize;
-        let mut set_count = 0usize;
-        let result: Result<(), String> = (|| {
-            for row in &recv_entries {
-                if db_upsert_entry(&conn, row)? {
-                    e_count += 1;
-                }
-            }
-            for row in &recv_books {
-                if db_upsert_book(&conn, row)? {
-                    b_count += 1;
-                }
-            }
-            for row in &recv_signals {
-                if db_insert_signal_if_new(&conn, row)? {
-                    s_count += 1;
-                }
-            }
-            for (k, v, ua) in &recv_settings {
-                if db_upsert_setting(&conn, k, v, ua)? {
-                    set_count += 1;
-                }
-            }
-            Ok(())
-        })();
-        if let Err(e) = result {
-            let _ = conn.execute_batch("ROLLBACK");
-            return Err(e);
-        }
-        conn.execute_batch("COMMIT")
-            .map_err(|e| format!("sync tx commit: {e}"))?;
-        entries_received = e_count;
-        books_received = b_count;
-        signals_received = s_count;
-        settings_received = set_count;
-    }
+    // Apply all received entries/books/signals/settings in one atomic transaction.
+    let (entries_received, books_received, signals_received, settings_received) = apply_recv_in_tx(
+        app,
+        &recv_entries,
+        &recv_books,
+        &recv_signals,
+        &recv_settings,
+    )?;
 
     // Voice memos apply outside the SQL tx (audio file I/O can't be transactional).
     let voice_memos_received = apply_recv_voice_memos(app, &recv_voice_memos)?;
@@ -1401,6 +1350,70 @@ fn apply_recv_voice_memos(
         }
     }
     Ok(count)
+}
+
+/// Apply received entries, books, signals, and settings in one atomic SQL
+/// transaction — a TCP drop before COMMIT leaves the DB untouched, so partial
+/// state is impossible. Returns per-kind counts of rows actually inserted or
+/// updated (LWW skips are not counted). Shared by the client and server flows.
+#[allow(clippy::type_complexity)]
+fn apply_recv_in_tx(
+    app: &AppHandle,
+    recv_entries: &[JournalEntryRow],
+    recv_books: &[SyncBookRow],
+    recv_signals: &[SyncSignalRow],
+    recv_settings: &[(String, String, String)],
+) -> Result<(usize, usize, usize, usize), String> {
+    let db = app
+        .try_state::<Database>()
+        .ok_or_else(|| "No DB state".to_string())?;
+    // Refuse to write while a password change is re-keying the DB. A write landing between
+    // the change's snapshot and its atomic flip would be encrypted under the old password and
+    // stranded undecryptable in the new-keyed DB. The peer retains its rows and re-syncs after.
+    if app
+        .try_state::<crate::RekeyInProgress>()
+        .map(|r| r.is_armed())
+        .unwrap_or(false)
+    {
+        return Err("sync deferred: a password change is re-keying the database".to_string());
+    }
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    conn.execute_batch("BEGIN IMMEDIATE")
+        .map_err(|e| format!("sync tx begin: {e}"))?;
+    let mut e_count = 0usize;
+    let mut b_count = 0usize;
+    let mut s_count = 0usize;
+    let mut set_count = 0usize;
+    let result: Result<(), String> = (|| {
+        for row in recv_entries {
+            if db_upsert_entry(&conn, row)? {
+                e_count += 1;
+            }
+        }
+        for row in recv_books {
+            if db_upsert_book(&conn, row)? {
+                b_count += 1;
+            }
+        }
+        for row in recv_signals {
+            if db_insert_signal_if_new(&conn, row)? {
+                s_count += 1;
+            }
+        }
+        for (k, v, ua) in recv_settings {
+            if db_upsert_setting(&conn, k, v, ua)? {
+                set_count += 1;
+            }
+        }
+        Ok(())
+    })();
+    if let Err(e) = result {
+        let _ = conn.execute_batch("ROLLBACK");
+        return Err(e);
+    }
+    conn.execute_batch("COMMIT")
+        .map_err(|e| format!("sync tx commit: {e}"))?;
+    Ok((e_count, b_count, s_count, set_count))
 }
 
 fn handle_sync_connection(app: AppHandle, stream: TcpStream) {
@@ -2025,65 +2038,14 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
     // Close both halves promptly.
     let _ = stream.shutdown(std::net::Shutdown::Both);
 
-    // Apply all received data in one atomic transaction — TCP drop before COMMIT
-    // leaves the DB untouched; partial state is impossible.
-    // Count actual upserts (not total received) so ack/log reflect new-or-updated rows only.
-    let (entries_received, books_received, signals_received, settings_received);
-    {
-        let db = app
-            .try_state::<Database>()
-            .ok_or_else(|| "No DB state".to_string())?;
-        // Refuse to write while a password change is re-keying the DB. A write landing between
-        // the change's snapshot and its atomic flip would be encrypted under the old password and
-        // stranded undecryptable in the new-keyed DB. The peer retains its rows and re-syncs after.
-        if app
-            .try_state::<crate::RekeyInProgress>()
-            .map(|r| r.is_armed())
-            .unwrap_or(false)
-        {
-            return Err("sync deferred: a password change is re-keying the database".to_string());
-        }
-        let conn = db.conn.lock().map_err(|e| e.to_string())?;
-        conn.execute_batch("BEGIN IMMEDIATE")
-            .map_err(|e| format!("sync tx begin: {e}"))?;
-        let mut e_count = 0usize;
-        let mut b_count = 0usize;
-        let mut s_count = 0usize;
-        let mut set_count = 0usize;
-        let result: Result<(), String> = (|| {
-            for row in &recv_entries {
-                if db_upsert_entry(&conn, row)? {
-                    e_count += 1;
-                }
-            }
-            for row in &recv_books {
-                if db_upsert_book(&conn, row)? {
-                    b_count += 1;
-                }
-            }
-            for row in &recv_signals {
-                if db_insert_signal_if_new(&conn, row)? {
-                    s_count += 1;
-                }
-            }
-            for (k, v, ua) in &recv_settings {
-                if db_upsert_setting(&conn, k, v, ua)? {
-                    set_count += 1;
-                }
-            }
-            Ok(())
-        })();
-        if let Err(e) = result {
-            let _ = conn.execute_batch("ROLLBACK");
-            return Err(e);
-        }
-        conn.execute_batch("COMMIT")
-            .map_err(|e| format!("sync tx commit: {e}"))?;
-        entries_received = e_count;
-        books_received = b_count;
-        signals_received = s_count;
-        settings_received = set_count;
-    }
+    // Apply all received entries/books/signals/settings in one atomic transaction.
+    let (entries_received, books_received, signals_received, settings_received) = apply_recv_in_tx(
+        app,
+        &recv_entries,
+        &recv_books,
+        &recv_signals,
+        &recv_settings,
+    )?;
 
     // Voice memos apply outside the SQL tx (audio file I/O can't be transactional).
     let voice_memos_received = apply_recv_voice_memos(app, &recv_voice_memos)?;

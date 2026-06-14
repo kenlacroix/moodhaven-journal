@@ -35,10 +35,13 @@ fn parse_peer_timestamp(ts: &str) -> Result<chrono::DateTime<chrono::Utc>, Strin
 
 // ── Manifest helpers ──────────────────────────────────────────────────────────
 
-pub fn db_get_entries_manifest(conn: &Connection) -> Result<Vec<SyncMeta>, String> {
+/// Run an `id, updated_at`-shaped manifest query and collect the rows. `label`
+/// names the table for error messages. All per-table manifest helpers below are
+/// thin wrappers around this so they stay byte-for-byte consistent.
+fn db_collect_manifest(conn: &Connection, sql: &str, label: &str) -> Result<Vec<SyncMeta>, String> {
     let mut stmt = conn
-        .prepare("SELECT id, updated_at FROM journal_entries ORDER BY updated_at DESC")
-        .map_err(|e| format!("prepare entries manifest: {e}"))?;
+        .prepare(sql)
+        .map_err(|e| format!("prepare {label} manifest: {e}"))?;
     let rows = stmt
         .query_map([], |r| {
             Ok(SyncMeta {
@@ -46,41 +49,33 @@ pub fn db_get_entries_manifest(conn: &Connection) -> Result<Vec<SyncMeta>, Strin
                 updated_at: r.get(1)?,
             })
         })
-        .map_err(|e| format!("query entries manifest: {e}"))?;
+        .map_err(|e| format!("query {label} manifest: {e}"))?;
     rows.collect::<Result<Vec<_>, _>>()
-        .map_err(|e| format!("collect entries manifest: {e}"))
+        .map_err(|e| format!("collect {label} manifest: {e}"))
+}
+
+pub fn db_get_entries_manifest(conn: &Connection) -> Result<Vec<SyncMeta>, String> {
+    db_collect_manifest(
+        conn,
+        "SELECT id, updated_at FROM journal_entries ORDER BY updated_at DESC",
+        "entries",
+    )
 }
 
 pub fn db_get_books_manifest(conn: &Connection) -> Result<Vec<SyncMeta>, String> {
-    let mut stmt = conn
-        .prepare("SELECT id, COALESCE(updated_at, created_at) FROM books ORDER BY id")
-        .map_err(|e| format!("prepare books manifest: {e}"))?;
-    let rows = stmt
-        .query_map([], |r| {
-            Ok(SyncMeta {
-                id: r.get(0)?,
-                updated_at: r.get(1)?,
-            })
-        })
-        .map_err(|e| format!("query books manifest: {e}"))?;
-    rows.collect::<Result<Vec<_>, _>>()
-        .map_err(|e| format!("collect books manifest: {e}"))
+    db_collect_manifest(
+        conn,
+        "SELECT id, COALESCE(updated_at, created_at) FROM books ORDER BY id",
+        "books",
+    )
 }
 
 pub fn db_get_signals_manifest(conn: &Connection) -> Result<Vec<SyncMeta>, String> {
-    let mut stmt = conn
-        .prepare("SELECT id, created_at FROM signals ORDER BY created_at DESC")
-        .map_err(|e| format!("prepare signals manifest: {e}"))?;
-    let rows = stmt
-        .query_map([], |r| {
-            Ok(SyncMeta {
-                id: r.get(0)?,
-                updated_at: r.get(1)?,
-            })
-        })
-        .map_err(|e| format!("query signals manifest: {e}"))?;
-    rows.collect::<Result<Vec<_>, _>>()
-        .map_err(|e| format!("collect signals manifest: {e}"))
+    db_collect_manifest(
+        conn,
+        "SELECT id, created_at FROM signals ORDER BY created_at DESC",
+        "signals",
+    )
 }
 
 /// Returns manifest items for whitelisted settings keys that exist in the DB.
@@ -320,21 +315,11 @@ pub fn db_insert_signal_if_new(conn: &Connection, row: &SyncSignalRow) -> Result
 // ── Voice memos (LWW on updated_at, audio carried alongside) ───────────────────
 
 pub fn db_get_voice_memos_manifest(conn: &Connection) -> Result<Vec<SyncMeta>, String> {
-    let mut stmt = conn
-        .prepare(
-            "SELECT id, COALESCE(updated_at, created_at) FROM voice_memos ORDER BY updated_at DESC",
-        )
-        .map_err(|e| format!("prepare voice_memos manifest: {e}"))?;
-    let rows = stmt
-        .query_map([], |r| {
-            Ok(SyncMeta {
-                id: r.get(0)?,
-                updated_at: r.get(1)?,
-            })
-        })
-        .map_err(|e| format!("query voice_memos manifest: {e}"))?;
-    rows.collect::<Result<Vec<_>, _>>()
-        .map_err(|e| format!("collect voice_memos manifest: {e}"))
+    db_collect_manifest(
+        conn,
+        "SELECT id, COALESCE(updated_at, created_at) FROM voice_memos ORDER BY updated_at DESC",
+        "voice_memos",
+    )
 }
 
 /// Fetch full voice-memo rows for the given ids, paired with each memo's

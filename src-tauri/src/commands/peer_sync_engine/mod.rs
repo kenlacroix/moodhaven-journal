@@ -1847,6 +1847,31 @@ fn run_sync_client(app: AppHandle, peer_device_id: String, host: String) {
     }
 }
 
+/// Bind a TCP listener on `0.0.0.0:{port}` with `SO_REUSEADDR` enabled.
+///
+/// Without `SO_REUSEADDR`, a re-bind fails with "Address already in use" while
+/// sockets from the previous sync session sit in TIME_WAIT (~60s) — which happens
+/// constantly on Android, where the app is killed and relaunched often, leaving the
+/// peer-sync server unable to start and breaking all sync until the kernel clears
+/// TIME_WAIT.
+fn bind_reusable_listener(port: u16) -> Result<TcpListener, String> {
+    let addr: SocketAddr = format!("0.0.0.0:{port}")
+        .parse()
+        .map_err(|e| format!("parse sync addr: {e}"))?;
+    let socket = Socket::new(Domain::IPV4, SockType::STREAM, Some(SockProtocol::TCP))
+        .map_err(|e| format!("create sync socket: {e}"))?;
+    socket
+        .set_reuse_address(true)
+        .map_err(|e| format!("set SO_REUSEADDR: {e}"))?;
+    socket
+        .bind(&addr.into())
+        .map_err(|e| format!("bind sync server on port {port}: {e}"))?;
+    socket
+        .listen(128)
+        .map_err(|e| format!("listen sync server on port {port}: {e}"))?;
+    Ok(socket.into())
+}
+
 // ── Tauri commands ────────────────────────────────────────────────────────────
 
 /// Start the sync server on this device's deterministic port.
@@ -1875,26 +1900,8 @@ pub fn peer_start_sync_server(
     let identity = get_or_create_device_identity(&app)?;
     let port = sync_port_for_device(&identity.device_id);
 
-    // Bind listener with SO_REUSEADDR. Without it, a re-bind fails with
-    // "Address already in use" while sockets from the previous sync session sit in
-    // TIME_WAIT (~60s) — which happens constantly on Android, where the app is
-    // killed and relaunched often, leaving the peer-sync server unable to start and
-    // breaking all sync until the kernel clears TIME_WAIT.
-    let addr: SocketAddr = format!("0.0.0.0:{port}")
-        .parse()
-        .map_err(|e| format!("parse sync addr: {e}"))?;
-    let socket = Socket::new(Domain::IPV4, SockType::STREAM, Some(SockProtocol::TCP))
-        .map_err(|e| format!("create sync socket: {e}"))?;
-    socket
-        .set_reuse_address(true)
-        .map_err(|e| format!("set SO_REUSEADDR: {e}"))?;
-    socket
-        .bind(&addr.into())
-        .map_err(|e| format!("bind sync server on port {port}: {e}"))?;
-    socket
-        .listen(128)
-        .map_err(|e| format!("listen sync server on port {port}: {e}"))?;
-    let listener: TcpListener = socket.into();
+    // Bind listener with SO_REUSEADDR (see bind_reusable_listener).
+    let listener = bind_reusable_listener(port)?;
     listener
         .set_nonblocking(true)
         .map_err(|e| format!("set nonblocking: {e}"))?;
@@ -2075,6 +2082,35 @@ mod tests {
     use super::*;
     use crate::db::{EncryptedContent, JournalEntryRow};
     use rusqlite::Connection;
+
+    // ── bind_reusable_listener ─────────────────────────────────────────────────
+
+    /// Resolve the OS-assigned ephemeral port from a bound listener (we bind on
+    /// 0.0.0.0:0, the kernel picks the port, and we read it back to re-bind it).
+    fn ephemeral_port(listener: &TcpListener) -> u16 {
+        listener.local_addr().expect("local_addr").port()
+    }
+
+    #[test]
+    fn bind_reusable_listener_binds_ephemeral_port() {
+        let listener = bind_reusable_listener(0).expect("bind on ephemeral port");
+        let addr = listener.local_addr().expect("local_addr");
+        assert!(addr.is_ipv4());
+        assert_ne!(addr.port(), 0, "kernel must assign a concrete port");
+    }
+
+    #[test]
+    fn bind_reusable_listener_allows_immediate_rebind() {
+        // Bind once to claim a concrete port, read it back, then drop the listener.
+        let port = {
+            let first = bind_reusable_listener(0).expect("first bind");
+            ephemeral_port(&first)
+        };
+        // Re-binding the same port immediately must succeed thanks to SO_REUSEADDR;
+        // without it the freed socket could linger in TIME_WAIT and trigger AddrInUse.
+        let rebound = bind_reusable_listener(port).expect("rebind same port");
+        assert_eq!(ephemeral_port(&rebound), port);
+    }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 

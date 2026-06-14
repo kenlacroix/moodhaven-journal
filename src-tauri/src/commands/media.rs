@@ -607,6 +607,7 @@ pub fn save_media_attachment(
 /// `content://` URI rather than a filesystem path; the frontend reads the bytes
 /// and passes them as base64. Mirrors `save_media_attachment` but decodes bytes
 /// instead of reading from disk.
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub fn save_media_attachment_bytes(
     app: AppHandle,

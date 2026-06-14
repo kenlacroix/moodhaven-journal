@@ -83,8 +83,15 @@ let sessionPassword: string | null = null;
 /**
  * Unlock the journal with password
  */
-export async function unlockJournal(password: string): Promise<boolean> {
-  const isValid = await verifyUserPassword(password);
+export async function unlockJournal(
+  password: string,
+  alreadyVerified = false,
+): Promise<boolean> {
+  // verify_password runs a 600k-iteration PBKDF2 (~seconds on a phone). When the
+  // caller (the lock screen) has ALREADY verified — and thereby derived + stored
+  // the DB key + 2FA state — re-verifying here just doubles the unlock latency for
+  // no benefit. Skip it in that case.
+  const isValid = alreadyVerified || (await verifyUserPassword(password));
 
   if (isValid) {
     sessionPassword = password;

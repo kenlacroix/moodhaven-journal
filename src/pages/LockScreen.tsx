@@ -240,8 +240,10 @@ export function LockScreen() {
           pendingPasswordRef.current = password;
           setStep('biometric-enroll-offer');
         } else {
-          // No 2FA, no biometric offer — unlock directly
-          const success = await unlock(password);
+          // No 2FA, no biometric offer — unlock directly. The password was already
+          // verified above (verifyUserPassword), which derived + stored the DB key,
+          // so skip the redundant second verify_password PBKDF2 inside unlock().
+          const success = await unlock(password, true);
           if (success) {
             // Reset rate limit only after the session is unlocked (delete_setting requires unlock)
             await resetRateLimit().catch((err) => logger.warn('resetRateLimit failed', { error: String(err) }));

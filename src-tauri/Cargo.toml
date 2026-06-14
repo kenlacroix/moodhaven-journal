@@ -39,7 +39,7 @@ anyhow = "1"
 base64 = "0.22"
 totp-rs = { version = "5", features = ["qr", "gen_secret"] }
 data-encoding = "2"
-sha2 = { version = "0.10", features = ["asm"] }
+sha2 = "0.10"
 rand = "0.8"
 hex = "0.4"
 aes-gcm = "0.10"
@@ -73,6 +73,14 @@ tauri-plugin-shell = "2"
 # The same version is already pulled transitively by Tauri — no network download needed.
 [target.'cfg(target_os = "linux")'.dependencies]
 webkit2gtk = { version = "2.0", features = [] }
+
+# Hardware SHA for PBKDF2 (verify_password) on ARM. sha2's `asm` feature enables
+# the aarch64 ARMv8 SHA backend, which uses core::arch intrinsics (NOT the external
+# sha2-asm crate) gated behind a runtime cpufeatures check — fast on phones with
+# the crypto extensions, soft fallback otherwise. Scoped to aarch64 so x86_64
+# (esp. Windows MSVC) does NOT pull sha2-asm, whose x86 assembly fails to build there.
+[target.'cfg(target_arch = "aarch64")'.dependencies]
+sha2 = { version = "0.10", features = ["asm"] }
 
 [dev-dependencies]
 tempfile = "3"

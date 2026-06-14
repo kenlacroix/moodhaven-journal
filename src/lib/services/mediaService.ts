@@ -10,6 +10,40 @@ import { invoke } from '@tauri-apps/api/core';
 import { open as openFilePicker } from '@tauri-apps/plugin-dialog';
 import type { MediaAttachment } from '../../types/journal';
 
+const IS_ANDROID =
+  typeof navigator !== 'undefined' && /android/i.test(navigator.userAgent);
+
+/** Base64-encode bytes in 32 KB chunks to avoid call-stack overflow on large images. */
+function bytesToBase64(bytes: Uint8Array): string {
+  const CHUNK = 0x8000;
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    binary += String.fromCharCode.apply(
+      null,
+      bytes.subarray(i, i + CHUNK) as unknown as number[],
+    );
+  }
+  return btoa(binary);
+}
+
+/**
+ * Best-effort filename from a picked path or content:// URI.
+ * Takes the last `/` segment (URL-decoded), strips any path separators / `..`,
+ * and falls back to `attachment-<index>` when nothing usable remains.
+ * The Rust side validates the final name (no separators / traversal).
+ */
+function deriveFilename(filePath: string, index: number): string {
+  let segment = filePath.split(/[/\\]/).pop() ?? '';
+  try {
+    segment = decodeURIComponent(segment);
+  } catch {
+    // leave segment as-is if it isn't valid percent-encoding
+  }
+  // Drop anything that still looks like a path separator or traversal.
+  segment = segment.replace(/[/\\]/g, '').replace(/\.\./g, '');
+  return segment.trim() || `attachment-${index}`;
+}
+
 // Dialog filter groups
 const MEDIA_FILTERS = [
   {
@@ -52,13 +86,31 @@ export async function pickAndAttachMedia(
   const attached: MediaAttachment[] = [];
   const skipped: string[] = [];
 
-  for (const filePath of paths) {
+  for (let i = 0; i < paths.length; i++) {
+    const filePath = paths[i];
     try {
-      const attachment = await invoke<MediaAttachment>('save_media_attachment', {
-        entryId,
-        filePath,
-        password,
-      });
+      let attachment: MediaAttachment;
+      if (IS_ANDROID) {
+        // Android's picker returns a content:// URI, not a filesystem path —
+        // std::fs::read fails on it. Read the bytes via the fs plugin (which
+        // resolves content:// URIs on Android) and send them base64-encoded.
+        const { readFile } = await import('@tauri-apps/plugin-fs');
+        const bytes = await readFile(filePath);
+        const dataBase64 = bytesToBase64(bytes);
+        const filename = deriveFilename(filePath, i);
+        attachment = await invoke<MediaAttachment>('save_media_attachment_bytes', {
+          entryId,
+          filename,
+          dataBase64,
+          password,
+        });
+      } else {
+        attachment = await invoke<MediaAttachment>('save_media_attachment', {
+          entryId,
+          filePath,
+          password,
+        });
+      }
       attached.push(attachment);
     } catch (err) {
       const msg = String(err);

@@ -1111,7 +1111,34 @@ pub fn sweep_preview_temp(app: AppHandle) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::validate_entry_id;
+    use super::{media_row_from_sql, validate_entry_id};
+
+    #[test]
+    fn media_row_from_sql_maps_all_columns() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE entry_media (id TEXT, entry_id TEXT, filename TEXT, mime_type TEXT, \
+             size_bytes INTEGER, enc_path TEXT, created_at TEXT); \
+             INSERT INTO entry_media VALUES ('m1','e1','pic.jpg','image/jpeg',123,\
+             'media/e1/m1.jpg.enc','2026-01-01T00:00:00');",
+        )
+        .unwrap();
+        let got = conn
+            .query_row(
+                "SELECT id, entry_id, filename, mime_type, size_bytes, enc_path, created_at \
+                 FROM entry_media",
+                [],
+                media_row_from_sql,
+            )
+            .unwrap();
+        assert_eq!(got.id, "m1");
+        assert_eq!(got.entry_id, "e1");
+        assert_eq!(got.filename, "pic.jpg");
+        assert_eq!(got.mime_type, "image/jpeg");
+        assert_eq!(got.size_bytes, 123);
+        assert_eq!(got.enc_path, "media/e1/m1.jpg.enc");
+        assert_eq!(got.created_at, "2026-01-01T00:00:00");
+    }
 
     #[test]
     fn valid_uuid_accepted() {

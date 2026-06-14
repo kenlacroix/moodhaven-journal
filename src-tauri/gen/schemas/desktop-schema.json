@@ -6483,6 +6483,30 @@
           "markdownDescription": "Denies the show command without any pre-configured scope."
         },
         {
+          "description": "Default plugin permissions.\n#### This default permission set includes:\n\n- `allow-opener-open-file`",
+          "type": "string",
+          "const": "opener:default",
+          "markdownDescription": "Default plugin permissions.\n#### This default permission set includes:\n\n- `allow-opener-open-file`"
+        },
+        {
+          "description": "Allow opening a local file with the system viewer via an ACTION_VIEW intent.",
+          "type": "string",
+          "const": "opener:allow-opener-open-file",
+          "markdownDescription": "Allow opening a local file with the system viewer via an ACTION_VIEW intent."
+        },
+        {
+          "description": "Default plugin permissions.\n#### This default permission set includes:\n\n- `allow-securekey-get-cloud-token-key`",
+          "type": "string",
+          "const": "securekey:default",
+          "markdownDescription": "Default plugin permissions.\n#### This default permission set includes:\n\n- `allow-securekey-get-cloud-token-key`"
+        },
+        {
+          "description": "Allow retrieving the AndroidKeyStore-backed per-device cloud token key.",
+          "type": "string",
+          "const": "securekey:allow-securekey-get-cloud-token-key",
+          "markdownDescription": "Allow retrieving the AndroidKeyStore-backed per-device cloud token key."
+        },
+        {
           "description": "This permission set configures which\nshell functionality is exposed by default.\n\n#### Granted Permissions\n\nIt allows to use the `open` functionality with a reasonable\nscope pre-configured. It will allow opening `http(s)://`,\n`tel:` and `mailto:` links.\n\n#### This default permission set includes:\n\n- `allow-open`",
           "type": "string",
           "const": "shell:default",

@@ -83,6 +83,7 @@ const LOCK_GATED_COMMANDS = new Set([
   'get_journal_entries_by_date',
   'get_entries_on_this_day',
   'update_journal_entry',
+  'patch_entry_encrypted_content',
   'delete_journal_entry',
   'patch_entry_location_weather',
   'patch_entry_pinned',
@@ -239,6 +240,37 @@ async function dispatch(command: string, p: Params): Promise<any> {
         privacy_mode: (p.privacyMode as number) ?? 0,
         word_count: (p.wordCount as number) ?? null,
       });
+    }
+    case 'patch_entry_encrypted_content': {
+      // Re-encryption migration: replace ONLY encrypted_content, preserving updated_at
+      // (so the timeline doesn't reorder). dbUpdateEntry always bumps updated_at, so do a
+      // raw read-modify-write here that keeps the existing timestamp.
+      // Compare-and-swap on updated_at: no-op if the row was edited since the
+      // caller snapshotted it (mirrors the Rust path; closes the same TOCTOU).
+      const db = await openDB();
+      const applied = await new Promise<boolean>((resolve, reject) => {
+        const t = db.transaction('journal_entries', 'readwrite');
+        const store = t.objectStore('journal_entries');
+        const getReq = store.get(p.id as string);
+        getReq.onerror = () => reject(getReq.error);
+        getReq.onsuccess = () => {
+          const existing = getReq.result as BrowserEntryRow | undefined;
+          if (!existing) {
+            reject(new Error('Entry not found'));
+            return;
+          }
+          if (existing.updated_at !== (p.expectedUpdatedAt as string)) {
+            resolve(false);
+            return;
+          }
+          existing.encrypted_content =
+            p.encryptedContent as BrowserEntryRow['encrypted_content'];
+          const putReq = store.put(existing);
+          putReq.onerror = () => reject(putReq.error);
+          putReq.onsuccess = () => resolve(true);
+        };
+      });
+      return applied;
     }
     case 'delete_journal_entry': {
       return dbDeleteEntry(p.id as string);
@@ -719,6 +751,8 @@ async function dispatch(command: string, p: Params): Promise<any> {
     case 'link_voice_memo_to_entry':
     case 'transcribe_voice_memo':
     case 'store_voice_memo':
+    // Phone voice capture is desktop/Tauri-only; no-op in the browser build.
+    case 'store_voice_memo_bytes':
       return null;
     case 'publish_voice_memo_draft':
       throw new Error('publish_voice_memo_draft not supported in browser mode');

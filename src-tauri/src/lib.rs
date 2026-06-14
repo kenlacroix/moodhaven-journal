@@ -677,6 +677,7 @@ pub fn run() {
             commands::get_journal_entries_by_date,
             commands::get_entries_on_this_day,
             commands::update_journal_entry,
+            commands::patch_entry_encrypted_content,
             commands::delete_journal_entry,
             commands::patch_entry_location_weather,
             commands::patch_entry_pinned,
@@ -766,6 +767,7 @@ pub fn run() {
             commands::oura_backfill,
             // Media attachments
             commands::save_media_attachment,
+            commands::save_media_attachment_bytes,
             commands::list_entry_media,
             commands::list_all_media,
             commands::open_media_attachment,
@@ -796,6 +798,7 @@ pub fn run() {
             commands::mark_sync_log_synced,
             // Voice memos (Wear OS audio recordings)
             commands::store_voice_memo,
+            commands::store_voice_memo_bytes,
             commands::list_voice_memos,
             commands::get_voice_memo,
             commands::delete_voice_memo,

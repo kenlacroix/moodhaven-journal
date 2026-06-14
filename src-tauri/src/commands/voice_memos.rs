@@ -18,7 +18,9 @@
 
 use crate::db::{self, Database, VoiceMemoRow};
 use crate::AppLockState;
+use base64::{engine::general_purpose::STANDARD, Engine};
 use rusqlite::params;
+use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Manager, State};
 
 use super::require_unlocked;
@@ -118,6 +120,58 @@ pub fn store_voice_memo(
         health_json.as_deref(),
         &rel_path,
         "watch",
+    )
+}
+
+/// Persist a voice memo recorded on this device (phone on-device capture) directly
+/// from raw audio bytes, bypassing the `voice_memos_incoming/` staging hop used by
+/// the Wear bridge.
+///
+/// The whisper sidecar is desktop-only, so a phone-captured memo is stored with no
+/// transcription and waits to be transcribed on a paired desktop after sync. Audio
+/// is 16 kHz mono WAV (produced by `useAudioRecorder`); whisper-cli accepts WAV, so
+/// `transcribe_voice_memo` works on it unchanged once it reaches a desktop.
+///
+/// Gated by `require_unlocked`: unlike the Wear bridge this is a deliberate
+/// user action inside an unlocked session.
+#[allow(clippy::too_many_arguments)]
+#[tauri::command]
+pub fn store_voice_memo_bytes(
+    app: AppHandle,
+    db: State<Database>,
+    lock: State<'_, AppLockState>,
+    id: String,
+    timestamp: String,
+    duration_ms: i64,
+    health_json: Option<String>,
+    audio_base64: String,
+) -> Result<VoiceMemoRow, String> {
+    require_unlocked(&lock)?;
+
+    if id.is_empty() {
+        return Err("store_voice_memo_bytes: id must not be empty".to_string());
+    }
+    // `id` is interpolated into the destination filename — reject path separators.
+    validate_incoming_filename(&id)
+        .map_err(|e| format!("store_voice_memo_bytes: invalid id: {e}"))?;
+
+    let bytes =
+        decode_nonempty_audio(&audio_base64).map_err(|e| format!("store_voice_memo_bytes: {e}"))?;
+
+    let dest_dir = voice_memos_dir(&app)?;
+    let (dest, rel_path) = resolve_voice_memo_dest(&dest_dir, &id)?;
+
+    std::fs::write(&dest, &bytes)
+        .map_err(|e| format!("store_voice_memo_bytes: write failed: {e}"))?;
+
+    db::create_voice_memo(
+        &db,
+        &id,
+        &timestamp,
+        duration_ms,
+        health_json.as_deref(),
+        &rel_path,
+        "phone",
     )
 }
 
@@ -492,6 +546,38 @@ pub fn list_pending_drafts(
 
 // ── pure helpers exposed for testing ─────────────────────────────────────────
 
+/// Decode a base64 audio payload, rejecting malformed input and empty audio.
+///
+/// Extracted from `store_voice_memo_bytes` so the validation core is unit-testable
+/// without an `AppHandle`/`State` (the rest of the command is filesystem + DB IO).
+pub(crate) fn decode_nonempty_audio(audio_base64: &str) -> Result<Vec<u8>, String> {
+    let bytes = STANDARD
+        .decode(audio_base64.as_bytes())
+        .map_err(|e| format!("base64 decode: {e}"))?;
+    if bytes.is_empty() {
+        return Err("audio is empty".to_string());
+    }
+    Ok(bytes)
+}
+
+/// Resolve the on-disk destination and the DB-relative path for a phone-captured
+/// memo from `id`, rejecting any `id` whose resolved path would escape `dest_dir`.
+/// Pulled out of `store_voice_memo_bytes` so the path/guard logic is unit-testable
+/// without an `AppHandle` (the rest of the command is filesystem + DB IO).
+pub(crate) fn resolve_voice_memo_dest(
+    dest_dir: &Path,
+    id: &str,
+) -> Result<(PathBuf, String), String> {
+    let dest_filename = format!("{}.wav", id);
+    let dest = dest_dir.join(&dest_filename);
+    let rel_path = format!("voice_memos/{}", dest_filename);
+    // Defense in depth: ensure the resolved destination stays inside voice_memos/.
+    if dest.parent() != Some(dest_dir) {
+        return Err("store_voice_memo_bytes: id escapes voice_memos directory".to_string());
+    }
+    Ok((dest, rel_path))
+}
+
 /// Returns `Ok(())` if `filename` is a safe plain filename (no path traversal).
 pub(crate) fn validate_incoming_filename(filename: &str) -> Result<(), &'static str> {
     if filename.is_empty() {
@@ -508,7 +594,53 @@ pub(crate) fn validate_incoming_filename(filename: &str) -> Result<(), &'static 
 
 #[cfg(test)]
 mod tests {
-    use super::validate_incoming_filename;
+    use super::{decode_nonempty_audio, resolve_voice_memo_dest, validate_incoming_filename};
+    use base64::{engine::general_purpose::STANDARD, Engine};
+    use std::path::Path;
+
+    #[test]
+    fn resolve_dest_builds_wav_path_inside_dir() {
+        let dir = Path::new("/data/app/voice_memos");
+        let (dest, rel) = resolve_voice_memo_dest(dir, "abc123").unwrap();
+        assert_eq!(dest, dir.join("abc123.wav"));
+        assert_eq!(rel, "voice_memos/abc123.wav");
+        assert_eq!(dest.parent(), Some(dir));
+    }
+
+    #[test]
+    fn resolve_dest_rejects_parent_traversal() {
+        let dir = Path::new("/data/app/voice_memos");
+        let err = resolve_voice_memo_dest(dir, "../evil").unwrap_err();
+        assert!(err.contains("escapes voice_memos directory"), "{err}");
+    }
+
+    #[test]
+    fn resolve_dest_rejects_nested_subdir() {
+        let dir = Path::new("/data/app/voice_memos");
+        let err = resolve_voice_memo_dest(dir, "sub/evil").unwrap_err();
+        assert!(err.contains("escapes voice_memos directory"), "{err}");
+    }
+
+    #[test]
+    fn decode_valid_base64_audio() {
+        let encoded = STANDARD.encode(b"fake wav bytes");
+        let decoded = decode_nonempty_audio(&encoded).expect("should decode");
+        assert_eq!(decoded, b"fake wav bytes");
+    }
+
+    #[test]
+    fn decode_rejects_invalid_base64() {
+        // `!` is not a valid base64 character.
+        let err = decode_nonempty_audio("not!base64!").unwrap_err();
+        assert!(err.contains("base64 decode"));
+    }
+
+    #[test]
+    fn decode_rejects_empty_audio() {
+        // Empty input decodes to zero bytes → rejected.
+        let err = decode_nonempty_audio("").unwrap_err();
+        assert!(err.contains("audio is empty"));
+    }
 
     #[test]
     fn plain_filename_accepted() {

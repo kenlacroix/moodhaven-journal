@@ -16,6 +16,17 @@ import {
   devBypassUnlock,
 } from '../lib/services/journalService';
 import { seedDevEntries } from '../lib/devSeed';
+import { migrateEntriesToAccountSalt } from '../lib/services/encryptionMigration';
+
+/**
+ * Kick off the account-salt re-encryption sweep in the background. Fire-and-forget: never
+ * awaited on the unlock-transition path so it cannot delay the UI; errors are swallowed.
+ */
+function startEncryptionMigration(): void {
+  migrateEntriesToAccountSalt().catch((error) => {
+    logger.warn('Encryption migration sweep failed (non-fatal):', { error: String(error) });
+  });
+}
 
 interface AppState {
   // Authentication
@@ -35,7 +46,7 @@ interface AppState {
   // Actions
   checkInitialization: () => Promise<void>;
   initialize: (password: string) => Promise<boolean>;
-  unlock: (password: string) => Promise<boolean>;
+  unlock: (password: string, alreadyVerified?: boolean) => Promise<boolean>;
   finalizeUnlock: (password: string) => Promise<boolean>;
   lock: () => void;
   setTheme: (theme: 'light' | 'dark' | 'system') => void;
@@ -77,6 +88,7 @@ export const useAppStore = create<AppState>((set) => ({
       // Auto-unlock after setup
       const unlocked = await unlockJournal(password);
       set({ isInitialized: true, isUnlocked: unlocked, sessionPassword: unlocked ? password : null });
+      if (unlocked) startEncryptionMigration();
       return true;
     } catch (error) {
       logger.error('Failed to initialize:', { error: String(error) });
@@ -84,12 +96,14 @@ export const useAppStore = create<AppState>((set) => ({
     }
   },
 
-  // Unlock with password
-  unlock: async (password: string) => {
+  // Unlock with password. `alreadyVerified` skips a redundant verify_password
+  // PBKDF2 when the caller (lock screen) has already verified this password.
+  unlock: async (password: string, alreadyVerified = false) => {
     try {
-      const success = await unlockJournal(password);
+      const success = await unlockJournal(password, alreadyVerified);
       if (success) {
         set({ isUnlocked: true, sessionPassword: password });
+        startEncryptionMigration();
       }
       return success;
     } catch (error) {
@@ -106,6 +120,7 @@ export const useAppStore = create<AppState>((set) => ({
       const success = await finalizeUnlockService(password);
       if (success) {
         set({ isUnlocked: true, sessionPassword: password });
+        startEncryptionMigration();
       }
       return success;
     } catch (error) {

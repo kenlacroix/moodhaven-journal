@@ -46,6 +46,17 @@ function formatCountdown(ms: number): string {
   return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 }
 
+/**
+ * Yield until the browser has painted one frame, so a just-set loading state is
+ * visible before heavy/awaited work begins. Double rAF: the first callback runs
+ * before paint, the second resolves after that frame has painted.
+ */
+function nextPaint(): Promise<void> {
+  return new Promise<void>((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  });
+}
+
 export function LockScreen() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -218,6 +229,9 @@ export function LockScreen() {
 
       setError(null);
       setIsLoading(true);
+      // Let the "Verifying…" state paint before the (potentially slow) verify
+      // round-trip, so the button gives immediate feedback on press.
+      await nextPaint();
 
       try {
         // First verify the password
@@ -240,8 +254,10 @@ export function LockScreen() {
           pendingPasswordRef.current = password;
           setStep('biometric-enroll-offer');
         } else {
-          // No 2FA, no biometric offer — unlock directly
-          const success = await unlock(password);
+          // No 2FA, no biometric offer — unlock directly. The password was already
+          // verified above (verifyUserPassword), which derived + stored the DB key,
+          // so skip the redundant second verify_password PBKDF2 inside unlock().
+          const success = await unlock(password, true);
           if (success) {
             // Reset rate limit only after the session is unlocked (delete_setting requires unlock)
             await resetRateLimit().catch((err) => logger.warn('resetRateLimit failed', { error: String(err) }));
@@ -367,6 +383,8 @@ export function LockScreen() {
 
       setPinLoading(true);
       setPinError(null);
+      // Paint the loading state before the decrypt round-trip (see nextPaint).
+      await nextPaint();
 
       try {
         const decryptedPassword = await pinUnlock(pinInput);

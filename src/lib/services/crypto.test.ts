@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { encrypt, decrypt, verifyPassword, hashPassword, verifyPasswordHash, clearKeyCache } from './crypto';
+import { encrypt, decrypt, verifyPassword, hashPassword, verifyPasswordHash, clearKeyCache, setAccountSalt, clearAccountSalt } from './crypto';
 
 // ── PBKDF2 cross-language vector ──────────────────────────────────────────────
 // Verifies that TypeScript's WebCrypto PBKDF2 (hashPassword / verifyPasswordHash)
@@ -225,6 +225,61 @@ describe('crypto', () => {
       const enc2 = await encrypt('new private entry', 'new-password');
       const result = await decrypt(enc2.data!, 'old-password');
       expect(result.success).toBe(false);
+    });
+  });
+
+  describe('account salt (stable per-account PBKDF2 salt)', () => {
+    const SALT_A = btoa(String.fromCharCode(...new Uint8Array(16).fill(7))); // 16 bytes
+    const SALT_B = btoa(String.fromCharCode(...new Uint8Array(16).fill(9))); // 16 bytes
+
+    beforeEach(() => {
+      clearKeyCache();
+      clearAccountSalt();
+    });
+
+    afterEach(() => {
+      clearAccountSalt();
+    });
+
+    it('uses the stable salt for every encrypt but a unique IV per message', async () => {
+      setAccountSalt(SALT_A);
+      const r1 = await encrypt('entry one', 'pw');
+      const r2 = await encrypt('entry two', 'pw');
+
+      // Stable salt: both envelopes carry the account salt.
+      expect(r1.data!.salt).toBe(SALT_A);
+      expect(r2.data!.salt).toBe(SALT_A);
+
+      // Unique IV: random per message even with a stable salt.
+      expect(r1.data!.iv).not.toBe(r2.data!.iv);
+    });
+
+    it('round-trips: setAccountSalt → encrypt → decrypt returns original', async () => {
+      setAccountSalt(SALT_A);
+      const enc = await encrypt('round trip text', 'pw');
+      const dec = await decrypt(enc.data!, 'pw');
+      expect(dec.success).toBe(true);
+      expect(dec.data).toBe('round trip text');
+    });
+
+    it('decrypt uses the per-blob salt, not the account salt (backward-compat / cross-device)', async () => {
+      // Encrypt with a RANDOM salt (account salt not set) — simulates legacy /
+      // cross-device data that carries its own embedded salt.
+      const legacy = await encrypt('legacy entry', 'pw');
+      expect(legacy.data!.salt).not.toBe(SALT_B);
+
+      // Now set a DIFFERENT account salt for the current session.
+      setAccountSalt(SALT_B);
+
+      // decrypt must still succeed by reading the blob's own embedded salt.
+      const dec = await decrypt(legacy.data!, 'pw');
+      expect(dec.success).toBe(true);
+      expect(dec.data).toBe('legacy entry');
+    });
+
+    it('rejects a salt that does not decode to 16 bytes', () => {
+      const tooShort = btoa(String.fromCharCode(...new Uint8Array(8).fill(1)));
+      expect(() => setAccountSalt(tooShort)).toThrow();
     });
   });
 });

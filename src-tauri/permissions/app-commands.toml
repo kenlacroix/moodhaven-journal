@@ -38,6 +38,7 @@ commands.allow = [
   "get_journal_entries_by_date",
   "get_entries_on_this_day",
   "update_journal_entry",
+  "patch_entry_encrypted_content",
   "delete_journal_entry",
   "patch_entry_location_weather",
   "patch_entry_pinned",
@@ -117,6 +118,7 @@ commands.allow = [
   "oura_backfill",
   # Media attachments
   "save_media_attachment",
+  "save_media_attachment_bytes",
   "list_entry_media",
   "list_all_media",
   "open_media_attachment",
@@ -149,6 +151,7 @@ commands.allow = [
   "mark_sync_log_synced",
   # Voice memos (Wear OS audio recordings)
   "store_voice_memo",
+  "store_voice_memo_bytes",
   "list_voice_memos",
   "get_voice_memo",
   "delete_voice_memo",
@@ -266,6 +269,7 @@ commands.allow = [
   "get_app_version",
   # Media
   "save_media_attachment",
+  "save_media_attachment_bytes",
   "list_entry_media",
   "open_media_attachment",
   "get_media_thumbnail",

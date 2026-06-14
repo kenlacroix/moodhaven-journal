@@ -217,6 +217,7 @@ describe('voice memo browser stubs', () => {
     'link_voice_memo_to_entry',
     'transcribe_voice_memo',
     'store_voice_memo',
+    'store_voice_memo_bytes',
   ];
 
   for (const cmd of nullStubs) {

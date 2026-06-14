@@ -37,6 +37,27 @@ use crate::AppLockState;
 
 const MAX_MEDIA_BYTES: u64 = 500 * 1024 * 1024; // 500 MB hard cap
 
+/// Reject a frontend-supplied filename that isn't a bare name.
+/// Defense-in-depth before the name reaches any path join: no separators, no `..`.
+fn reject_unsafe_filename(filename: &str) -> Result<(), String> {
+    if filename.contains('/') || filename.contains('\\') || filename.contains("..") {
+        return Err("Invalid filename".to_string());
+    }
+    Ok(())
+}
+
+/// Reject media larger than the hard cap, mirroring the path-based command.
+fn enforce_media_size_limit(len: usize) -> Result<(), String> {
+    if len as u64 > MAX_MEDIA_BYTES {
+        return Err(format!(
+            "File too large ({} MB, max {} MB)",
+            len as u64 / (1024 * 1024),
+            MAX_MEDIA_BYTES / (1024 * 1024)
+        ));
+    }
+    Ok(())
+}
+
 use super::require_unlocked;
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -571,14 +592,130 @@ pub fn save_media_attachment(
 
     let media_id = Uuid::new_v4().to_string();
     let enc_filename = format!("{}.{}.enc", media_id, extension);
-    let media_dir = get_media_dir(&app, &entry_id)?;
-    let enc_abs = media_dir.join(&enc_filename);
 
-    std::fs::write(&enc_abs, &encrypted)
+    persist_prepared_media(
+        &app,
+        &db,
+        entry_id,
+        filename,
+        PreparedMedia {
+            media_id,
+            enc_filename,
+            mime_type,
+            size_bytes,
+            encrypted,
+        },
+    )
+}
+
+/// The side-effect-free result of preparing a base64 media payload for storage:
+/// the encrypted on-disk bytes plus the derived metadata the command needs to
+/// place the file and write the DB row. Holds no Tauri state, so the whole
+/// decode → validate → compress → encrypt pipeline is unit-testable in isolation.
+#[cfg_attr(test, derive(Debug))]
+struct PreparedMedia {
+    media_id: String,
+    enc_filename: String,
+    mime_type: String,
+    size_bytes: i64,
+    encrypted: Vec<u8>,
+}
+
+/// Pure core of `save_media_attachment_bytes`: decode base64, reject unsafe
+/// filenames, enforce the size limit, recompress images, and encrypt to MBMF.
+/// No filesystem or DB access — those stay in the thin command wrapper so this
+/// can be exercised directly by tests.
+fn prepare_media_bytes(
+    filename: &str,
+    data_base64: &str,
+    password: &str,
+) -> Result<PreparedMedia, String> {
+    // Defense-in-depth: `filename` comes from the frontend, so reject anything
+    // that isn't a bare filename before it reaches path joins.
+    reject_unsafe_filename(filename)?;
+
+    let extension = Path::new(filename)
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("bin")
+        .to_ascii_lowercase();
+    let mime_type = mime_from_filename(filename).to_string();
+
+    let plaintext = STANDARD
+        .decode(data_base64.as_bytes())
+        .map_err(|e| format!("Invalid base64 media data: {e}"))?;
+
+    // Enforce the same size limit as the path-based command.
+    enforce_media_size_limit(plaintext.len())?;
+
+    // Recompress images (downscale + re-encode in the same format) before encryption.
+    // Shrinks the encrypted store and strips EXIF/GPS metadata; falls back to the original
+    // bytes for non-images, undecodable input, or when compression wouldn't save space.
+    let plaintext = match compress_image(&plaintext, &mime_type) {
+        Some(compressed) => compressed,
+        None => plaintext,
+    };
+    let size_bytes = plaintext.len() as i64;
+
+    let encrypted = encrypt_to_mbmf(&plaintext, password)?;
+    drop(plaintext);
+
+    let media_id = Uuid::new_v4().to_string();
+    let enc_filename = format!("{}.{}.enc", media_id, extension);
+
+    Ok(PreparedMedia {
+        media_id,
+        enc_filename,
+        mime_type,
+        size_bytes,
+        encrypted,
+    })
+}
+
+/// Attach a file to an entry from in-memory base64 bytes.
+/// Used on Android, where the system file picker returns a non-readable
+/// `content://` URI rather than a filesystem path; the frontend reads the bytes
+/// and passes them as base64. Mirrors `save_media_attachment` but decodes bytes
+/// instead of reading from disk. The pure pipeline lives in `prepare_media_bytes`;
+/// this wrapper only wires Tauri state (file write + DB insert).
+#[allow(clippy::too_many_arguments)]
+#[tauri::command]
+pub fn save_media_attachment_bytes(
+    app: AppHandle,
+    db: State<'_, Database>,
+    lock: State<'_, AppLockState>,
+    rekey: State<'_, crate::RekeyInProgress>,
+    entry_id: String,
+    filename: String,
+    data_base64: String,
+    password: String,
+) -> Result<MediaAttachment, String> {
+    require_unlocked(&lock)?;
+    super::require_no_rekey(&rekey)?;
+
+    let prepared = prepare_media_bytes(&filename, &data_base64, &password)?;
+    persist_prepared_media(&app, &db, entry_id, filename, prepared)
+}
+
+/// Shared persistence tail for both `save_media_attachment` (disk path) and
+/// `save_media_attachment_bytes` (Android base64): resolve the per-entry media
+/// directory, write the encrypted blob, insert the DB row, and build the
+/// `MediaAttachment` response. The relative-path + DB-row construction is split
+/// into the pure `build_media_row` helper so it is unit-testable.
+fn persist_prepared_media(
+    app: &AppHandle,
+    db: &Database,
+    entry_id: String,
+    filename: String,
+    prepared: PreparedMedia,
+) -> Result<MediaAttachment, String> {
+    let media_dir = get_media_dir(app, &entry_id)?;
+    let enc_abs = media_dir.join(&prepared.enc_filename);
+
+    std::fs::write(&enc_abs, &prepared.encrypted)
         .map_err(|e| format!("Failed to write encrypted file: {}", e))?;
 
-    let rel_path = format!("media/{}/{}", entry_id, enc_filename);
-    let created_at = chrono::Local::now().format("%Y-%m-%dT%H:%M:%S").to_string();
+    let attachment = build_media_row(entry_id, filename, &prepared);
 
     {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
@@ -586,20 +723,41 @@ pub fn save_media_attachment(
             "INSERT INTO entry_media \
              (id, entry_id, filename, mime_type, size_bytes, enc_path, created_at) \
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-            params![media_id, entry_id, filename, mime_type, size_bytes, rel_path, created_at],
+            params![
+                attachment.id,
+                attachment.entry_id,
+                attachment.filename,
+                attachment.mime_type,
+                attachment.size_bytes,
+                attachment.enc_path,
+                attachment.created_at,
+            ],
         )
         .map_err(|e| format!("DB insert failed: {}", e))?;
     }
 
-    Ok(MediaAttachment {
-        id: media_id,
+    Ok(attachment)
+}
+
+/// Build the `MediaAttachment` row from prepared media: derives the stored
+/// relative path and a `created_at` timestamp. Pure (no filesystem/DB), so the
+/// rel-path and metadata wiring is exercised directly in tests.
+fn build_media_row(
+    entry_id: String,
+    filename: String,
+    prepared: &PreparedMedia,
+) -> MediaAttachment {
+    let enc_path = format!("media/{}/{}", entry_id, prepared.enc_filename);
+    let created_at = chrono::Local::now().format("%Y-%m-%dT%H:%M:%S").to_string();
+    MediaAttachment {
+        id: prepared.media_id.clone(),
         entry_id,
         filename,
-        mime_type,
-        size_bytes,
-        enc_path: rel_path,
+        mime_type: prepared.mime_type.clone(),
+        size_bytes: prepared.size_bytes,
+        enc_path,
         created_at,
-    })
+    }
 }
 
 /// Return all media attachments for a journal entry, ordered by creation time.
@@ -619,21 +777,26 @@ pub fn list_entry_media(
         .map_err(|e| format!("Prepare: {}", e))?;
 
     let rows: Vec<MediaAttachment> = stmt
-        .query_map(params![entry_id], |row| {
-            Ok(MediaAttachment {
-                id: row.get(0)?,
-                entry_id: row.get(1)?,
-                filename: row.get(2)?,
-                mime_type: row.get(3)?,
-                size_bytes: row.get(4)?,
-                enc_path: row.get(5)?,
-                created_at: row.get(6)?,
-            })
-        })
+        .query_map(params![entry_id], media_row_from_sql)
         .map_err(|e| format!("Query: {}", e))?
         .filter_map(|r| r.ok())
         .collect();
     Ok(rows)
+}
+
+/// Map a `SELECT id, entry_id, filename, mime_type, size_bytes, enc_path,
+/// created_at FROM entry_media` row into a `MediaAttachment`. Shared by
+/// `list_entry_media` and `list_all_media`.
+fn media_row_from_sql(row: &rusqlite::Row<'_>) -> rusqlite::Result<MediaAttachment> {
+    Ok(MediaAttachment {
+        id: row.get(0)?,
+        entry_id: row.get(1)?,
+        filename: row.get(2)?,
+        mime_type: row.get(3)?,
+        size_bytes: row.get(4)?,
+        enc_path: row.get(5)?,
+        created_at: row.get(6)?,
+    })
 }
 
 /// Decrypt a media file to a temp location and open it with the system viewer.
@@ -809,17 +972,7 @@ pub fn list_all_media(
         .map_err(|e| format!("Prepare: {}", e))?;
 
     let rows: Vec<MediaAttachment> = stmt
-        .query_map([], |row| {
-            Ok(MediaAttachment {
-                id: row.get(0)?,
-                entry_id: row.get(1)?,
-                filename: row.get(2)?,
-                mime_type: row.get(3)?,
-                size_bytes: row.get(4)?,
-                enc_path: row.get(5)?,
-                created_at: row.get(6)?,
-            })
-        })
+        .query_map([], media_row_from_sql)
         .map_err(|e| format!("Query: {}", e))?
         .filter_map(|r| r.ok())
         .collect();
@@ -958,7 +1111,34 @@ pub fn sweep_preview_temp(app: AppHandle) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::validate_entry_id;
+    use super::{media_row_from_sql, validate_entry_id};
+
+    #[test]
+    fn media_row_from_sql_maps_all_columns() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE entry_media (id TEXT, entry_id TEXT, filename TEXT, mime_type TEXT, \
+             size_bytes INTEGER, enc_path TEXT, created_at TEXT); \
+             INSERT INTO entry_media VALUES ('m1','e1','pic.jpg','image/jpeg',123,\
+             'media/e1/m1.jpg.enc','2026-01-01T00:00:00');",
+        )
+        .unwrap();
+        let got = conn
+            .query_row(
+                "SELECT id, entry_id, filename, mime_type, size_bytes, enc_path, created_at \
+                 FROM entry_media",
+                [],
+                media_row_from_sql,
+            )
+            .unwrap();
+        assert_eq!(got.id, "m1");
+        assert_eq!(got.entry_id, "e1");
+        assert_eq!(got.filename, "pic.jpg");
+        assert_eq!(got.mime_type, "image/jpeg");
+        assert_eq!(got.size_bytes, 123);
+        assert_eq!(got.enc_path, "media/e1/m1.jpg.enc");
+        assert_eq!(got.created_at, "2026-01-01T00:00:00");
+    }
 
     #[test]
     fn valid_uuid_accepted() {
@@ -1071,5 +1251,149 @@ mod tests {
         if let Some(out) = compress_image(&small, "image/jpeg") {
             assert!(out.len() < small.len());
         }
+    }
+
+    // ── save_media_attachment_bytes guards ───────────────────────────────────────
+
+    use super::{enforce_media_size_limit, reject_unsafe_filename, MAX_MEDIA_BYTES};
+
+    #[test]
+    fn bytes_filename_plain_name_accepted() {
+        assert!(reject_unsafe_filename("photo.jpg").is_ok());
+        assert!(reject_unsafe_filename("my report 2026.pdf").is_ok());
+    }
+
+    #[test]
+    fn bytes_filename_forward_slash_rejected() {
+        assert!(reject_unsafe_filename("a/b.jpg").is_err());
+        assert!(reject_unsafe_filename("/etc/passwd").is_err());
+    }
+
+    #[test]
+    fn bytes_filename_backslash_rejected() {
+        assert!(reject_unsafe_filename("a\\b.jpg").is_err());
+        assert!(reject_unsafe_filename("..\\secret").is_err());
+    }
+
+    #[test]
+    fn bytes_filename_dot_dot_rejected() {
+        assert!(reject_unsafe_filename("..").is_err());
+        assert!(reject_unsafe_filename("evil..jpg").is_err());
+    }
+
+    #[test]
+    fn bytes_size_within_limit_accepted() {
+        assert!(enforce_media_size_limit(0).is_ok());
+        assert!(enforce_media_size_limit(1024).is_ok());
+        assert!(enforce_media_size_limit(MAX_MEDIA_BYTES as usize).is_ok());
+    }
+
+    #[test]
+    fn bytes_size_over_limit_rejected() {
+        let err = enforce_media_size_limit(MAX_MEDIA_BYTES as usize + 1)
+            .expect_err("oversized payload must be rejected");
+        assert!(err.contains("too large"), "got: {err}");
+    }
+
+    // ── prepare_media_bytes (pure core of save_media_attachment_bytes) ────────────
+
+    use super::{decrypt_mbmf, prepare_media_bytes};
+    use base64::{engine::general_purpose::STANDARD, Engine as _};
+
+    #[test]
+    fn prepare_round_trips_non_image_payload() {
+        // Non-image bytes are stored verbatim (no compression), so decrypting the
+        // prepared blob must return exactly the original payload.
+        let original = b"the quick brown fox \x00\x01\x02 jumps".to_vec();
+        let b64 = STANDARD.encode(&original);
+        let prepared =
+            prepare_media_bytes("note.pdf", &b64, "correct horse battery").expect("prepare ok");
+
+        assert_eq!(prepared.mime_type, "application/pdf");
+        assert!(prepared.enc_filename.ends_with(".pdf.enc"));
+        assert!(prepared.enc_filename.starts_with(&prepared.media_id));
+        assert_eq!(prepared.size_bytes, original.len() as i64);
+
+        let decrypted =
+            decrypt_mbmf(&prepared.encrypted, "correct horse battery").expect("decrypt ok");
+        assert_eq!(decrypted, original);
+    }
+
+    #[test]
+    fn prepare_wrong_password_fails_to_decrypt() {
+        let original = b"secret bytes".to_vec();
+        let b64 = STANDARD.encode(&original);
+        let prepared = prepare_media_bytes("a.bin", &b64, "right-password").expect("prepare ok");
+        assert!(decrypt_mbmf(&prepared.encrypted, "wrong-password").is_err());
+    }
+
+    #[test]
+    fn prepare_rejects_invalid_base64() {
+        let err = prepare_media_bytes("a.png", "not%%base64!!", "pw")
+            .expect_err("invalid base64 must be rejected");
+        assert!(err.contains("Invalid base64"), "got: {err}");
+    }
+
+    #[test]
+    fn prepare_rejects_unsafe_filename() {
+        let b64 = STANDARD.encode(b"x");
+        assert!(prepare_media_bytes("../escape.jpg", &b64, "pw").is_err());
+        assert!(prepare_media_bytes("dir/file.jpg", &b64, "pw").is_err());
+    }
+
+    #[test]
+    fn prepare_accepts_within_limit_payload() {
+        // The decoded-size boundary itself is covered by `bytes_size_over_limit_rejected`
+        // via `enforce_media_size_limit`; here confirm the limit check is wired into the
+        // pipeline by passing a comfortably-small payload end-to-end.
+        let b64 = STANDARD.encode(vec![0u8; 1024]);
+        assert!(prepare_media_bytes("data.bin", &b64, "pw").is_ok());
+    }
+
+    #[test]
+    fn prepare_unknown_extension_defaults_octet_stream() {
+        let b64 = STANDARD.encode(b"blob");
+        let prepared = prepare_media_bytes("archive.xyz", &b64, "pw").expect("prepare ok");
+        assert_eq!(prepared.mime_type, "application/octet-stream");
+        assert!(prepared.enc_filename.ends_with(".xyz.enc"));
+    }
+
+    // ── build_media_row (pure persistence-tail metadata) ─────────────────────────
+
+    use super::build_media_row;
+
+    #[test]
+    fn build_media_row_derives_rel_path_and_carries_metadata() {
+        let b64 = STANDARD.encode(b"payload");
+        let prepared = prepare_media_bytes("photo.jpg", &b64, "pw").expect("prepare ok");
+        let expected_id = prepared.media_id.clone();
+        let expected_enc = prepared.enc_filename.clone();
+        let expected_size = prepared.size_bytes;
+
+        let row = build_media_row("entry-42".to_string(), "photo.jpg".to_string(), &prepared);
+
+        assert_eq!(row.id, expected_id);
+        assert_eq!(row.entry_id, "entry-42");
+        assert_eq!(row.filename, "photo.jpg");
+        assert_eq!(row.mime_type, "image/jpeg");
+        assert_eq!(row.size_bytes, expected_size);
+        assert_eq!(row.enc_path, format!("media/entry-42/{}", expected_enc));
+        assert!(!row.created_at.is_empty());
+    }
+
+    #[test]
+    fn prepare_compresses_large_jpeg_before_encrypt() {
+        // A large JPEG should be recompressed: the stored (decrypted) bytes must be
+        // smaller than the original and decode to a within-cap image.
+        let big = gradient_encoded(4000, 3000, image::ImageFormat::Jpeg);
+        let b64 = STANDARD.encode(&big);
+        let prepared = prepare_media_bytes("photo.jpg", &b64, "pw").expect("prepare ok");
+        assert_eq!(prepared.mime_type, "image/jpeg");
+        assert!(prepared.size_bytes < big.len() as i64, "should shrink");
+
+        let decrypted = decrypt_mbmf(&prepared.encrypted, "pw").expect("decrypt ok");
+        assert_eq!(decrypted.len() as i64, prepared.size_bytes);
+        let img = image::load_from_memory(&decrypted).expect("decodes");
+        assert!(img.width().max(img.height()) <= MAX_IMAGE_EDGE);
     }
 }

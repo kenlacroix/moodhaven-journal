@@ -58,6 +58,27 @@ export async function storeVoiceMemo(params: {
   return invoke<VoiceMemo>('store_voice_memo', params);
 }
 
+/**
+ * Persist a phone-recorded voice memo directly from raw base64 audio.
+ * The whisper.cpp sidecar is desktop-only, so the memo is stored untranscribed
+ * for later transcription once it reaches (or syncs to) a desktop instance.
+ */
+export async function storeVoiceMemoBytes(
+  id: string,
+  timestamp: string,
+  durationMs: number,
+  audioBase64: string,
+  healthJson?: string,
+): Promise<VoiceMemo> {
+  return invoke<VoiceMemo>('store_voice_memo_bytes', {
+    id,
+    timestamp,
+    durationMs,
+    healthJson: healthJson ?? null,
+    audioBase64,
+  });
+}
+
 /** List voice memos newest first. */
 export async function listVoiceMemos(limit?: number): Promise<VoiceMemo[]> {
   return invoke<VoiceMemo[]>('list_voice_memos', { limit: limit ?? null });

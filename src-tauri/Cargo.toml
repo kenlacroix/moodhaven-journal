@@ -39,7 +39,7 @@ anyhow = "1"
 base64 = "0.22"
 totp-rs = { version = "5", features = ["qr", "gen_secret"] }
 data-encoding = "2"
-sha2 = "0.10"
+sha2 = { version = "0.10", features = ["asm"] }
 rand = "0.8"
 hex = "0.4"
 aes-gcm = "0.10"

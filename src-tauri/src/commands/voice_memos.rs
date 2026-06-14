@@ -20,6 +20,7 @@ use crate::db::{self, Database, VoiceMemoRow};
 use crate::AppLockState;
 use base64::{engine::general_purpose::STANDARD, Engine};
 use rusqlite::params;
+use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Manager, State};
 
 use super::require_unlocked;
@@ -158,14 +159,7 @@ pub fn store_voice_memo_bytes(
         decode_nonempty_audio(&audio_base64).map_err(|e| format!("store_voice_memo_bytes: {e}"))?;
 
     let dest_dir = voice_memos_dir(&app)?;
-    let dest_filename = format!("{}.wav", id);
-    let dest = dest_dir.join(&dest_filename);
-    let rel_path = format!("voice_memos/{}", dest_filename);
-
-    // Defense in depth: ensure the resolved destination stays inside voice_memos/.
-    if dest.parent() != Some(dest_dir.as_path()) {
-        return Err("store_voice_memo_bytes: id escapes voice_memos directory".to_string());
-    }
+    let (dest, rel_path) = resolve_voice_memo_dest(&dest_dir, &id)?;
 
     std::fs::write(&dest, &bytes)
         .map_err(|e| format!("store_voice_memo_bytes: write failed: {e}"))?;
@@ -566,6 +560,24 @@ pub(crate) fn decode_nonempty_audio(audio_base64: &str) -> Result<Vec<u8>, Strin
     Ok(bytes)
 }
 
+/// Resolve the on-disk destination and the DB-relative path for a phone-captured
+/// memo from `id`, rejecting any `id` whose resolved path would escape `dest_dir`.
+/// Pulled out of `store_voice_memo_bytes` so the path/guard logic is unit-testable
+/// without an `AppHandle` (the rest of the command is filesystem + DB IO).
+pub(crate) fn resolve_voice_memo_dest(
+    dest_dir: &Path,
+    id: &str,
+) -> Result<(PathBuf, String), String> {
+    let dest_filename = format!("{}.wav", id);
+    let dest = dest_dir.join(&dest_filename);
+    let rel_path = format!("voice_memos/{}", dest_filename);
+    // Defense in depth: ensure the resolved destination stays inside voice_memos/.
+    if dest.parent() != Some(dest_dir) {
+        return Err("store_voice_memo_bytes: id escapes voice_memos directory".to_string());
+    }
+    Ok((dest, rel_path))
+}
+
 /// Returns `Ok(())` if `filename` is a safe plain filename (no path traversal).
 pub(crate) fn validate_incoming_filename(filename: &str) -> Result<(), &'static str> {
     if filename.is_empty() {
@@ -582,8 +594,32 @@ pub(crate) fn validate_incoming_filename(filename: &str) -> Result<(), &'static 
 
 #[cfg(test)]
 mod tests {
-    use super::{decode_nonempty_audio, validate_incoming_filename};
+    use super::{decode_nonempty_audio, resolve_voice_memo_dest, validate_incoming_filename};
     use base64::{engine::general_purpose::STANDARD, Engine};
+    use std::path::Path;
+
+    #[test]
+    fn resolve_dest_builds_wav_path_inside_dir() {
+        let dir = Path::new("/data/app/voice_memos");
+        let (dest, rel) = resolve_voice_memo_dest(dir, "abc123").unwrap();
+        assert_eq!(dest, dir.join("abc123.wav"));
+        assert_eq!(rel, "voice_memos/abc123.wav");
+        assert_eq!(dest.parent(), Some(dir));
+    }
+
+    #[test]
+    fn resolve_dest_rejects_parent_traversal() {
+        let dir = Path::new("/data/app/voice_memos");
+        let err = resolve_voice_memo_dest(dir, "../evil").unwrap_err();
+        assert!(err.contains("escapes voice_memos directory"), "{err}");
+    }
+
+    #[test]
+    fn resolve_dest_rejects_nested_subdir() {
+        let dir = Path::new("/data/app/voice_memos");
+        let err = resolve_voice_memo_dest(dir, "sub/evil").unwrap_err();
+        assert!(err.contains("escapes voice_memos directory"), "{err}");
+    }
 
     #[test]
     fn decode_valid_base64_audio() {

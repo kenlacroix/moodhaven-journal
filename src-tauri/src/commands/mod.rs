@@ -3,6 +3,7 @@
 //! These commands are invoked from the React frontend via IPC.
 
 use crate::AppLockState;
+use crate::RekeyInProgress;
 use tauri::State;
 
 pub const KEYRING_SERVICE: &str = "com.moodhaven.app";
@@ -16,10 +17,22 @@ pub(crate) fn require_unlocked(lock: &State<'_, AppLockState>) -> Result<(), Str
     }
 }
 
+/// Refuse data-write commands while a password change is re-keying the database, so a concurrent
+/// write can't strand a row under the old password (TOCTOU). Used by entry/signal/media/sync
+/// write paths alongside `require_unlocked`.
+pub(crate) fn require_no_rekey(rekey: &State<'_, RekeyInProgress>) -> Result<(), String> {
+    if rekey.is_armed() {
+        Err("A password change is in progress — try again once it finishes.".to_string())
+    } else {
+        Ok(())
+    }
+}
+
 pub mod activities;
 pub mod analytics;
 pub mod biometric;
 pub mod books;
+pub mod change_password;
 pub mod cloud_providers;
 pub mod data_management;
 pub mod hardware_key;
@@ -47,6 +60,7 @@ pub use activities::*;
 pub use analytics::*;
 pub use biometric::*;
 pub use books::*;
+pub use change_password::*;
 pub use cloud_providers::*;
 pub use data_management::*;
 pub use hardware_key::*;

@@ -148,6 +148,49 @@ fn decrypt_totp_secret(stored: &str, password: &str) -> Result<String, String> {
     String::from_utf8(plaintext).map_err(|_| "totp secret not valid utf-8".to_string())
 }
 
+/// Re-encrypt the stored TOTP secret from `old_password` to `new_password` as part of
+/// `change_master_password` (active-plans/change-password.md §4 step 4, item 5). Operates
+/// on a caller-held `&Connection` so it runs *inside* the orchestrator's inner transaction
+/// — the secret flips to the new password atomically with the entry/signal blobs and the
+/// verifier hash. No-op (Ok) when 2FA is absent or the secret is legacy plaintext.
+#[allow(dead_code)] // wired up by change_master_password in the implementation pass (§4.4)
+pub(crate) fn reencrypt_totp(
+    conn: &rusqlite::Connection,
+    old_password: &str,
+    new_password: &str,
+) -> Result<(), String> {
+    let stored: Option<String> = conn
+        .query_row(
+            "SELECT totp_secret FROM two_factor_auth WHERE id = 1",
+            [],
+            |row| row.get(0),
+        )
+        .map_err(|e| match e {
+            rusqlite::Error::QueryReturnedNoRows => "no 2fa row".to_string(),
+            other => format!("read totp secret: {other}"),
+        })
+        .ok()
+        .flatten();
+
+    let Some(stored) = stored else {
+        return Ok(()); // 2FA not configured — nothing to re-encrypt.
+    };
+    if !stored.starts_with(TOTP_ENC_PREFIX) {
+        return Ok(()); // legacy plaintext seed — leave for the disable/re-enable migration.
+    }
+
+    // Hold the decrypted seed in a Zeroizing buffer so it is wiped from memory on drop rather
+    // than lingering in a plain String after the re-encrypt.
+    let secret = zeroize::Zeroizing::new(decrypt_totp_secret(&stored, old_password)?);
+    let reencrypted = encrypt_totp_secret(&secret, new_password)?;
+    conn.execute(
+        "UPDATE two_factor_auth SET totp_secret = ?1, updated_at = datetime('now') WHERE id = 1",
+        [reencrypted],
+    )
+    .map_err(|e| format!("update totp secret: {e}"))?;
+    Ok(())
+}
+
 // ============================================================================
 // Internal Helpers
 // ============================================================================

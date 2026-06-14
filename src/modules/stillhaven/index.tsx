@@ -1,10 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Underwater2D } from './environments/underwater/Underwater2D';
-import { SubmergeOverlay } from './environments/underwater/SubmergeOverlay';
 import { Forest2D } from './environments/forest/Forest2D';
-import { ForestOverlay } from './environments/forest/ForestOverlay';
 import { Sky2D } from './environments/sky/Sky2D';
-import { SkyOverlay } from './environments/sky/SkyOverlay';
+import { EnvironmentTransitionOverlay } from './environments/EnvironmentTransitionOverlay';
 import { useBilateralEngine } from './hooks/useBilateralEngine';
 import { ActivationDial } from './components/ActivationDial';
 import { ProtocolPicker } from './components/ProtocolPicker';
@@ -493,9 +491,7 @@ export function StillView({ onHandoff }: StillViewProps): React.JSX.Element {
                                           <Underwater2D {...envProps} />
       )}
       {scene === 'submerging' && (
-        checkIn.environment === 'forest' ? <ForestOverlay onComplete={handleSubmergeComplete} /> :
-        checkIn.environment === 'sky'    ? <SkyOverlay   onComplete={handleSubmergeComplete} /> :
-                                           <SubmergeOverlay onComplete={handleSubmergeComplete} />
+        <EnvironmentTransitionOverlay environment={checkIn.environment} onComplete={handleSubmergeComplete} />
       )}
     </div>
   );

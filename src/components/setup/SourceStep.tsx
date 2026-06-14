@@ -7,7 +7,7 @@ interface SourceStepProps {
 }
 
 export function SourceStep({ onBack, onChooseFresh, onChooseSync }: SourceStepProps) {
-  const { isBrowser } = usePlatform();
+  const { canPeerSync } = usePlatform();
   return (
     <div className="space-y-6">
       <div className="text-center">
@@ -45,7 +45,7 @@ export function SourceStep({ onBack, onChooseFresh, onChooseSync }: SourceStepPr
         </button>
 
         {/* Sync from another device — desktop only (requires mDNS + native TCP) */}
-        {!isBrowser && (
+        {canPeerSync && (
           <button
             type="button"
             onClick={onChooseSync}

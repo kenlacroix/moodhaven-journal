@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import type { RefObject } from 'react';
 import type { AppSettings } from '../../../types/settings';
 import type { TwoFactorStatus } from '../../../types/twoFactor';
 import { usePlatform } from '../../../hooks/usePlatform';
@@ -7,6 +8,8 @@ import { use2FASetup } from '../../../hooks/use2FASetup';
 import { PrivacyAutoLock } from './PrivacyAutoLock';
 import { PrivacyBiometric } from './PrivacyBiometric';
 import { PrivacyPinUnlock } from './PrivacyPinUnlock';
+import { PrivacyChangePassword } from './PrivacyChangePassword';
+import { PrivacyRecoveryKey } from './PrivacyRecoveryKey';
 import { PrivacyTwoFactor } from './PrivacyTwoFactor';
 import { PrivacyDataManagement } from './PrivacyDataManagement';
 import { TransparencySection } from './PrivacyTransparency';
@@ -22,6 +25,7 @@ interface PrivacyTabProps {
   handleExport: () => void;
   setAutoLockTimeout: (v: number) => void;
   sessionPassword?: string;
+  transparencyRef?: RefObject<HTMLDivElement>;
 }
 
 export function PrivacyTab({
@@ -35,8 +39,9 @@ export function PrivacyTab({
   handleExport,
   setAutoLockTimeout,
   sessionPassword = '',
+  transparencyRef,
 }: PrivacyTabProps) {
-  const { isAndroid, isBrowser, isDesktop } = usePlatform();
+  const { isAndroid, isBrowser, isDesktop, canHardwareKey } = usePlatform();
 
   const savedFocusRef = useRef<Element | null>(null);
   const totpDialogRef = useRef<HTMLDivElement>(null);
@@ -108,10 +113,14 @@ export function PrivacyTab({
 
         <PrivacyPinUnlock sessionPassword={sessionPassword} />
 
+        {!isBrowser && <PrivacyChangePassword sessionPassword={sessionPassword} />}
+
+        <PrivacyRecoveryKey sessionPassword={sessionPassword} />
+
         <PrivacyTwoFactor
           twoFactorStatus={twoFactorStatus}
           backupCodesCount={backupCodesCount}
-          isBrowser={isBrowser}
+          canHardwareKey={canHardwareKey}
           onSetupTotp={() => setShow2FASetup('totp')}
           onSetupWebAuthn={() => setShow2FASetup('webauthn')}
           onRegenerateBackupCodes={handleRegenerateBackupCodes}
@@ -125,7 +134,7 @@ export function PrivacyTab({
           handleExport={handleExport}
         />
 
-        <TransparencySection settings={settings} isBrowser={isBrowser} />
+        <TransparencySection settings={settings} isBrowser={isBrowser} sectionRef={transparencyRef} />
       </div>
 
       {/* 2FA Setup Modal - TOTP */}

@@ -52,7 +52,7 @@ export function CollapsibleToolbar({
   quickCapture = false,
   onToggleQuickCapture,
 }: CollapsibleToolbarProps) {
-  const { isIOS } = usePlatform();
+  const { isDesktop } = usePlatform();
   const [formatState, setFormatState] = useState<Record<string, boolean>>({});
   const toolbarPanelRef = useRef<HTMLDivElement>(null);
 
@@ -195,8 +195,9 @@ export function CollapsibleToolbar({
             onClick={onEmojiClick}
           />
 
-          {/* Speech-to-text: quick capture toggle + mic button — sidecar unavailable on iOS */}
-          {onMicClick && !isIOS && (
+          {/* Speech-to-text: quick capture toggle + mic button — whisper sidecar is
+              desktop-only (absent on iOS/Android; no sidecar in the browser build) */}
+          {onMicClick && isDesktop && (
             <>
               <TBDivider />
               {onToggleQuickCapture && (
@@ -244,7 +245,7 @@ function ToolbarBtn({
       title={label}
       aria-pressed={isActive}
       className={`
-        p-1.5 rounded transition-all duration-150 active:scale-90
+        p-2 rounded transition-all duration-150 active:scale-90
         ${isActive
           ? 'bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400'
           : 'text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-600 dark:hover:text-slate-300'
@@ -310,7 +311,7 @@ function MicButton({
         disabled={isProcessing}
         aria-label={title}
         title={title}
-        className={`p-1.5 rounded transition-all duration-150 active:scale-90 ${buttonClass} ${isProcessing ? 'cursor-wait' : ''}`}
+        className={`p-2 rounded transition-all duration-150 active:scale-90 ${buttonClass} ${isProcessing ? 'cursor-wait' : ''}`}
       >
         {isProcessing ? (
           <span className="flex items-center gap-1">
@@ -366,7 +367,7 @@ function QuickCaptureToggle({
       title="Quick capture (bypass formatting)"
       aria-pressed={active}
       className={[
-        'p-1.5 rounded transition-all duration-150 active:scale-90 min-w-[44px] min-h-[44px] flex items-center justify-center',
+        'p-2 rounded transition-all duration-150 active:scale-90 min-w-[44px] min-h-[44px] flex items-center justify-center',
         active
           ? 'text-amber-500 bg-amber-50 dark:bg-amber-900/20'
           : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-slate-100 dark:hover:bg-slate-800',

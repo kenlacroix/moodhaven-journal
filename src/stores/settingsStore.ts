@@ -35,7 +35,7 @@ import { cloudProviderStatus } from '../lib/services/cloudProvidersService';
 import { useAppStore } from './appStore';
 
 // Section to scroll to when settings page opens
-type SettingsScrollTarget = 'speech-to-text' | 'ai' | 'privacy' | 'health' | 'notifications' | 'sync' | null;
+type SettingsScrollTarget = 'speech-to-text' | 'ai' | 'privacy' | 'privacy-checkup' | 'health' | 'notifications' | 'sync' | 'export' | null;
 
 interface SettingsState {
   settings: AppSettings;
@@ -88,6 +88,8 @@ interface SettingsState {
   setStorageType: (type: StorageBackend) => void;
   setWebDAVConfig: (config: Partial<WebDAVConfig>) => void;
   setLastSyncDate: (date: string, direction: 'upload' | 'download') => void;
+  setByoCloudFolder: (folderPath: string | null) => void;
+  setByoCloudLastSync: (date: string) => void;
 
   // Tutorial
   setHasSeenTutorial: (seen: boolean) => void;
@@ -142,6 +144,14 @@ interface SettingsState {
   distractionFree: boolean;
   setDistractionFree: (v: boolean) => void;
 
+  // Writing appearance drawer — toggle lives in TopBar, drawer renders in
+  // WritingView, so the open + onboarding-pulse state is shared here.
+  appearanceDrawerOpen: boolean;
+  appearanceHintPulse: boolean;
+  setAppearanceDrawerOpen: (v: boolean) => void;
+  toggleAppearanceDrawer: () => void;
+  setAppearanceHintPulse: (v: boolean) => void;
+
   // Auto-save indicator (not persisted — set by WritingView, read by Sidebar)
   savingState: 'idle' | 'saving' | 'saved';
   lastAutoSaved: string | null; // ISO date string
@@ -157,6 +167,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   hasUnsavedChanges: false,
   scrollToSection: null,
   distractionFree: false,
+  appearanceDrawerOpen: false,
+  appearanceHintPulse: false,
   savingState: 'idle',
   lastAutoSaved: null,
 
@@ -529,6 +541,32 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     }));
   },
 
+  setByoCloudFolder: (folderPath) => {
+    set((state) => ({
+      settings: {
+        ...state.settings,
+        storage: {
+          ...state.settings.storage,
+          byocloud: { ...state.settings.storage.byocloud, folderPath },
+        },
+      },
+      hasUnsavedChanges: true,
+    }));
+  },
+
+  setByoCloudLastSync: (date) => {
+    set((state) => ({
+      settings: {
+        ...state.settings,
+        storage: {
+          ...state.settings.storage,
+          byocloud: { ...state.settings.storage.byocloud, lastSyncAt: date },
+        },
+      },
+      hasUnsavedChanges: true,
+    }));
+  },
+
   // Tutorial
   setHasSeenTutorial: (hasSeenTutorial) => {
     set((state) => ({
@@ -808,6 +846,9 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
 
   // Session UI
   setDistractionFree: (distractionFree) => set({ distractionFree }),
+  setAppearanceDrawerOpen: (appearanceDrawerOpen) => set({ appearanceDrawerOpen }),
+  toggleAppearanceDrawer: () => set((s) => ({ appearanceDrawerOpen: !s.appearanceDrawerOpen })),
+  setAppearanceHintPulse: (appearanceHintPulse) => set({ appearanceHintPulse }),
 
   // Auto-save indicator
   setSavingState: (savingState) => set({ savingState }),

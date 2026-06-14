@@ -1,0 +1,13 @@
+# Opener plugin permissions
+# These allow the TypeScript layer to invoke the Android-native OpenerPlugin
+# via window.__TAURI_INTERNALS__.invoke('plugin:opener|commandName', args).
+
+[[permission]]
+identifier = "allow-opener-open-file"
+description = "Allow opening a local file with the system viewer via an ACTION_VIEW intent."
+commands.allow = ["openFile"]
+
+[default]
+permissions = [
+  "allow-opener-open-file",
+]

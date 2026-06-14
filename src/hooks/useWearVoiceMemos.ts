@@ -156,10 +156,11 @@ export function useWearVoiceMemos({
 
     const pending = memos.filter((m) => !m.transcription);
     // Sequential — one at a time to avoid hammering the sidecar
-    pending.reduce(
-      (chain, memo) => chain.then(() => transcribeMemo(memo.id)),
-      Promise.resolve()
-    );
+    void (async () => {
+      for (const memo of pending) {
+        await transcribeMemo(memo.id);
+      }
+    })();
   }, [memos, enabled, model, transcribeMemo]);
 
   // ── Called by useWearSignals.onVoiceMemo for newly-arrived memos ─────────

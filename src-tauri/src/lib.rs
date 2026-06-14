@@ -14,6 +14,33 @@ use zeroize::Zeroize;
 /// Sensitive Tauri commands check this state before executing.
 pub struct AppLockState(pub Mutex<bool>);
 
+/// True while a `change_master_password` is in flight (from `change_password_begin`, or the
+/// command's own self-arm, until it returns). Data-write commands refuse while armed so the
+/// frontend's re-key snapshot can't be invalidated by a concurrent write (the TOCTOU window
+/// between fetching blobs and the atomic flip). Cleared on `lock_app`.
+pub struct RekeyInProgress(pub std::sync::atomic::AtomicBool);
+
+impl RekeyInProgress {
+    pub fn new() -> Self {
+        RekeyInProgress(std::sync::atomic::AtomicBool::new(false))
+    }
+    pub fn arm(&self) {
+        self.0.store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+    pub fn disarm(&self) {
+        self.0.store(false, std::sync::atomic::Ordering::SeqCst);
+    }
+    pub fn is_armed(&self) -> bool {
+        self.0.load(std::sync::atomic::Ordering::SeqCst)
+    }
+}
+
+impl Default for RekeyInProgress {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Backend rate limiter for `verify_password`.
 ///
 /// Tracks consecutive failures and enforces a 30-second lockout after 5 failures.
@@ -353,6 +380,12 @@ pub fn run() {
         // Registers the Android-native WearPlugin so Tauri's IPC router can route
         // `invoke('plugin:wear|*')` calls to the Kotlin WearPlugin via pluginManager.
         .plugin(tauri::plugin::Builder::<_, ()>::new("wear").build())
+        // Registers the Android-native OpenerPlugin so `invoke('plugin:opener|*')`
+        // routes to the Kotlin OpenerPlugin (system viewer via ACTION_VIEW intent).
+        .plugin(tauri::plugin::Builder::<_, ()>::new("opener").build())
+        // Registers the Android-native SecureKeyPlugin so `invoke('plugin:securekey|*')`
+        // routes to the Kotlin SecureKeyPlugin (AndroidKeyStore-backed cloud token key).
+        .plugin(tauri::plugin::Builder::<_, ()>::new("securekey").build())
         .setup(|app| {
             // If a full-restore pending file exists, verify its SHA-256 checksum then
             // swap it in before opening the DB.  This prevents a tampered pending
@@ -547,8 +580,14 @@ pub fn run() {
             // Full-DB restore consent gate (armed explicitly by the serving user)
             app.manage(commands::peer_sync_engine::RestoreArmState::new());
 
+            // Password-change write-gate (blocks data writes while a re-key is in flight)
+            app.manage(RekeyInProgress::new());
+
             // STT model download state (cancellation tokens)
             app.manage(commands::DownloadState::default());
+
+            // Cloud-token key override (Android KeyStore-backed; see cloud_providers)
+            app.manage(commands::cloud_providers::CloudTokenKeyOverride::default());
 
             // Sweep leftover preview temp files from previous sessions
             let _ = commands::sweep_preview_temp(app.handle().clone());
@@ -626,10 +665,15 @@ pub fn run() {
             commands::store_password_hash,
             commands::get_password_hash,
             commands::verify_password,
+            commands::change_master_password,
+            commands::change_password_begin,
+            commands::change_password_cancel,
             // Journal entries
             commands::create_journal_entry,
             commands::get_journal_entry,
             commands::get_all_journal_entries,
+            commands::get_entry_rekey_blobs,
+            commands::get_signal_rekey_blobs,
             commands::get_journal_entries_by_date,
             commands::get_entries_on_this_day,
             commands::update_journal_entry,
@@ -671,7 +715,10 @@ pub fn run() {
             commands::import_data,
             commands::get_data_stats,
             commands::write_text_file,
+            commands::write_binary_file,
+            commands::read_text_file,
             commands::exit_app,
+            commands::relaunch_app,
             commands::get_log_path,
             commands::open_log_folder,
             commands::set_log_level,
@@ -807,8 +854,10 @@ pub fn run() {
             commands::cloud_provider_upload_blob,
             commands::cloud_provider_download_blob,
             commands::cloud_provider_status,
+            commands::cloud_set_token_key,
             commands::cloud_provider_disconnect,
             commands::cloud_provider_refresh_token,
+            commands::cloud_provider_available,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

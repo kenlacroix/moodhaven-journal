@@ -64,12 +64,15 @@ function computeSeverity(tag) {
   return major > 1 || (major === 1 && minor >= 8) ? 'security' : 'recommended';
 }
 
+const virusTotalAsset = release.assets.find((a) => a.name === 'virustotal.txt');
+
 const payload = {
   version: release.tagName,
   releaseUrl: release.url,
   publishedAt: release.publishedAt,
   severity: computeSeverity(release.tagName),
   assets,
+  ...(virusTotalAsset ? { virusTotalUrl: virusTotalAsset.url } : {}),
 };
 
 const fs = require('fs');

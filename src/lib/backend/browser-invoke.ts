@@ -418,11 +418,13 @@ async function dispatch(command: string, p: Params): Promise<any> {
       return true;
     }
     case 'factory_reset': {
-      if (!_browserSessionUnlocked) {
-        throw new Error('Session is locked');
-      }
+      // Intentionally NOT lock-gated — this is the lock-screen "Erase & Start
+      // Fresh" escape hatch and must work while locked, matching the desktop
+      // backend (factory_reset has no require_unlocked guard).
       const db = await openDB();
-      const stores = ['journal_entries', 'settings', 'books', 'webdav_state'];
+      // Clear every object store so nothing (incl. StillHaven sessions/samples)
+      // survives a reset. Iterating storeNames keeps this complete as stores grow.
+      const stores = Array.from(db.objectStoreNames);
       for (const storeName of stores) {
         await new Promise<void>((resolve, reject) => {
           const t = db.transaction(storeName, 'readwrite');
@@ -431,11 +433,13 @@ async function dispatch(command: string, p: Params): Promise<any> {
           req.onerror = () => reject(req.error);
         });
       }
+      _browserSessionUnlocked = false;
       return true;
     }
-    case 'exit_app': {
+    case 'exit_app':
+    case 'relaunch_app': {
       // window.close() is blocked by browsers unless the tab was opened by script.
-      // Reload instead so the app restarts cleanly (e.g. after factory reset).
+      // Reload instead so the app restarts cleanly into first-run (e.g. after reset).
       window.location.reload();
       return;
     }
@@ -450,6 +454,23 @@ async function dispatch(command: string, p: Params): Promise<any> {
       URL.revokeObjectURL(url);
       return;
     }
+    case 'write_binary_file': {
+      // Trigger browser download of base64-encoded bytes (recovery-key PDF export).
+      const raw = atob(p.contentsBase64 as string);
+      const bytes = new Uint8Array(raw.length);
+      for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+      const blob = new Blob([bytes], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = (p.path as string).split('/').pop() ?? 'download.pdf';
+      a.click();
+      URL.revokeObjectURL(url);
+      return;
+    }
+    case 'read_text_file':
+      // BYO-Cloud folder sync reads arbitrary OS paths — not reachable from the browser sandbox.
+      throw new Error('Folder sync requires the desktop app');
 
     // -----------------------------------------------------------------------
     // 2FA — browser provides TOTP via WebCrypto; stubs for hardware key
@@ -477,6 +498,15 @@ async function dispatch(command: string, p: Params): Promise<any> {
       if (command === 'disable_2fa') return true;
       return null;
     }
+
+    // PIN unlock — not supported in browser build (no OS-backed secure storage)
+    case 'pin_is_enabled':
+      return false;
+    case 'pin_setup':
+    case 'pin_disable':
+      return undefined;
+    case 'pin_unlock':
+      throw new Error('PIN unlock requires the desktop app');
 
     // -----------------------------------------------------------------------
     // Unsupported in browser — Tauri-only features
@@ -555,6 +585,16 @@ async function dispatch(command: string, p: Params): Promise<any> {
       return { updateAvailable: false, latestVersion: APP_VERSION, downloadUrl: null };
     case 'download_and_install_update':
       throw new Error('Auto-update requires the desktop app');
+
+    // Change master password re-encrypts the SQLCipher whole-DB layer and on-disk
+    // media — both desktop/Tauri-only. The browser build has no second encryption
+    // layer to rekey, so the feature is unavailable (UI is also gated in PrivacyTab).
+    case 'get_entry_rekey_blobs':
+    case 'get_signal_rekey_blobs':
+    case 'change_password_begin':
+    case 'change_password_cancel':
+    case 'change_master_password':
+      throw new Error('Changing your password requires the desktop app');
 
     case 'get_entry_timestamps': {
       const entries = await dbGetAllEntries();
@@ -698,6 +738,10 @@ async function dispatch(command: string, p: Params): Promise<any> {
       return dbListAllEntryActivities();
     case 'get_activity_stats':
       return dbGetActivityStats();
+
+    // Managed cloud providers don't run in the browser build.
+    case 'cloud_provider_available':
+      return false;
 
     default:
       console.warn(`[browser-invoke] unhandled command: ${command}`, p);

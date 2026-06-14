@@ -151,6 +151,7 @@ fn constant_time_eq(a: &str, b: &str) -> bool {
 pub fn create_journal_entry(
     db: State<Database>,
     lock: State<'_, AppLockState>,
+    rekey: State<'_, crate::RekeyInProgress>,
     id: String,
     encrypted_content: EncryptedContent,
     mood: i32,
@@ -160,6 +161,7 @@ pub fn create_journal_entry(
     word_count: Option<i32>,
 ) -> Result<JournalEntryRow, String> {
     require_unlocked(&lock)?;
+    super::require_no_rekey(&rekey)?;
     if !(1..=5).contains(&mood) {
         return Err("Mood must be between 1 and 5".to_string());
     }
@@ -203,6 +205,33 @@ pub fn get_all_journal_entries(
     db::get_all_entries(&db, limit)
 }
 
+/// One entry's id + raw encrypted blob, for the change-password re-key sweep.
+#[derive(Debug, serde::Serialize)]
+pub struct EntryRekeyBlob {
+    pub id: String,
+    pub encrypted_content: EncryptedContent,
+}
+
+/// Return the raw `encrypted_content` of EVERY entry — including SEALED time-capsule entries
+/// whose content `get_all_journal_entries` deliberately withholds. The frontend needs every
+/// per-field blob to re-encrypt under the new password during `change_master_password`;
+/// omitting sealed entries would leave them undecryptable after the change. Encrypted blobs
+/// only — no plaintext leaves the backend. Requires an unlocked session.
+#[tauri::command]
+pub fn get_entry_rekey_blobs(
+    db: State<'_, Database>,
+    lock: State<'_, AppLockState>,
+) -> Result<Vec<EntryRekeyBlob>, String> {
+    require_unlocked(&lock)?;
+    Ok(db::get_all_entry_blobs(&db)?
+        .into_iter()
+        .map(|(id, encrypted_content)| EntryRekeyBlob {
+            id,
+            encrypted_content,
+        })
+        .collect())
+}
+
 /// Get entries from the same calendar day (month+day) in previous years (On This Day).
 /// More efficient than fetching all entries and filtering in JS.
 #[tauri::command]
@@ -227,10 +256,12 @@ pub fn get_journal_entries_by_date(
 }
 
 /// Update an existing journal entry
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub fn update_journal_entry(
     db: State<Database>,
     lock: State<'_, AppLockState>,
+    rekey: State<'_, crate::RekeyInProgress>,
     id: String,
     encrypted_content: EncryptedContent,
     mood: i32,
@@ -238,6 +269,7 @@ pub fn update_journal_entry(
     word_count: Option<i32>,
 ) -> Result<JournalEntryRow, String> {
     require_unlocked(&lock)?;
+    super::require_no_rekey(&rekey)?;
     if !(1..=5).contains(&mood) {
         return Err("Mood must be between 1 and 5".to_string());
     }
@@ -255,9 +287,11 @@ pub fn update_journal_entry(
 pub fn delete_journal_entry(
     db: State<Database>,
     lock: State<'_, AppLockState>,
+    rekey: State<'_, crate::RekeyInProgress>,
     id: String,
 ) -> Result<bool, String> {
     require_unlocked(&lock)?;
+    super::require_no_rekey(&rekey)?;
     db::delete_entry(&db, &id)
 }
 
@@ -267,10 +301,12 @@ pub fn delete_journal_entry(
 pub fn patch_entry_location_weather(
     db: State<Database>,
     lock: State<'_, AppLockState>,
+    rekey: State<'_, crate::RekeyInProgress>,
     id: String,
     location_weather: String,
 ) -> Result<(), String> {
     require_unlocked(&lock)?;
+    super::require_no_rekey(&rekey)?;
     db::patch_entry_location_weather(&db, &id, &location_weather)
 }
 
@@ -279,10 +315,12 @@ pub fn patch_entry_location_weather(
 pub fn patch_entry_pinned(
     db: State<Database>,
     lock: State<'_, AppLockState>,
+    rekey: State<'_, crate::RekeyInProgress>,
     id: String,
     pinned: bool,
 ) -> Result<(), String> {
     require_unlocked(&lock)?;
+    super::require_no_rekey(&rekey)?;
     db::patch_entry_pinned(&db, &id, pinned)
 }
 
@@ -291,10 +329,12 @@ pub fn patch_entry_pinned(
 pub fn patch_entry_status(
     db: State<Database>,
     lock: State<'_, AppLockState>,
+    rekey: State<'_, crate::RekeyInProgress>,
     id: String,
     status: String,
 ) -> Result<(), String> {
     require_unlocked(&lock)?;
+    super::require_no_rekey(&rekey)?;
     db::patch_entry_status(&db, &id, &status)
 }
 
@@ -303,10 +343,12 @@ pub fn patch_entry_status(
 pub fn link_journal_entry_to_session(
     db: State<Database>,
     lock: State<'_, AppLockState>,
+    rekey: State<'_, crate::RekeyInProgress>,
     entry_id: String,
     session_id: String,
 ) -> Result<(), String> {
     require_unlocked(&lock)?;
+    super::require_no_rekey(&rekey)?;
     db::link_journal_entry_to_session(&db, &entry_id, &session_id)
 }
 
@@ -315,10 +357,12 @@ pub fn link_journal_entry_to_session(
 pub fn sync_entry_tags(
     db: State<Database>,
     lock: State<'_, AppLockState>,
+    rekey: State<'_, crate::RekeyInProgress>,
     id: String,
     tags: Vec<String>,
 ) -> Result<(), String> {
     require_unlocked(&lock)?;
+    super::require_no_rekey(&rekey)?;
     db::sync_entry_tags(&db, &id, &tags)
 }
 

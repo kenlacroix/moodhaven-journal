@@ -7,6 +7,7 @@
 
 import { useEffect, useState, useCallback, lazy, Suspense } from 'react';
 import { useAppBanners } from './hooks/useAppBanners';
+import { useStoragePersistence } from './hooks/useStoragePersistence';
 import { BreakoutWriterApp } from './components/breakout/BreakoutWriterApp';
 
 // Views are lazy-loaded: only the initial WritingView is preloaded; all others
@@ -32,6 +33,7 @@ const SyncDetailsModal = lazy(() => import('./components/sync/SyncDetailsModal')
 import { useAppStore } from './stores/appStore';
 import { useSettingsStore } from './stores/settingsStore';
 import { useReminderScheduler } from './hooks/useReminderScheduler';
+import { useAutoLock } from './hooks/useAutoLock';
 import { useUpdateCheck } from './hooks/useUpdateCheck';
 import { useWearSignals } from './hooks/useWearSignals';
 import { usePeerSync } from './hooks/usePeerSync';
@@ -59,6 +61,7 @@ function App() {
 function MainApp() {
   const { isUnlocked, isInitialized, checkInitialization, lock, sessionPassword } = useAppStore();
   const loadSettings = useSettingsStore((s) => s.loadSettings);
+  const setScrollToSection = useSettingsStore((s) => s.setScrollToSection);
   const hasSeenTutorial = useSettingsStore((s) => s.settings.tutorial?.hasSeenTutorial);
   const hasSeenDisclaimer = useSettingsStore((s) => s.settings.wellness?.hasSeenDisclaimer ?? true);
   const stillhavenEnabled = useSettingsStore((s) => s.settings.wellness?.stillhavenEnabled ?? false);
@@ -87,11 +90,15 @@ function MainApp() {
   const [sealingEntryId, setSealingEntryId] = useState<string | null>(null);
   const [timelineRefresh, setTimelineRefresh] = useState(0);
 
-  const { isAndroid, isBrowser } = usePlatform();
+  const { isAndroid, canPeerSync } = usePlatform();
   const isMobileViewport = useIsMobile();
 
   // Schedule reminder notifications (hook checks enabled state internally)
   useReminderScheduler();
+
+  // Enforce auto-lock timeout + clear-clipboard-on-lock privacy settings.
+  // Hook is inert unless unlocked AND autoLockTimeout > 0.
+  useAutoLock();
 
   // Update check — runs once per session after settings are loaded, respects 24h gate
   const updateHook = useUpdateCheck();
@@ -116,7 +123,7 @@ function MainApp() {
   // Peer-to-peer sync — initializes device identity and starts mDNS discovery.
   // Runs for the entire app lifetime; discovery state lives in peerSyncStore.
   // Not available in browser (no mDNS, no raw TCP).
-  usePeerSync({ enabled: !isBrowser });
+  usePeerSync({ enabled: canPeerSync });
 
   // Time capsule — polls once per session on unlock for due capsules.
   const { pendingCapsule, revealCapsule, dismissCapsule } = useTimeCapsule({
@@ -131,6 +138,12 @@ function MainApp() {
     onThisDayOldestYear,
     dismissOnThisDay,
   } = useAppBanners(isUnlocked && !!sessionPassword);
+
+  // Browser/PWA only: request durable IndexedDB storage once per session; nudge a
+  // backup if the browser denies it (eviction would lose the journal).
+  const { showBackupNudge, dismissBackupNudge } = useStoragePersistence(
+    isUnlocked && !!sessionPassword
+  );
 
   useEffect(() => {
     const init = async () => {
@@ -171,6 +184,17 @@ function MainApp() {
       setShowTutorial(true);
     }
   }, [isUnlocked, settingsLoadedForSession, hasSeenTutorial, showDisclaimer]);
+
+  // Android: bootstrap the hardware-backed cloud-token key once at startup so
+  // OAuth tokens encrypt under AndroidKeyStore, not the bare 0600 fallback file.
+  useEffect(() => {
+    if (!isAndroid) return;
+    import('./lib/services/cloudProvidersService').then(({ bootstrapAndroidCloudTokenKey }) => {
+      bootstrapAndroidCloudTokenKey().catch((err) =>
+        logger.warn('Cloud token key bootstrap failed:', { error: String(err) })
+      );
+    });
+  }, [isAndroid]);
 
   // Helper: run a silent background sync (no UI feedback — fire and forget)
   const runBackgroundSync = useCallback(() => {
@@ -474,6 +498,36 @@ function MainApp() {
           <button
             type="button"
             onClick={dismissOnThisDay}
+            aria-label="Dismiss"
+            className="flex-shrink-0 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      )}
+
+      {/* Browser/PWA: durable storage denied — nudge an encrypted backup */}
+      {showBackupNudge && (
+        <div className="fixed bottom-5 left-5 z-50 flex items-start gap-3 px-4 py-3 rounded-xl bg-white dark:bg-slate-800 border border-amber-300 dark:border-amber-700 shadow-lg max-w-xs animate-slide-up" role="alert">
+          <span className="text-base mt-0.5">⚠️</span>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-slate-800 dark:text-slate-100">Back up your journal</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              This browser may clear MoodHaven's stored data when disk space runs low. Export an encrypted backup to be safe.
+            </p>
+            <button
+              type="button"
+              onClick={() => { dismissBackupNudge(); setScrollToSection('export'); handleNavigate('settings'); }}
+              className="mt-1.5 text-xs font-medium text-violet-600 dark:text-violet-400 hover:underline"
+            >
+              Back up now
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={dismissBackupNudge}
             aria-label="Dismiss"
             className="flex-shrink-0 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
           >

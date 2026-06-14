@@ -1,0 +1,99 @@
+name: SonarQube Cloud
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  sonar:
+    name: Analyze
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+        with:
+          # Full history gives Sonar accurate new-code / blame data
+          fetch-depth: 0
+
+      - name: Setup Node 22
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6.4.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Frontend tests with coverage
+        run: npm run test:coverage
+
+      # ── Rust coverage ──────────────────────────────────────────────────────
+      # The Rust backend is the largest, most security-sensitive code in the repo.
+      # Without this it reports 0% coverage to Sonar, dragging the metric down and
+      # hiding the real cargo test suite.
+      - name: Install Linux system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - name: Setup Rust (stable)
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8  # stable (2026-04-04)
+        with:
+          toolchain: stable
+          components: llvm-tools-preview
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4  # v2.9.1
+        with:
+          workspaces: src-tauri
+
+      - name: Create stub whisper sidecar
+        shell: bash
+        run: |
+          # tauri-build validates sidecar existence at compile time.
+          # Create a stub binary for the host triple so the build compiles
+          # without shipping a real whisper binary in CI.
+          mkdir -p src-tauri/binaries
+          TRIPLE=$(rustc -vV | sed -n 's/host: //p')
+          STUB="src-tauri/binaries/whisper-${TRIPLE}"
+          if [[ ! -f "$STUB" ]]; then
+            printf '\x4D\x5A' > "$STUB" 2>/dev/null || touch "$STUB"
+            echo "Created stub: $STUB"
+          fi
+
+      - name: Install cargo-llvm-cov
+        run: cargo install cargo-llvm-cov --locked
+
+      - name: Rust tests with coverage (lcov)
+        working-directory: src-tauri
+        run: cargo llvm-cov --lcov --output-path ../coverage/rust-lcov.info
+
+      - name: SonarQube Cloud scan
+        uses: SonarSource/sonarqube-scan-action@713881670b6b3676cda39549040e2d88c70d582e  # v8.2.0
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+      # ── Quality gate enforcement ───────────────────────────────────────────
+      # Fails the check if Sonar's quality gate on this branch/PR fails, so the
+      # gate is visible and blocking rather than advisory.
+      - name: SonarQube Quality Gate check
+        uses: SonarSource/sonarqube-quality-gate-action@cf038b0e0cdecfa9e56c198bbb7d21d751d62c3b  # v1.2.0
+        timeout-minutes: 5
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

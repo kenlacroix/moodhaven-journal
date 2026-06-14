@@ -18,6 +18,9 @@ pub mod signals;
 pub mod still;
 pub mod voice_memos;
 
+#[cfg(test)]
+mod crash_replay;
+
 pub use analytics::*;
 pub use books::*;
 pub use journal::*;
@@ -56,11 +59,92 @@ pub fn read_db_state(db_path: &Path) -> DbStateFile {
 }
 
 fn write_db_state(db_path: &Path, state: &DbStateFile) -> Result<(), String> {
+    use std::io::Write;
     let path = db_state_path(db_path);
     let json = serde_json::to_string(state).map_err(|e| format!("serialize db_state: {e}"))?;
-    std::fs::write(&path, json).map_err(|e| format!("write db_state.json: {e}"))?;
+
+    // db_state.json is the commit signal for both encrypt_in_place and change_master_password,
+    // so it must be crash-durable: write to a temp, fsync its contents, then atomically rename
+    // over the live file and fsync the directory. A bare `fs::write` truncates-then-writes with
+    // no fsync, so a power loss can leave it empty (→ "unencrypted" → brick) or leave the salt
+    // unflushed while the promoted DB is already on the new key.
+    let tmp = path.with_extension("json.tmp");
+    {
+        let mut f = std::fs::File::create(&tmp).map_err(|e| format!("create db_state tmp: {e}"))?;
+        f.write_all(json.as_bytes())
+            .map_err(|e| format!("write db_state tmp: {e}"))?;
+        f.sync_all()
+            .map_err(|e| format!("fsync db_state tmp: {e}"))?;
+    }
+    // POSIX rename(2) replaces atomically; Windows rename fails if the dest exists, so clear it
+    // first (tiny window — acceptable on a platform with weaker durability guarantees anyway).
+    #[cfg(target_os = "windows")]
+    {
+        let _ = std::fs::remove_file(&path);
+    }
+    std::fs::rename(&tmp, &path).map_err(|e| format!("rename db_state.json: {e}"))?;
+    if let Some(dir) = path.parent() {
+        if let Ok(d) = std::fs::File::open(dir) {
+            let _ = d.sync_all();
+        }
+    }
     Ok(())
 }
+
+// ============================================================================
+// Crash-replay harness hook (Layer B — literal SIGKILL)
+// ============================================================================
+
+/// Crash-injection hook for the crash-replay test harness (`scripts/crash-replay.sh`).
+///
+/// Debug-only and inert by default: it does nothing unless the `MH_CRASH_POINT`
+/// environment variable is set and exactly matches `label`. When armed it stops the
+/// process *at this exact boundary* so an external `kill -9` lands deterministically:
+///
+/// - **park mode (default):** create the readiness file named by `MH_CRASH_READY`
+///   (so the parent knows the dangerous step has not yet run), then block forever.
+///   The parent then sends a genuine `SIGKILL`.
+/// - **abort mode (`MH_CRASH_MODE=abort`):** `std::process::abort()` immediately —
+///   for environments where the parent cannot signal the child.
+///
+/// There is NO release-build effect: `crash_point!` compiles this call out entirely in
+/// release (`debug_assertions` off), and even in debug it is a no-op unless armed.
+#[cfg(debug_assertions)]
+pub fn crash_inject(label: &str) {
+    match std::env::var("MH_CRASH_POINT") {
+        Ok(want) if want == label => {}
+        _ => return,
+    }
+    log::warn!("[crash_point] armed boundary reached: {label}");
+    if let Ok(ready) = std::env::var("MH_CRASH_READY") {
+        if !ready.is_empty() {
+            let _ = std::fs::write(&ready, label.as_bytes());
+        }
+    }
+    if std::env::var("MH_CRASH_MODE").ok().as_deref() == Some("abort") {
+        std::process::abort();
+    }
+    // Park at the boundary; the harness sends SIGKILL. Sleep in long ticks — the
+    // process is killed externally, so this loop never exits on its own.
+    loop {
+        std::thread::sleep(std::time::Duration::from_secs(3600));
+    }
+}
+
+/// Fire a named crash boundary for the crash-replay harness.
+///
+/// Expands to nothing in release builds (gated on `debug_assertions`); in debug builds
+/// it is still inert unless `MH_CRASH_POINT` matches the label (see [`crash_inject`]).
+macro_rules! crash_point {
+    ($label:expr) => {{
+        #[cfg(debug_assertions)]
+        $crate::db::crash_inject($label);
+    }};
+}
+// Re-exported for reuse by the change_master_password feature PR, which will drop the
+// same macro at its phase boundaries (active-plans/change-password.md §7).
+#[allow(unused_imports)]
+pub(crate) use crash_point;
 
 // ============================================================================
 // User settings row
@@ -86,6 +170,22 @@ impl Database {
     /// call `apply_key()` after the user authenticates before the connection is usable.
     pub fn new(db_path: PathBuf) -> Result<Self, String> {
         let mut state = read_db_state(&db_path);
+
+        // Recovery (B6′ — interrupted rename): the Windows backup-and-rename window in
+        // encrypt_in_place / atomic_promote moves the original aside to moodhaven_old.db
+        // before renaming the encrypted tmp into place. A crash in that window can leave
+        // moodhaven.db absent while the backup survives. If the live DB is missing but the
+        // backup exists, restore it so the normal tmp / key-verified promotion below can run.
+        // Cross-platform safe: it fires only when the live file is absent AND a backup is
+        // present, so it never clobbers an already-promoted encrypted DB.
+        let backup_path = db_path.with_file_name("moodhaven_old.db");
+        if !db_path.exists() && backup_path.exists() {
+            log::warn!(
+                "[sqlcipher] moodhaven.db missing but moodhaven_old.db backup present — \
+                 restoring backup (interrupted-rename recovery, B6′)"
+            );
+            let _ = std::fs::rename(&backup_path, &db_path);
+        }
 
         // Recovery: if moodhaven_enc.db exists, a previous migration was interrupted.
         // Determine how far it got based on the salt pre-write and encrypted flag.
@@ -243,10 +343,23 @@ impl Database {
             return self.promote_pending_tmp(&tmp_path, &hex_key);
         }
 
+        // Interrupted change_master_password recovery: a `moodhaven_rekey.db` tmp means a
+        // password change crashed. recover_rekey_tmp promotes it (committed) or discards it
+        // (pre-commit), reusing the same key-verify-before-promote safety as the migration path.
+        let rekey_tmp = self.path.with_file_name("moodhaven_rekey.db");
+        if rekey_tmp.exists() {
+            return self.recover_rekey_tmp(&rekey_tmp, &hex_key);
+        }
+
         let new_conn = Self::open_keyed(&self.path, &hex_key)?;
         Self::run_pragmas_and_migrations(&new_conn)?;
-        let mut conn = self.conn.lock().map_err(|e| e.to_string())?;
-        *conn = new_conn;
+        {
+            let mut conn = self.conn.lock().map_err(|e| e.to_string())?;
+            *conn = new_conn;
+        }
+        // Finish the keyless tail of a change interrupted after its atomic flip but before the
+        // media renames / marker clear (e.g. crash after promote). No-op in the steady state.
+        self.finish_pending_password_change();
         Ok(())
     }
 
@@ -463,6 +576,7 @@ impl Database {
                 salt: Some(salt_b64.to_string()),
             },
         )?;
+        crash_point!("encrypt.after_salt");
 
         // 1. Flush WAL and export to encrypted tmp file (hold conn lock for this block)
         {
@@ -489,6 +603,7 @@ impl Database {
                 .execute_batch("SELECT count(*) FROM sqlite_master;")
                 .map_err(|_| "encrypted db unreadable after export".to_string())?;
         }
+        crash_point!("encrypt.after_export");
 
         // 3. Write db_state.json BEFORE releasing the file handle. This must happen before
         //    the rename: if a crash occurs between here and step 6, Database::new() will
@@ -500,6 +615,7 @@ impl Database {
                 salt: Some(salt_b64.to_string()),
             },
         )?;
+        crash_point!("encrypt.after_state_true");
 
         // 4. Release the original file by replacing the conn with an in-memory placeholder
         {
@@ -523,6 +639,7 @@ impl Database {
             }
             std::thread::sleep(std::time::Duration::from_millis(50));
         }
+        crash_point!("encrypt.before_rename");
 
         // 6. Rename encrypted tmp to final path.
         //    On Windows, rename fails if the destination exists — move the original to a
@@ -586,6 +703,7 @@ impl Database {
             }
             return Err(e);
         }
+        crash_point!("encrypt.after_rename");
 
         // 7. Open final keyed connection to the encrypted file
         {
@@ -612,6 +730,275 @@ impl Database {
         }
 
         Ok(())
+    }
+
+    /// Rekey the outer SQLCipher layer to a new password-derived key — the final,
+    /// irreversible step of `change_master_password` (active-plans/change-password.md §4
+    /// step 6). By the time this runs the inner per-field blobs have already been
+    /// re-encrypted under the new password and committed (the inner txn), and the media
+    /// files have been re-encrypted; only the whole-file SQLCipher key is still old.
+    ///
+    /// Structure mirrors `encrypt_in_place`: export the live (old-keyed) DB into a new
+    /// tmp file keyed with `new_key`, key-verify it, write the new salt, then
+    /// `atomic_promote` the tmp over the original and reopen under the new key. The
+    /// orchestrator brackets this call with the `cmp.before_rekey` / `cmp.after_rekey`
+    /// crash boundaries so a crash leaves the DB either wholly on the old key (tmp
+    /// discarded) or wholly on the new key (tmp promoted) — never a mix.
+    ///
+    /// `apply_inner` runs inside the new-keyed tmp BEFORE it is promoted, re-encrypting the
+    /// per-field blobs (entries/signals/TOTP) and updating the verifier + recovery rows so the
+    /// tmp is fully self-consistent under the new password before it ever becomes live. A crash
+    /// before the [`write_db_state`] flip below leaves the tmp an orphan and the live DB wholly
+    /// on the old password; a crash after it recovers forward to the new DB (see
+    /// [`recover_rekey_tmp`]). This is the single atomic flip the crash-replay matrix proves.
+    pub fn rekey_in_place<F>(
+        &self,
+        new_key: &[u8; 32],
+        new_salt_b64: &str,
+        apply_inner: F,
+    ) -> Result<(), String>
+    where
+        F: FnOnce(&Connection) -> Result<(), String>,
+    {
+        let hex_key = Zeroizing::new(hex::encode(new_key));
+        let tmp_path = self.path.with_file_name("moodhaven_rekey.db");
+        let tmp_str = tmp_path.to_str().ok_or("non-UTF8 db path")?;
+        if tmp_str.contains('\'') {
+            return Err("Database path contains single quotes — cannot rekey".to_string());
+        }
+        let tmp_str = tmp_str.to_string();
+
+        // Clean any previous incomplete attempt (orphan tmp + its sidecars).
+        let _ = std::fs::remove_file(&tmp_path);
+        let _ = std::fs::remove_file(tmp_path.with_extension("db-wal"));
+        let _ = std::fs::remove_file(tmp_path.with_extension("db-shm"));
+
+        // 1. Export the live (OLD-keyed) DB into the NEW-keyed tmp. The live conn is held only
+        //    for this block; sqlcipher_export reads `main` and writes the attached encrypted db.
+        {
+            let conn = self.conn.lock().map_err(|e| e.to_string())?;
+            let _ = conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);");
+            let attach_sql = Zeroizing::new(format!(
+                "ATTACH DATABASE '{tmp_str}' AS rekeyed KEY \"x'{}'\";
+                 SELECT sqlcipher_export('rekeyed');
+                 DETACH DATABASE rekeyed;",
+                *hex_key
+            ));
+            conn.execute_batch(&attach_sql)
+                .map_err(|e| format!("sqlcipher_export (rekey): {e}"))?;
+        }
+
+        // 2. Open the new-keyed tmp and apply the inner re-encryption INSIDE it. The live DB is
+        //    still 100% on the old password and untouched, so a crash here leaves an incomplete
+        //    tmp + db_state.salt still old → an orphan, discarded on recovery → OLD.
+        {
+            let tmp_conn = Self::open_keyed(&tmp_path, &hex_key)?;
+            tmp_conn
+                .execute_batch("PRAGMA foreign_keys = ON;")
+                .map_err(|e| format!("rekey tmp pragmas: {e}"))?;
+            apply_inner(&tmp_conn)?;
+            tmp_conn
+                .execute_batch("SELECT count(*) FROM sqlite_master;")
+                .map_err(|_| "rekey tmp unreadable after inner updates".to_string())?;
+            let _ = tmp_conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);");
+            // tmp_conn drops here, flushing + releasing the handle before the promote.
+        }
+        // Durability: force the NEW-keyed tmp to stable storage BEFORE the commit flips db_state
+        // to point at it. Without this, power loss could persist the salt flip while the tmp's
+        // contents are still in the page cache and lost → db_state=new with an unreadable tmp.
+        if let Ok(f) = std::fs::File::open(&tmp_path) {
+            let _ = f.sync_all();
+        }
+        crash_point!("cmp.tmp_built");
+
+        // 3. THE COMMIT POINT — write the new salt to db_state.json. Mirrors encrypt_in_place's
+        //    "encrypted:true" pre-write: from this instant the system is committed to the new
+        //    password, because the next unlock derives the new key (from this salt) and
+        //    `recover_rekey_tmp` key-verifies + promotes the already-built tmp. Written ONLY
+        //    after the tmp is fully built and verified above.
+        write_db_state(
+            &self.path,
+            &DbStateFile {
+                encrypted: true,
+                salt: Some(new_salt_b64.to_string()),
+            },
+        )?;
+        crash_point!("cmp.after_db_flip");
+
+        // 4. Release the live (old-keyed) connection so the handle is freed before the rename.
+        {
+            let mut conn = self.conn.lock().map_err(|e| e.to_string())?;
+            let placeholder =
+                Connection::open_in_memory().map_err(|e| format!("placeholder: {e}"))?;
+            *conn = placeholder;
+        }
+        // Drop the OLD live DB's stale WAL/SHM (retry for delayed Windows handle release).
+        for _ in 0..5 {
+            let wal_gone = std::fs::remove_file(self.path.with_extension("db-wal")).is_ok()
+                || !self.path.with_extension("db-wal").exists();
+            let shm_gone = std::fs::remove_file(self.path.with_extension("db-shm")).is_ok()
+                || !self.path.with_extension("db-shm").exists();
+            if wal_gone && shm_gone {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+        let _ = std::fs::remove_file(tmp_path.with_extension("db-wal"));
+        let _ = std::fs::remove_file(tmp_path.with_extension("db-shm"));
+
+        // 5. Atomically replace the live DB with the NEW-keyed tmp.
+        Self::atomic_promote(&self.path, &tmp_path)?;
+        // Make the promote durable so a power loss can't undo the rename.
+        if let Some(dir) = self.path.parent() {
+            if let Ok(d) = std::fs::File::open(dir) {
+                let _ = d.sync_all();
+            }
+        }
+        crash_point!("cmp.after_promote");
+
+        // 6. Open the final keyed connection on the promoted file and adopt it.
+        let final_conn = Self::open_keyed(&self.path, &hex_key)?;
+        Self::run_pragmas_and_migrations(&final_conn)?;
+        {
+            let mut conn = self.conn.lock().map_err(|e| e.to_string())?;
+            *conn = final_conn;
+        }
+        Ok(())
+    }
+
+    /// New-salt of an in-flight `change_master_password`, read from the pending marker without
+    /// depending on the command-layer marker type. Used to decide, at recovery, whether the
+    /// change committed (db_state.salt already advanced to this value) or not.
+    fn pending_change_new_salt(&self) -> Option<String> {
+        let marker = self
+            .path
+            .with_file_name(crate::commands::change_password::PENDING_MARKER);
+        let txt = std::fs::read_to_string(&marker).ok()?;
+        let v: serde_json::Value = serde_json::from_str(&txt).ok()?;
+        v.get("new_salt_b64")?.as_str().map(|s| s.to_string())
+    }
+
+    /// Finish the KEYLESS tail of a `change_master_password` interrupted with NO `moodhaven_rekey.db`
+    /// tmp present (the `recover_rekey_tmp` caller handles the tmp case). Idempotent and key-free,
+    /// so it is safe to run on every unlock — it no-ops when no marker is present (steady state).
+    ///
+    /// Commit-aware, because this is reachable in BOTH states:
+    /// - **Committed** (db_state.salt == the marker's new salt): the tmp was already promoted; the
+    ///   live DB is on the new password. Finish the keyless tail — promote any staged media and
+    ///   clear the stale biometric keyring credential (it wraps the OLD password).
+    /// - **Pre-commit** (salts differ, or unknown): a crash during media *staging*, before the tmp
+    ///   was built. The live DB is still on the OLD password, so the staged `*.rekeytmp` media MUST
+    ///   be discarded — promoting them over the originals would replace old-keyed files with
+    ///   new-keyed ones the live (old) key cannot read.
+    fn finish_pending_password_change(&self) {
+        let marker = self
+            .path
+            .with_file_name(crate::commands::change_password::PENDING_MARKER);
+        if !marker.exists() {
+            return;
+        }
+        let cur_salt = read_db_state(&self.path).salt;
+        let new_salt = self.pending_change_new_salt();
+        let committed = matches!((&cur_salt, &new_salt), (Some(c), Some(n)) if c == n);
+        if let Some(dir) = self.path.parent() {
+            if committed {
+                let _ = crate::commands::media::finish_media_renames(dir);
+                // Biometric is an OS-keyring credential (not in the DB), so it isn't cleared by
+                // the rekey itself — clear it here so a crash-after-commit can't leave a stale
+                // credential that still yields the old password.
+                let _ = crate::commands::biometric::biometric_clear_session();
+            } else {
+                let _ = crate::commands::media::cleanup_media_staging(dir);
+            }
+        }
+        let _ = std::fs::remove_file(&marker);
+        log::info!(
+            "[change-password] finished interrupted change (committed={committed}: media {}, marker clear)",
+            if committed { "promoted" } else { "rolled back" }
+        );
+    }
+
+    /// Recover an interrupted `change_master_password` that left a `moodhaven_rekey.db` tmp.
+    /// `hex_key` is derived (by `verify_password`) from the CURRENT db_state.salt:
+    ///
+    /// - **Committed** (db_state.salt == the marker's new salt): the flip happened; the tmp is
+    ///   the authoritative new-password DB. Key-verify it with the (new) key and promote it. A
+    ///   verify *failure* here means a WRONG new password, NOT an orphan — return an error and
+    ///   keep both files so a correct retry still completes (never discard committed data).
+    /// - **Pre-commit** (db_state.salt still the old salt): the tmp is a genuine orphan and the
+    ///   live DB is the intact old-password DB. Discard the tmp, roll back staged media, clear
+    ///   the marker, and open the live DB with the (old) key → OLD.
+    fn recover_rekey_tmp(&self, tmp_path: &Path, hex_key: &str) -> Result<(), String> {
+        let cur_salt = read_db_state(&self.path).salt;
+        let new_salt = self.pending_change_new_salt();
+        let committed = matches!((&cur_salt, &new_salt), (Some(c), Some(n)) if c == n);
+
+        if committed {
+            let keyed = Self::open_keyed(tmp_path, hex_key).map_err(|e| {
+                // Committed but the key does not open the new tmp → wrong (new) password.
+                // Do NOT discard: the change is committed and this is the live data.
+                format!("Your password was changed; please unlock with your NEW password. ({e})")
+            })?;
+            Self::run_pragmas_and_migrations(&keyed)?;
+            drop(keyed);
+            {
+                let mut conn = self.conn.lock().map_err(|e| e.to_string())?;
+                let placeholder =
+                    Connection::open_in_memory().map_err(|e| format!("placeholder: {e}"))?;
+                *conn = placeholder;
+            }
+            // Sweep the live DB's stale WAL/SHM and the tmp's sidecars before the rename.
+            for _ in 0..5 {
+                let wal_gone = std::fs::remove_file(self.path.with_extension("db-wal")).is_ok()
+                    || !self.path.with_extension("db-wal").exists();
+                let shm_gone = std::fs::remove_file(self.path.with_extension("db-shm")).is_ok()
+                    || !self.path.with_extension("db-shm").exists();
+                if wal_gone && shm_gone {
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
+            let _ = std::fs::remove_file(tmp_path.with_extension("db-wal"));
+            let _ = std::fs::remove_file(tmp_path.with_extension("db-shm"));
+
+            Self::atomic_promote(&self.path, tmp_path)?;
+            let final_conn = Self::open_keyed(&self.path, hex_key)?;
+            Self::run_pragmas_and_migrations(&final_conn)?;
+            {
+                let mut conn = self.conn.lock().map_err(|e| e.to_string())?;
+                *conn = final_conn;
+            }
+            log::info!("[change-password] promoted interrupted rekey tmp after key verification");
+            self.finish_pending_password_change();
+            Ok(())
+        } else {
+            // Pre-commit orphan: the live DB is the intact OLD DB and `hex_key` matches it.
+            let open_result = (|| -> Result<(), String> {
+                let new_conn = Self::open_keyed(&self.path, hex_key)?;
+                Self::run_pragmas_and_migrations(&new_conn)?;
+                let mut conn = self.conn.lock().map_err(|e| e.to_string())?;
+                *conn = new_conn;
+                Ok(())
+            })();
+            // The tmp + staged media + marker are genuine orphans in the pre-commit state, so
+            // they are safe to discard regardless of whether `hex_key` was the correct old
+            // password (a wrong password simply yields Err below and the user retries).
+            let _ = std::fs::remove_file(tmp_path);
+            let _ = std::fs::remove_file(tmp_path.with_extension("db-wal"));
+            let _ = std::fs::remove_file(tmp_path.with_extension("db-shm"));
+            if let Some(dir) = self.path.parent() {
+                let _ = crate::commands::media::cleanup_media_staging(dir);
+            }
+            let _ = std::fs::remove_file(
+                self.path
+                    .with_file_name(crate::commands::change_password::PENDING_MARKER),
+            );
+            log::warn!(
+                "[change-password] discarded orphan rekey tmp (pre-commit interruption) — \
+                 rolled back to the old password"
+            );
+            open_result
+        }
     }
 
     /// Returns true if db_state.json reports the database is SQLCipher-encrypted.
@@ -1157,6 +1544,19 @@ pub fn is_2fa_enabled(db: &Database) -> Result<bool, String> {
 mod sqlcipher_key_tests {
     use rusqlite::Connection;
 
+    // Release-build inertness guard (crash-replay harness DoD): in release the
+    // `crash_point!` macro must expand to nothing, so even an armed `MH_CRASH_POINT`
+    // can neither park nor abort. Compiled only under `cargo test --release`; if the
+    // macro were active here it would block forever and hang the test run.
+    #[cfg(not(debug_assertions))]
+    #[test]
+    fn crash_point_is_inert_in_release() {
+        std::env::set_var("MH_CRASH_POINT", "encrypt.after_salt");
+        super::crash_point!("encrypt.after_salt");
+        std::env::remove_var("MH_CRASH_POINT");
+        // Reaching this line proves the boundary did not park or abort in release.
+    }
+
     // Regression guard for the SQLCipher key-application bug: the DB is encrypted
     // with a RAW key via `ATTACH ... KEY "x'<hex>'"`, so it MUST be read back with
     // the same raw form `PRAGMA key = "x'<hex>'"`. `PRAGMA hexkey` instead decodes
@@ -1663,6 +2063,211 @@ mod sqlcipher_key_tests {
             db.apply_key(&wrong).is_err(),
             "wrong key after lock must fail to unlock"
         );
+
+        drop(db);
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    /// Build a deterministic 32-byte raw key (and its hex form) for migration tests.
+    fn test_key(seed: u8) -> [u8; 32] {
+        let mut k = [0u8; 32];
+        for (i, byte) in k.iter_mut().enumerate() {
+            *byte = (i as u8).wrapping_mul(seed).wrapping_add(seed);
+        }
+        k
+    }
+
+    // Upgrade-migration E2E (highest-value release gap): an N-1 install ships a PLAINTEXT
+    // moodhaven.db (db_state.json absent). The first unlock on the new binary derives the
+    // key and runs the one-time `encrypt_in_place` migration. This test drives that real
+    // migration path end-to-end and asserts the single thing the PT8 "SQLCipher-inert" bug
+    // got wrong for three minor versions: the on-disk file must be actual CIPHERTEXT
+    // afterwards, not a plaintext `SQLite format 3` DB — while every seeded row survives.
+    #[test]
+    fn encrypt_in_place_migrates_plaintext_to_ciphertext_at_rest() {
+        use super::{read_db_state, Database};
+
+        const SQLITE_MAGIC: &[u8] = b"SQLite format 3\0";
+
+        let dir = std::env::temp_dir();
+        let pid = std::process::id();
+        let base = dir.join(format!("mh_migrate_e2e_{pid}"));
+        let _ = std::fs::remove_dir_all(&base);
+        let _ = std::fs::create_dir_all(&base);
+        let db_path = base.join("moodhaven.db");
+        let tmp_path = base.join("moodhaven_enc.db");
+
+        // 1. Seed a pre-1.8.0-style plaintext profile: full schema via Database::new (no
+        //    db_state.json → encrypted:false) with known journal rows the user must not lose.
+        {
+            let seed = Database::new(db_path.clone()).expect("seed plaintext DB");
+            {
+                let conn = seed.conn.lock().unwrap();
+                conn.execute_batch(
+                    "INSERT INTO journal_entries (id, encrypted_content, mood, created_at, updated_at)
+                     VALUES ('e1', 'blob-one', 5, datetime('now'), datetime('now')),
+                            ('e2', 'blob-two', 2, datetime('now'), datetime('now'));",
+                )
+                .unwrap();
+            }
+            assert!(!seed.is_encrypted(), "fresh seed must be plaintext");
+            drop(seed);
+        }
+
+        // 2. Sanity: the on-disk file really is a plaintext SQLite DB before migration.
+        let before = std::fs::read(&db_path).unwrap();
+        assert!(
+            before.starts_with(SQLITE_MAGIC),
+            "pre-migration file must be a plaintext `SQLite format 3` DB"
+        );
+
+        // 3. Boot the new binary and run the real one-time migration (what unlock_app calls).
+        let db = Database::new(db_path.clone()).expect("open plaintext DB on new binary");
+        assert!(!db.is_encrypted(), "still plaintext before first unlock");
+        let key = test_key(7);
+        let salt_b64 = "dGVzdC1zYWx0"; // base64("test-salt") — stored verbatim in db_state
+        db.encrypt_in_place(&key, salt_b64)
+            .expect("one-time migration must succeed");
+
+        // 4. db_state is now authoritative-encrypted, the interrupted-migration tmp is gone.
+        assert!(
+            db.is_encrypted(),
+            "db_state must report encrypted after migration"
+        );
+        let state = read_db_state(&db_path);
+        assert!(state.encrypted);
+        assert_eq!(
+            state.salt.as_deref(),
+            Some(salt_b64),
+            "salt must be persisted"
+        );
+        assert!(
+            !tmp_path.exists(),
+            "moodhaven_enc.db must be renamed away, not left behind"
+        );
+
+        // 5. THE regression guard: the on-disk file must no longer be a plaintext SQLite DB.
+        let after = std::fs::read(&db_path).unwrap();
+        assert!(
+            !after.starts_with(SQLITE_MAGIC),
+            "post-migration file must be ciphertext, not a plaintext `SQLite format 3` header \
+             (this is exactly the PT8 SQLCipher-inert bug)"
+        );
+
+        // 6. Data intact: the migrated connection serves every row through the keyed handle.
+        {
+            let conn = db.conn.lock().unwrap();
+            let n: i64 = conn
+                .query_row("SELECT count(*) FROM journal_entries", [], |r| r.get(0))
+                .expect("migrated DB must serve rows");
+            assert_eq!(n, 2, "both seeded rows must survive the migration");
+            let blob: String = conn
+                .query_row(
+                    "SELECT encrypted_content FROM journal_entries WHERE id = 'e1'",
+                    [],
+                    |r| r.get(0),
+                )
+                .unwrap();
+            assert_eq!(blob, "blob-one");
+        }
+
+        // 7. At rest the bytes are unreadable without the key: an unkeyed open, and a
+        //    wrong-key open, must both fail; only the correct raw key decrypts.
+        {
+            let unkeyed = Connection::open(&db_path).unwrap();
+            assert!(
+                unkeyed
+                    .query_row("SELECT count(*) FROM journal_entries", [], |r| r
+                        .get::<_, i64>(0))
+                    .is_err(),
+                "unkeyed open of the encrypted file must not read journal data"
+            );
+        }
+        {
+            let wrong_hex = hex::encode(test_key(99));
+            let wrong = Connection::open(&db_path).unwrap();
+            wrong
+                .execute_batch(&format!("PRAGMA key = \"x'{wrong_hex}'\";"))
+                .unwrap();
+            assert!(
+                wrong
+                    .query_row("SELECT count(*) FROM journal_entries", [], |r| r
+                        .get::<_, i64>(0))
+                    .is_err(),
+                "wrong key must not decrypt the at-rest DB"
+            );
+        }
+
+        drop(db);
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    // Companion to the migration E2E: prove an already-migrated profile REOPENS cleanly on a
+    // subsequent launch. Database::new must open the encrypted file without keying it (the
+    // passive handle can't read journal data), and the first apply_key of the session must
+    // re-key it and restore full read access — the exact startup→unlock path every launch
+    // after the one-time migration takes.
+    #[test]
+    fn migrated_profile_reopens_and_decrypts_on_next_launch() {
+        use super::Database;
+
+        let dir = std::env::temp_dir();
+        let pid = std::process::id();
+        let base = dir.join(format!("mh_migrate_reopen_{pid}"));
+        let _ = std::fs::remove_dir_all(&base);
+        let _ = std::fs::create_dir_all(&base);
+        let db_path = base.join("moodhaven.db");
+
+        let key = test_key(13);
+
+        // 1. Seed + migrate, exactly as the first-unlock path does, then close the app.
+        {
+            let seed = Database::new(db_path.clone()).expect("seed plaintext DB");
+            {
+                let conn = seed.conn.lock().unwrap();
+                conn.execute(
+                    "INSERT INTO journal_entries (id, encrypted_content, mood, created_at, updated_at)
+                     VALUES ('e1', 'persisted-blob', 3, datetime('now'), datetime('now'))",
+                    [],
+                )
+                .unwrap();
+            }
+            seed.encrypt_in_place(&key, "dGVzdC1zYWx0")
+                .expect("migration must succeed");
+            drop(seed); // app exit
+        }
+
+        // 2. Next launch: Database::new opens the encrypted file but does not key it, so the
+        //    passive connection cannot read journal data until the user unlocks.
+        let db = Database::new(db_path.clone()).expect("reopen encrypted DB on next launch");
+        assert!(
+            db.is_encrypted(),
+            "reopened profile must be recognised as encrypted"
+        );
+        {
+            let conn = db.conn.lock().unwrap();
+            assert!(
+                conn.query_row("SELECT count(*) FROM journal_entries", [], |r| r
+                    .get::<_, i64>(0))
+                    .is_err(),
+                "passive (unkeyed) connection must not serve journal data before unlock"
+            );
+        }
+
+        // 3. First unlock of the new session keys the connection and restores the row.
+        db.apply_key(&key)
+            .expect("unlock must re-key the reopened DB");
+        {
+            let conn = db.conn.lock().unwrap();
+            let blob: String = conn
+                .query_row(
+                    "SELECT encrypted_content FROM journal_entries WHERE id = 'e1'",
+                    [],
+                    |r| r.get(0),
+                )
+                .expect("unlocked reopened DB must serve the migrated row");
+            assert_eq!(blob, "persisted-blob");
+        }
 
         drop(db);
         let _ = std::fs::remove_dir_all(&base);

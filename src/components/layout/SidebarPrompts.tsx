@@ -4,6 +4,7 @@ import { PeerSyncBadge } from '../peer-sync/PeerSyncBadge';
 import type { UseUpdateCheckReturn } from '../../hooks/useUpdateCheck';
 import { usePlatform } from '../../hooks/usePlatform';
 import { getMoodTrend } from '../../lib/services/analyticsService';
+import { useSettingsStore } from '../../stores/settingsStore';
 import type { ViewType } from './Sidebar';
 
 const MOOD_COLORS: Record<number, string> = {
@@ -83,7 +84,7 @@ interface SidebarPromptsProps {
 }
 
 export function SidebarPrompts({ collapsed, updateHook, onNavigate }: SidebarPromptsProps) {
-  const { isBrowser } = usePlatform();
+  const { isBrowser, canPeerSync } = usePlatform();
 
   const [showSupportPrompt, setShowSupportPrompt] = useState(() => {
     try {
@@ -117,8 +118,8 @@ export function SidebarPrompts({ collapsed, updateHook, onNavigate }: SidebarPro
 
   return (
     <>
-      {/* Peer sync badge — desktop only */}
-      {!isBrowser && (
+      {/* Peer sync badge — desktop + Android only */}
+      {canPeerSync && (
         <div className="px-3 pb-1">
           <PeerSyncBadge
             collapsed={collapsed}
@@ -217,8 +218,23 @@ export function SidebarPrompts({ collapsed, updateHook, onNavigate }: SidebarPro
       {/* 7-day mood sparkline */}
       {!isBrowser && <MoodSparkline collapsed={collapsed} />}
 
-      {/* User Guide + Support links */}
+      {/* Privacy Checkup + User Guide + Support links */}
       <div className={`px-3 pb-3 pt-1 border-t border-slate-100 dark:border-slate-800 space-y-2 ${collapsed ? 'flex flex-col items-center' : ''}`}>
+        <button
+          type="button"
+          aria-label="Privacy Checkup"
+          title="Privacy Checkup — see what's enabled at a glance"
+          onClick={() => {
+            useSettingsStore.getState().setScrollToSection('privacy-checkup');
+            onNavigate('settings');
+          }}
+          className="flex items-center gap-1.5 text-xs text-slate-400 dark:text-slate-500 hover:text-emerald-500 dark:hover:text-emerald-400 transition-colors"
+        >
+          <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 01-1.043 3.296 3.745 3.745 0 01-3.296 1.043A3.745 3.745 0 0112 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 01-3.296-1.043 3.745 3.745 0 01-1.043-3.296A3.745 3.745 0 013 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 011.043-3.296 3.746 3.746 0 013.296-1.043A3.746 3.746 0 0112 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 013.296 1.043 3.746 3.746 0 011.043 3.296A3.745 3.745 0 0121 12z" />
+          </svg>
+          {!collapsed && <span>Privacy Checkup</span>}
+        </button>
         <a
           href="https://github.com/kenlacroix/moodhaven-journal#readme"
           target="_blank"

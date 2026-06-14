@@ -60,6 +60,18 @@ describe('settingsService', () => {
       mockInvoke.mockResolvedValue('not valid json');
       await expect(loadSettings()).resolves.toEqual(createDefaultSettings());
     });
+
+    it('deep-merges nested defaults absent from an older stored blob', async () => {
+      // A blob from a build that predates writing appearance: `appearance`
+      // exists but lacks the nested `writing` key. A shallow merge would drop
+      // `appearance.writing`, crashing WritingView on `writing.fontFamily`.
+      const stored = { appearance: { theme: 'dark', compactMode: true } };
+      mockInvoke.mockResolvedValue(JSON.stringify(stored));
+      const result = await loadSettings();
+      expect(result.appearance.writing).toEqual(createDefaultSettings().appearance.writing);
+      expect(result.appearance.theme).toBe('dark');
+      expect(result.appearance.compactMode).toBe(true);
+    });
   });
 
   // ── saveSettings ────────────────────────────────────────────

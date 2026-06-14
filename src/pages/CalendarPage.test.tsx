@@ -69,7 +69,7 @@ function setupCalendarMock(initial: Partial<ReturnType<typeof useCalendar>> = {}
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockUsePlatform.mockReturnValue({ isIOS: false, isAndroid: false, isMobile: false, isBrowser: false, isDesktop: true });
+  mockUsePlatform.mockReturnValue({ isIOS: false, isAndroid: false, isMobile: false, isBrowser: false, isDesktop: true, canPeerSync: true, canSTT: true, canHardwareKey: true });
   setupCalendarMock();
 });
 
@@ -107,14 +107,14 @@ describe('CalendarPage', () => {
   });
 
   it('renders mobile layout on Android', () => {
-    mockUsePlatform.mockReturnValue({ isIOS: false, isAndroid: true, isMobile: true, isBrowser: false, isDesktop: false });
+    mockUsePlatform.mockReturnValue({ isIOS: false, isAndroid: true, isMobile: true, isBrowser: false, isDesktop: false, canPeerSync: true, canSTT: false, canHardwareKey: false });
     setupCalendarMock();
     render(<CalendarPage />);
     expect(screen.getByText('Tap a day to see its entries')).toBeInTheDocument();
   });
 
   it('shows back button in mobile layout after selecting a date', () => {
-    mockUsePlatform.mockReturnValue({ isIOS: false, isAndroid: true, isMobile: true, isBrowser: false, isDesktop: false });
+    mockUsePlatform.mockReturnValue({ isIOS: false, isAndroid: true, isMobile: true, isBrowser: false, isDesktop: false, canPeerSync: true, canSTT: false, canHardwareKey: false });
     setupCalendarMock();
     render(<CalendarPage />);
     fireEvent.click(screen.getByText('Select date'));

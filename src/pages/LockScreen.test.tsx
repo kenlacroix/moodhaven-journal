@@ -327,6 +327,47 @@ describe('LockScreen — PIN lockout: countdown expiry re-enables input', () => 
   }, 15000);
 });
 
+describe('LockScreen — recovery key: corrupted escrow guard', () => {
+  it('rejects a recovered password that does not match the stored hash (with 2FA enabled)', async () => {
+    const { recoverPassword, isRecoveryKeyEnabled } = await import(
+      '../lib/services/recoveryKeyService'
+    );
+    vi.mocked(isRecoveryKeyEnabled).mockResolvedValueOnce(true);
+    vi.mocked(recoverPassword).mockResolvedValueOnce('wrong-decrypted-password');
+
+    const { verifyUserPassword } = await import('../lib/services/journalService');
+    // Escrow decrypts cleanly but yields a password that fails hash verification.
+    vi.mocked(verifyUserPassword).mockResolvedValueOnce(false);
+
+    // 2FA enabled — without the guard this path would promote via finalizeUnlock (no verify).
+    const { get2FAStatus } = await import('../lib/services/twoFactorService');
+    vi.mocked(get2FAStatus).mockResolvedValue({
+      enabled: true,
+      method: 'totp',
+      has_backup_codes: true,
+    });
+
+    render(<LockScreen />);
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /use recovery key/i })).toBeInTheDocument()
+    );
+    await userEvent.click(screen.getByRole('button', { name: /use recovery key/i }));
+    await userEvent.type(
+      screen.getByLabelText(/recovery key/i),
+      'AAAA-BBBB-CCCC-DDDD-EEEE-FFFF'
+    );
+    await userEvent.click(screen.getByRole('button', { name: /unlock/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/escrow corrupted/i)).toBeInTheDocument();
+    });
+    // Must NOT advance to the 2FA step or promote the session.
+    expect(screen.queryByText(/enter recovery key/i)).toBeInTheDocument();
+    expect(mockFinalizeUnlock).not.toHaveBeenCalled();
+    expect(mockUnlock).not.toHaveBeenCalled();
+  });
+});
+
 describe('LockScreen — PIN submit: stale password', () => {
   it('shows stale-password error when PIN decrypts but verifyUserPassword fails', async () => {
     const { verifyUserPassword } = await import('../lib/services/journalService');

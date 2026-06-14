@@ -52,26 +52,26 @@ beforeEach(() => {
 
 describe('DevicesTab — iOS gate', () => {
   it('shows iOS placeholder when isIOS is true', () => {
-    mockUsePlatform.mockReturnValue({ isIOS: true, isAndroid: false, isMobile: true, isBrowser: false, isDesktop: false });
+    mockUsePlatform.mockReturnValue({ isIOS: true, isAndroid: false, isMobile: true, isBrowser: false, isDesktop: false, canPeerSync: false, canSTT: false, canHardwareKey: false });
     render(<DevicesTab />);
     expect(screen.getByText('Peer sync is not available on iOS')).toBeInTheDocument();
     expect(screen.getByText(/Use Dropbox or Google Drive/)).toBeInTheDocument();
   });
 
   it('does not render the Local Sync toggle on iOS', () => {
-    mockUsePlatform.mockReturnValue({ isIOS: true, isAndroid: false, isMobile: true, isBrowser: false, isDesktop: false });
+    mockUsePlatform.mockReturnValue({ isIOS: true, isAndroid: false, isMobile: true, isBrowser: false, isDesktop: false, canPeerSync: false, canSTT: false, canHardwareKey: false });
     render(<DevicesTab />);
     expect(screen.queryByText('Local Sync')).not.toBeInTheDocument();
   });
 
   it('shows browser placeholder when isBrowser is true', () => {
-    mockUsePlatform.mockReturnValue({ isIOS: false, isAndroid: false, isMobile: false, isBrowser: true, isDesktop: false });
+    mockUsePlatform.mockReturnValue({ isIOS: false, isAndroid: false, isMobile: false, isBrowser: true, isDesktop: false, canPeerSync: false, canSTT: false, canHardwareKey: false });
     render(<DevicesTab />);
     expect(screen.getByText('LAN Sync requires the desktop app')).toBeInTheDocument();
   });
 
   it('renders the Local Sync toggle on desktop (not iOS, not browser)', () => {
-    mockUsePlatform.mockReturnValue({ isIOS: false, isAndroid: false, isMobile: false, isBrowser: false, isDesktop: true });
+    mockUsePlatform.mockReturnValue({ isIOS: false, isAndroid: false, isMobile: false, isBrowser: false, isDesktop: true, canPeerSync: true, canSTT: true, canHardwareKey: true });
     render(<DevicesTab />);
     expect(screen.getByText('Local Sync')).toBeInTheDocument();
   });

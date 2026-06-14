@@ -16,6 +16,15 @@ const MAX_FUTURE_SECS: i64 = 10;
 fn parse_peer_timestamp(ts: &str) -> Result<chrono::DateTime<chrono::Utc>, String> {
     let dt = chrono::DateTime::parse_from_rfc3339(ts)
         .map(|dt| dt.with_timezone(&chrono::Utc))
+        .or_else(|_| {
+            // SQLite `datetime('now')` / CURRENT_TIMESTAMP schema defaults emit a
+            // naive "YYYY-MM-DD HH:MM:SS" (no 'T', no timezone) — treat as UTC.
+            // Both fallbacks require time components, so date-only strings (e.g.
+            // "9999-12-31") are still rejected.
+            chrono::NaiveDateTime::parse_from_str(ts, "%Y-%m-%d %H:%M:%S")
+                .or_else(|_| chrono::NaiveDateTime::parse_from_str(ts, "%Y-%m-%dT%H:%M:%S"))
+                .map(|naive| naive.and_utc())
+        })
         .map_err(|_| format!("invalid timestamp: {ts:?}"))?;
     let limit = chrono::Utc::now() + chrono::TimeDelta::seconds(MAX_FUTURE_SECS);
     if dt > limit {

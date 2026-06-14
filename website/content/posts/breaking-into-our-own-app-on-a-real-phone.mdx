@@ -1,0 +1,58 @@
+---
+title: "We Tried to Break Into Our Own App — On a Real Phone"
+publishDate: "2026-06-13"
+excerpt: "We installed MoodHaven on an everyday Android phone and spent a day trying to read your journal, steal your password, and intercept your data. Your entries stayed encrypted, your text never left the device, and biometric unlock held. Here's the honest accounting — including the small things we tightened up."
+---
+
+*We installed MoodHaven on an everyday Android phone — no special hacking modifications — and spent a day trying to read a journal, lift the password off disk, and intercept anything leaving the device. The things that matter held: your entries are encrypted on disk, your journal text never leaves your phone, and biometric unlock is protected by the phone's hardware. Here's the plain-language accounting, including the few small to-dos we found and closed.*
+
+## The short version
+
+If you keep a journal in MoodHaven on Android, three things should be true, and we set out to prove them on real hardware rather than just claim them:
+
+- **Your entries are encrypted on disk.** If someone got hold of the database file, it's unreadable scramble — not a peek-able list of your thoughts.
+- **Your journal text never leaves your device.** We watched the network. Your words simply weren't in it.
+- **Biometric unlock is locked to your fingerprint by the phone's secure hardware** — not just an app setting that could be flipped.
+
+All three held. We also found a couple of minor housekeeping items — none of which exposed your data — and we've checked or fixed them. That's the honest part: we'd rather tell you what we tightened than pretend nothing turned up.
+
+## How we checked
+
+It's easy to write "your data is encrypted" on a marketing page. It's harder, and more honest, to install your own app on an ordinary phone and genuinely try to get at the data — the way a curious or motivated person actually would.
+
+So that's what we did. We put MoodHaven on a normal, unmodified Android phone, wrote some test journal entries, turned on the privacy features a real user would, and then spent the day attacking it: reaching for the database file, hunting for the password on disk, and routing the phone's traffic through a tool that tries to read everything going in and out. No insider shortcuts — we worked with the same app you'd download.
+
+## Your entries: scrambled on disk
+
+The first thing we went for was the journal database itself. On a phone, an app's data lives in its own private storage. We pulled the file and looked at it.
+
+It was ciphertext — encrypted from the first byte. There was no readable text, no list of entries, no "today I felt…" hiding in there. The whole journal file is sealed as one encrypted container, on top of each individual entry being encrypted as well. Getting the file gets you nothing without your password, which brings us to the next thing we tried to steal.
+
+## Your password: never sitting there to grab
+
+If you turn on biometric unlock — Fingerprint, Face Unlock — the app needs a way to unlock your journal after your face or fingerprint checks out. A lazy design would stash your password somewhere on disk in a way that a determined snoop could read. We specifically went looking for that.
+
+What we found instead: the stored secret is itself encrypted, and the key that would unlock it lives in the phone's dedicated security hardware — the same protected area that guards your other sensitive credentials. Crucially, that key is set up to require **your** fingerprint or face to be used at all, and it's automatically invalidated if someone enrolls a new fingerprint on the phone. In plain terms: even with full access to the app's files, the biometric secret can't be turned back into your password without you, in person, unlocking it. That's exactly the bar we wanted to clear.
+
+## Your journal text: not on the wire
+
+Then we watched the network. We pointed the phone's traffic through an interception tool — the classic "person in the middle" setup — to see what MoodHaven actually sends.
+
+Two things stood out. First, your journal text was never in the traffic, full stop. Second, MoodHaven's own connections refused to be intercepted at all: the app makes its network requests through its own secured channel that ignores the kind of trust trickery these tools rely on. The interceptor never got a window into MoodHaven.
+
+Because the network was sealed, we verified the privacy promise a different way — by reading our own source code in the open. Our optional AI features, when you turn them on, send only *aggregated signals*: things like your average mood, broad trends, frequency of writing, and locally-detected emotion *labels*. The actual words you write are never assembled into anything that gets sent. We say this not because we couldn't read it on the wire, but because we can show you it isn't there in the code that builds the request.
+
+## The honest to-do list
+
+A real test isn't credible if everything comes back perfect. Here's what turned up, all minor, all addressed:
+
+- **The build we attacked was a developer build.** Two of the early "findings" — that the app was openly debuggable and allowed unencrypted connections — turned out to be settings that only exist in the *developer* version we'd installed for testing. We went back and confirmed the **public release build you actually download has both of those switched off**. The thing that gave us our easy foothold was our own test build, not the app you use.
+- **A small extra network safeguard.** We're adding one more belt-and-suspenders network rule as defense-in-depth, even though the release build already blocks unencrypted connections.
+- **The watch companion.** A paired smartwatch could, in theory, send a mood tap or a draft voice memo into the app — bounded by the fact that drafts always wait for your review and nothing is ever sent out. We're tightening this to only accept signals from devices it explicitly recognizes.
+- **A leftover file.** An old, unused preference file from a previous version was lingering. We're cleaning it up.
+
+None of these exposed an entry, a password, or a single word you wrote. They're the kind of tidying you only find by actually looking.
+
+## Why we do this
+
+MoodHaven exists to protect one thing: the private things you write down. "Trust us" isn't good enough for that — not from a small team, not from anyone. So we keep trying to break in ourselves, on the same phones and the same downloads you use, and we tell you what we find. Your journal stayed sealed. That's the result we were after, and the only one worth reporting.

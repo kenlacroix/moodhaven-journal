@@ -19,6 +19,27 @@ export async function cloudProviderAuthStart(provider: 'dropbox' | 'gdrive'): Pr
   return invoke('cloud_provider_auth_start', { provider });
 }
 
+/**
+ * Whether a managed provider has real OAuth credentials compiled in. False while
+ * the build ships placeholder creds, so the UI can show "coming soon" instead of
+ * a dead-end connect button.
+ */
+export async function cloudProviderAvailable(provider: 'dropbox' | 'gdrive'): Promise<boolean> {
+  return invoke<boolean>('cloud_provider_available', { provider });
+}
+
+/**
+ * Android only: fetch the cloud-token encryption key from the AndroidKeyStore-backed
+ * `securekey` plugin and hand it to Rust, so OAuth tokens are encrypted under a
+ * hardware-backed key instead of the bare 0600 fallback file. Best-effort — on
+ * failure Rust falls back to its keyring→file path, so cloud sync still works.
+ * Must run before any cloud-token operation; called once at startup.
+ */
+export async function bootstrapAndroidCloudTokenKey(): Promise<void> {
+  const { key } = await invoke<{ key: string }>('plugin:securekey|getCloudTokenKey');
+  await invoke('cloud_set_token_key', { keyHex: key });
+}
+
 async function cloudProviderUploadBlob(
   provider: 'dropbox' | 'gdrive',
   blob: string,

@@ -143,6 +143,7 @@ cd src-tauri && cargo check
 - Time Capsule user guide: @docs/howto-time-capsule.md
 - StillHaven user guide: @docs/howto-stillhaven.md
 - Mood analytics user guide: @docs/howto-mood-analytics.md
+- Password manager unlock (copy-paste + honesty): @docs/howto-password-managers.md
 
 ## Health Stack
 

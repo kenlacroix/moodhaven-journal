@@ -20,7 +20,7 @@ export function SecurityStep({
   onTwoFactorComplete,
   sessionPassword,
 }: SecurityStepProps) {
-  const { isBrowser } = usePlatform();
+  const { canHardwareKey } = usePlatform();
   return (
     <div className="space-y-6">
       {twoFactorSetupMode === 'totp' && (
@@ -93,7 +93,7 @@ export function SecurityStep({
                   </div>
                 </button>
 
-                {!isBrowser && (
+                {canHardwareKey && (
                   <button
                     type="button"
                     onClick={() => onSetupModeChange('hardwarekey')}

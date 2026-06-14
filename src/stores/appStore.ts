@@ -114,10 +114,14 @@ export const useAppStore = create<AppState>((set) => ({
     }
   },
 
-  // Lock the journal
+  // Lock the journal.
+  // SECURITY: null the store copy of the password FIRST, so that even if
+  // lockJournal() later throws, the broadly-readable Zustand reference is
+  // already cleared. lockJournal() then nulls the narrower journalService
+  // module variable and wipes the derived-key cache (clearKeyCache).
   lock: () => {
-    lockJournal();
     set({ isUnlocked: false, sessionPassword: null });
+    lockJournal();
   },
 
   // Set theme

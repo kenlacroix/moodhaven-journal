@@ -29,7 +29,7 @@ jobs:
     name: Validate version format
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
       - name: Check tauri.conf.json and Cargo.toml use 3-part semver
         run: |
           TAURI_VERSION=$(python3 -c "import json; print(json.load(open('src-tauri/tauri.conf.json'))['version'])")
@@ -61,25 +61,30 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # cmake_extra carries a baseline-ISA flag set on every x86-64 target so the
+          # whisper-cli sidecar runs on processors without AVX2/FMA/BMI2 (older CPUs,
+          # Pentium/Celeron, many virtualised CPUs). Without it ggml defaults to AVX2
+          # on x86-64 and the sidecar dies with an illegal-instruction fault. SSE4.2 is
+          # kept (universal since ~2010). arm64 uses NEON and is unaffected.
           - platform: Linux (x86_64)
             os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
             whisper_binary: whisper-x86_64-unknown-linux-gnu
-            cmake_extra: ""
+            cmake_extra: "-DGGML_AVX=OFF -DGGML_AVX2=OFF -DGGML_FMA=OFF -DGGML_F16C=OFF -DGGML_BMI2=OFF"
             cross: false
 
           - platform: Windows (x86_64)
             os: windows-latest
             target: x86_64-pc-windows-msvc
             whisper_binary: whisper-x86_64-pc-windows-msvc.exe
-            cmake_extra: ""
+            cmake_extra: "-DGGML_AVX=OFF -DGGML_AVX2=OFF -DGGML_FMA=OFF -DGGML_F16C=OFF -DGGML_BMI2=OFF"
             cross: false
 
           - platform: macOS (x86_64)
             os: macos-latest
             target: x86_64-apple-darwin
             whisper_binary: whisper-x86_64-apple-darwin
-            cmake_extra: "-DCMAKE_OSX_ARCHITECTURES=x86_64"
+            cmake_extra: "-DCMAKE_OSX_ARCHITECTURES=x86_64 -DGGML_AVX=OFF -DGGML_AVX2=OFF -DGGML_FMA=OFF -DGGML_F16C=OFF -DGGML_BMI2=OFF"
             cross: false
 
           - platform: macOS (Apple Silicon)
@@ -91,7 +96,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
 
       - name: Install Linux system dependencies
         if: matrix.os == 'ubuntu-22.04'
@@ -132,7 +137,7 @@ jobs:
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5.0.5
         with:
           path: src-tauri/binaries/${{ matrix.whisper_binary }}
-          key: whisper-${{ matrix.whisper_binary }}-v1.7.4
+          key: whisper-${{ matrix.whisper_binary }}-v1.7.4-baseline-isa
 
       - name: Build whisper-cli sidecar
         if: steps.whisper_cache.outputs.cache-hit != 'true'
@@ -175,8 +180,10 @@ jobs:
           releaseDraft: true
           prerelease: false
           args: --target ${{ matrix.target }}
-        # Skip release creation on manual dry-run dispatches
-        if: github.event_name == 'push' || inputs.dry_run == 'false'
+        # Skip release creation on manual dry-run dispatches. `dry_run` is a boolean input, so
+        # compare it as a boolean (the old `== 'false'` string compare always coerced to false,
+        # which silently skipped this step on every manual dispatch).
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && !inputs.dry_run)
 
       - name: Build Tauri app (dry run — no release)
         uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5  # v0.6.2
@@ -186,11 +193,13 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           args: --target ${{ matrix.target }}
-        if: github.event_name == 'workflow_dispatch' && inputs.dry_run == 'true'
+        # `dry_run` is a boolean input — use it directly (the old `== 'true'` string compare
+        # coerced to false, so this build step never actually ran on a manual dispatch).
+        if: github.event_name == 'workflow_dispatch' && inputs.dry_run
 
-      # Upload artifacts for the checksum job
+      # Upload artifacts for the checksum job (and for manual dry-run installer testing)
       - name: Upload artifacts
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: bundle-${{ matrix.target }}
@@ -260,7 +269,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
 
       - name: Setup Java 17
         uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654  # v5.2.0
@@ -318,7 +327,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
 
       - name: Setup Node 22
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6.4.0
@@ -390,7 +399,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -427,6 +436,16 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.ref_name }}
         run: node scripts/generate-checksums.cjs
+
+      # Submit installers to VirusTotal and publish per-asset report links.
+      # Transparency signal only (not a code signature); never blocks a release.
+      - name: Submit installers to VirusTotal
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+          VT_API_KEY: ${{ secrets.VT_API_KEY }}
+        run: node scripts/submit-virustotal.cjs
 
       - name: Generate latest-release.json and attach to release
         env:

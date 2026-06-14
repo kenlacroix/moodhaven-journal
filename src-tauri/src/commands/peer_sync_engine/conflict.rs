@@ -708,8 +708,9 @@ pub fn db_set_peer_sync_at(conn: &Connection, peer_id: &str, at: &str) -> Result
 #[cfg(test)]
 mod tests {
     use super::{
-        db_get_voice_memos_manifest, db_insert_signal_if_new, db_upsert_book, db_upsert_entry,
-        db_upsert_setting, db_upsert_voice_memo, merge_settings_json, parse_peer_timestamp,
+        db_get_voice_memos_full, db_get_voice_memos_manifest, db_insert_signal_if_new,
+        db_upsert_book, db_upsert_entry, db_upsert_setting, db_upsert_voice_memo,
+        merge_settings_json, parse_peer_timestamp,
     };
     use crate::commands::peer_sync_engine::protocol::{
         SyncBookRow, SyncSignalRow, SyncVoiceMemoRow,
@@ -1302,5 +1303,54 @@ mod tests {
         assert_eq!(manifest.len(), 1);
         assert_eq!(manifest[0].id, "vm-005");
         assert_eq!(manifest[0].updated_at, "2026-02-01T00:00:00Z");
+    }
+
+    #[test]
+    fn voice_memos_full_returns_empty_for_empty_ids() {
+        let conn = make_voice_memos_conn();
+        let rows = db_get_voice_memos_full(&conn, &[]).unwrap();
+        assert!(rows.is_empty());
+    }
+
+    #[test]
+    fn voice_memos_full_fetches_rows_with_local_file_path() {
+        let conn = make_voice_memos_conn();
+        db_upsert_voice_memo(
+            &conn,
+            &stub_voice_memo("vm-a", "2026-01-01T00:00:00Z", Some("first")),
+            "voice_memos/vm-a.wav",
+        )
+        .unwrap();
+        db_upsert_voice_memo(
+            &conn,
+            &stub_voice_memo("vm-b", "2026-01-02T00:00:00Z", None),
+            "voice_memos/vm-b.wav",
+        )
+        .unwrap();
+        // Request only one of the two ids; the file_path must be paired alongside
+        // the wire row (file_path is not part of SyncVoiceMemoRow).
+        let rows = db_get_voice_memos_full(&conn, &["vm-a".to_string()]).unwrap();
+        assert_eq!(rows.len(), 1);
+        let (row, file_path) = &rows[0];
+        assert_eq!(row.id, "vm-a");
+        assert_eq!(row.transcription.as_deref(), Some("first"));
+        assert_eq!(row.book_id, "default");
+        assert_eq!(file_path, "voice_memos/vm-a.wav");
+    }
+
+    #[test]
+    fn voice_memos_full_skips_unknown_ids() {
+        let conn = make_voice_memos_conn();
+        db_upsert_voice_memo(
+            &conn,
+            &stub_voice_memo("vm-known", "2026-01-01T00:00:00Z", None),
+            "voice_memos/vm-known.wav",
+        )
+        .unwrap();
+        let rows =
+            db_get_voice_memos_full(&conn, &["vm-known".to_string(), "vm-missing".to_string()])
+                .unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].0.id, "vm-known");
     }
 }

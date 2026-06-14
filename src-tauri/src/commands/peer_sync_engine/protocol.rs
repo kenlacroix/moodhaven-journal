@@ -164,6 +164,154 @@ mod tests {
             _ => panic!("deserialized to wrong variant"),
         }
     }
+
+    // ── Voice-memo protocol features + wire types ─────────────────────────────
+
+    #[test]
+    fn local_features_advertises_voice_memos() {
+        let feats = local_features();
+        assert!(feats.iter().any(|f| f == FEATURE_VOICE_MEMOS));
+        assert_eq!(FEATURE_VOICE_MEMOS, "voice_memos");
+    }
+
+    #[test]
+    fn msg_ok_round_trips_features() {
+        let msg = Msg::Ok {
+            name: "Server".into(),
+            eph_pub: Some("cafe".into()),
+            challenge: Some("beef".into()),
+            features: local_features(),
+        };
+        let back: Msg = serde_json::from_str(&serde_json::to_string(&msg).unwrap()).unwrap();
+        match back {
+            Msg::Ok { features, name, .. } => {
+                assert_eq!(name, "Server");
+                assert!(features.iter().any(|f| f == FEATURE_VOICE_MEMOS));
+            }
+            _ => panic!("wrong variant"),
+        }
+    }
+
+    #[test]
+    fn msg_ok_from_old_peer_decodes_to_empty_features() {
+        // An older server omits `features`; it must deserialize as empty so the
+        // client skips the voice-memo phase against it.
+        let json = r#"{"t":"ok","name":"Old"}"#;
+        match serde_json::from_str::<Msg>(json).unwrap() {
+            Msg::Ok { features, name, .. } => {
+                assert_eq!(name, "Old");
+                assert!(features.is_empty());
+            }
+            _ => panic!("wrong variant"),
+        }
+    }
+
+    fn sample_voice_memo_row() -> SyncVoiceMemoRow {
+        SyncVoiceMemoRow {
+            id: "vm-001".into(),
+            timestamp: "2026-01-01T00:00:00Z".into(),
+            duration_ms: 4200,
+            health_json: Some(r#"{"hr":62}"#.into()),
+            transcription: Some("hello world".into()),
+            entry_id: None,
+            source: "phone".into(),
+            created_at: "2026-01-01T00:00:00Z".into(),
+            context: None,
+            inferred_mood: Some(4),
+            book_id: "default".into(),
+            reviewed: 0,
+            updated_at: "2026-01-02T00:00:00Z".into(),
+        }
+    }
+
+    #[test]
+    fn sync_voice_memo_row_round_trips() {
+        let row = sample_voice_memo_row();
+        let back: SyncVoiceMemoRow =
+            serde_json::from_str(&serde_json::to_string(&row).unwrap()).unwrap();
+        assert_eq!(back.id, "vm-001");
+        assert_eq!(back.duration_ms, 4200);
+        assert_eq!(back.transcription.as_deref(), Some("hello world"));
+        assert_eq!(back.inferred_mood, Some(4));
+        assert_eq!(back.updated_at, "2026-01-02T00:00:00Z");
+    }
+
+    #[test]
+    fn sync_voice_memo_row_has_no_file_path() {
+        // file_path is device-local and must never be serialized over the wire.
+        let json = serde_json::to_string(&sample_voice_memo_row()).unwrap();
+        assert!(
+            !json.contains("file_path"),
+            "file_path must never cross the wire"
+        );
+    }
+
+    #[test]
+    fn msg_voice_memo_round_trips() {
+        let msg = Msg::VoiceMemo {
+            row: sample_voice_memo_row(),
+            audio_base64: "QUJD".into(),
+        };
+        let back: Msg = serde_json::from_str(&serde_json::to_string(&msg).unwrap()).unwrap();
+        match back {
+            Msg::VoiceMemo { row, audio_base64 } => {
+                assert_eq!(row.id, "vm-001");
+                assert_eq!(audio_base64, "QUJD");
+            }
+            _ => panic!("wrong variant"),
+        }
+    }
+
+    #[test]
+    fn msg_voice_memos_done_and_ack_round_trip() {
+        let done: Msg =
+            serde_json::from_str(&serde_json::to_string(&Msg::VoiceMemosDone { sent: 3 }).unwrap())
+                .unwrap();
+        match done {
+            Msg::VoiceMemosDone { sent } => assert_eq!(sent, 3),
+            _ => panic!("wrong variant"),
+        }
+        let ack: Msg =
+            serde_json::from_str(&serde_json::to_string(&Msg::VoiceMemosAck { recv: 2 }).unwrap())
+                .unwrap();
+        match ack {
+            Msg::VoiceMemosAck { recv } => assert_eq!(recv, 2),
+            _ => panic!("wrong variant"),
+        }
+    }
+
+    #[test]
+    fn manifest_voice_memos_defaults_when_omitted() {
+        // A pre-voice-memo peer's MANIFEST omits `voice_memos`; it must default to
+        // an empty list so the diff treats the peer as having none.
+        let json = r#"{"t":"manifest","entries":[],"books":[],"signals":[],"settings":[]}"#;
+        match serde_json::from_str::<Msg>(json).unwrap() {
+            Msg::Manifest { voice_memos, .. } => assert!(voice_memos.is_empty()),
+            _ => panic!("wrong variant"),
+        }
+    }
+
+    #[test]
+    fn manifest_round_trips_voice_memos() {
+        let msg = Msg::Manifest {
+            entries: Vec::new(),
+            books: Vec::new(),
+            signals: Vec::new(),
+            settings: Vec::new(),
+            voice_memos: vec![SyncMeta {
+                id: "vm-9".into(),
+                updated_at: "2026-03-01T00:00:00Z".into(),
+            }],
+        };
+        let back: Msg = serde_json::from_str(&serde_json::to_string(&msg).unwrap()).unwrap();
+        match back {
+            Msg::Manifest { voice_memos, .. } => {
+                assert_eq!(voice_memos.len(), 1);
+                assert_eq!(voice_memos[0].id, "vm-9");
+            }
+            _ => panic!("wrong variant"),
+        }
+    }
 }
 
 // ── Protocol messages ─────────────────────────────────────────────────────────

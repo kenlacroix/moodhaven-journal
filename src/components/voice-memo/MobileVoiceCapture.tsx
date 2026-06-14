@@ -29,7 +29,7 @@ import { logger } from '../../lib/services/logger';
  * large arrays, so we round-trip through a Blob → FileReader data URL and strip
  * the `data:...;base64,` prefix.
  */
-function arrayBufferToBase64(buffer: ArrayBuffer): Promise<string> {
+export function arrayBufferToBase64(buffer: ArrayBuffer): Promise<string> {
   return new Promise((resolve, reject) => {
     const blob = new Blob([buffer], { type: 'audio/wav' });
     const reader = new FileReader();

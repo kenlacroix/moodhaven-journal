@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MobileVoiceCapture } from './MobileVoiceCapture';
+import { MobileVoiceCapture, arrayBufferToBase64 } from './MobileVoiceCapture';
 import {
   storeVoiceMemoBytes,
   listVoiceMemos,
@@ -322,6 +322,35 @@ describe('MobileVoiceCapture — base64 encoding failure', () => {
       const status = await screen.findByText(/Could not save voice memo/i);
       expect(status).toBeInTheDocument();
       expect(mockStore).not.toHaveBeenCalled();
+    } finally {
+      vi.stubGlobal('FileReader', RealFileReader);
+    }
+  });
+});
+
+// ── arrayBufferToBase64 (unit) ──────────────────────────────────────────────────
+
+describe('arrayBufferToBase64', () => {
+  it('strips the data-URL prefix and returns the base64 payload', async () => {
+    const out = await arrayBufferToBase64(new TextEncoder().encode('ABC').buffer);
+    expect(out).toBe('QUJD');
+  });
+
+  it('rejects when FileReader yields a non-string result', async () => {
+    const RealFileReader = globalThis.FileReader;
+    class NonStringFileReader {
+      onerror: ((this: FileReader, ev: ProgressEvent) => void) | null = null;
+      onload: ((this: FileReader, ev: ProgressEvent) => void) | null = null;
+      result: ArrayBuffer | string | null = new ArrayBuffer(4); // not a string
+      readAsDataURL(): void {
+        queueMicrotask(() => this.onload?.call(this as never, {} as ProgressEvent));
+      }
+    }
+    vi.stubGlobal('FileReader', NonStringFileReader);
+    try {
+      await expect(
+        arrayBufferToBase64(new TextEncoder().encode('xy').buffer),
+      ).rejects.toThrow('Unexpected FileReader result');
     } finally {
       vi.stubGlobal('FileReader', RealFileReader);
     }

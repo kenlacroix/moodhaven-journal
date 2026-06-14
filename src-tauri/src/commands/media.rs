@@ -623,36 +623,38 @@ pub fn save_media_attachment(
     })
 }
 
-/// Attach a file to an entry from in-memory base64 bytes.
-/// Used on Android, where the system file picker returns a non-readable
-/// `content://` URI rather than a filesystem path; the frontend reads the bytes
-/// and passes them as base64. Mirrors `save_media_attachment` but decodes bytes
-/// instead of reading from disk.
-#[allow(clippy::too_many_arguments)]
-#[tauri::command]
-pub fn save_media_attachment_bytes(
-    app: AppHandle,
-    db: State<'_, Database>,
-    lock: State<'_, AppLockState>,
-    rekey: State<'_, crate::RekeyInProgress>,
-    entry_id: String,
-    filename: String,
-    data_base64: String,
-    password: String,
-) -> Result<MediaAttachment, String> {
-    require_unlocked(&lock)?;
-    super::require_no_rekey(&rekey)?;
+/// The side-effect-free result of preparing a base64 media payload for storage:
+/// the encrypted on-disk bytes plus the derived metadata the command needs to
+/// place the file and write the DB row. Holds no Tauri state, so the whole
+/// decode → validate → compress → encrypt pipeline is unit-testable in isolation.
+#[cfg_attr(test, derive(Debug))]
+struct PreparedMedia {
+    media_id: String,
+    enc_filename: String,
+    mime_type: String,
+    size_bytes: i64,
+    encrypted: Vec<u8>,
+}
 
+/// Pure core of `save_media_attachment_bytes`: decode base64, reject unsafe
+/// filenames, enforce the size limit, recompress images, and encrypt to MBMF.
+/// No filesystem or DB access — those stay in the thin command wrapper so this
+/// can be exercised directly by tests.
+fn prepare_media_bytes(
+    filename: &str,
+    data_base64: &str,
+    password: &str,
+) -> Result<PreparedMedia, String> {
     // Defense-in-depth: `filename` comes from the frontend, so reject anything
     // that isn't a bare filename before it reaches path joins.
-    reject_unsafe_filename(&filename)?;
+    reject_unsafe_filename(filename)?;
 
-    let extension = Path::new(&filename)
+    let extension = Path::new(filename)
         .extension()
         .and_then(|e| e.to_str())
         .unwrap_or("bin")
         .to_ascii_lowercase();
-    let mime_type = mime_from_filename(&filename).to_string();
+    let mime_type = mime_from_filename(filename).to_string();
 
     let plaintext = STANDARD
         .decode(data_base64.as_bytes())
@@ -670,11 +672,51 @@ pub fn save_media_attachment_bytes(
     };
     let size_bytes = plaintext.len() as i64;
 
-    let encrypted = encrypt_to_mbmf(&plaintext, &password)?;
+    let encrypted = encrypt_to_mbmf(&plaintext, password)?;
     drop(plaintext);
 
     let media_id = Uuid::new_v4().to_string();
     let enc_filename = format!("{}.{}.enc", media_id, extension);
+
+    Ok(PreparedMedia {
+        media_id,
+        enc_filename,
+        mime_type,
+        size_bytes,
+        encrypted,
+    })
+}
+
+/// Attach a file to an entry from in-memory base64 bytes.
+/// Used on Android, where the system file picker returns a non-readable
+/// `content://` URI rather than a filesystem path; the frontend reads the bytes
+/// and passes them as base64. Mirrors `save_media_attachment` but decodes bytes
+/// instead of reading from disk. The pure pipeline lives in `prepare_media_bytes`;
+/// this wrapper only wires Tauri state (file write + DB insert).
+#[allow(clippy::too_many_arguments)]
+#[tauri::command]
+pub fn save_media_attachment_bytes(
+    app: AppHandle,
+    db: State<'_, Database>,
+    lock: State<'_, AppLockState>,
+    rekey: State<'_, crate::RekeyInProgress>,
+    entry_id: String,
+    filename: String,
+    data_base64: String,
+    password: String,
+) -> Result<MediaAttachment, String> {
+    require_unlocked(&lock)?;
+    super::require_no_rekey(&rekey)?;
+
+    let prepared = prepare_media_bytes(&filename, &data_base64, &password)?;
+    let PreparedMedia {
+        media_id,
+        enc_filename,
+        mime_type,
+        size_bytes,
+        encrypted,
+    } = prepared;
+
     let media_dir = get_media_dir(&app, &entry_id)?;
     let enc_abs = media_dir.join(&enc_filename);
 
@@ -1217,5 +1259,84 @@ mod tests {
         let err = enforce_media_size_limit(MAX_MEDIA_BYTES as usize + 1)
             .expect_err("oversized payload must be rejected");
         assert!(err.contains("too large"), "got: {err}");
+    }
+
+    // ── prepare_media_bytes (pure core of save_media_attachment_bytes) ────────────
+
+    use super::{decrypt_mbmf, prepare_media_bytes};
+    use base64::{engine::general_purpose::STANDARD, Engine as _};
+
+    #[test]
+    fn prepare_round_trips_non_image_payload() {
+        // Non-image bytes are stored verbatim (no compression), so decrypting the
+        // prepared blob must return exactly the original payload.
+        let original = b"the quick brown fox \x00\x01\x02 jumps".to_vec();
+        let b64 = STANDARD.encode(&original);
+        let prepared =
+            prepare_media_bytes("note.pdf", &b64, "correct horse battery").expect("prepare ok");
+
+        assert_eq!(prepared.mime_type, "application/pdf");
+        assert!(prepared.enc_filename.ends_with(".pdf.enc"));
+        assert!(prepared.enc_filename.starts_with(&prepared.media_id));
+        assert_eq!(prepared.size_bytes, original.len() as i64);
+
+        let decrypted =
+            decrypt_mbmf(&prepared.encrypted, "correct horse battery").expect("decrypt ok");
+        assert_eq!(decrypted, original);
+    }
+
+    #[test]
+    fn prepare_wrong_password_fails_to_decrypt() {
+        let original = b"secret bytes".to_vec();
+        let b64 = STANDARD.encode(&original);
+        let prepared = prepare_media_bytes("a.bin", &b64, "right-password").expect("prepare ok");
+        assert!(decrypt_mbmf(&prepared.encrypted, "wrong-password").is_err());
+    }
+
+    #[test]
+    fn prepare_rejects_invalid_base64() {
+        let err = prepare_media_bytes("a.png", "not%%base64!!", "pw")
+            .expect_err("invalid base64 must be rejected");
+        assert!(err.contains("Invalid base64"), "got: {err}");
+    }
+
+    #[test]
+    fn prepare_rejects_unsafe_filename() {
+        let b64 = STANDARD.encode(b"x");
+        assert!(prepare_media_bytes("../escape.jpg", &b64, "pw").is_err());
+        assert!(prepare_media_bytes("dir/file.jpg", &b64, "pw").is_err());
+    }
+
+    #[test]
+    fn prepare_accepts_within_limit_payload() {
+        // The decoded-size boundary itself is covered by `bytes_size_over_limit_rejected`
+        // via `enforce_media_size_limit`; here confirm the limit check is wired into the
+        // pipeline by passing a comfortably-small payload end-to-end.
+        let b64 = STANDARD.encode(vec![0u8; 1024]);
+        assert!(prepare_media_bytes("data.bin", &b64, "pw").is_ok());
+    }
+
+    #[test]
+    fn prepare_unknown_extension_defaults_octet_stream() {
+        let b64 = STANDARD.encode(b"blob");
+        let prepared = prepare_media_bytes("archive.xyz", &b64, "pw").expect("prepare ok");
+        assert_eq!(prepared.mime_type, "application/octet-stream");
+        assert!(prepared.enc_filename.ends_with(".xyz.enc"));
+    }
+
+    #[test]
+    fn prepare_compresses_large_jpeg_before_encrypt() {
+        // A large JPEG should be recompressed: the stored (decrypted) bytes must be
+        // smaller than the original and decode to a within-cap image.
+        let big = gradient_encoded(4000, 3000, image::ImageFormat::Jpeg);
+        let b64 = STANDARD.encode(&big);
+        let prepared = prepare_media_bytes("photo.jpg", &b64, "pw").expect("prepare ok");
+        assert_eq!(prepared.mime_type, "image/jpeg");
+        assert!(prepared.size_bytes < big.len() as i64, "should shrink");
+
+        let decrypted = decrypt_mbmf(&prepared.encrypted, "pw").expect("decrypt ok");
+        assert_eq!(decrypted.len() as i64, prepared.size_bytes);
+        let img = image::load_from_memory(&decrypted).expect("decodes");
+        assert!(img.width().max(img.height()) <= MAX_IMAGE_EDGE);
     }
 }

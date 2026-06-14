@@ -1,0 +1,88 @@
+name: Android Kotlin
+
+# Compiles the Android phone app's Kotlin on every PR that touches the generated
+# Android project. This is the only CI job that compiles Android Kotlin: the Rust
+# backend and the web frontend are built in CI, but Kotlin (MainActivity, custom
+# Tauri plugins) was never compiled until now — so plugin-registration API drift
+# (e.g. `pluginManager.load` vs `getPluginManager().load`) or unresolved references
+# only surfaced at local `tauri android build` time, where the wrapper hides the
+# error behind an opaque IO blob.
+#
+# `:app:compileUniversalDebugKotlin` has NO dependency on the Rust/NDK build (the
+# .so libs are only needed at packaging time), so this stays fast and needs no
+# OpenSSL/NDK toolchain.
+#
+# Two Tauri-generated Gradle files (tauri.settings.gradle, app/tauri.build.gradle.kts)
+# are gitignored — they hold machine-specific Cargo registry paths — so a clean CI
+# checkout lacks the `:app` subproject wiring. `cargo metadata` populates the registry
+# (no Rust build) and scripts/gen-tauri-settings-gradle.py reproduces both files from
+# it before gradle runs.
+on:
+  pull_request:
+    paths:
+      - "src-tauri/gen/android/**"
+      - ".github/workflows/android-kotlin.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src-tauri/gen/android/**"
+      - ".github/workflows/android-kotlin.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-kotlin-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compile-kotlin:
+    name: Compile Android app Kotlin
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
+
+      - name: Setup Java 17
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654  # v5.2.0
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8  # stable (2026-04-04)
+
+      - name: Cache Cargo registry
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5.0.5
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/registry/src
+          key: cargo-registry-${{ hashFiles('src-tauri/Cargo.lock') }}
+          restore-keys: cargo-registry-
+
+      # The Tauri CLI normally writes tauri.settings.gradle + app/tauri.build.gradle.kts
+      # during `tauri android build`; both are gitignored (they hold machine-specific
+      # Cargo registry paths). Without them `settings.gradle` skips `:app` entirely and
+      # the gradle step fails with "project 'app' not found". `cargo metadata` extracts
+      # the tauri/tauri-plugin crates into the registry WITHOUT building Rust, then the
+      # script reproduces both files from that metadata. No .so build is triggered.
+      - name: Generate Tauri Android Gradle files (no Rust build)
+        run: python3 scripts/gen-tauri-settings-gradle.py
+
+      - name: Accept Android SDK licenses
+        run: yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses 2>/dev/null || true
+
+      - name: Cache Gradle packages
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5.0.5
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ hashFiles('src-tauri/gen/android/**/*.gradle*', 'src-tauri/gen/android/**/gradle-wrapper.properties') }}
+          restore-keys: gradle-
+
+      - name: Compile Android app Kotlin (no Rust)
+        working-directory: src-tauri/gen/android
+        run: ./gradlew :app:compileUniversalDebugKotlin --no-daemon -Dorg.gradle.java.home=$JAVA_HOME

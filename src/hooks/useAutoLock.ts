@@ -34,11 +34,8 @@ export function useAutoLock() {
 
     const doLock = () => {
       if (clearClipboardRef.current) {
-        try {
-          void navigator.clipboard?.writeText('').catch(() => {/* permission denied — ignore */});
-        } catch {
-          // clipboard API unavailable — ignore
-        }
+        // Optional chaining covers a missing Clipboard API; .catch() covers a denied write.
+        void navigator.clipboard?.writeText('').catch(() => {/* unavailable or denied — ignore */});
       }
       lock();
     };

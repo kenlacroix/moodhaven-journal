@@ -28,6 +28,8 @@ pub struct VoiceMemoRow {
     pub book_id: String,
     /// 0 = pending review, 1 = published or discarded
     pub reviewed: i64,
+    /// RFC 3339 UTC timestamp of the last mutation — LWW version field for peer sync.
+    pub updated_at: String,
 }
 
 /// Map a rusqlite row to a `VoiceMemoRow`.
@@ -35,7 +37,7 @@ pub struct VoiceMemoRow {
 /// Expected column order (0-indexed):
 /// 0 id, 1 timestamp, 2 duration_ms, 3 health_json, 4 file_path,
 /// 5 transcription, 6 entry_id, 7 source, 8 created_at,
-/// 9 context, 10 inferred_mood, 11 book_id, 12 reviewed
+/// 9 context, 10 inferred_mood, 11 book_id, 12 reviewed, 13 updated_at
 fn map_memo_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<VoiceMemoRow> {
     Ok(VoiceMemoRow {
         id: r.get(0)?,
@@ -53,12 +55,15 @@ fn map_memo_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<VoiceMemoRow> {
             .get::<_, Option<String>>(11)?
             .unwrap_or_else(|| "default".to_string()),
         reviewed: r.get::<_, Option<i64>>(12)?.unwrap_or(0),
+        updated_at: r
+            .get::<_, Option<String>>(13)?
+            .unwrap_or_else(|| r.get::<_, String>(8).unwrap_or_default()),
     })
 }
 
 const SELECT_COLS: &str = "id, timestamp, duration_ms, health_json, file_path,
      transcription, entry_id, source, created_at,
-     context, inferred_mood, book_id, reviewed";
+     context, inferred_mood, book_id, reviewed, updated_at";
 
 /// Insert a voice memo record.
 /// `file_path` is the relative path stored in the DB (`voice_memos/<id>.m4a`).
@@ -75,9 +80,10 @@ pub fn create_voice_memo(
 
     conn.execute(
         "INSERT INTO voice_memos
-             (id, timestamp, duration_ms, health_json, file_path, source, created_at)
+             (id, timestamp, duration_ms, health_json, file_path, source, created_at, updated_at)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6,
-                 strftime('%Y-%m-%dT%H:%M:%S','now','localtime'))",
+                 strftime('%Y-%m-%dT%H:%M:%S','now','localtime'),
+                 strftime('%Y-%m-%dT%H:%M:%SZ','now'))",
         params![id, timestamp, duration_ms, health_json, file_path, source],
     )
     .map_err(|e| format!("Failed to insert voice memo: {}", e))?;
@@ -144,7 +150,8 @@ pub fn patch_voice_memo_transcription(
     conn.execute(
         "UPDATE voice_memos
          SET transcription = ?1,
-             raw_transcription = CASE WHEN raw_transcription IS NULL THEN ?1 ELSE raw_transcription END
+             raw_transcription = CASE WHEN raw_transcription IS NULL THEN ?1 ELSE raw_transcription END,
+             updated_at = strftime('%Y-%m-%dT%H:%M:%SZ','now')
          WHERE id = ?2",
         params![transcription, id],
     )
@@ -162,7 +169,7 @@ pub fn link_voice_memo_to_entry(
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
     conn.execute(
-        "UPDATE voice_memos SET entry_id = ?1 WHERE id = ?2",
+        "UPDATE voice_memos SET entry_id = ?1, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id = ?2",
         params![entry_id, memo_id],
     )
     .map_err(|e| format!("Failed to link voice memo: {}", e))?;
@@ -216,7 +223,8 @@ mod tests {
                 context           TEXT,
                 inferred_mood     INTEGER,
                 book_id           TEXT NOT NULL DEFAULT 'default',
-                reviewed          INTEGER NOT NULL DEFAULT 0
+                reviewed          INTEGER NOT NULL DEFAULT 0,
+                updated_at        TEXT
             );
             CREATE TABLE journal_entries (
                 id                TEXT PRIMARY KEY,
@@ -305,6 +313,49 @@ mod tests {
         assert_eq!(row.duration_ms, 5000);
         assert_eq!(row.reviewed, 0);
         assert!(row.transcription.is_none());
+    }
+
+    #[test]
+    fn create_populates_rfc3339_utc_updated_at() {
+        // updated_at is the LWW version field for peer sync; create_voice_memo must
+        // populate it as RFC 3339 UTC (…Z) so parse_peer_timestamp accepts it.
+        let db = test_db();
+        let row = create_voice_memo(
+            &db,
+            "vm-ts",
+            "2026-01-01T10:00:00",
+            1000,
+            None,
+            "voice_memos/vm-ts.m4a",
+            "watch",
+        )
+        .unwrap();
+        assert!(row.updated_at.ends_with('Z'), "updated_at must be UTC (…Z)");
+        assert!(
+            row.updated_at.contains('T'),
+            "updated_at must be RFC 3339 with a time component"
+        );
+    }
+
+    #[test]
+    fn map_memo_row_falls_back_to_created_at_when_updated_at_null() {
+        // Rows written before the migration (or via insert paths that omit
+        // updated_at) have a NULL updated_at; the mapper must fall back to
+        // created_at so the row still carries a usable LWW timestamp.
+        let db = test_db();
+        {
+            let conn = db.conn.lock().unwrap();
+            conn.execute(
+                "INSERT INTO voice_memos
+                   (id, timestamp, duration_ms, file_path, source, created_at, updated_at)
+                 VALUES ('vm-null', '2026-01-01T00:00:00', 1000, 'voice_memos/x.m4a',
+                         'watch', '2026-05-05T05:05:05', NULL)",
+                [],
+            )
+            .unwrap();
+        }
+        let row = get_voice_memo(&db, "vm-null").unwrap().unwrap();
+        assert_eq!(row.updated_at, "2026-05-05T05:05:05");
     }
 
     #[test]

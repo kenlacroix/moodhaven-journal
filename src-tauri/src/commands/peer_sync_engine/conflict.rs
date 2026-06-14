@@ -5,7 +5,7 @@ use rusqlite::Connection;
 
 use crate::db::JournalEntryRow;
 
-use super::protocol::{SyncBookRow, SyncMeta, SyncSignalRow};
+use super::protocol::{SyncBookRow, SyncMeta, SyncSignalRow, SyncVoiceMemoRow};
 
 // Maximum seconds a peer's `updated_at` may be ahead of local clock.
 const MAX_FUTURE_SECS: i64 = 10;
@@ -35,10 +35,13 @@ fn parse_peer_timestamp(ts: &str) -> Result<chrono::DateTime<chrono::Utc>, Strin
 
 // ── Manifest helpers ──────────────────────────────────────────────────────────
 
-pub fn db_get_entries_manifest(conn: &Connection) -> Result<Vec<SyncMeta>, String> {
+/// Run an `id, updated_at`-shaped manifest query and collect the rows. `label`
+/// names the table for error messages. All per-table manifest helpers below are
+/// thin wrappers around this so they stay byte-for-byte consistent.
+fn db_collect_manifest(conn: &Connection, sql: &str, label: &str) -> Result<Vec<SyncMeta>, String> {
     let mut stmt = conn
-        .prepare("SELECT id, updated_at FROM journal_entries ORDER BY updated_at DESC")
-        .map_err(|e| format!("prepare entries manifest: {e}"))?;
+        .prepare(sql)
+        .map_err(|e| format!("prepare {label} manifest: {e}"))?;
     let rows = stmt
         .query_map([], |r| {
             Ok(SyncMeta {
@@ -46,41 +49,33 @@ pub fn db_get_entries_manifest(conn: &Connection) -> Result<Vec<SyncMeta>, Strin
                 updated_at: r.get(1)?,
             })
         })
-        .map_err(|e| format!("query entries manifest: {e}"))?;
+        .map_err(|e| format!("query {label} manifest: {e}"))?;
     rows.collect::<Result<Vec<_>, _>>()
-        .map_err(|e| format!("collect entries manifest: {e}"))
+        .map_err(|e| format!("collect {label} manifest: {e}"))
+}
+
+pub fn db_get_entries_manifest(conn: &Connection) -> Result<Vec<SyncMeta>, String> {
+    db_collect_manifest(
+        conn,
+        "SELECT id, updated_at FROM journal_entries ORDER BY updated_at DESC",
+        "entries",
+    )
 }
 
 pub fn db_get_books_manifest(conn: &Connection) -> Result<Vec<SyncMeta>, String> {
-    let mut stmt = conn
-        .prepare("SELECT id, COALESCE(updated_at, created_at) FROM books ORDER BY id")
-        .map_err(|e| format!("prepare books manifest: {e}"))?;
-    let rows = stmt
-        .query_map([], |r| {
-            Ok(SyncMeta {
-                id: r.get(0)?,
-                updated_at: r.get(1)?,
-            })
-        })
-        .map_err(|e| format!("query books manifest: {e}"))?;
-    rows.collect::<Result<Vec<_>, _>>()
-        .map_err(|e| format!("collect books manifest: {e}"))
+    db_collect_manifest(
+        conn,
+        "SELECT id, COALESCE(updated_at, created_at) FROM books ORDER BY id",
+        "books",
+    )
 }
 
 pub fn db_get_signals_manifest(conn: &Connection) -> Result<Vec<SyncMeta>, String> {
-    let mut stmt = conn
-        .prepare("SELECT id, created_at FROM signals ORDER BY created_at DESC")
-        .map_err(|e| format!("prepare signals manifest: {e}"))?;
-    let rows = stmt
-        .query_map([], |r| {
-            Ok(SyncMeta {
-                id: r.get(0)?,
-                updated_at: r.get(1)?,
-            })
-        })
-        .map_err(|e| format!("query signals manifest: {e}"))?;
-    rows.collect::<Result<Vec<_>, _>>()
-        .map_err(|e| format!("collect signals manifest: {e}"))
+    db_collect_manifest(
+        conn,
+        "SELECT id, created_at FROM signals ORDER BY created_at DESC",
+        "signals",
+    )
 }
 
 /// Returns manifest items for whitelisted settings keys that exist in the DB.
@@ -315,6 +310,148 @@ pub fn db_insert_signal_if_new(conn: &Connection, row: &SyncSignalRow) -> Result
         )
         .map_err(|e| format!("insert signal: {e}"))?;
     Ok(changes > 0)
+}
+
+// ── Voice memos (LWW on updated_at, audio carried alongside) ───────────────────
+
+pub fn db_get_voice_memos_manifest(conn: &Connection) -> Result<Vec<SyncMeta>, String> {
+    db_collect_manifest(
+        conn,
+        "SELECT id, COALESCE(updated_at, created_at) FROM voice_memos ORDER BY updated_at DESC",
+        "voice_memos",
+    )
+}
+
+/// Fetch full voice-memo rows for the given ids, paired with each memo's
+/// device-local `file_path` (needed to read the audio bytes off disk before
+/// sending). The `file_path` is NOT part of `SyncVoiceMemoRow` — it never goes
+/// over the wire.
+pub fn db_get_voice_memos_full(
+    conn: &Connection,
+    ids: &[String],
+) -> Result<Vec<(SyncVoiceMemoRow, String)>, String> {
+    if ids.is_empty() {
+        return Ok(vec![]);
+    }
+    let placeholders = ids.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
+    let sql = format!(
+        "SELECT id, timestamp, duration_ms, health_json, transcription, entry_id, \
+                source, created_at, context, inferred_mood, book_id, reviewed, \
+                COALESCE(updated_at, created_at), file_path \
+         FROM voice_memos WHERE id IN ({placeholders})"
+    );
+    conn.prepare(&sql)
+        .map_err(|e| format!("prepare voice_memos full: {e}"))?
+        .query_map(rusqlite::params_from_iter(ids.iter()), |r| {
+            Ok((
+                SyncVoiceMemoRow {
+                    id: r.get(0)?,
+                    timestamp: r.get(1)?,
+                    duration_ms: r.get(2)?,
+                    health_json: r.get(3)?,
+                    transcription: r.get(4)?,
+                    entry_id: r.get(5)?,
+                    source: r.get(6)?,
+                    created_at: r.get(7)?,
+                    context: r.get(8)?,
+                    inferred_mood: r.get(9)?,
+                    book_id: r
+                        .get::<_, Option<String>>(10)?
+                        .unwrap_or_else(|| "default".to_string()),
+                    reviewed: r.get::<_, Option<i64>>(11)?.unwrap_or(0),
+                    updated_at: r.get(12)?,
+                },
+                r.get::<_, String>(13)?,
+            ))
+        })
+        .map_err(|e| format!("query voice_memos full: {e}"))?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .map_err(|e| format!("collect voice_memos full: {e}"))
+}
+
+/// Upsert a voice memo received from a peer (LWW on `updated_at`). `file_path` is
+/// the local relative path this device will use — never the peer's. The audio
+/// file itself is written by the caller. `raw_transcription` is intentionally not
+/// touched so an on-device edit's original whisper output survives.
+/// Returns true if the local DB row was inserted or updated.
+pub fn db_upsert_voice_memo(
+    conn: &Connection,
+    row: &SyncVoiceMemoRow,
+    file_path: &str,
+) -> Result<bool, String> {
+    let remote_ts = parse_peer_timestamp(&row.updated_at)?;
+
+    let existing: Option<String> = conn
+        .query_row(
+            "SELECT COALESCE(updated_at, created_at) FROM voice_memos WHERE id = ?1",
+            rusqlite::params![row.id],
+            |r| r.get(0),
+        )
+        .ok();
+
+    match existing {
+        None => {
+            conn.execute(
+                "INSERT INTO voice_memos \
+                 (id, timestamp, duration_ms, health_json, file_path, transcription, \
+                  entry_id, source, created_at, context, inferred_mood, book_id, \
+                  reviewed, updated_at) \
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+                rusqlite::params![
+                    row.id,
+                    row.timestamp,
+                    row.duration_ms,
+                    row.health_json,
+                    file_path,
+                    row.transcription,
+                    row.entry_id,
+                    row.source,
+                    row.created_at,
+                    row.context,
+                    row.inferred_mood,
+                    row.book_id,
+                    row.reviewed,
+                    row.updated_at
+                ],
+            )
+            .map_err(|e| format!("insert voice memo: {e}"))?;
+            Ok(true)
+        }
+        Some(ref local)
+            if {
+                parse_peer_timestamp(local)
+                    .map(|local_ts| remote_ts > local_ts)
+                    .unwrap_or(false)
+            } =>
+        {
+            // file_path is left untouched — this device's audio already lives at
+            // its own path; only the synced metadata is updated.
+            conn.execute(
+                "UPDATE voice_memos \
+                 SET timestamp = ?2, duration_ms = ?3, health_json = ?4, \
+                     transcription = ?5, entry_id = ?6, source = ?7, context = ?8, \
+                     inferred_mood = ?9, book_id = ?10, reviewed = ?11, updated_at = ?12 \
+                 WHERE id = ?1",
+                rusqlite::params![
+                    row.id,
+                    row.timestamp,
+                    row.duration_ms,
+                    row.health_json,
+                    row.transcription,
+                    row.entry_id,
+                    row.source,
+                    row.context,
+                    row.inferred_mood,
+                    row.book_id,
+                    row.reviewed,
+                    row.updated_at
+                ],
+            )
+            .map_err(|e| format!("update voice memo: {e}"))?;
+            Ok(true)
+        }
+        _ => Ok(false), // local is same age or newer — skip
+    }
 }
 
 /// Merge whitelisted fields from `remote` JSON into `local` JSON.
@@ -556,10 +693,13 @@ pub fn db_set_peer_sync_at(conn: &Connection, peer_id: &str, at: &str) -> Result
 #[cfg(test)]
 mod tests {
     use super::{
-        db_insert_signal_if_new, db_upsert_book, db_upsert_entry, db_upsert_setting,
+        db_get_voice_memos_full, db_get_voice_memos_manifest, db_insert_signal_if_new,
+        db_upsert_book, db_upsert_entry, db_upsert_setting, db_upsert_voice_memo,
         merge_settings_json, parse_peer_timestamp,
     };
-    use crate::commands::peer_sync_engine::protocol::{SyncBookRow, SyncSignalRow};
+    use crate::commands::peer_sync_engine::protocol::{
+        SyncBookRow, SyncSignalRow, SyncVoiceMemoRow,
+    };
     use crate::db::journal::{EncryptedContent, JournalEntryRow};
 
     // ── Schema helpers ────────────────────────────────────────────────────────
@@ -632,6 +772,31 @@ mod tests {
                 source TEXT NOT NULL,
                 payload TEXT NOT NULL,
                 created_at TEXT NOT NULL
+            );",
+        )
+        .unwrap();
+        conn
+    }
+
+    fn make_voice_memos_conn() -> rusqlite::Connection {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE voice_memos (
+                id TEXT PRIMARY KEY,
+                timestamp TEXT NOT NULL,
+                duration_ms INTEGER NOT NULL DEFAULT 0,
+                health_json TEXT,
+                file_path TEXT NOT NULL,
+                transcription TEXT,
+                entry_id TEXT,
+                source TEXT NOT NULL DEFAULT 'watch',
+                created_at TEXT NOT NULL,
+                raw_transcription TEXT,
+                context TEXT,
+                inferred_mood INTEGER,
+                book_id TEXT NOT NULL DEFAULT 'default',
+                reviewed INTEGER NOT NULL DEFAULT 0,
+                updated_at TEXT
             );",
         )
         .unwrap();
@@ -1002,5 +1167,175 @@ mod tests {
             .query_row("SELECT COUNT(*) FROM signals", [], |r| r.get(0))
             .unwrap();
         assert_eq!(count, 2);
+    }
+
+    // ── db_upsert_voice_memo / manifest ───────────────────────────────────────
+
+    fn stub_voice_memo(
+        id: &str,
+        updated_at: &str,
+        transcription: Option<&str>,
+    ) -> SyncVoiceMemoRow {
+        SyncVoiceMemoRow {
+            id: id.to_string(),
+            timestamp: "2026-01-01T00:00:00Z".into(),
+            duration_ms: 1000,
+            health_json: None,
+            transcription: transcription.map(|s| s.to_string()),
+            entry_id: None,
+            source: "phone".into(),
+            created_at: "2026-01-01T00:00:00Z".into(),
+            context: None,
+            inferred_mood: None,
+            book_id: "default".into(),
+            reviewed: 0,
+            updated_at: updated_at.to_string(),
+        }
+    }
+
+    #[test]
+    fn new_voice_memo_is_inserted_with_local_file_path() {
+        let conn = make_voice_memos_conn();
+        let row = stub_voice_memo("vm-001", "2026-01-01T10:00:00Z", None);
+        assert!(db_upsert_voice_memo(&conn, &row, "voice_memos/vm-001.wav").unwrap());
+        let fp: String = conn
+            .query_row(
+                "SELECT file_path FROM voice_memos WHERE id = 'vm-001'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(fp, "voice_memos/vm-001.wav");
+    }
+
+    #[test]
+    fn newer_voice_memo_transcription_overwrites_and_keeps_local_file_path() {
+        let conn = make_voice_memos_conn();
+        db_upsert_voice_memo(
+            &conn,
+            &stub_voice_memo("vm-002", "2026-01-01T00:00:00Z", None),
+            "voice_memos/vm-002.wav",
+        )
+        .unwrap();
+        // A newer peer row carrying the transcription, with a *different* peer-side
+        // path. The transcription must apply; the local file_path must NOT change.
+        let changed = db_upsert_voice_memo(
+            &conn,
+            &stub_voice_memo("vm-002", "2026-01-02T00:00:00Z", Some("hello world")),
+            "voice_memos/vm-002.wav",
+        )
+        .unwrap();
+        assert!(changed, "newer remote memo must update local");
+        let (tx, fp): (Option<String>, String) = conn
+            .query_row(
+                "SELECT transcription, file_path FROM voice_memos WHERE id = 'vm-002'",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(tx.as_deref(), Some("hello world"));
+        assert_eq!(fp, "voice_memos/vm-002.wav");
+    }
+
+    #[test]
+    fn older_voice_memo_is_skipped() {
+        let conn = make_voice_memos_conn();
+        db_upsert_voice_memo(
+            &conn,
+            &stub_voice_memo("vm-003", "2026-01-10T00:00:00Z", Some("kept")),
+            "voice_memos/vm-003.wav",
+        )
+        .unwrap();
+        let changed = db_upsert_voice_memo(
+            &conn,
+            &stub_voice_memo("vm-003", "2026-01-01T00:00:00Z", Some("stale")),
+            "voice_memos/vm-003.wav",
+        )
+        .unwrap();
+        assert!(!changed, "older remote memo must not overwrite local");
+        let tx: Option<String> = conn
+            .query_row(
+                "SELECT transcription FROM voice_memos WHERE id = 'vm-003'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(tx.as_deref(), Some("kept"));
+    }
+
+    #[test]
+    fn far_future_voice_memo_timestamp_is_rejected() {
+        let conn = make_voice_memos_conn();
+        let result = db_upsert_voice_memo(
+            &conn,
+            &stub_voice_memo("vm-004", "9999-12-31T23:59:59Z", None),
+            "voice_memos/vm-004.wav",
+        );
+        assert!(result.is_err(), "far-future timestamp must be rejected");
+        assert!(result.unwrap_err().contains("future"));
+    }
+
+    #[test]
+    fn voice_memos_manifest_lists_id_and_updated_at() {
+        let conn = make_voice_memos_conn();
+        db_upsert_voice_memo(
+            &conn,
+            &stub_voice_memo("vm-005", "2026-02-01T00:00:00Z", None),
+            "voice_memos/vm-005.wav",
+        )
+        .unwrap();
+        let manifest = db_get_voice_memos_manifest(&conn).unwrap();
+        assert_eq!(manifest.len(), 1);
+        assert_eq!(manifest[0].id, "vm-005");
+        assert_eq!(manifest[0].updated_at, "2026-02-01T00:00:00Z");
+    }
+
+    #[test]
+    fn voice_memos_full_returns_empty_for_empty_ids() {
+        let conn = make_voice_memos_conn();
+        let rows = db_get_voice_memos_full(&conn, &[]).unwrap();
+        assert!(rows.is_empty());
+    }
+
+    #[test]
+    fn voice_memos_full_fetches_rows_with_local_file_path() {
+        let conn = make_voice_memos_conn();
+        db_upsert_voice_memo(
+            &conn,
+            &stub_voice_memo("vm-a", "2026-01-01T00:00:00Z", Some("first")),
+            "voice_memos/vm-a.wav",
+        )
+        .unwrap();
+        db_upsert_voice_memo(
+            &conn,
+            &stub_voice_memo("vm-b", "2026-01-02T00:00:00Z", None),
+            "voice_memos/vm-b.wav",
+        )
+        .unwrap();
+        // Request only one of the two ids; the file_path must be paired alongside
+        // the wire row (file_path is not part of SyncVoiceMemoRow).
+        let rows = db_get_voice_memos_full(&conn, &["vm-a".to_string()]).unwrap();
+        assert_eq!(rows.len(), 1);
+        let (row, file_path) = &rows[0];
+        assert_eq!(row.id, "vm-a");
+        assert_eq!(row.transcription.as_deref(), Some("first"));
+        assert_eq!(row.book_id, "default");
+        assert_eq!(file_path, "voice_memos/vm-a.wav");
+    }
+
+    #[test]
+    fn voice_memos_full_skips_unknown_ids() {
+        let conn = make_voice_memos_conn();
+        db_upsert_voice_memo(
+            &conn,
+            &stub_voice_memo("vm-known", "2026-01-01T00:00:00Z", None),
+            "voice_memos/vm-known.wav",
+        )
+        .unwrap();
+        let rows =
+            db_get_voice_memos_full(&conn, &["vm-known".to_string(), "vm-missing".to_string()])
+                .unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].0.id, "vm-known");
     }
 }

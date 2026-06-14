@@ -16,6 +16,8 @@ import { WritingView } from './WritingView';
 import { getEntryById } from '../lib/services/journalService';
 import { pickAndAttachMedia, listEntryMedia } from '../lib/services/mediaService';
 import { useAppStore } from '../stores/appStore';
+import { usePlatform } from '../hooks/usePlatform';
+import { useIsMobile } from '../hooks/useIsMobile';
 
 // ── Force mobile layout (the reworded save indicator + spinner live there) ─────
 vi.mock('../hooks/usePlatform', () => ({
@@ -311,6 +313,67 @@ describe('WritingView — save indicator wording', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Saved · 3 words')).toBeInTheDocument();
+    });
+  });
+});
+
+describe('WritingView — desktop layout attach spinner', () => {
+  beforeEach(() => {
+    // Force the desktop layout (isMobile === false) so the desktop attach
+    // button branch (spinner / disabled / aria-busy) renders and is exercised.
+    vi.mocked(usePlatform).mockReturnValue({
+      isAndroid: false,
+      isIOS: false,
+      isMobile: false,
+      isBrowser: false,
+      isDesktop: true,
+      canPeerSync: true,
+      canSTT: true,
+      canHardwareKey: true,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any);
+    vi.mocked(useIsMobile).mockReturnValue(false);
+  });
+
+  it('shows a spinner and disables the desktop attach button while attaching', async () => {
+    let release!: () => void;
+    vi.mocked(pickAndAttachMedia).mockReturnValue(
+      new Promise((resolve) => {
+        release = () => resolve({ attached: [], skipped: [] });
+      })
+    );
+
+    vi.mocked(getEntryById).mockResolvedValue({
+      id: 'entry-1',
+      title: 'T',
+      content: '<p>hello world</p>',
+      mood: 3,
+      privacyMode: 0,
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z',
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any);
+
+    render(<WritingView entryId="entry-1" />);
+
+    const attachBtn = await screen.findByRole('button', { name: /attach/i });
+    expect(attachBtn).not.toBeDisabled();
+
+    await act(async () => {
+      await userEvent.click(attachBtn);
+    });
+
+    await waitFor(() => {
+      const busy = screen.getByRole('button', { name: /attach/i });
+      expect(busy).toBeDisabled();
+      expect(busy).toHaveAttribute('aria-busy', 'true');
+    });
+
+    await act(async () => {
+      release();
+    });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /attach/i })).not.toBeDisabled();
     });
   });
 });

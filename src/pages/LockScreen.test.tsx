@@ -353,11 +353,13 @@ describe('LockScreen — password submit: paint-yield + unlock', () => {
     });
 
     // The verify round-trip runs, then unlock() is called with the password.
+    // The password path passes alreadyVerified=true so unlock() skips the
+    // redundant second verify_password PBKDF2 (see LockScreen.tsx:260).
     await waitFor(() => {
       expect(verifyUserPassword).toHaveBeenCalledWith('correct horse');
     });
     await waitFor(() => {
-      expect(mockUnlock).toHaveBeenCalledWith('correct horse');
+      expect(mockUnlock).toHaveBeenCalledWith('correct horse', true);
     });
   });
 

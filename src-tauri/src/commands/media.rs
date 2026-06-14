@@ -592,35 +592,20 @@ pub fn save_media_attachment(
 
     let media_id = Uuid::new_v4().to_string();
     let enc_filename = format!("{}.{}.enc", media_id, extension);
-    let media_dir = get_media_dir(&app, &entry_id)?;
-    let enc_abs = media_dir.join(&enc_filename);
 
-    std::fs::write(&enc_abs, &encrypted)
-        .map_err(|e| format!("Failed to write encrypted file: {}", e))?;
-
-    let rel_path = format!("media/{}/{}", entry_id, enc_filename);
-    let created_at = chrono::Local::now().format("%Y-%m-%dT%H:%M:%S").to_string();
-
-    {
-        let conn = db.conn.lock().map_err(|e| e.to_string())?;
-        conn.execute(
-            "INSERT INTO entry_media \
-             (id, entry_id, filename, mime_type, size_bytes, enc_path, created_at) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-            params![media_id, entry_id, filename, mime_type, size_bytes, rel_path, created_at],
-        )
-        .map_err(|e| format!("DB insert failed: {}", e))?;
-    }
-
-    Ok(MediaAttachment {
-        id: media_id,
+    persist_prepared_media(
+        &app,
+        &db,
         entry_id,
         filename,
-        mime_type,
-        size_bytes,
-        enc_path: rel_path,
-        created_at,
-    })
+        PreparedMedia {
+            media_id,
+            enc_filename,
+            mime_type,
+            size_bytes,
+            encrypted,
+        },
+    )
 }
 
 /// The side-effect-free result of preparing a base64 media payload for storage:
@@ -709,22 +694,28 @@ pub fn save_media_attachment_bytes(
     super::require_no_rekey(&rekey)?;
 
     let prepared = prepare_media_bytes(&filename, &data_base64, &password)?;
-    let PreparedMedia {
-        media_id,
-        enc_filename,
-        mime_type,
-        size_bytes,
-        encrypted,
-    } = prepared;
+    persist_prepared_media(&app, &db, entry_id, filename, prepared)
+}
 
-    let media_dir = get_media_dir(&app, &entry_id)?;
-    let enc_abs = media_dir.join(&enc_filename);
+/// Shared persistence tail for both `save_media_attachment` (disk path) and
+/// `save_media_attachment_bytes` (Android base64): resolve the per-entry media
+/// directory, write the encrypted blob, insert the DB row, and build the
+/// `MediaAttachment` response. The relative-path + DB-row construction is split
+/// into the pure `build_media_row` helper so it is unit-testable.
+fn persist_prepared_media(
+    app: &AppHandle,
+    db: &Database,
+    entry_id: String,
+    filename: String,
+    prepared: PreparedMedia,
+) -> Result<MediaAttachment, String> {
+    let media_dir = get_media_dir(app, &entry_id)?;
+    let enc_abs = media_dir.join(&prepared.enc_filename);
 
-    std::fs::write(&enc_abs, &encrypted)
+    std::fs::write(&enc_abs, &prepared.encrypted)
         .map_err(|e| format!("Failed to write encrypted file: {}", e))?;
 
-    let rel_path = format!("media/{}/{}", entry_id, enc_filename);
-    let created_at = chrono::Local::now().format("%Y-%m-%dT%H:%M:%S").to_string();
+    let attachment = build_media_row(entry_id, filename, &prepared);
 
     {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
@@ -732,20 +723,41 @@ pub fn save_media_attachment_bytes(
             "INSERT INTO entry_media \
              (id, entry_id, filename, mime_type, size_bytes, enc_path, created_at) \
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-            params![media_id, entry_id, filename, mime_type, size_bytes, rel_path, created_at],
+            params![
+                attachment.id,
+                attachment.entry_id,
+                attachment.filename,
+                attachment.mime_type,
+                attachment.size_bytes,
+                attachment.enc_path,
+                attachment.created_at,
+            ],
         )
         .map_err(|e| format!("DB insert failed: {}", e))?;
     }
 
-    Ok(MediaAttachment {
-        id: media_id,
+    Ok(attachment)
+}
+
+/// Build the `MediaAttachment` row from prepared media: derives the stored
+/// relative path and a `created_at` timestamp. Pure (no filesystem/DB), so the
+/// rel-path and metadata wiring is exercised directly in tests.
+fn build_media_row(
+    entry_id: String,
+    filename: String,
+    prepared: &PreparedMedia,
+) -> MediaAttachment {
+    let enc_path = format!("media/{}/{}", entry_id, prepared.enc_filename);
+    let created_at = chrono::Local::now().format("%Y-%m-%dT%H:%M:%S").to_string();
+    MediaAttachment {
+        id: prepared.media_id.clone(),
         entry_id,
         filename,
-        mime_type,
-        size_bytes,
-        enc_path: rel_path,
+        mime_type: prepared.mime_type.clone(),
+        size_bytes: prepared.size_bytes,
+        enc_path,
         created_at,
-    })
+    }
 }
 
 /// Return all media attachments for a journal entry, ordered by creation time.
@@ -765,21 +777,26 @@ pub fn list_entry_media(
         .map_err(|e| format!("Prepare: {}", e))?;
 
     let rows: Vec<MediaAttachment> = stmt
-        .query_map(params![entry_id], |row| {
-            Ok(MediaAttachment {
-                id: row.get(0)?,
-                entry_id: row.get(1)?,
-                filename: row.get(2)?,
-                mime_type: row.get(3)?,
-                size_bytes: row.get(4)?,
-                enc_path: row.get(5)?,
-                created_at: row.get(6)?,
-            })
-        })
+        .query_map(params![entry_id], media_row_from_sql)
         .map_err(|e| format!("Query: {}", e))?
         .filter_map(|r| r.ok())
         .collect();
     Ok(rows)
+}
+
+/// Map a `SELECT id, entry_id, filename, mime_type, size_bytes, enc_path,
+/// created_at FROM entry_media` row into a `MediaAttachment`. Shared by
+/// `list_entry_media` and `list_all_media`.
+fn media_row_from_sql(row: &rusqlite::Row<'_>) -> rusqlite::Result<MediaAttachment> {
+    Ok(MediaAttachment {
+        id: row.get(0)?,
+        entry_id: row.get(1)?,
+        filename: row.get(2)?,
+        mime_type: row.get(3)?,
+        size_bytes: row.get(4)?,
+        enc_path: row.get(5)?,
+        created_at: row.get(6)?,
+    })
 }
 
 /// Decrypt a media file to a temp location and open it with the system viewer.
@@ -955,17 +972,7 @@ pub fn list_all_media(
         .map_err(|e| format!("Prepare: {}", e))?;
 
     let rows: Vec<MediaAttachment> = stmt
-        .query_map([], |row| {
-            Ok(MediaAttachment {
-                id: row.get(0)?,
-                entry_id: row.get(1)?,
-                filename: row.get(2)?,
-                mime_type: row.get(3)?,
-                size_bytes: row.get(4)?,
-                enc_path: row.get(5)?,
-                created_at: row.get(6)?,
-            })
-        })
+        .query_map([], media_row_from_sql)
         .map_err(|e| format!("Query: {}", e))?
         .filter_map(|r| r.ok())
         .collect();
@@ -1322,6 +1329,29 @@ mod tests {
         let prepared = prepare_media_bytes("archive.xyz", &b64, "pw").expect("prepare ok");
         assert_eq!(prepared.mime_type, "application/octet-stream");
         assert!(prepared.enc_filename.ends_with(".xyz.enc"));
+    }
+
+    // ── build_media_row (pure persistence-tail metadata) ─────────────────────────
+
+    use super::build_media_row;
+
+    #[test]
+    fn build_media_row_derives_rel_path_and_carries_metadata() {
+        let b64 = STANDARD.encode(b"payload");
+        let prepared = prepare_media_bytes("photo.jpg", &b64, "pw").expect("prepare ok");
+        let expected_id = prepared.media_id.clone();
+        let expected_enc = prepared.enc_filename.clone();
+        let expected_size = prepared.size_bytes;
+
+        let row = build_media_row("entry-42".to_string(), "photo.jpg".to_string(), &prepared);
+
+        assert_eq!(row.id, expected_id);
+        assert_eq!(row.entry_id, "entry-42");
+        assert_eq!(row.filename, "photo.jpg");
+        assert_eq!(row.mime_type, "image/jpeg");
+        assert_eq!(row.size_bytes, expected_size);
+        assert_eq!(row.enc_path, format!("media/entry-42/{}", expected_enc));
+        assert!(!row.created_at.is_empty());
     }
 
     #[test]

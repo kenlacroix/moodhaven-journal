@@ -1486,33 +1486,33 @@ fn do_sync_client(app: &AppHandle, peer_device_id: &str, host: &str) -> Result<(
 
     // Step 2: Read OK (plaintext) — server includes eph_pub, HELLO challenge, and
     // its advertised protocol features (used to gate the voice-memo phase below).
-    let (server_name, server_eph_pub, server_challenge, server_features) = match read_msg(&mut stream)?
-    {
-        Msg::Ok {
-            name,
-            eph_pub,
-            challenge,
-            features,
-        } => (name, eph_pub, challenge, features),
-        Msg::NotTrusted { server_device_id } => {
-            // The server no longer has us in its trusted list — auto-revoke it
-            // from our side so both devices are in sync without manual intervention.
-            log::warn!(
-                "[sync] Client: server {server_device_id} does not trust us — auto-revoking"
-            );
-            let _ = remove_trusted_device(app, peer_device_id);
-            let _ = app.emit(
-                "peer:peer_revoked_us",
-                serde_json::json!({
-                    "deviceId": peer_device_id,
-                    "deviceName": peer_name,
-                }),
-            );
-            return Ok(());
-        }
-        Msg::Err { msg } => return Err(format!("Server rejected: {msg}")),
-        other => return Err(format!("Expected OK, got: {other:?}")),
-    };
+    let (server_name, server_eph_pub, server_challenge, server_features) =
+        match read_msg(&mut stream)? {
+            Msg::Ok {
+                name,
+                eph_pub,
+                challenge,
+                features,
+            } => (name, eph_pub, challenge, features),
+            Msg::NotTrusted { server_device_id } => {
+                // The server no longer has us in its trusted list — auto-revoke it
+                // from our side so both devices are in sync without manual intervention.
+                log::warn!(
+                    "[sync] Client: server {server_device_id} does not trust us — auto-revoking"
+                );
+                let _ = remove_trusted_device(app, peer_device_id);
+                let _ = app.emit(
+                    "peer:peer_revoked_us",
+                    serde_json::json!({
+                        "deviceId": peer_device_id,
+                        "deviceName": peer_name,
+                    }),
+                );
+                return Ok(());
+            }
+            Msg::Err { msg } => return Err(format!("Server rejected: {msg}")),
+            other => return Err(format!("Expected OK, got: {other:?}")),
+        };
     log::info!("[sync] Client: connected to '{server_name}'");
 
     // Step 2b: If the server sent a challenge, prove our identity with an Ed25519 signature.

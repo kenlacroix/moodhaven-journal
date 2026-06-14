@@ -10,6 +10,8 @@ import {
   encrypt,
   decrypt,
   clearKeyCache,
+  setAccountSalt,
+  clearAccountSalt,
   hashPassword,
   type EncryptedData,
 } from './crypto';
@@ -99,6 +101,10 @@ export async function unlockJournal(
     await (invoke('unlock_app') as Promise<void> | undefined)?.catch(() => {
       // Non-fatal: desktop-only command, not available in browser mode.
     });
+    // Install the per-account salt before any encryption happens this session.
+    await initAccountEncryption().catch(() => {
+      // Non-fatal: encrypt() falls back to a random per-call salt without it.
+    });
     return true;
   }
 
@@ -123,6 +129,10 @@ export async function finalizeUnlock(password: string): Promise<boolean> {
     }
   }
   sessionPassword = password;
+  // Install the per-account salt before any encryption happens this session.
+  await initAccountEncryption().catch(() => {
+    // Non-fatal: encrypt() falls back to a random per-call salt without it.
+  });
   return true;
 }
 
@@ -132,6 +142,8 @@ export async function finalizeUnlock(password: string): Promise<boolean> {
 export function lockJournal(): void {
   sessionPassword = null;
   clearKeyCache();
+  clearAccountSalt();
+  accountSaltBase64 = null;
   // Notify Rust backend — sensitive commands will reject until next unlock.
   (invoke('lock_app') as Promise<void> | undefined)?.catch(() => {
     // Non-fatal: browser mode / test environment.
@@ -166,6 +178,51 @@ function getPassword(): string {
  */
 export function getSessionPassword(): string | null {
   return sessionPassword;
+}
+
+// ============================================================================
+// Account Encryption Salt
+// ============================================================================
+
+// Base64 of the per-account PBKDF2 salt currently installed in crypto.ts, or null when
+// uninitialized/locked. Mirrored here (rather than reaching into crypto.ts internals) so
+// the migration sweep can compare each blob's salt against the account salt.
+let accountSaltBase64: string | null = null;
+
+/** SETTINGS key for the per-account encryption salt. Stored standalone — NOT inside the
+ *  synced `app_settings` blob and NOT `password_salt`, so it never crosses peer sync.
+ *  Each device generates its own; that's fine because decrypt() reads each blob's own salt. */
+const ENCRYPTION_SALT_KEY = 'encryption_salt';
+
+const ACCOUNT_SALT_BYTES = 16;
+
+function randomSaltBase64(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(ACCOUNT_SALT_BYTES));
+  let s = '';
+  for (const b of bytes) s += String.fromCharCode(b);
+  return btoa(s);
+}
+
+/**
+ * Ensure the stable per-account PBKDF2 salt exists and is installed in crypto.ts.
+ *
+ * Reads `encryption_salt`; if absent, generates 16 fresh random bytes and persists them once.
+ * Then calls setAccountSalt() so every subsequent encrypt() reuses the session-cached key.
+ * Idempotent — safe to call on every unlock path.
+ */
+export async function initAccountEncryption(): Promise<void> {
+  let saltB64 = await invoke<string | null>('get_setting', { key: ENCRYPTION_SALT_KEY });
+  if (!saltB64) {
+    saltB64 = randomSaltBase64();
+    await invoke('set_setting', { key: ENCRYPTION_SALT_KEY, value: saltB64 });
+  }
+  setAccountSalt(saltB64);
+  accountSaltBase64 = saltB64;
+}
+
+/** Current account salt (base64), or null if uninitialized/locked. */
+export function getAccountSaltBase64(): string | null {
+  return accountSaltBase64;
 }
 
 // ============================================================================

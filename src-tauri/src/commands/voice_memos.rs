@@ -154,12 +154,8 @@ pub fn store_voice_memo_bytes(
     validate_incoming_filename(&id)
         .map_err(|e| format!("store_voice_memo_bytes: invalid id: {e}"))?;
 
-    let bytes = STANDARD
-        .decode(audio_base64.as_bytes())
-        .map_err(|e| format!("store_voice_memo_bytes: base64 decode: {e}"))?;
-    if bytes.is_empty() {
-        return Err("store_voice_memo_bytes: audio is empty".to_string());
-    }
+    let bytes =
+        decode_nonempty_audio(&audio_base64).map_err(|e| format!("store_voice_memo_bytes: {e}"))?;
 
     let dest_dir = voice_memos_dir(&app)?;
     let dest_filename = format!("{}.wav", id);
@@ -546,6 +542,20 @@ pub fn list_pending_drafts(
 
 // ── pure helpers exposed for testing ─────────────────────────────────────────
 
+/// Decode a base64 audio payload, rejecting malformed input and empty audio.
+///
+/// Extracted from `store_voice_memo_bytes` so the validation core is unit-testable
+/// without an `AppHandle`/`State` (the rest of the command is filesystem + DB IO).
+pub(crate) fn decode_nonempty_audio(audio_base64: &str) -> Result<Vec<u8>, String> {
+    let bytes = STANDARD
+        .decode(audio_base64.as_bytes())
+        .map_err(|e| format!("base64 decode: {e}"))?;
+    if bytes.is_empty() {
+        return Err("audio is empty".to_string());
+    }
+    Ok(bytes)
+}
+
 /// Returns `Ok(())` if `filename` is a safe plain filename (no path traversal).
 pub(crate) fn validate_incoming_filename(filename: &str) -> Result<(), &'static str> {
     if filename.is_empty() {
@@ -562,7 +572,29 @@ pub(crate) fn validate_incoming_filename(filename: &str) -> Result<(), &'static 
 
 #[cfg(test)]
 mod tests {
-    use super::validate_incoming_filename;
+    use super::{decode_nonempty_audio, validate_incoming_filename};
+    use base64::{engine::general_purpose::STANDARD, Engine};
+
+    #[test]
+    fn decode_valid_base64_audio() {
+        let encoded = STANDARD.encode(b"fake wav bytes");
+        let decoded = decode_nonempty_audio(&encoded).expect("should decode");
+        assert_eq!(decoded, b"fake wav bytes");
+    }
+
+    #[test]
+    fn decode_rejects_invalid_base64() {
+        // `!` is not a valid base64 character.
+        let err = decode_nonempty_audio("not!base64!").unwrap_err();
+        assert!(err.contains("base64 decode"));
+    }
+
+    #[test]
+    fn decode_rejects_empty_audio() {
+        // Empty input decodes to zero bytes → rejected.
+        let err = decode_nonempty_audio("").unwrap_err();
+        assert!(err.contains("audio is empty"));
+    }
 
     #[test]
     fn plain_filename_accepted() {

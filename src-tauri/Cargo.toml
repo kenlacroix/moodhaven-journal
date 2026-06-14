@@ -74,6 +74,14 @@ tauri-plugin-shell = "2"
 [target.'cfg(target_os = "linux")'.dependencies]
 webkit2gtk = { version = "2.0", features = [] }
 
+# Hardware SHA for PBKDF2 (verify_password) on ARM. sha2's `asm` feature enables
+# the aarch64 ARMv8 SHA backend, which uses core::arch intrinsics (NOT the external
+# sha2-asm crate) gated behind a runtime cpufeatures check — fast on phones with
+# the crypto extensions, soft fallback otherwise. Scoped to aarch64 so x86_64
+# (esp. Windows MSVC) does NOT pull sha2-asm, whose x86 assembly fails to build there.
+[target.'cfg(target_arch = "aarch64")'.dependencies]
+sha2 = { version = "0.10", features = ["asm"] }
+
 [dev-dependencies]
 tempfile = "3"
 # Used only by updater signature tests to synthesize valid minisign fixtures

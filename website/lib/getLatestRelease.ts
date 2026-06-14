@@ -11,6 +11,8 @@ export interface LatestRelease {
   releaseUrl: string;
   publishedAt: string;
   assets: ReleaseAsset[];
+  /** download URL of the release's virustotal.txt report, when present. */
+  virusTotalUrl?: string;
 }
 
 const GITHUB_REPO = "kenlacroix/moodhaven-journal";
@@ -37,6 +39,7 @@ function parseGitHubApiResponse(data: unknown): LatestRelease | null {
   if (!releaseUrl.startsWith("https://github.com/")) return null;
 
   const assets: ReleaseAsset[] = [];
+  let virusTotalUrl: string | undefined;
   if (Array.isArray(d.assets)) {
     for (const asset of d.assets) {
       if (!asset || typeof asset !== "object") continue;
@@ -47,12 +50,16 @@ function parseGitHubApiResponse(data: unknown): LatestRelease | null {
       const size = typeof a.size === "number" ? a.size : 0;
 
       if (!name || !downloadUrl.startsWith("https://github.com/")) continue;
+      if (name === "virustotal.txt") {
+        virusTotalUrl = downloadUrl;
+        continue;
+      }
       assets.push({ name, downloadUrl, sizeLabel: formatBytes(size) });
     }
   }
 
   if (assets.length === 0) return null;
-  return { version, releaseUrl, publishedAt, assets };
+  return { version, releaseUrl, publishedAt, assets, virusTotalUrl };
 }
 
 function isValidRelease(data: unknown): data is LatestRelease {
@@ -65,6 +72,12 @@ function isValidRelease(data: unknown): data is LatestRelease {
   )
     return false;
   if (typeof d.publishedAt !== "string") return false;
+  if (
+    d.virusTotalUrl !== undefined &&
+    (typeof d.virusTotalUrl !== "string" ||
+      !d.virusTotalUrl.startsWith("https://github.com/"))
+  )
+    return false;
   if (!Array.isArray(d.assets)) return false;
   for (const asset of d.assets) {
     if (!asset || typeof asset !== "object") return false;

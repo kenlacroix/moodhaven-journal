@@ -68,7 +68,7 @@ interface SyncDetailsModalProps {
 }
 
 export function SyncDetailsModal({ onClose, onNavigateToSettings }: SyncDetailsModalProps) {
-  const { isBrowser } = usePlatform();
+  const { isBrowser, canPeerSync } = usePlatform();
   const storage = useSettingsStore((s) => s.settings.storage);
   const syncSettings = useSettingsStore((s) => s.settings.sync);
   const lastAutoSaved = useSettingsStore((s) => s.lastAutoSaved);
@@ -331,8 +331,8 @@ export function SyncDetailsModal({ onClose, onNavigateToSettings }: SyncDetailsM
             </p>
           )}
 
-          {/* LAN Sync section — desktop only */}
-          {!isBrowser && (
+          {/* LAN Sync section — desktop + Android only */}
+          {canPeerSync && (
           <>
           <div className="h-px bg-slate-100 dark:bg-slate-800" />
           <div className="space-y-2.5">

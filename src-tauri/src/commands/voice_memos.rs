@@ -314,6 +314,13 @@ pub async fn transcribe_voice_memo(
         .map_err(|e| format!("transcribe_voice_memo: whisper exec failed: {}", e))?;
 
     if !output.status.success() {
+        if let Some(msg) = crate::commands::speech_to_text::cpu_unsupported_message(
+            output.status.code(),
+            &output.stdout,
+            &output.stderr,
+        ) {
+            return Err(msg);
+        }
         let stderr = String::from_utf8_lossy(&output.stderr);
         return Err(format!("transcribe_voice_memo: whisper error: {}", stderr));
     }
@@ -402,10 +409,12 @@ pub fn patch_voice_memo_mood(
 /// - Returns the created journal entry as JSON.
 ///
 /// DB mutex is acquired and released before any further work — no cross-await holding.
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub fn publish_voice_memo_draft(
     db: State<Database>,
     lock: State<'_, AppLockState>,
+    rekey: State<'_, crate::RekeyInProgress>,
     id: String,
     encrypted_content: serde_json::Value,
     mood: i64,
@@ -415,6 +424,7 @@ pub fn publish_voice_memo_draft(
     if lock.is_locked() {
         return Err("Session is locked".to_string());
     }
+    super::require_no_rekey(&rekey)?;
     if !(1..=5).contains(&mood) {
         return Err("mood must be 1–5".to_string());
     }

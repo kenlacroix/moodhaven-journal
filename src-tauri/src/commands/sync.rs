@@ -105,9 +105,11 @@ pub fn get_entry_timestamps(
 pub fn upsert_entry_from_sync(
     db: State<Database>,
     lock: State<'_, AppLockState>,
+    rekey: State<'_, crate::RekeyInProgress>,
     entry_json: String,
 ) -> Result<(), String> {
     require_unlocked(&lock)?;
+    super::require_no_rekey(&rekey)?;
     // Deserialize as a generic Value so we can pick out fields without
     // reproducing the full JournalEntryRow struct in this module.
     let v: serde_json::Value =

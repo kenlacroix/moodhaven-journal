@@ -16,6 +16,10 @@ commands.allow = [
   "verify_password",
   "unlock_app",
   "lock_app",
+  # Change master password (requires unlock; re-encrypts all data)
+  "change_master_password",
+  "change_password_begin",
+  "change_password_cancel",
   # PIN unlock (pin_is_enabled + pin_unlock are pre-auth; pin_setup + pin_disable require unlock)
   "pin_is_enabled",
   "pin_setup",
@@ -29,6 +33,8 @@ commands.allow = [
   "create_journal_entry",
   "get_journal_entry",
   "get_all_journal_entries",
+  "get_entry_rekey_blobs",
+  "get_signal_rekey_blobs",
   "get_journal_entries_by_date",
   "get_entries_on_this_day",
   "update_journal_entry",
@@ -61,6 +67,8 @@ commands.allow = [
   "import_data",
   "get_data_stats",
   "write_text_file",
+  "write_binary_file",
+  "read_text_file",
   "exit_app",
   "get_log_path",
   "open_log_folder",
@@ -221,6 +229,8 @@ commands.allow = [
   "cloud_provider_status",
   "cloud_provider_disconnect",
   "cloud_provider_refresh_token",
+  "cloud_provider_available",
+  "cloud_set_token_key",
 ]
 
 [[permission]]

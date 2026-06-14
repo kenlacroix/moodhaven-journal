@@ -19,10 +19,12 @@ const VALID_SOURCES: &[&str] = &["wear_os", "oura", "manual", "stillhaven"];
 const MAX_PAYLOAD_BYTES: usize = 10_240; // 10 KB — mood_tap payloads are tiny; cap tightened for safety
 
 /// Create a new encrypted signal
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub fn create_signal(
     db: State<Database>,
     lock: State<'_, AppLockState>,
+    rekey: State<'_, crate::RekeyInProgress>,
     id: String,
     timestamp: String,
     signal_type: String,
@@ -31,6 +33,7 @@ pub fn create_signal(
     payload: String,
 ) -> Result<SignalRow, String> {
     require_unlocked(&lock)?;
+    super::require_no_rekey(&rekey)?;
     if id.is_empty() {
         return Err("Signal id must not be empty".to_string());
     }
@@ -60,6 +63,29 @@ pub fn list_signals(
 ) -> Result<Vec<SignalRow>, String> {
     require_unlocked(&lock)?;
     db::list_signals(&db, signal_type.as_deref(), limit)
+}
+
+/// One signal's id + raw encrypted payload, for the change-password re-key sweep.
+#[derive(Debug, serde::Serialize)]
+pub struct SignalRekeyBlob {
+    pub id: String,
+    pub payload: String,
+}
+
+/// Return EVERY signal's encrypted payload (no limit) so `change_master_password` can re-key all
+/// of them. `list_signals` defaults to 200 and caps at 1000, which would silently strand signals
+/// beyond the cap under the old password (undecryptable after the change). Encrypted blobs only —
+/// no plaintext leaves the backend. Requires an unlocked session.
+#[tauri::command]
+pub fn get_signal_rekey_blobs(
+    db: State<'_, Database>,
+    lock: State<'_, AppLockState>,
+) -> Result<Vec<SignalRekeyBlob>, String> {
+    require_unlocked(&lock)?;
+    Ok(db::get_all_signal_blobs(&db)?
+        .into_iter()
+        .map(|(id, payload)| SignalRekeyBlob { id, payload })
+        .collect())
 }
 
 /// Link an existing signal to a journal reflection entry (many-to-many)

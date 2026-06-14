@@ -84,6 +84,7 @@ pub fn lock_app(
     db: State<'_, Database>,
     session_bridge: State<'_, crate::commands::session_bridge::SessionBridge>,
     restore_arm: State<'_, crate::commands::peer_sync_engine::RestoreArmState>,
+    rekey: State<'_, crate::RekeyInProgress>,
 ) -> Result<(), String> {
     *lock.0.lock().map_err(|e| e.to_string())? = true;
     twofa.reset();
@@ -92,6 +93,21 @@ pub fn lock_app(
     restore_arm.clear();
     // Wipe any unconsumed writer-window password so plaintext never survives a lock.
     session_bridge.clear();
+
+    // If a `change_master_password` is mid-flight it OWNS the write-gate and the keyed
+    // connection. Disarming the gate here would re-open the write window, and releasing the
+    // key would swap the live connection out from under the running rekey (risking corruption
+    // or stranded rows). Leave both to the change's own completion — its `DisarmOnDrop` clears
+    // the gate and it installs the new-keyed connection. The session is still marked locked, so
+    // the UI locks; the brief key-in-memory window until the change finishes (seconds) is an
+    // acceptable trade against data loss.
+    if rekey.is_armed() {
+        log::warn!(
+            "[lock] change_master_password in flight — deferring write-gate disarm + key release"
+        );
+        return Ok(());
+    }
+    rekey.disarm();
     // Release the keyed SQLCipher connection so SQLCipher zeroes the raw 256-bit key it
     // held for the connection's lifetime — otherwise the key persists in the connection's
     // memory after lock and is recoverable from a process memory dump. No-op for an
@@ -191,6 +207,15 @@ pub fn set_log_level(db: tauri::State<'_, Database>, level: String) -> Result<()
 pub fn exit_app(db_key: State<'_, DbKeyState>) {
     db_key.clear();
     std::process::exit(0);
+}
+
+/// Relaunch the application (used after factory reset to return to first-run).
+/// Clears the in-memory DB key, then restarts the process so it reinitializes
+/// from the now-empty data directory and lands on the setup wizard.
+#[tauri::command]
+pub fn relaunch_app(app: AppHandle, db_key: State<'_, DbKeyState>) {
+    db_key.clear();
+    app.restart();
 }
 
 /// Factory reset - wipe all app data and return to first-run state.
@@ -834,20 +859,13 @@ pub async fn import_data(app: AppHandle, data: String) -> Result<i32, String> {
     Ok(imported_count)
 }
 
-/// Write text to a file and verify it was written correctly.
-/// Used instead of the FS plugin which has scope restrictions on user-selected paths.
-/// Rejects paths that traverse into sensitive system or shell-config locations.
-#[tauri::command]
-pub async fn write_text_file(
-    path: String,
-    contents: String,
-    lock: State<'_, AppLockState>,
-) -> Result<u64, String> {
-    require_unlocked(&lock)?;
-    let file_path = std::path::Path::new(&path);
+/// Canonicalize a user-selected path and reject any that traverse into sensitive
+/// system or shell-config locations. Shared by `write_text_file` and `read_text_file`
+/// so both honor the identical guard. For not-yet-existing files the parent is
+/// canonicalized and the filename re-joined.
+fn guard_user_file_path(path: &str) -> Result<std::path::PathBuf, String> {
+    let file_path = std::path::Path::new(path);
 
-    // Resolve to an absolute, canonical path (resolves `..` components).
-    // If the file doesn't exist yet, canonicalize the parent instead.
     let canonical = if file_path.exists() {
         file_path
             .canonicalize()
@@ -861,8 +879,8 @@ pub async fn write_text_file(
         return Err("Invalid path".to_string());
     };
 
-    // Block writes to sensitive system and shell-config paths using component-based
-    // matching so that ".ssh" in a directory name elsewhere does not false-match.
+    // Block sensitive system and shell-config paths using component-based matching so
+    // that ".ssh" in a directory name elsewhere does not false-match.
     // Lowercased for case-insensitive matching on Windows.
     let blocked_by_component = canonical.components().any(|c| {
         let name = c.as_os_str().to_str().unwrap_or("").to_lowercase();
@@ -904,11 +922,25 @@ pub async fn write_text_file(
 
     if blocked_by_component || blocked_by_prefix || blocked_by_filename {
         return Err(format!(
-            "Writing to '{}' is not permitted",
+            "Access to '{}' is not permitted",
             canonical.display()
         ));
     }
 
+    Ok(canonical)
+}
+
+/// Write text to a file and verify it was written correctly.
+/// Used instead of the FS plugin which has scope restrictions on user-selected paths.
+/// Rejects paths that traverse into sensitive system or shell-config locations.
+#[tauri::command]
+pub async fn write_text_file(
+    path: String,
+    contents: String,
+    lock: State<'_, AppLockState>,
+) -> Result<u64, String> {
+    require_unlocked(&lock)?;
+    let canonical = guard_user_file_path(&path)?;
     let file_path = canonical.as_path();
 
     // Ensure parent directory exists
@@ -936,6 +968,59 @@ pub async fn write_text_file(
     }
 
     Ok(written_size)
+}
+
+/// Write binary bytes (base64-encoded by the frontend) to a user-selected path.
+/// Mirrors `write_text_file`'s path guard; used by the recovery-key PDF export so a
+/// binary PDF can be written to a path the user picks via the save dialog (the FS
+/// plugin's scope restrictions block arbitrary user-selected paths).
+#[tauri::command]
+pub async fn write_binary_file(
+    path: String,
+    contents_base64: String,
+    lock: State<'_, AppLockState>,
+) -> Result<u64, String> {
+    require_unlocked(&lock)?;
+    let canonical = guard_user_file_path(&path)?;
+    let file_path = canonical.as_path();
+
+    if let Some(parent) = file_path.parent() {
+        if !parent.exists() {
+            return Err(format!("Directory does not exist: {}", parent.display()));
+        }
+    }
+
+    let bytes = general_purpose::STANDARD
+        .decode(contents_base64.as_bytes())
+        .map_err(|e| format!("Invalid base64 payload: {}", e))?;
+
+    fs::write(file_path, &bytes).map_err(|e| format!("Failed to write file: {}", e))?;
+
+    let metadata =
+        fs::metadata(file_path).map_err(|e| format!("File verification failed: {}", e))?;
+    let written_size = metadata.len();
+    let expected_size = bytes.len() as u64;
+    if written_size != expected_size {
+        return Err(format!(
+            "File verification failed: expected {} bytes, got {} bytes",
+            expected_size, written_size
+        ));
+    }
+
+    Ok(written_size)
+}
+
+/// Read a UTF-8 text file from a user-selected path. Honors the same path guard as
+/// `write_text_file`. Used by BYO-Cloud folder sync to read back the encrypted backup
+/// blob from a user-picked sync folder (one the OS keeps mirrored to iCloud/Drive/etc.).
+#[tauri::command]
+pub async fn read_text_file(path: String, lock: State<'_, AppLockState>) -> Result<String, String> {
+    require_unlocked(&lock)?;
+    let canonical = guard_user_file_path(&path)?;
+    if !canonical.exists() {
+        return Err(format!("File does not exist: {}", canonical.display()));
+    }
+    fs::read_to_string(&canonical).map_err(|e| format!("Failed to read file: {}", e))
 }
 
 /// Get database statistics for export info

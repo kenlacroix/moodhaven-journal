@@ -178,6 +178,151 @@ fn decrypt_mbmf(data: &[u8], password: &str) -> Result<Vec<u8>, String> {
     }
 }
 
+/// Re-encrypt one MBMF blob from `old_password` to `new_password` — the pure transform
+/// behind `change_master_password`'s media step (active-plans/change-password.md §4.5).
+/// Decrypts under the old key and re-encrypts under a fresh per-file salt/key derived
+/// from the new password. Pure and side-effect-free so it can be unit-tested in isolation;
+/// the orchestrator wraps it with stage-then-rename + per-file progress for crash-safety.
+#[allow(dead_code)] // wired up by change_master_password in the implementation pass (§4.5)
+pub(crate) fn reencrypt_mbmf(
+    data: &[u8],
+    old_password: &str,
+    new_password: &str,
+) -> Result<Vec<u8>, String> {
+    let plaintext = decrypt_mbmf(data, old_password)?;
+    encrypt_to_mbmf(&plaintext, new_password)
+}
+
+/// Suffix appended to a media file's on-disk path while its re-encrypted copy is staged
+/// but not yet promoted over the original. A `<file>.rekeytmp` sibling is the on-disk
+/// record of "this file's NEW-password copy exists but the rename hasn't happened yet" —
+/// the discriminator both the keyless forward-finish and the rollback scan use.
+pub(crate) const STAGING_SUFFIX: &str = ".rekeytmp";
+
+/// Visit every staging file (`*.rekeytmp`) under `<app_data_dir>/media/`. Media live at
+/// `media/<entry_id>/<file>.enc`, so staging files are one directory deep; we walk the
+/// two-level tree without recursion. Taking `app_data_dir` (not an `AppHandle`) lets the
+/// db-layer crash recovery — which only has `self.path` — drive the same keyless finish.
+fn for_each_staging_file(app_data_dir: &Path, mut f: impl FnMut(&Path)) -> Result<(), String> {
+    let root = app_data_dir.join("media");
+    let Ok(entries) = std::fs::read_dir(&root) else {
+        return Ok(()); // no media dir yet → nothing staged
+    };
+    for entry in entries.flatten() {
+        let dir = entry.path();
+        if !dir.is_dir() {
+            continue;
+        }
+        if let Ok(files) = std::fs::read_dir(&dir) {
+            for file in files.flatten() {
+                let p = file.path();
+                if p.to_string_lossy().ends_with(STAGING_SUFFIX) {
+                    f(&p);
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Stage re-encryption of every media file from `old_password` to `new_password` — the
+/// KEYED, reversible first half of `change_master_password`'s media step (§4.5). For each
+/// `entry_media` row: read the MBMF bytes → [`reencrypt_mbmf`] → write to a `<file>.rekeytmp`
+/// staging sibling → fsync. Originals are left completely untouched, so a crash anywhere in
+/// here leaves only orphan staging files (cleaned by [`cleanup_media_staging`]) and the live
+/// data wholly on the old password. The actual swap is the keyless [`finish_media_renames`],
+/// run only AFTER the atomic DB flip. Returns the number of files staged. `progress(done,total)`
+/// is invoked after each file for the FE progress UI.
+pub(crate) fn stage_reencrypt_media(
+    app_data_dir: &Path,
+    db: &Database,
+    old_password: &str,
+    new_password: &str,
+    mut progress: impl FnMut(usize, usize),
+) -> Result<usize, String> {
+    // Snapshot the file list under a brief lock, then release it before touching the FS.
+    let rel_paths: Vec<String> = {
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        let mut stmt = conn
+            .prepare("SELECT enc_path FROM entry_media ORDER BY id ASC")
+            .map_err(|e| format!("prepare media list: {e}"))?;
+        let rows: Vec<String> = stmt
+            .query_map([], |row| row.get::<_, String>(0))
+            .map_err(|e| format!("query media list: {e}"))?
+            .filter_map(|r| r.ok())
+            .collect();
+        rows
+    };
+
+    let total = rel_paths.len();
+    for (i, rel) in rel_paths.iter().enumerate() {
+        let orig = abs_enc_path_in(app_data_dir, rel)?;
+        // A missing file is not fatal: the DB row may reference a file deleted out-of-band.
+        // Skip it rather than abort the whole change.
+        if !orig.exists() {
+            progress(i + 1, total);
+            continue;
+        }
+        let data = std::fs::read(&orig).map_err(|e| format!("read media {rel}: {e}"))?;
+        let reencrypted = reencrypt_mbmf(&data, old_password, new_password)?;
+        let staging = staging_path(&orig);
+        {
+            let mut f = std::fs::File::create(&staging)
+                .map_err(|e| format!("create staging {}: {e}", staging.display()))?;
+            use std::io::Write;
+            f.write_all(&reencrypted)
+                .map_err(|e| format!("write staging {}: {e}", staging.display()))?;
+            f.sync_all()
+                .map_err(|e| format!("fsync staging {}: {e}", staging.display()))?;
+        }
+        progress(i + 1, total);
+    }
+    Ok(total)
+}
+
+/// The `<file>.rekeytmp` staging sibling for an original media path.
+fn staging_path(orig: &Path) -> std::path::PathBuf {
+    let mut s = orig.as_os_str().to_os_string();
+    s.push(STAGING_SUFFIX);
+    std::path::PathBuf::from(s)
+}
+
+/// Promote every staged `*.rekeytmp` over its original — the KEYLESS, idempotent second half
+/// of the media step (§4.5), run only AFTER the atomic DB flip. Renames need no key (the
+/// staged bytes are already re-encrypted under the new password), so this is exactly the work
+/// startup recovery can finish unattended after a post-commit crash. Returns the count renamed.
+pub(crate) fn finish_media_renames(app_data_dir: &Path) -> Result<usize, String> {
+    let mut to_rename: Vec<std::path::PathBuf> = Vec::new();
+    for_each_staging_file(app_data_dir, |p| to_rename.push(p.to_path_buf()))?;
+    let mut n = 0usize;
+    for staging in to_rename {
+        let orig = staging
+            .to_string_lossy()
+            .strip_suffix(STAGING_SUFFIX)
+            .map(std::path::PathBuf::from)
+            .ok_or("staging path lost its suffix")?;
+        std::fs::rename(&staging, &orig)
+            .map_err(|e| format!("promote media {}: {e}", orig.display()))?;
+        n += 1;
+    }
+    Ok(n)
+}
+
+/// Delete every staged `*.rekeytmp` — the rollback when a change is abandoned BEFORE the DB
+/// flip (originals are still the live, old-password data). Keyless and idempotent. Returns the
+/// count removed.
+pub(crate) fn cleanup_media_staging(app_data_dir: &Path) -> Result<usize, String> {
+    let mut to_remove: Vec<std::path::PathBuf> = Vec::new();
+    for_each_staging_file(app_data_dir, |p| to_remove.push(p.to_path_buf()))?;
+    let mut n = 0usize;
+    for staging in to_remove {
+        if std::fs::remove_file(&staging).is_ok() {
+            n += 1;
+        }
+    }
+    Ok(n)
+}
+
 // ── Filesystem helpers ─────────────────────────────────────────────────────────
 
 /// Returns Ok(()) if entry_id is safe to use as a path component, Err otherwise.
@@ -272,6 +417,78 @@ fn abs_enc_path(app: &AppHandle, rel_path: &str) -> Result<std::path::PathBuf, S
     Ok(canonical)
 }
 
+/// Resolve a stored `enc_path` (e.g. `media/<entry>/<file>.enc`) against an explicit
+/// `app_data_dir`, rejecting `..` traversal — the `AppHandle`-free variant of
+/// [`abs_enc_path`] used by the change-password media staging and the db-layer crash
+/// recovery (which only have a directory path, not an `AppHandle`).
+fn abs_enc_path_in(app_data_dir: &Path, rel_path: &str) -> Result<std::path::PathBuf, String> {
+    use std::path::Component;
+    let joined = app_data_dir.join(rel_path);
+    if joined.components().any(|c| c == Component::ParentDir) {
+        return Err("Refusing to access media path with '..' components".to_string());
+    }
+    Ok(joined)
+}
+
+// ── Image compression ───────────────────────────────────────────────────────────
+
+/// Longest-edge cap (px) applied to stored images. A journal is text-first; full-res
+/// phone photos (4000px+) bloat the encrypted store with no viewing benefit.
+const MAX_IMAGE_EDGE: u32 = 2048;
+/// JPEG quality for re-encoded photos — visually lossless at typical viewing sizes.
+const JPEG_QUALITY: u8 = 82;
+
+/// Recompress an image before encryption: downscale to [`MAX_IMAGE_EDGE`] on the longest
+/// side and re-encode in the *same* format. When recompression happens, encoding from decoded
+/// raw pixels also strips EXIF/GPS metadata (a best-effort privacy win — the pass-through
+/// cases below keep the original bytes, metadata included). Format is preserved so the
+/// stored filename, extension, and MIME type stay correct — JPEG→JPEG (quality-capped),
+/// PNG→PNG (lossless).
+///
+/// Returns `None` to mean "store the original unchanged": the MIME type isn't a format we
+/// recompress (GIF may be animated, WebP is already efficient, non-images), decoding fails,
+/// or the recompressed bytes wouldn't be smaller — we never inflate the stored blob.
+fn compress_image(data: &[u8], mime_type: &str) -> Option<Vec<u8>> {
+    let fmt = match mime_type {
+        "image/jpeg" => image::ImageFormat::Jpeg,
+        "image/png" => image::ImageFormat::Png,
+        _ => return None,
+    };
+
+    let img = image::load_from_memory_with_format(data, fmt).ok()?;
+    let scaled = if img.width().max(img.height()) > MAX_IMAGE_EDGE {
+        // thumbnail() preserves aspect ratio and fits within the box.
+        img.thumbnail(MAX_IMAGE_EDGE, MAX_IMAGE_EDGE)
+    } else {
+        img
+    };
+
+    let mut out: Vec<u8> = Vec::new();
+    match fmt {
+        image::ImageFormat::Jpeg => {
+            use image::codecs::jpeg::JpegEncoder;
+            use image::ExtendedColorType;
+            let rgb = scaled.to_rgb8();
+            JpegEncoder::new_with_quality(&mut out, JPEG_QUALITY)
+                .encode(
+                    rgb.as_raw(),
+                    rgb.width(),
+                    rgb.height(),
+                    ExtendedColorType::Rgb8,
+                )
+                .ok()?;
+        }
+        image::ImageFormat::Png => {
+            scaled
+                .write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png)
+                .ok()?;
+        }
+        _ => return None,
+    }
+
+    (out.len() < data.len()).then_some(out)
+}
+
 fn mime_from_filename(filename: &str) -> &'static str {
     let ext = Path::new(filename)
         .extension()
@@ -307,11 +524,13 @@ pub fn save_media_attachment(
     app: AppHandle,
     db: State<'_, Database>,
     lock: State<'_, AppLockState>,
+    rekey: State<'_, crate::RekeyInProgress>,
     entry_id: String,
     file_path: String,
     password: String,
 ) -> Result<MediaAttachment, String> {
     require_unlocked(&lock)?;
+    super::require_no_rekey(&rekey)?;
     let src = Path::new(&file_path);
     let filename = src
         .file_name()
@@ -337,6 +556,14 @@ pub fn save_media_attachment(
 
     let plaintext =
         std::fs::read(src).map_err(|e| format!("Failed to read '{}': {}", filename, e))?;
+
+    // Recompress images (downscale + re-encode in the same format) before encryption.
+    // Shrinks the encrypted store and strips EXIF/GPS metadata; falls back to the original
+    // bytes for non-images, undecodable input, or when compression wouldn't save space.
+    let plaintext = match compress_image(&plaintext, &mime_type) {
+        Some(compressed) => compressed,
+        None => plaintext,
+    };
     let size_bytes = plaintext.len() as i64;
 
     let encrypted = encrypt_to_mbmf(&plaintext, &password)?;
@@ -411,6 +638,12 @@ pub fn list_entry_media(
 
 /// Decrypt a media file to a temp location and open it with the system viewer.
 /// The temp file is automatically deleted after 60 seconds.
+///
+/// Returns the temp file path **on Android only** (empty string on desktop). On
+/// desktop the OS viewer is launched here; Android has no `Command` launcher, so
+/// the frontend opens the returned path via the `opener` plugin (ACTION_VIEW +
+/// FileProvider). The temp file lives under the app cache dir, which the
+/// FileProvider already exposes via `cache-path` in `file_paths.xml`.
 #[tauri::command]
 pub fn open_media_attachment(
     app: AppHandle,
@@ -418,7 +651,7 @@ pub fn open_media_attachment(
     lock: State<'_, AppLockState>,
     media_id: String,
     password: String,
-) -> Result<(), String> {
+) -> Result<String, String> {
     require_unlocked(&lock)?;
     let (enc_path, filename) = {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
@@ -440,33 +673,43 @@ pub fn open_media_attachment(
     std::fs::write(&temp_path, &plaintext).map_err(|e| format!("Write temp file: {}", e))?;
 
     // Open with platform default viewer
-    let _temp_str = temp_path.to_str().ok_or("Non-UTF8 temp path")?.to_string();
+    let temp_str = temp_path.to_str().ok_or("Non-UTF8 temp path")?.to_string();
 
     #[cfg(target_os = "macos")]
     std::process::Command::new("open")
-        .arg(&_temp_str)
+        .arg(&temp_str)
         .spawn()
         .map_err(|e| format!("open: {}", e))?;
 
     #[cfg(target_os = "windows")]
     std::process::Command::new("cmd")
-        .args(["/c", "start", "", &_temp_str])
+        .args(["/c", "start", "", &temp_str])
         .spawn()
         .map_err(|e| format!("start: {}", e))?;
 
     #[cfg(target_os = "linux")]
     std::process::Command::new("xdg-open")
-        .arg(&_temp_str)
+        .arg(&temp_str)
         .spawn()
         .map_err(|e| format!("xdg-open: {}", e))?;
 
-    // Auto-cleanup after 10 s
+    // Desktop launchers already opened the file; Android hands the path back to
+    // the frontend, which fires an ACTION_VIEW intent via the opener plugin.
+    #[cfg(target_os = "android")]
+    let result_path = temp_str;
+    #[cfg(not(target_os = "android"))]
+    let result_path = {
+        let _ = temp_str;
+        String::new()
+    };
+
+    // Auto-cleanup — long enough for a viewer (or the Android app chooser) to read.
     std::thread::spawn(move || {
-        std::thread::sleep(std::time::Duration::from_secs(10));
+        std::thread::sleep(std::time::Duration::from_secs(60));
         let _ = std::fs::remove_file(&temp_path);
     });
 
-    Ok(())
+    Ok(result_path)
 }
 
 /// Decrypt an image attachment and return a base64-encoded JPEG thumbnail
@@ -638,6 +881,7 @@ pub fn write_media_from_sync(
     app: AppHandle,
     db: State<'_, Database>,
     lock: State<'_, AppLockState>,
+    rekey: State<'_, crate::RekeyInProgress>,
     entry_id: String,
     media_id: String,
     filename: String,
@@ -647,6 +891,7 @@ pub fn write_media_from_sync(
     data_base64: String,
 ) -> Result<(), String> {
     require_unlocked(&lock)?;
+    super::require_no_rekey(&rekey)?;
     // `media_id` comes from an untrusted peer's media manifest and is interpolated
     // into the on-disk filename — validate it as a safe path component (same rules
     // as entry_id) to block traversal writes outside the media directory.
@@ -763,5 +1008,68 @@ mod tests {
     #[test]
     fn path_traversal_rejected() {
         assert!(validate_entry_id("evil/../../../etc/passwd").is_err());
+    }
+
+    // ── compress_image ──────────────────────────────────────────────────────────
+
+    use super::{compress_image, MAX_IMAGE_EDGE};
+
+    /// Build a deterministic gradient image and encode it in `fmt`. A gradient (vs a flat
+    /// fill) gives JPEG/PNG real content to compress, so size comparisons are meaningful.
+    fn gradient_encoded(w: u32, h: u32, fmt: image::ImageFormat) -> Vec<u8> {
+        let img = image::RgbImage::from_fn(w, h, |x, y| {
+            image::Rgb([(x % 256) as u8, (y % 256) as u8, ((x + y) % 256) as u8])
+        });
+        let dynimg = image::DynamicImage::ImageRgb8(img);
+        let mut out = Vec::new();
+        dynimg
+            .write_to(&mut std::io::Cursor::new(&mut out), fmt)
+            .unwrap();
+        out
+    }
+
+    #[test]
+    fn compress_returns_none_for_non_image_mime() {
+        assert!(compress_image(b"%PDF-1.4 not an image", "application/pdf").is_none());
+    }
+
+    #[test]
+    fn compress_returns_none_for_animated_or_efficient_formats() {
+        // GIF (possibly animated) and WebP are intentionally passed through untouched.
+        let data = gradient_encoded(64, 64, image::ImageFormat::Png);
+        assert!(compress_image(&data, "image/gif").is_none());
+        assert!(compress_image(&data, "image/webp").is_none());
+    }
+
+    #[test]
+    fn compress_returns_none_for_undecodable_bytes() {
+        assert!(compress_image(b"\xff\xd8\xff not really a jpeg", "image/jpeg").is_none());
+    }
+
+    #[test]
+    fn compress_downscales_large_jpeg_to_cap() {
+        let big = gradient_encoded(4000, 3000, image::ImageFormat::Jpeg);
+        let out = compress_image(&big, "image/jpeg").expect("large jpeg should compress");
+        assert!(out.len() < big.len(), "compressed must be smaller");
+        let decoded = image::load_from_memory(&out).unwrap();
+        assert!(decoded.width().max(decoded.height()) <= MAX_IMAGE_EDGE);
+    }
+
+    #[test]
+    fn compress_downscales_large_png_to_cap() {
+        let big = gradient_encoded(4000, 2000, image::ImageFormat::Png);
+        let out = compress_image(&big, "image/png").expect("large png should compress");
+        assert!(out.len() < big.len(), "compressed must be smaller");
+        let decoded = image::load_from_memory(&out).unwrap();
+        assert!(decoded.width().max(decoded.height()) <= MAX_IMAGE_EDGE);
+    }
+
+    #[test]
+    fn compress_never_inflates() {
+        // A small already-compressed image must not be replaced with larger bytes.
+        let small = gradient_encoded(48, 48, image::ImageFormat::Jpeg);
+        if let Some(out) = compress_image(&small, "image/jpeg") {
+            assert!(out.len() < small.len());
+        }
     }
 }

@@ -264,7 +264,7 @@ export async function dbGetStreakStats(): Promise<{
   totalDays: number;
 }> {
   const entries = await dbGetAllEntries();
-  const days = [...new Set(entries.map((e) => e.created_at.slice(0, 10)))].sort();
+  const days = [...new Set(entries.map((e) => e.created_at.slice(0, 10)))].sort((a, b) => a.localeCompare(b));
   if (days.length === 0) return { currentStreak: 0, longestStreak: 0, totalDays: 0 };
 
   let longest = 1;

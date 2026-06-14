@@ -116,7 +116,7 @@ export async function downloadBackup(
           return { success: false, error: 'No backups found on server' };
         }
         // Sort by name (date-based names sort chronologically) — take latest
-        targetFile = listResult.files.sort().reverse()[0];
+        targetFile = listResult.files.sort((a, b) => a.localeCompare(b)).reverse()[0];
       }
     }
 
@@ -152,5 +152,5 @@ export async function listBackups(webdavConfig: WebDAVConfig): Promise<string[]>
   if (!result.success || !result.files) {
     return [];
   }
-  return result.files.sort().reverse();
+  return result.files.sort((a, b) => a.localeCompare(b)).reverse();
 }

@@ -74,4 +74,45 @@ describe("getLatestRelease", () => {
     mockFetch({ ...VALID_PAYLOAD, assets: [] });
     expect(await getLatestRelease()).toBeNull();
   });
+
+  it("passes through virusTotalUrl from the fallback JSON", async () => {
+    const url =
+      "https://github.com/kenlacroix/moodhaven-journal/releases/download/v0.9.0/virustotal.txt";
+    mockFetch({ ...VALID_PAYLOAD, virusTotalUrl: url });
+    const result = await getLatestRelease();
+    expect(result?.virusTotalUrl).toBe(url);
+  });
+
+  it("rejects a non-github virusTotalUrl in the fallback JSON", async () => {
+    mockFetch({ ...VALID_PAYLOAD, virusTotalUrl: "https://evil.com/report.txt" });
+    expect(await getLatestRelease()).toBeNull();
+  });
+
+  it("leaves virusTotalUrl undefined when the release has no report", async () => {
+    mockFetch(VALID_PAYLOAD);
+    const result = await getLatestRelease();
+    expect(result?.virusTotalUrl).toBeUndefined();
+  });
+
+  it("extracts virusTotalUrl from the GitHub API asset list and drops it from assets", async () => {
+    const vtUrl =
+      "https://github.com/kenlacroix/moodhaven-journal/releases/download/v0.9.0/virustotal.txt";
+    mockFetch({
+      tag_name: "v0.9.0",
+      html_url: "https://github.com/kenlacroix/moodhaven-journal/releases/tag/v0.9.0",
+      published_at: "2026-04-01T00:00:00Z",
+      assets: [
+        {
+          name: "MoodHaven_0.9.0_amd64.AppImage",
+          browser_download_url:
+            "https://github.com/kenlacroix/moodhaven-journal/releases/download/v0.9.0/MoodHaven_0.9.0_amd64.AppImage",
+          size: 96_780_000,
+        },
+        { name: "virustotal.txt", browser_download_url: vtUrl, size: 1024 },
+      ],
+    });
+    const result = await getLatestRelease();
+    expect(result?.virusTotalUrl).toBe(vtUrl);
+    expect(result?.assets.map((a) => a.name)).not.toContain("virustotal.txt");
+  });
 });

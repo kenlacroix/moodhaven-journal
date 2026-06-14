@@ -66,6 +66,23 @@ pub fn create_signal(
     Ok(row)
 }
 
+/// Every signal's `id` + encrypted `payload`, with NO limit — for the change-password re-key
+/// sweep. Unlike `list_signals` (defaults to 200, caps at 1000), this returns the full set so
+/// `change_master_password` re-encrypts every signal; any omission would leave that signal
+/// undecryptable under the new password.
+pub fn get_all_signal_blobs(db: &Database) -> Result<Vec<(String, String)>, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let mut stmt = conn
+        .prepare("SELECT id, payload FROM signals ORDER BY id ASC")
+        .map_err(|e| e.to_string())?;
+    let rows: Vec<(String, String)> = stmt
+        .query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))
+        .map_err(|e| e.to_string())?
+        .filter_map(|r| r.ok())
+        .collect();
+    Ok(rows)
+}
+
 /// List signals, optionally filtered by type
 pub fn list_signals(
     db: &Database,

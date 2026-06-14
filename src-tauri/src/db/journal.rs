@@ -119,6 +119,29 @@ pub fn map_entry_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<JournalEntryRo
     })
 }
 
+/// Return `(id, EncryptedContent)` for EVERY entry from the raw `encrypted_content` column —
+/// sealed time-capsule entries included (their content is only withheld at the read APIs, not
+/// in the column). Used by the change-password re-key sweep so no blob is left on the old key.
+pub fn get_all_entry_blobs(db: &Database) -> Result<Vec<(String, EncryptedContent)>, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let mut stmt = conn
+        .prepare("SELECT id, encrypted_content FROM journal_entries")
+        .map_err(|e| format!("prepare entry blobs: {e}"))?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })
+        .map_err(|e| format!("query entry blobs: {e}"))?;
+    let mut out = Vec::new();
+    for r in rows {
+        let (id, json) = r.map_err(|e| format!("read entry blob: {e}"))?;
+        let content = serde_json::from_str::<EncryptedContent>(&json)
+            .map_err(|e| format!("parse entry blob {id}: {e}"))?;
+        out.push((id, content));
+    }
+    Ok(out)
+}
+
 /// Create a new journal entry
 #[allow(clippy::too_many_arguments)]
 pub fn create_entry(

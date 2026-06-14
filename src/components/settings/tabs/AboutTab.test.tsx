@@ -43,37 +43,37 @@ beforeEach(() => {
 
 describe('AboutTab — iOS platform gates', () => {
   it('renders UpdatePanel on desktop (not iOS)', () => {
-    mockUsePlatform.mockReturnValue({ isIOS: false, isAndroid: false, isMobile: false, isBrowser: false, isDesktop: true });
+    mockUsePlatform.mockReturnValue({ isIOS: false, isAndroid: false, isMobile: false, isBrowser: false, isDesktop: true, canPeerSync: true, canSTT: true, canHardwareKey: true });
     render(<AboutTab {...baseProps} />);
     expect(screen.getByText('UpdatePanel')).toBeInTheDocument();
   });
 
   it('does not render UpdatePanel on iOS', () => {
-    mockUsePlatform.mockReturnValue({ isIOS: true, isAndroid: false, isMobile: true, isBrowser: false, isDesktop: false });
+    mockUsePlatform.mockReturnValue({ isIOS: true, isAndroid: false, isMobile: true, isBrowser: false, isDesktop: false, canPeerSync: false, canSTT: false, canHardwareKey: false });
     render(<AboutTab {...baseProps} />);
     expect(screen.queryByText('UpdatePanel')).not.toBeInTheDocument();
   });
 
   it('renders the Log Level select on desktop', () => {
-    mockUsePlatform.mockReturnValue({ isIOS: false, isAndroid: false, isMobile: false, isBrowser: false, isDesktop: true });
+    mockUsePlatform.mockReturnValue({ isIOS: false, isAndroid: false, isMobile: false, isBrowser: false, isDesktop: true, canPeerSync: true, canSTT: true, canHardwareKey: true });
     render(<AboutTab {...baseProps} />);
     expect(screen.getByLabelText('Log level')).toBeInTheDocument();
   });
 
   it('does not render the Log Level select on iOS', () => {
-    mockUsePlatform.mockReturnValue({ isIOS: true, isAndroid: false, isMobile: true, isBrowser: false, isDesktop: false });
+    mockUsePlatform.mockReturnValue({ isIOS: true, isAndroid: false, isMobile: true, isBrowser: false, isDesktop: false, canPeerSync: false, canSTT: false, canHardwareKey: false });
     render(<AboutTab {...baseProps} />);
     expect(screen.queryByLabelText('Log level')).not.toBeInTheDocument();
   });
 
   it('does not render the Log Level select in browser mode', () => {
-    mockUsePlatform.mockReturnValue({ isIOS: false, isAndroid: false, isMobile: false, isBrowser: true, isDesktop: false });
+    mockUsePlatform.mockReturnValue({ isIOS: false, isAndroid: false, isMobile: false, isBrowser: true, isDesktop: false, canPeerSync: false, canSTT: false, canHardwareKey: false });
     render(<AboutTab {...baseProps} />);
     expect(screen.queryByLabelText('Log level')).not.toBeInTheDocument();
   });
 
   it('renders the app version on all platforms', () => {
-    mockUsePlatform.mockReturnValue({ isIOS: true, isAndroid: false, isMobile: true, isBrowser: false, isDesktop: false });
+    mockUsePlatform.mockReturnValue({ isIOS: true, isAndroid: false, isMobile: true, isBrowser: false, isDesktop: false, canPeerSync: false, canSTT: false, canHardwareKey: false });
     render(<AboutTab {...baseProps} />);
     expect(screen.getByText('v1.6.0')).toBeInTheDocument();
   });

@@ -232,6 +232,26 @@ Platform suffixes follow Tauri's sidecar naming convention:
 
 In CI, this step runs during the build matrix before `npm run tauri build`.
 
+### Processor compatibility (baseline ISA)
+
+The shipped `whisper-cli` sidecar is built with a **baseline instruction set** on every
+x86-64 target: `-DGGML_AVX=OFF -DGGML_AVX2=OFF -DGGML_FMA=OFF -DGGML_F16C=OFF -DGGML_BMI2=OFF`
+(SSE4.2 is kept — universal since ~2010). Without this, ggml defaults to AVX2 on x86-64 and
+the sidecar dies with an illegal-instruction fault (`STATUS_ILLEGAL_INSTRUCTION` 0xC000001D on
+Windows, `SIGILL` on Unix) on older CPUs, low-end Pentium/Celeron parts, and many virtualised
+CPUs — with no output, so the failure was previously silent. The trade-off is a modest speed
+reduction on modern AVX2 machines, which is acceptable for the model sizes used here.
+
+As a safety net, `transcribe_voice_memo` / `stt_transcribe` detect that specific crash
+(`cpu_unsupported_message` in `speech_to_text.rs`) and return *"Speech-to-text isn't supported
+on this device's processor…"* instead of a generic error, so any future SIMD mismatch degrades
+gracefully rather than failing silently.
+
+> A future enhancement could ship multiple CPU variants and use ggml's runtime dispatch
+> (`GGML_CPU_ALL_VARIANTS` + `GGML_BACKEND_DL`) to recover AVX2 speed while keeping the baseline
+> fallback — at the cost of bundling the variant libraries alongside the single sidecar binary.
+> Planned in [`active-plans/stt-multi-isa-runtime-dispatch.md`](../active-plans/stt-multi-isa-runtime-dispatch.md).
+
 ---
 
 ## Privacy Guarantees

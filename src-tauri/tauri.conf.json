@@ -60,6 +60,9 @@
       "minimumSystemVersion": "16.0",
       "developmentTeam": "REPLACE_WITH_APPLE_TEAM_ID"
     },
+    "android": {
+      "minSdkVersion": 24
+    },
     "linux": {
       "appimage": {
         "bundleMediaFramework": true

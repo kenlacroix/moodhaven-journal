@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { SettingSection } from '../SettingSection';
-import { factoryReset, exitApp } from '../../../lib/services/dataManagementService';
+import { factoryReset, relaunchApp } from '../../../lib/services/dataManagementService';
 import { logger } from '../../../lib/services/logger';
 
 interface PrivacyDataManagementProps {
@@ -34,10 +34,10 @@ export function PrivacyDataManagement({
       setIsResetting(false);
       return;
     }
-    // Wipe succeeded — exit to restart into first-run. A failure here is not a
-    // reset failure (data is already gone), so don't surface it as one.
-    await exitApp().catch((err) =>
-      logger.warn('exit_app after reset failed', { error: String(err) }),
+    // Wipe succeeded — relaunch into first-run. A failure here is not a reset
+    // failure (data is already gone), so don't surface it as one.
+    await relaunchApp().catch((err) =>
+      logger.warn('relaunch_app after reset failed', { error: String(err) }),
     );
   }, [resetConfirmText]);
 

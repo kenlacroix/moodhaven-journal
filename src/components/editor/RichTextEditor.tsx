@@ -77,7 +77,7 @@ export function RichTextEditor({
   const [linkDialogInitialUrl, setLinkDialogInitialUrl] = useState('');
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
 
-  const { isBrowser } = usePlatform();
+  const { canSTT } = usePlatform();
 
   // Speech-to-text
   const sttSettings = useSettingsStore((s) => s.settings.speechToText);
@@ -112,6 +112,10 @@ export function RichTextEditor({
           keepMarks: true,
           keepAttributes: false,
         },
+        // StarterKit v3 bundles Link + Underline; disable so the explicitly
+        // configured extensions below win (avoids duplicate-name warning).
+        link: false,
+        underline: false,
       }),
       Underline,
       TaskList,
@@ -336,7 +340,7 @@ export function RichTextEditor({
   }, [sttToast]);
 
   // Check if STT is ready (enabled and model downloaded)
-  const sttReady = !isBrowser && sttSettings.enabled && sttSettings.modelDownloaded;
+  const sttReady = canSTT && sttSettings.enabled && sttSettings.modelDownloaded;
 
   // Handle mic button click for speech-to-text
   const handleMicClick = useCallback(async () => {

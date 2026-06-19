@@ -796,8 +796,8 @@ mod tests {
 
     #[test]
     fn encrypt_decrypt_round_trip() {
-        let secret = "JBSWY3DPEHPK3PXP";
-        let password = "correct-horse-battery-staple";
+        let secret = "JBSWY3DPEHPK3PXP"; // nosemgrep: rust-hardcoded-secret (test fixture — TOTP encrypt/decrypt round-trip)
+        let password = "correct-horse-battery-staple"; // nosemgrep: rust-hardcoded-secret (test fixture — TOTP round-trip)
         let blob = encrypt_totp_secret(secret, password).expect("encrypt failed");
         let recovered = decrypt_totp_secret(&blob, password).expect("decrypt failed");
         assert_eq!(recovered, secret);
@@ -805,7 +805,7 @@ mod tests {
 
     #[test]
     fn wrong_password_fails_decryption() {
-        let secret = "JBSWY3DPEHPK3PXP";
+        let secret = "JBSWY3DPEHPK3PXP"; // nosemgrep: rust-hardcoded-secret (test fixture — wrong-password decryption)
         let blob = encrypt_totp_secret(secret, "password-a").expect("encrypt failed");
         let result = decrypt_totp_secret(&blob, "password-b");
         assert!(result.is_err());
@@ -813,7 +813,7 @@ mod tests {
 
     #[test]
     fn legacy_plaintext_returned_as_is() {
-        let legacy = "JBSWY3DPEHPK3PXP";
+        let legacy = "JBSWY3DPEHPK3PXP"; // nosemgrep: rust-hardcoded-secret (test fixture — legacy plaintext passthrough)
         let result = decrypt_totp_secret(legacy, "anypassword").expect("should succeed");
         assert_eq!(result, legacy);
     }

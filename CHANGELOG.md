@@ -5,6 +5,45 @@ All notable changes to MoodHaven Journal are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.9.0] — 2026-06-18
+
+### Added
+
+- **BYO-Cloud folder sync (desktop)** — back up to any folder your own cloud client already syncs (Dropbox, Google Drive, OneDrive, Syncthing, …). Encrypted client-side using the same AES-256-GCM envelope as the `.moodhaven` export, so the provider only ever sees ciphertext. (#149)
+- **Change your master password** — re-encrypts your journal under a new password with a crash-safe, in-place migration (Approach A), backed by a crash-replay test harness so an interrupted change can't brick the database. (#153, #155, #152)
+- **Printable recovery-key PDF** — export your 24-character recovery key as a clean, printable PDF to store offline. (#168)
+- **Voice capture on Android** — record a voice memo on your phone; it transcribes later on a synced desktop (no cloud speech APIs). (#163)
+- **Voice memos sync across devices** — a new peer-sync phase carries voice memos and their transcriptions through the encrypted round-trip. (#164)
+- **Image compression before encryption** — photo attachments are compressed prior to encryption, reducing database growth. (#173)
+- **Auto-lock enforcement + clear-clipboard-on-lock** — the configured auto-lock timeout is now actively enforced, and the clipboard is wiped when the app locks. (#187)
+- **Privacy Checkup** — a deep-link in the sidebar footer jumps straight to a privacy-settings review. (#162)
+- **PWA durable-storage guard + backup nudge** — the browser build requests persistent storage and nudges you to keep a backup. (#175)
+
+### Changed
+
+- **Faster unlock** — skips a redundant second password verification and uses hardware-accelerated SHA on ARM, roughly halving unlock time; a single per-account encryption salt with background migration also speeds repeat decrypts. (#195, #196, #194)
+- **Android peer discovery** — the app now holds a Wi-Fi MulticastLock so mDNS peer discovery works on Android. (#165)
+- **Android media handling** — open attachments in the system viewer (ACTION_VIEW) and attach media via content-URI bytes. (#166, #191, #190)
+- **Android cloud-token storage** — the cloud OAuth token key is now stored in the AndroidKeyStore. (#167)
+- **Honest mobile sync labeling** — the mobile sync UI now reflects which providers are actually available on the platform. (#170)
+- **Writing view polish** — responsive scaling, relocated appearance toolbar, an attach spinner, and a clearer save indicator. (#160, #192)
+- **Erase & Start Fresh** — relaunches into first-run setup and is gated behind a hold-to-confirm action. (#159)
+- **Password-manager guidance** — copy-paste workflow documented, with an inline hint on the unlock screen. (#151)
+
+### Fixed
+
+- **Peer sync reliability** — set `SO_REUSEADDR` on the sync listener, accept SQLite naive timestamps in timestamp parsing, and persist peer identity on Android (which has no OS keyring backend). (#189, #183, #182)
+- **Speech-to-text on older processors** — portable whisper build that returns a graceful "unsupported processor" message instead of a silent illegal-instruction crash. (#184)
+- **Recovery-key promote** — re-verifies the derived key against the stored hash before promoting. (#176)
+- **Browser build** — repaired a WritingView crash in the browser/PWA build. (#158)
+- **StillHaven** — wellbeing dates are computed in local time, fixing date-boundary flakiness. (#171)
+
+### Security
+
+- **Release integrity** — installers are auto-submitted to VirusTotal and download verification is wired into the release flow. (#148)
+- **CodeQL alerts resolved** — workflow-permissions hardening and markdown sanitization. (#156)
+- **Dependency advisories** — two security advisories closed in the nightly scan. (#143)
+
 ## [1.8.2] — 2026-06-07
 
 ### Changed

@@ -7,7 +7,13 @@ identifier = "allow-opener-open-file"
 description = "Allow opening a local file with the system viewer via an ACTION_VIEW intent."
 commands.allow = ["openFile"]
 
+[[permission]]
+identifier = "allow-opener-share-file"
+description = "Allow sharing a local file via an ACTION_SEND chooser (export to Drive, Files, email, etc.)."
+commands.allow = ["shareFile"]
+
 [default]
 permissions = [
   "allow-opener-open-file",
+  "allow-opener-share-file",
 ]

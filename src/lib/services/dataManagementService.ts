@@ -10,6 +10,8 @@ import { save } from '@tauri-apps/plugin-dialog';
 import { encrypt, decrypt } from './crypto';
 import type { EncryptedData } from './crypto';
 import { listAllMedia } from './mediaService';
+import { isAndroidPlatform } from '../../hooks/usePlatform';
+import { shareExportedText } from './mobileExport';
 
 /**
  * Factory reset - wipe all app data
@@ -94,6 +96,11 @@ export async function downloadBackup(data: string, filename: string): Promise<vo
       throw new Error('Export data is not in the expected encrypted format.');
     }
     throw e;
+  }
+
+  if (isAndroidPlatform) {
+    await shareExportedText(filename, data, 'application/octet-stream');
+    return;
   }
 
   const filePath = await save({

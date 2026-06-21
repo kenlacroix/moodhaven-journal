@@ -92,6 +92,31 @@ const POSTS = [
     prompt:
       "Two soft glowing orbs hovering gently above calm water, one slightly to the left, one slightly to the right, warm cream light blending into soft violet, painterly and dreamlike, evoking gentle alternating rhythm and settling.",
   },
+  {
+    slug: "activity-tagging-and-mood-correlation",
+    prompt:
+      "A wooden desk at golden hour with a small open journal, beside it several smooth river stones arranged in a loose connecting line and a few pressed leaves, faint delicate lines linking them like a gentle pattern quietly emerging, warm and contemplative.",
+  },
+  {
+    slug: "breaking-into-our-own-app-on-a-real-phone",
+    prompt:
+      "A closed leather journal on a wooden table with a small brass padlock resting beside it and a magnifying glass laid nearby catching soft morning light, calm and reassuring rather than alarming, a sense of careful inspection and safekeeping.",
+  },
+  {
+    slug: "what-happens-when-you-change-your-password",
+    prompt:
+      "An old worn brass key lying beside a brand-new brass key on a weathered wooden desk, a closed journal with a small violet wax seal nearby, soft warm light, a quiet sense of safe transition and continuity.",
+  },
+  {
+    slug: "why-local-first-matters",
+    prompt:
+      "A single small cottage on a quiet tree-lined island in calm still water at golden hour, one warm glowing window, no bridges or wires to the mainland, utterly self-contained and serene.",
+  },
+  {
+    slug: "default-hero",
+    prompt:
+      "A calm abstract painterly scene — soft rolling fog over a still lake at dawn, gentle violet and cream light, deep tranquility, no focal subject.",
+  },
 ];
 
 async function exists(p) {
@@ -103,8 +128,17 @@ async function exists(p) {
   }
 }
 
+// The site fallback hero lives at public/images/default-hero.png (one level
+// up from the blog dir); every other slug is a per-post hero under blog/.
+function outPathFor(slug) {
+  if (slug === "default-hero") {
+    return resolve(outDir, "..", "default-hero.png");
+  }
+  return resolve(outDir, `${slug}.png`);
+}
+
 async function generate({ slug, prompt }) {
-  const outPath = resolve(outDir, `${slug}.png`);
+  const outPath = outPathFor(slug);
   if (!force && (await exists(outPath))) {
     console.log(`SKIP ${slug} (exists)`);
     return;

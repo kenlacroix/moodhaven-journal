@@ -114,11 +114,16 @@ const renderText = (c, unsub, url) => {
 };
 
 function stripTags(html) {
-  return html
-    .replace(/<\/(p|div|h[1-6]|li)>/gi, '\n')
-    .replace(/<[^>]+>/g, '')
-    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"')
-    .replace(/\n{3,}/g, '\n\n').trim();
+  let out = html.replace(/<\/(p|div|h[1-6]|li)>/gi, '\n');
+  // Strip tags repeatedly until stable so split/nested tags can't survive one pass.
+  let prev;
+  do { prev = out; out = out.replace(/<[^>]*>/g, ''); } while (out !== prev);
+  // Decode entities; ampersand LAST so we never double-decode (e.g. &amp;lt; -> &lt;).
+  out = out
+    .replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+    .replace(/&amp;/g, '&');
+  return out.replace(/\n{3,}/g, '\n\n').trim();
 }
 
 // Optional one-click unsubscribe, only when a signing secret is configured.

@@ -16,6 +16,8 @@ on:
     - cron: '0 12 * * *' # 12:00 UTC daily
   workflow_dispatch: {}
 
+permissions: {}
+
 jobs:
   rebuild:
     runs-on: ubuntu-latest

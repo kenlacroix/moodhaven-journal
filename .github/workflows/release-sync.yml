@@ -1,9 +1,10 @@
 name: Release Sync
 
 # Fires when a release is published (draft -> published). Keeps README download
-# tables + Recent Changes in sync with the release, then pushes to main —
-# which triggers the git-connected Cloudflare Pages rebuild of moodhaven.app,
-# whose download page reads latest-release.json from the now-published release.
+# tables + Recent Changes in sync with the release by opening a PR to main. When
+# the PR auto-merges (after checks pass) it lands on main, which triggers the
+# git-connected Cloudflare Pages rebuild of moodhaven.app, whose download page
+# reads latest-release.json from the now-published release.
 on:
   release:
     types: [published]
@@ -18,6 +19,7 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
 
 concurrency:
   group: release-sync
@@ -31,7 +33,9 @@ jobs:
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6
         with:
           ref: main
-          token: ${{ secrets.GITHUB_TOKEN }}
+          # PAT (not GITHUB_TOKEN) so the pushed branch + PR trigger the
+          # required status checks and the PR can auto-merge once they pass.
+          token: ${{ secrets.RELEASE_SYNC_PAT }}
 
       - name: Setup Node 22
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6.4.0
@@ -57,15 +61,23 @@ jobs:
           NOTES: ${{ steps.notes.outputs.notes }}
         run: node scripts/update-readme-release.cjs
 
-      - name: Commit and push to main
+      - name: Open sync PR and enable auto-merge
         env:
           TAG: ${{ github.event.release.tag_name || inputs.tag }}
+          GH_TOKEN: ${{ secrets.RELEASE_SYNC_PAT }}
         run: |
+          BRANCH="release-sync/${TAG}"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$BRANCH"
           git add README.md
-          # --allow-empty: even a no-op publish (e.g. re-publish) pushes a commit so
+          # --allow-empty: even a no-op publish (e.g. re-publish) lands a commit so
           # Cloudflare Pages rebuilds and the download page picks up latest-release.json.
-          git commit --allow-empty -m "docs(readme): sync download links and changelog for $TAG [skip ci]"
-          git pull --rebase origin main
-          git push origin main
+          git commit --allow-empty -m "docs(readme): sync download links and changelog for $TAG"
+          git push --force-with-lease origin "$BRANCH"
+          if ! gh pr view "$BRANCH" --json number --jq '.number' >/dev/null 2>&1; then
+            gh pr create --base main --head "$BRANCH" \
+              --title "docs(readme): sync release $TAG" \
+              --body "Automated README + download-link sync for release \`$TAG\`. Merging triggers the Cloudflare Pages rebuild of moodhaven.app."
+          fi
+          gh pr merge "$BRANCH" --auto --squash

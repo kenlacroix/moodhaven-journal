@@ -1,0 +1,89 @@
+name: Draft Reddit posts
+
+# Each day, after the blog refresh, generate a manual-post Reddit draft for any
+# MoodHaven blog post that has just gone live (publishDate reached, not
+# draft/unpublished) and open it as a GitHub issue to copy-paste by hand. Reddit
+# is deliberately NOT auto-posted (it punishes broadcast link-drops), so this
+# never posts — it only drafts. Drafted slugs are tracked in
+# .github/reddit-drafted.json (committed back) so nothing is re-drafted and a
+# missed day self-heals.
+#
+# The ledger is committed only after the issues are created, so a failed run
+# retries cleanly; the per-slug title check keeps re-runs from duplicating.
+# No secrets required — uses the built-in GITHUB_TOKEN to open issues.
+
+on:
+  schedule:
+    - cron: '20 12 * * *' # 12:20 UTC, after the blog refresh (12:00), before social (12:30)
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'draft (fresh live posts) | seed (mark all live posts drafted, no issues)'
+        type: choice
+        options: [draft, seed]
+        default: draft
+
+jobs:
+  draft:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # commit the updated ledger
+      issues: write # open a draft issue per post
+    defaults:
+      run:
+        working-directory: website
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Seed ledger (no drafts)
+        if: github.event.inputs.mode == 'seed'
+        run: node scripts/gen-reddit-draft.mjs --seed
+
+      - name: Generate drafts
+        id: gen
+        if: github.event.inputs.mode == 'draft' || github.event_name == 'schedule'
+        run: node scripts/gen-reddit-draft.mjs
+
+      - name: Open a draft issue per post (deduped)
+        if: steps.gen.outputs.count != '0' && steps.gen.outputs.count != ''
+        working-directory: ${{ github.workspace }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SLUGS: ${{ steps.gen.outputs.slugs }}
+          DRAFT_DIR: ${{ steps.gen.outputs.draft_dir }}
+        run: |
+          set -e
+          for slug in $(echo "$SLUGS" | tr ',' ' '); do
+            TITLE="Reddit draft: $slug"
+            EXISTING=$(gh issue list --state all --search "$TITLE in:title" --json title \
+              --jq "[.[] | select(.title == \"$TITLE\")] | length")
+            if [ "$EXISTING" = "0" ]; then
+              gh issue create --title "$TITLE" --body-file "$DRAFT_DIR/reddit-draft-$slug.md" --label automation \
+                || gh issue create --title "$TITLE" --body-file "$DRAFT_DIR/reddit-draft-$slug.md"
+              echo "Opened issue: $TITLE"
+            else
+              echo "Issue already exists for $slug; skipping."
+            fi
+          done
+
+      - name: Commit ledger
+        if: steps.gen.outputs.count != '0' && steps.gen.outputs.count != ''
+        working-directory: ${{ github.workspace }}
+        run: |
+          if ! git diff --quiet .github/reddit-drafted.json; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add .github/reddit-drafted.json
+            git commit -m "chore: record Reddit-drafted posts [skip ci]"
+            git pull --rebase --autostash origin main
+            git push
+          fi

@@ -1,0 +1,89 @@
+name: Blog newsletter
+
+# Each day, after the blog refresh (blog-refresh.yml at 12:00 UTC), email any
+# blog post that has just gone live — a post whose publishDate is today-or-earlier
+# and whose slug is not already in the sent-ledger (drafts skipped) — to the
+# EmailOctopus subscriber list via Resend. Emailed slugs are tracked in
+# .github/newsletter-sent.json (committed back), so nothing sends twice and a
+# missed day self-heals.
+#
+# Requires repo secrets: EMAILOCTOPUS_API_KEY, EMAILOCTOPUS_LIST_ID,
+# RESEND_API_KEY, NEWSLETTER_ADDRESS (optional: NEWSLETTER_FROM,
+# SUBSCRIBE_CONFIRM_SECRET). Until they are all set, the job runs and no-ops
+# (no email sent).
+
+on:
+  schedule:
+    - cron: '13 15 * * *' # 15:13 UTC, after blog-refresh.yml (12:00)
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'send (email fresh live posts) | dry (preview, no email)'
+        type: choice
+        options: [send, dry]
+        default: send
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # commit the updated ledger
+      issues: write # open a notification issue
+    defaults:
+      run:
+        working-directory: website
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Preview only (dry run)
+        if: github.event.inputs.mode == 'dry'
+        env:
+          EMAILOCTOPUS_API_KEY: ${{ secrets.EMAILOCTOPUS_API_KEY }}
+          EMAILOCTOPUS_LIST_ID: ${{ secrets.EMAILOCTOPUS_LIST_ID }}
+          SUBSCRIBE_CONFIRM_SECRET: ${{ secrets.SUBSCRIBE_CONFIRM_SECRET }}
+        run: node scripts/send-newsletter.mjs --auto
+
+      - name: Send to subscribers
+        id: send
+        if: github.event.inputs.mode == 'send' || github.event_name == 'schedule'
+        env:
+          EMAILOCTOPUS_API_KEY: ${{ secrets.EMAILOCTOPUS_API_KEY }}
+          EMAILOCTOPUS_LIST_ID: ${{ secrets.EMAILOCTOPUS_LIST_ID }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          NEWSLETTER_ADDRESS: ${{ secrets.NEWSLETTER_ADDRESS }}
+          NEWSLETTER_FROM: ${{ secrets.NEWSLETTER_FROM }}
+          SUBSCRIBE_CONFIRM_SECRET: ${{ secrets.SUBSCRIBE_CONFIRM_SECRET }}
+        run: node scripts/send-newsletter.mjs --auto --send
+
+      - name: Commit ledger if changed
+        if: always() && (github.event.inputs.mode == 'send' || github.event_name == 'schedule')
+        working-directory: .
+        run: |
+          if ! git diff --quiet .github/newsletter-sent.json; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add .github/newsletter-sent.json
+            git commit -m "chore: record newsletter-sent posts [skip ci]"
+            git pull --rebase --autostash origin main
+            git push
+          fi
+
+      - name: Notify via issue
+        if: always() && (github.event.inputs.mode == 'send' || github.event_name == 'schedule') && (steps.send.outputs.sent != '0' || steps.send.outputs.failed != '0')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TITLE="Newsletter: ${{ steps.send.outputs.sent }} sent, ${{ steps.send.outputs.failed }} failed"
+          gh issue create --title "$TITLE" --body-file "${{ steps.send.outputs.summary_file }}" --label automation || \
+          gh issue create --title "$TITLE" --body-file "${{ steps.send.outputs.summary_file }}"

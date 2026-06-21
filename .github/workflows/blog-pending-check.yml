@@ -1,0 +1,26 @@
+name: Blog pending publish check
+
+# Weekly visibility check: lists queued blog posts (publishDate in the future,
+# so currently hidden by the build-time gate) and any post missing a publishDate
+# (which will never publish). Surfaces the result in the job log so a drip post
+# doesn't quietly slip past its slot. Read-only — opens no issues, changes nothing.
+
+on:
+  schedule:
+    - cron: '0 13 * * 1' # Mondays 13:00 UTC
+  workflow_dispatch: {}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: website
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - name: Report queued / undated posts
+        run: node scripts/check-pending-publish.mjs

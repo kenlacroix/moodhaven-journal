@@ -1,0 +1,31 @@
+name: Blog refresh
+
+# Rebuilds the MoodHaven site daily so future-dated blog posts go live on their
+# own, without a git push. The publish gate is build-time only: posts with a
+# `publishDate` in the future are hidden (app/blog/[slug]/page.tsx returns
+# notFound(); the listing filters publishDate <= today). A queued post therefore
+# only appears once the site is rebuilt on or after its date — this cron is what
+# flips it live.
+#
+# Requires a CF_DEPLOY_HOOK repo secret = the Cloudflare Pages deploy hook URL
+# for the moodhaven.app site. Until that secret is set, this job no-ops (it skips
+# the curl rather than failing) so the workflow stays green.
+
+on:
+  schedule:
+    - cron: '0 12 * * *' # 12:00 UTC daily
+  workflow_dispatch: {}
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Cloudflare Pages deploy hook
+        env:
+          CF_DEPLOY_HOOK: ${{ secrets.CF_DEPLOY_HOOK }}
+        run: |
+          if [ -z "$CF_DEPLOY_HOOK" ]; then
+            echo "CF_DEPLOY_HOOK secret is not set — skipping deploy hook (no-op)."
+            exit 0
+          fi
+          curl -fsSL -X POST "$CF_DEPLOY_HOOK"

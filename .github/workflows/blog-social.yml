@@ -1,0 +1,101 @@
+name: Announce blog posts to LinkedIn
+
+# Each day, after the blog refresh, announce any MoodHaven blog post that has
+# just gone live (publishDate reached, not draft/unpublished) to LinkedIn via
+# Buffer. Posts are scheduled for the next high-engagement slot (an edit/cancel
+# window in Buffer), validated before sending, and the result is reported as a
+# GitHub issue. Announced slugs are tracked in .github/linkedin-posted.json
+# (committed back), so nothing is double-posted and a missed day self-heals.
+#
+# Requires repo secrets BUFFER_API_KEY and BUFFER_CHANNEL_ID. Until they are set,
+# the job runs and no-ops (exit 0). Find the channel id with the `check` mode
+# (scripts/buffer-channels.mjs) once the API key secret is in place.
+
+on:
+  schedule:
+    - cron: '30 12 * * *' # 12:30 UTC, just after the blog refresh (blog-refresh.yml @ 12:00)
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'announce (post fresh live posts) | check (validate secrets) | test (one deletable post) | verify (list scheduled/sent)'
+        type: choice
+        options: [announce, check, test, verify]
+        default: announce
+
+jobs:
+  announce:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # commit the updated ledger
+      issues: write # open a notification issue
+    defaults:
+      run:
+        working-directory: website
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check Buffer connectivity (no posting)
+        if: github.event.inputs.mode == 'check'
+        env:
+          BUFFER_API_KEY: ${{ secrets.BUFFER_API_KEY }}
+          BUFFER_CHANNEL_ID: ${{ secrets.BUFFER_CHANNEL_ID }}
+        run: node scripts/buffer-channels.mjs
+
+      - name: Send one deletable test post
+        if: github.event.inputs.mode == 'test'
+        env:
+          BUFFER_API_KEY: ${{ secrets.BUFFER_API_KEY }}
+          BUFFER_CHANNEL_ID: ${{ secrets.BUFFER_CHANNEL_ID }}
+        run: node scripts/post-to-buffer.mjs --test
+
+      - name: Verify scheduled/sent posts (watcher)
+        if: github.event.inputs.mode == 'verify'
+        env:
+          BUFFER_API_KEY: ${{ secrets.BUFFER_API_KEY }}
+          BUFFER_CHANNEL_ID: ${{ secrets.BUFFER_CHANNEL_ID }}
+        run: node scripts/post-to-buffer.mjs --verify
+
+      - name: Announce new posts
+        id: announce
+        if: github.event.inputs.mode == 'announce' || github.event_name == 'schedule'
+        env:
+          BUFFER_API_KEY: ${{ secrets.BUFFER_API_KEY }}
+          BUFFER_CHANNEL_ID: ${{ secrets.BUFFER_CHANNEL_ID }}
+          # Best-time slot the post is scheduled into (audience timezone, not yours).
+          # Tue/Wed/Thu 12:00 ET. Change the hour/days here to retune.
+          LINKEDIN_TZ: America/New_York
+          LINKEDIN_HOUR: '12'
+          LINKEDIN_DAYS: '2,3,4'
+        run: node scripts/post-to-buffer.mjs
+
+      - name: Commit ledger if changed
+        if: always() && (github.event.inputs.mode == 'announce' || github.event_name == 'schedule')
+        working-directory: ${{ github.workspace }}
+        run: |
+          if ! git diff --quiet .github/linkedin-posted.json; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add .github/linkedin-posted.json
+            git commit -m "chore: record LinkedIn-announced posts [skip ci]"
+            git pull --rebase --autostash origin main
+            git push
+          fi
+
+      - name: Notify via issue
+        if: always() && (github.event.inputs.mode == 'announce' || github.event_name == 'schedule') && (steps.announce.outputs.announced != '0' || steps.announce.outputs.failed != '0')
+        working-directory: ${{ github.workspace }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TITLE="LinkedIn: ${{ steps.announce.outputs.announced }} scheduled, ${{ steps.announce.outputs.failed }} skipped/failed"
+          gh issue create --title "$TITLE" --body-file "${{ steps.announce.outputs.summary_file }}" --label automation || \
+          gh issue create --title "$TITLE" --body-file "${{ steps.announce.outputs.summary_file }}"

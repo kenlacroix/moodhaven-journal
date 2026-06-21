@@ -26,6 +26,10 @@ const IS_ANDROID = _hasTauri && !IS_IOS && /android/i.test(_ua);
 const IS_BROWSER = !_hasTauri;
 const IS_DESKTOP = _hasTauri && !IS_IOS && !IS_ANDROID;
 
+// Standalone export for non-React modules (services) that need the same signal
+// without the hook. Keep keyed to the single source of truth above.
+export const isAndroidPlatform = IS_ANDROID;
+
 // Capability flags — the preferred gating signal. Keyed to where each feature
 // actually works: native mDNS/TCP peer sync (desktop + Android phone companion),
 // the whisper.cpp sidecar (desktop only — App Sandbox blocks sidecars on iOS),

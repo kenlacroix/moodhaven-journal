@@ -14,6 +14,8 @@
 import { jsPDF } from 'jspdf';
 import { invoke } from '@tauri-apps/api/core';
 import { save } from '@tauri-apps/plugin-dialog';
+import { isAndroidPlatform } from '../../hooks/usePlatform';
+import { shareExportedBinary } from './mobileExport';
 
 const IS_BROWSER = typeof window !== 'undefined' && !window.__TAURI_INTERNALS__;
 const DEFAULT_FILE_NAME = 'moodhaven-recovery-key.pdf';
@@ -227,6 +229,11 @@ export async function exportRecoveryPdf(
 
   if (IS_BROWSER) {
     await invoke('write_binary_file', { path: fileName, contentsBase64: base64 });
+    return true;
+  }
+
+  if (isAndroidPlatform) {
+    await shareExportedBinary(fileName, base64, 'application/pdf');
     return true;
   }
 

@@ -7,6 +7,8 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import { save } from '@tauri-apps/plugin-dialog';
+import { isAndroidPlatform } from '../../hooks/usePlatform';
+import { shareExportedText } from './mobileExport';
 import type {
   TwoFactorStatus,
   TotpSetupData,
@@ -123,6 +125,11 @@ export async function downloadBackupCodes(codes: string[]): Promise<void> {
     '',
     `Generated: ${new Date().toISOString()}`,
   ].join('\n');
+
+  if (isAndroidPlatform) {
+    await shareExportedText('moodhaven-backup-codes.txt', content, 'text/plain');
+    return;
+  }
 
   const filePath = await save({
     defaultPath: 'moodhaven-backup-codes.txt',

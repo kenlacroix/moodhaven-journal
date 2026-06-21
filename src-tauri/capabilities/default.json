@@ -26,6 +26,7 @@
     "wear:allow-wear-flush-buffer",
     "wear:allow-wear-send-feedback",
     "opener:allow-opener-open-file",
+    "opener:allow-opener-share-file",
     "securekey:allow-securekey-get-cloud-token-key"
   ]
 }

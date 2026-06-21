@@ -160,39 +160,27 @@ pub fn open_log_folder(app: AppHandle) -> Result<(), String> {
 
     let dir_str = dir.to_str().ok_or("Non-UTF8 log dir path")?.to_string();
 
-    #[cfg(target_os = "macos")]
-    {
-        std::process::Command::new("open")
-            .arg(&dir_str)
-            .spawn()
-            .map_err(|e| format!("open: {e}"))?;
-        Ok(())
-    }
+    // Pick the platform launcher (no desktop equivalent of `xdg-open` exists on
+    // mobile, where this is UI-gated behind `isDesktop` anyway — return the path
+    // as a defensive fallback rather than silently no-op'ing).
+    let launcher = if cfg!(target_os = "macos") {
+        "open"
+    } else if cfg!(target_os = "windows") {
+        "explorer"
+    } else if cfg!(target_os = "linux") {
+        "xdg-open"
+    } else {
+        return Err(format!(
+            "Opening the log folder isn't supported on this platform. Logs are stored at: {dir_str}"
+        ));
+    };
 
-    #[cfg(target_os = "windows")]
-    {
-        std::process::Command::new("explorer")
-            .arg(&dir_str)
-            .spawn()
-            .map_err(|e| format!("explorer: {e}"))?;
-        Ok(())
-    }
+    std::process::Command::new(launcher)
+        .arg(&dir_str)
+        .spawn()
+        .map_err(|e| format!("{launcher}: {e}"))?;
 
-    #[cfg(target_os = "linux")]
-    {
-        std::process::Command::new("xdg-open")
-            .arg(&dir_str)
-            .spawn()
-            .map_err(|e| format!("xdg-open: {e}"))?;
-        Ok(())
-    }
-
-    // Mobile platforms have no user-facing file manager to launch into; the UI gates
-    // this behind `isDesktop`, so this is a defensive fallback rather than a reachable path.
-    #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
-    Err(format!(
-        "Opening the log folder isn't supported on this platform. Logs are stored at: {dir_str}"
-    ))
+    Ok(())
 }
 
 /// Set the runtime log level and persist it so it is restored on next startup.

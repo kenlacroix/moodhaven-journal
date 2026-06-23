@@ -454,4 +454,6 @@ Full history: [CHANGELOG.md](CHANGELOG.md)
 
 <div align="center">
 <sub>Built with care for people who write to understand themselves.</sub>
+<br>
+<sub>Built by <a href="https://kennethlacroix.me">Kenneth Lacroix</a></sub>
 </div>

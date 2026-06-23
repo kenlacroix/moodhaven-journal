@@ -179,7 +179,7 @@ export function AboutTab({
                 rel="author noopener noreferrer"
                 className="underline text-violet-600 dark:text-violet-400"
               >
-                Kenneth Lacroix
+                Kenneth LaCroix
               </a>
               , a solo indie developer. The security
               model relies on established cryptographic primitives — AES-256-GCM, PBKDF2,

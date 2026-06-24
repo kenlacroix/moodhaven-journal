@@ -96,14 +96,29 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             "@context": "https://schema.org",
             "@graph": [
               {
+                "@type": "Person",
+                "@id": "https://www.moodhaven.app/#ken",
+                "name": "Ken LaCroix",
+                "url": "https://www.kennethlacroix.me",
+                "jobTitle": "Creator & Maintainer",
+                "sameAs": [
+                  "https://www.kennethlacroix.me",
+                  "https://github.com/kenlacroix"
+                ]
+              },
+              {
                 "@type": "Organization",
                 "@id": "https://www.moodhaven.app/#org",
                 "name": "MoodHaven Journal",
                 "url": "https://www.moodhaven.app",
                 "logo": "https://www.moodhaven.app/icons/opengraph-image.png",
+                "founder": { "@id": "https://www.moodhaven.app/#ken" },
                 "sameAs": [
                   "https://github.com/kenlacroix/moodhaven-journal",
-                  "https://moodhaven.substack.com"
+                  "https://moodhaven.substack.com",
+                  "https://x.com/moodhavenapp",
+                  "https://bsky.app/profile/moodhavenapp.bsky.social",
+                  "https://www.linkedin.com/company/moodhavenapp/"
                 ]
               },
               {

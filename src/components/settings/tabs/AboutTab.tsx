@@ -172,7 +172,16 @@ export function AboutTab({
 
           <div className="pt-4">
             <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
-              MoodHaven Journal is built and maintained by a solo indie developer. The security
+              MoodHaven Journal is built and maintained by{' '}
+              <a
+                href="https://kennethlacroix.me"
+                target="_blank"
+                rel="author noopener noreferrer"
+                className="underline text-violet-600 dark:text-violet-400"
+              >
+                Kenneth LaCroix
+              </a>
+              , a solo indie developer. The security
               model relies on established cryptographic primitives — AES-256-GCM, PBKDF2,
               Ed25519 — not proprietary systems. The codebase has not been independently
               audited; you're welcome to{' '}

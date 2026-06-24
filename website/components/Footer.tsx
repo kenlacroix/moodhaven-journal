@@ -71,7 +71,7 @@ export default function Footer() {
             <Link
               href="https://www.kennethlacroix.me"
               target="_blank"
-              rel="noopener noreferrer"
+              rel="me author noopener noreferrer"
               className="underline hover:text-neutral-600"
             >
               Ken LaCroix

@@ -448,12 +448,14 @@ Full history: [CHANGELOG.md](CHANGELOG.md)
 
 ## License
 
-[MIT](LICENSE) — © MoodHaven Journal contributors
+[MIT](LICENSE) — © 2025 Ken LaCroix and MoodHaven Journal contributors
 
 ---
 
 <div align="center">
+
+Built by <a href="https://www.kennethlacroix.me">Ken LaCroix</a> · <a href="https://www.moodhaven.app">moodhaven.app</a>
+
 <sub>Built with care for people who write to understand themselves.</sub>
-<br>
-<sub>Built by <a href="https://kennethlacroix.me">Kenneth LaCroix</a></sub>
+
 </div>

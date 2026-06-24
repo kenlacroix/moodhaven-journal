@@ -226,7 +226,7 @@ export default function AboutPage() {
                   <a
                     href="https://www.kennethlacroix.me"
                     target="_blank"
-                    rel="noopener noreferrer"
+                    rel="me author noopener noreferrer"
                     className="text-xs font-medium text-primary-700 hover:underline"
                   >
                     Website ↗

@@ -122,7 +122,11 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
     "author": {
       "@type": "Person",
       "name": "Ken LaCroix",
-      "url": "https://www.moodhaven.app/about"
+      "url": "https://www.kennethlacroix.me",
+      "sameAs": [
+        "https://www.kennethlacroix.me",
+        "https://github.com/kenlacroix"
+      ]
     },
     "publisher": {
       "@type": "Organization",
@@ -133,11 +137,40 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
     ...(post.heroImage ? { "image": `https://www.moodhaven.app${post.heroImage}` } : {}),
   };
 
+  const breadcrumbLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      {
+        "@type": "ListItem",
+        "position": 1,
+        "name": "Home",
+        "item": "https://www.moodhaven.app",
+      },
+      {
+        "@type": "ListItem",
+        "position": 2,
+        "name": "Blog",
+        "item": "https://www.moodhaven.app/blog",
+      },
+      {
+        "@type": "ListItem",
+        "position": 3,
+        "name": post.title,
+        "item": `https://www.moodhaven.app/blog/${slug}`,
+      },
+    ],
+  };
+
   return (
     <>
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(articleLd) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }}
       />
       <BlogPostClient
         title={post.title}

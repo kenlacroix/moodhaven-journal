@@ -1,6 +1,11 @@
 # cargo-audit configuration for MoodHaven Journal
 # https://docs.rs/cargo-audit/latest/cargo_audit/config/
 #
+# Must live at src-tauri/.cargo/audit.toml — cargo-audit only reads
+# `.cargo/audit.toml` relative to its working directory (CI runs it
+# from src-tauri/). It was previously at src-tauri/audit.toml, where
+# it was silently never loaded.
+#
 # The advisories below are for unmaintained GTK3/GLib transitive dependencies
 # pulled in by Tauri's Linux WebView stack (webkit2gtk → gtk3 → atk/gdk/glib/…).
 # No fix version exists — these crates are deprecated as the ecosystem moved to
@@ -23,6 +28,8 @@ ignore = [
   "RUSTSEC-2024-0429",  # glib
   # Other unmaintained transitive deps (no fix version available)
   "RUSTSEC-2024-0370",  # proc-macro-error (pulled in by Tauri macros)
+  "RUSTSEC-2024-0384",  # instant (via keyring → secret-service → zbus v3)
+  "RUSTSEC-2024-0388",  # derivative (via keyring → secret-service → zbus v3)
   "RUSTSEC-2025-0057",  # fxhash
   "RUSTSEC-2025-0081",  # unic-char-property
   "RUSTSEC-2025-0075",  # unic-char-range

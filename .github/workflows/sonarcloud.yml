@@ -17,6 +17,10 @@ permissions:
 jobs:
   sonar:
     name: Analyze
+    # Dependabot-triggered runs use the Dependabot secret store, which has no
+    # SONAR_TOKEN, so the scan can only fail. Skip it — a skipped check still
+    # satisfies branch protection.
+    if: github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
 
     steps:

@@ -202,7 +202,7 @@ pub async fn stt_download_model(
     let url = model_url(&filename)?;
     let models_dir = get_models_dir(&app).map_err(|e| e.to_string())?;
     let model_path = validate_model_path(&models_dir, &filename)?;
-    let partial_path = validate_model_path(&models_dir, &format!("{}.partial", &filename))?;
+    let partial_path = validate_model_path(&models_dir, &format!("{}.partial", filename))?;
 
     // Remove any leftover partial file from a previous attempt
     let _ = fs::remove_file(&partial_path);
@@ -442,7 +442,7 @@ pub async fn stt_cancel_download(
 #[command]
 pub async fn stt_cleanup_partial(app: AppHandle, filename: String) -> Result<(), String> {
     let models_dir = get_models_dir(&app).map_err(|e| e.to_string())?;
-    let partial_path = validate_model_path(&models_dir, &format!("{}.partial", &filename))?;
+    let partial_path = validate_model_path(&models_dir, &format!("{}.partial", filename))?;
 
     if partial_path.exists() {
         fs::remove_file(&partial_path)
@@ -457,7 +457,7 @@ pub async fn stt_cleanup_partial(app: AppHandle, filename: String) -> Result<(),
 pub async fn stt_delete_model(app: AppHandle, filename: String) -> Result<(), String> {
     let models_dir = get_models_dir(&app).map_err(|e| e.to_string())?;
     let model_path = validate_model_path(&models_dir, &filename)?;
-    let partial_path = validate_model_path(&models_dir, &format!("{}.partial", &filename))?;
+    let partial_path = validate_model_path(&models_dir, &format!("{}.partial", filename))?;
 
     if model_path.exists() {
         fs::remove_file(&model_path).map_err(|e| format!("Failed to delete model: {}", e))?;

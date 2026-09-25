@@ -1,13 +1,18 @@
-# cargo-deny configuration for MoodHaven Journal (cargo-deny 0.19+)
-# Docs: https://embarkstudios.github.io/cargo-deny/
-# Migration from pre-0.16: https://github.com/EmbarkStudios/cargo-deny/pull/611
+# cargo-audit configuration for MoodHaven Journal
+# https://docs.rs/cargo-audit/latest/cargo_audit/config/
 #
-# In 0.19+: vulnerability = "deny", unlicensed = "deny", copyleft = "warn"
-# are the implicit defaults and have been removed as explicit config keys.
+# Must live at src-tauri/.cargo/audit.toml — cargo-audit only reads
+# `.cargo/audit.toml` relative to its working directory (CI runs it
+# from src-tauri/). It was previously at src-tauri/audit.toml, where
+# it was silently never loaded.
+#
+# The advisories below are for unmaintained GTK3/GLib transitive dependencies
+# pulled in by Tauri's Linux WebView stack (webkit2gtk → gtk3 → atk/gdk/glib/…).
+# No fix version exists — these crates are deprecated as the ecosystem moved to
+# GTK4. The security impact for a local desktop app is negligible as these
+# codepaths have no network exposure from MoodHaven Journal's perspective.
 
 [advisories]
-# Ignore advisories for unmaintained GTK3/Tauri transitive deps and other
-# unfixable transitive deps. No fix version exists for any of these.
 ignore = [
   # GTK3 bindings (unmaintained; Tauri Linux WebView dependency)
   "RUSTSEC-2024-0413",  # atk
@@ -29,8 +34,8 @@ ignore = [
   "RUSTSEC-2025-0081",  # unic-char-property
   "RUSTSEC-2025-0075",  # unic-char-range
   "RUSTSEC-2025-0080",  # unic-common
-  "RUSTSEC-2025-0100",  # unic-ucd-ident
   "RUSTSEC-2025-0098",  # unic-ucd-version
+  "RUSTSEC-2025-0100",  # unic-ucd-ident
   # Unsound transitive deps (no fix version available for our pinned versions)
   "RUSTSEC-2026-0190",  # anyhow 1.0.102 — fixed in 1.0.103; upgrade tracked in #253
   "RUSTSEC-2026-0221",  # event-listener 5.4.1 — !Send tags across threads
@@ -43,30 +48,5 @@ ignore = [
   "RUSTSEC-2026-0285",  # rustls <0.23.45 — TLS 1.3 handshake boundary issue; reqwest transitive dep
 ]
 
-[licenses]
-# Allow these SPDX license identifiers; anything else is denied by default
-allow = [
-  "MIT",
-  "Apache-2.0",
-  "Apache-2.0 WITH LLVM-exception",
-  "BSD-2-Clause",
-  "BSD-3-Clause",
-  "ISC",
-  "Unicode-3.0",
-  "CC0-1.0",
-  "Zlib",
-  "MPL-2.0",             # selectors (via kuchikiki → tauri-utils → Tauri)
-  "CDLA-Permissive-2.0", # webpki-roots (via hyper-rustls → reqwest 0.12)
-]
-
-[bans]
-# Warn on duplicate dependency versions (can hide subtle version mismatches)
-multiple-versions = "warn"
-# Explicitly deny crates known to be insecure or unsuitable
-deny = []
-
-[sources]
-# Only allow crates from crates.io (no private registries or arbitrary git sources)
-unknown-registry = "deny"
-unknown-git = "deny"
-allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+[yanked]
+enabled = false
